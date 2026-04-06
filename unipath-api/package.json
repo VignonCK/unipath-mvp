@@ -1,0 +1,21 @@
+{
+  "name": "unipath-api",
+  "version": "1.0.0",
+  "description": "API backend du projet UniPath",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Groupe 4 de SGBD (GIT) — EPAC: 2025-2026",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.1",
+    "express": "^5.2.1",
+    "install": "^0.13.0",
+    "prisma": "^5.22.0"
+  }
+}
