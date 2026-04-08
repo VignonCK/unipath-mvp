@@ -5,6 +5,7 @@
 
 generator client {
   provider = "prisma-client-js"
+
 }
 
 // Indique à Prisma de générer le client JavaScript pour interagir avec la base de données.
