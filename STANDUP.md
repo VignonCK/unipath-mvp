@@ -36,3 +36,24 @@ Qu'est-ce que j'ai fait ?
 Blocages rencontrés
 - dotenvx interceptait le chargement du .env → résolu en lecture manuelle
 - Fichier .env mal nommé (unipath.env) → renommé en .env
+
+# STANDUP — UniPath Frontend
+
+## Jour 1-2 — Adébayor
+
+### Qu'ai-je fait ?
+- Créé le projet React avec Vite
+- Installé et configuré Tailwind CSS v4
+- Installé React Router
+- Créé la structure des dossiers (pages, components, services)
+- Configuré les routes dans App.jsx
+- Créé les 4 pages squelettes (Login, Register, DashboardCandidat, DashboardCommission)
+- Créé le service API (api.js) et le fichier .env
+
+### Que vais-je faire demain ?
+- Implémenter le formulaire Register complet
+- Connecter Login à l'API backend
+- Implémenter les routes protégées avec ProtectedRoute
+
+### Blocages
+- Aucun blocage pour l'instant
