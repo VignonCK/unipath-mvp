@@ -67,3 +67,18 @@ si plusieurs applications accèdent à la DB
 - **Supabase** : PostgreSQL managé, évite la configuration d'un serveur dédié
 
 Pour plus de détails sur chaque table, trigger ou vue, se référer au schéma Prisma (prisma/schema.prisma) et aux scripts SQL dans Supabase.
+
+## Seeds de test
+Fichier : prisma/seed.js
+Commande : npx prisma db seed
+Données insérées :
+| Table       | Nombre | Description |
+|-------      |--------|-------------|
+| Concours    | 3      | Dont 1 paire avec dates en conflit (test trigger) |
+| Candidat    | 5      | Candidats fictifs avec données complètes          |
+| Inscription | 3      | Avec statuts variés pour tests commission         |
+
+## Supabase Storage
+Bucket : dossiers-candidats (privé)
+Contenu : Pièces justificatives des candidats
+Politiques : Upload et lecture réservés aux utilisateurs authentifiés
