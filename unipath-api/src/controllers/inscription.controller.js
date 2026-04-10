@@ -52,6 +52,7 @@ exports.getMesInscriptions = async (req, res) => {
     });
     res.json(inscriptions);
   } catch (error) {
-    res.status(500).json({ error: 'Erreur serveur' });
+    console.error('Erreur inscription:', error);
+res.status(500).json({ error: error.message });
   }
 };
