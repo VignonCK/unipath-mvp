@@ -57,3 +57,18 @@ Blocages rencontrés
 
 ### Blocages
 - Aucun blocage pour l'instant
+
+## Standup — 10 Avril 2026
+
+### Qu'ai-je fait hier ?
+- frontend jour 1-2 et documentation pour la modélisation UML
+
+### Que vais-je faire aujourd'hui ?
+- Créé et exécuté les seeds de test (3 concours, 5 candidats, inscriptions)
+- Configuré le bucket Supabase Storage `dossiers-candidats`
+- Mis en place les politiques d'accès RLS (upload et lecture)
+- Mis à jour DATABASE.md avec les sections Seeds et Storage
+- Diagramme des cas d'utilisation
+
+### Ai-je un blocage ?
+Aucun blocage pour le moment.
