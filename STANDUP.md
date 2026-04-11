@@ -72,3 +72,18 @@ Blocages rencontrés
 
 ### Ai-je un blocage ?
 Aucun blocage pour le moment.
+
+## Jour 5 — Harry (Backend)
+
+**Qu'est-ce que j'ai fait ?**
+- Implémenté le middleware d'authentification JWT
+- Créé toutes les routes : candidat, concours, inscription, commission, dossier
+- Configuré l'upload de fichiers avec Multer vers Supabase Storage
+- Testé et validé toutes les routes avec Postman et Thunder Client
+
+**Statut**
+- Backend 100% terminé et pushé sur le repo
+
+**Blocages rencontrés**
+- Problème de synchronisation entre Supabase Auth et la table Candidat → résolu manuellement
+- Upload fichier difficile avec Thunder Client → résolu avec Postman
