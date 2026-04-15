@@ -1,6 +1,7 @@
 // src/controllers/commission.controller.js
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const { envoyerEmailValidation, envoyerEmailRejet } = require('../services/email.service');
 
 exports.getDossiers = async (req, res) => {
   try {
@@ -33,7 +34,7 @@ exports.updateStatut = async (req, res) => {
 
     if (!['VALIDE', 'REJETE'].includes(statut)) {
       return res.status(400).json({
-        error: 'Statut invalide. Valeurs acceptées : VALIDE ou REJETE',
+        error: 'Statut invalide. Valeurs acceptees : VALIDE ou REJETE',
       });
     }
 
@@ -46,8 +47,25 @@ exports.updateStatut = async (req, res) => {
       },
     });
 
+    if (statut === 'VALIDE') {
+      envoyerEmailValidation({
+        candidatEmail: inscription.candidat.email,
+        candidatNom: inscription.candidat.nom,
+        candidatPrenom: inscription.candidat.prenom,
+        concours: inscription.concours.libelle,
+        matricule: inscription.candidat.matricule,
+      });
+    } else {
+      envoyerEmailRejet({
+        candidatEmail: inscription.candidat.email,
+        candidatNom: inscription.candidat.nom,
+        candidatPrenom: inscription.candidat.prenom,
+        concours: inscription.concours.libelle,
+      });
+    }
+
     res.json({
-      message: `Dossier ${statut.toLowerCase()} avec succès`,
+      message: `Dossier ${statut.toLowerCase()} avec succes. Email de notification envoye.`,
       inscription,
     });
   } catch (error) {
