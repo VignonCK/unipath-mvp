@@ -1,75 +1,126 @@
-// Importe le hook useState de React pour gérer l’état local du composant
-import { useState } from 'react';
+// src/pages/Login.jsx
+// Page de connexion
+// - Appelle l'API de Harry pour vérifier email + mot de passe
+// - Sauvegarde le token JWT dans localStorage
+// - Redirige vers /dashboard si connexion réussie
+// - Affiche le message de confirmation venant de Register
 
-// Déclare le composant fonctionnel Login et l’exporte
+import { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { authService } from '../services/api';
+
 export default function Login() {
-  // Déclare une variable d’état pour l’email, initialisée à une chaîne vide
+  const navigate = useNavigate();
+
+  // useLocation permet de lire les données passées par navigate()
+  // Ex: navigate('/login', { state: { message: 'Compte créé !' } })
+  const location = useLocation();
+
   const [email, setEmail] = useState('');
-  // Déclare une variable d’état pour le mot de passe, initialisée à une chaîne vide
   const [password, setPassword] = useState('');
 
-  // Fonction appelée lors de la soumission du formulaire
-  const handleSubmit = (e) => {
-    e.preventDefault(); // Empêche le rechargement de la page lors de la soumission du formulaire
-    console.log('Tentative de connexion :', email); // Affiche l’email dans la console (pour test)
-    // La vraie logique sera ajoutée aux jours 3-5
+  // true pendant l'appel API pour désactiver le bouton
+  const [loading, setLoading] = useState(false);
+
+  // Message d'erreur si connexion échoue
+  const [error, setError] = useState('');
+
+  // Message de succès venant de Register
+  // location.state?.message = "Compte créé ! Connectez-vous."
+  const successMessage = location.state?.message;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      // Appel API → POST /api/auth/login
+      // Le backend renvoie { token, user }
+      const data = await authService.login(email, password);
+
+      // Sauvegarder le token dans localStorage
+      // Ce token sera utilisé par toutes les requêtes suivantes
+      localStorage.setItem('token', data.token);
+
+      // Rediriger vers le dashboard candidat
+      navigate('/dashboard');
+    } catch (err) {
+      // Afficher l'erreur renvoyée par le backend
+      setError(err.message || 'Email ou mot de passe incorrect');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Retourne le JSX qui sera affiché à l’écran
   return (
-    // Conteneur principal centré verticalement et horizontalement
     <div className='min-h-screen bg-gray-100 flex items-center justify-center'>
-      {/* Carte blanche contenant le formulaire de connexion */}
       <div className='bg-white p-8 rounded-xl shadow-md w-full max-w-md'>
-        {/* Titre de la page */}
+
         <h1 className='text-2xl font-bold text-center text-blue-800 mb-6'>
           UniPath — Connexion
         </h1>
-        {/* Formulaire de connexion */}
+
+        {/* Message de succès venant de Register — vert */}
+        {successMessage && (
+          <div className='bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-4'>
+            {successMessage}
+          </div>
+        )}
+
+        {/* Message d'erreur — rouge */}
+        {error && (
+          <div className='bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4'>
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className='space-y-4'>
-          {/* Champ email */}
           <div>
             <label className='block text-sm font-medium text-gray-700 mb-1'>
               Email
             </label>
             <input
-              type='email' // Champ de type email
-              value={email} // Valeur liée à l’état email
-              onChange={(e) => setEmail(e.target.value)} // Met à jour l’état email à chaque saisie
+              type='email'
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className='w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
-              placeholder='votre@email.com' // Texte d’exemple
-              required // Champ obligatoire
+              placeholder='votre@email.com'
+              required
             />
           </div>
-          {/* Champ mot de passe */}
+
           <div>
             <label className='block text-sm font-medium text-gray-700 mb-1'>
               Mot de passe
             </label>
             <input
-              type='password' // Champ de type mot de passe
-              value={password} // Valeur liée à l’état password
-              onChange={(e) => setPassword(e.target.value)} // Met à jour l’état password à chaque saisie
+              type='password'
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               className='w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
-              placeholder='••••••••' // Texte d’exemple
-              required // Champ obligatoire
+              placeholder='••••••••'
+              required
             />
           </div>
-          {/* Bouton de soumission */}
+
+          {/* Bouton désactivé pendant le chargement */}
           <button
-            type='submit' // Déclenche la soumission du formulaire
-            className='w-full bg-blue-700 text-white py-2 rounded-lg hover:bg-blue-800 font-medium'
+            type='submit'
+            disabled={loading}
+            className='w-full bg-blue-700 text-white py-2 rounded-lg hover:bg-blue-800 font-medium disabled:opacity-50'
           >
-            Se connecter
+            {loading ? 'Connexion...' : 'Se connecter'}
           </button>
         </form>
-        {/* Lien vers la page d’inscription */}
+
         <p className='text-center text-sm text-gray-500 mt-4'>
           Pas encore de compte ?{' '}
           <a href='/register' className='text-blue-700 hover:underline'>
             S'inscrire
           </a>
         </p>
+
       </div>
     </div>
   );

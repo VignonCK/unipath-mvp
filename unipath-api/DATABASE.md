@@ -82,3 +82,21 @@ Données insérées :
 Bucket : dossiers-candidats (privé)
 Contenu : Pièces justificatives des candidats
 Politiques : Upload et lecture réservés aux utilisateurs authentifiés
+
+## Mise à jour Jours 6-7
+
+### Vue v_statistiques_dges (enrichie)
+La vue a été mise à jour pour inclure :
+- concours_id : UUID du concours (pour les requêtes frontend)
+- description : Description du concours
+- dateDebut / dateFin : Dates du concours
+
+### Nouvelle route API
+GET /api/dges/statistiques — interroge v_statistiques_dges via $queryRaw Prisma
+GET /api/dges/statistiques/:id — statistiques d'un concours spécifique
+
+### Note sur $queryRaw
+Prisma ne supporte pas nativement les vues SQL comme models.
+On utilise prisma.$queryRaw pour interroger directement les vues PostgreSQL.
+Cette approche est documentée : https://www.prisma.io/docs/concepts/components/prisma-client/raw-database-access
+

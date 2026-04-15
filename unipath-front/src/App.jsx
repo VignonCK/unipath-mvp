@@ -1,30 +1,50 @@
-// Importation des composants nécessaires de react-router-dom pour gérer le routage
+// src/App.jsx
+// Point central de la navigation de l'application
+// Contient les routes publiques et les routes protégées
+
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-// Importation des différentes pages de l'application
 import Login from './pages/Login';
 import Register from './pages/Register';
 import DashboardCandidat from './pages/DashboardCandidat';
 import DashboardCommission from './pages/DashboardCommission';
 
-// Définition du composant principal App
+// Composant qui protège une route
+// Si l'utilisateur n'est pas connecté → redirige vers /login
+// Si connecté → affiche la page demandée
+function RouteProtegee({ children }) {
+  const token = localStorage.getItem('token');
+  return token ? children : <Navigate to='/login' />;
+}
+
 function App() {
   return (
-    // BrowserRouter englobe l'application pour activer le routage
     <BrowserRouter>
-      {/* Définition des routes de l'application */}
       <Routes>
-        {/* Route par défaut : redirige vers la page de login */}
+        {/* Redirection par défaut vers login */}
         <Route path='/' element={<Navigate to='/login' />} />
-        {/* Pages publiques accessibles sans authentification */}
+
+        {/* Routes publiques — accessibles sans connexion */}
         <Route path='/login' element={<Login />} />
         <Route path='/register' element={<Register />} />
-        {/* Pages protégées, accessibles après authentification */}
-        <Route path='/dashboard' element={<DashboardCandidat />} />
-        <Route path='/commission' element={<DashboardCommission />} />
+
+        {/* Routes protégées — redirige vers /login si pas connecté */}
+        <Route path='/dashboard'
+          element={
+            <RouteProtegee>
+              <DashboardCandidat />
+            </RouteProtegee>
+          }
+        />
+        <Route path='/commission'
+          element={
+            <RouteProtegee>
+              <DashboardCommission />
+            </RouteProtegee>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );
 }
 
-// Exportation du composant App pour l'utiliser ailleurs dans l'application
 export default App;
