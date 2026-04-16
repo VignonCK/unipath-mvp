@@ -33,3 +33,6 @@ exports.telechargerConvocation = async (req, res) => {
     res.status(500).json({ error: 'Erreur lors de la generation du PDF' });
   }
 };
+if (inscription.candidatId !== req.user.id) {
+  return res.status(403).json({ error: 'Accès refusé' });
+}

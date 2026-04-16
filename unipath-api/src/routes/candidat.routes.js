@@ -8,3 +8,6 @@ router.get('/profil', protect, candidatController.getProfil);
 router.put('/profil', protect, candidatController.updateProfil);
 
 module.exports = router;
+const pdfController = require('../controllers/pdf.controller');
+
+router.get('/convocation/:inscriptionId', protect, pdfController.telechargerConvocation);
