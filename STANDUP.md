@@ -87,3 +87,15 @@ Aucun blocage pour le moment.
 **Blocages rencontrés**
 - Problème de synchronisation entre Supabase Auth et la table Candidat → résolu manuellement
 - Upload fichier difficile avec Thunder Client → résolu avec Postman
+
+## Jours 6-7 — Harry (Backend)
+
+**Qu'est-ce que j'ai fait ?**
+- Intégré la route DGES (GET /api/dges/statistiques)
+- Configuré Resend pour les emails de notification validation/rejet
+- Créé le service de génération PDF (convocation avec couleurs du Bénin, drapeau et logo MESRS)
+- Ajouté la route GET /api/candidats/convocation/:id avec vérification propriétaire
+
+**Blocages rencontrés**
+- Connexion Supabase pooler instable → en cours de résolution
+- dotenvx interceptait le .env → résolu par lecture manuelle

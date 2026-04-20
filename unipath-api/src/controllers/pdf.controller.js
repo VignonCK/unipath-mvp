@@ -19,6 +19,10 @@ exports.telechargerConvocation = async (req, res) => {
       return res.status(404).json({ error: 'Inscription non trouvee' });
     }
 
+    if (inscription.candidatId !== req.user.id) {
+      return res.status(403).json({ error: 'Acces refuse' });
+    }
+
     if (inscription.statut !== 'VALIDE') {
       return res.status(403).json({ error: 'Dossier non valide. Convocation indisponible.' });
     }
@@ -33,6 +37,3 @@ exports.telechargerConvocation = async (req, res) => {
     res.status(500).json({ error: 'Erreur lors de la generation du PDF' });
   }
 };
-if (inscription.candidatId !== req.user.id) {
-  return res.status(403).json({ error: 'Accès refusé' });
-}

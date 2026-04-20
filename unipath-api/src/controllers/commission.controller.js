@@ -69,6 +69,7 @@ exports.updateStatut = async (req, res) => {
       inscription,
     });
   } catch (error) {
-    res.status(500).json({ error: 'Erreur serveur' });
+   console.error('Erreur updateStatut:', error);
+res.status(500).json({ error: error.message });
   }
 };
