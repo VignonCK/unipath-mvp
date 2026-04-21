@@ -29,7 +29,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'UniPath API fonctionne !' });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`🚀 Serveur UniPath démarré sur le port ${PORT}`);
 });

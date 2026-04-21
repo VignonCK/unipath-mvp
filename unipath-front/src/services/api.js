@@ -153,3 +153,33 @@ export const commissionService = {
       body: JSON.stringify({ statut }),
     }),
 };
+// ── Convocation PDF ───────────────────────────────────────────
+export const convocationService = {
+  telecharger: async (inscriptionId) => {
+    const token = localStorage.getItem('token');
+    const response = await fetch(
+      `${BASE_URL}/candidats/convocation/${inscriptionId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Erreur téléchargement');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `convocation_${inscriptionId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  },
+};
+// ── DGES ─────────────────────────────────────────────────────
+export const dgesService = {
+  getStatistiques: () => request('/dges/statistiques'),
+  getStatistiquesConcours: (id) => request(`/dges/statistiques/${id}`),
+};
