@@ -134,7 +134,7 @@ export default function DashboardCommission() {
 
                   {/* ── Pièces justificatives ── */}
                   {/* Affiche ✓ en vert si déposée, ✗ en gris sinon */}
-                  <div className='grid grid-cols-5 gap-2 mb-4'>
+                  <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 mb-4'>
                     {['acteNaissance', 'carteIdentite', 'photo', 'releve', 'quittance'].map(p => (
                       <div
                         key={p}
@@ -152,7 +152,7 @@ export default function DashboardCommission() {
                   {/* ── Boutons Valider/Rejeter ── */}
                   {/* Visibles uniquement si le dossier est EN_ATTENTE */}
                   {inscription.statut === 'EN_ATTENTE' && (
-                    <div className='flex gap-3'>
+                    <div className='flex flex-col sm:flex-row gap-3'>
                       <button
                         onClick={() => handleDecision(inscription.id, 'VALIDE')}
                         className='flex-1 bg-green-600 text-white py-2 rounded hover:bg-green-700 font-medium'

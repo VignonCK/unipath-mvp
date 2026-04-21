@@ -10,8 +10,12 @@ export default function DashboardCandidat() {
   const [loading, setLoading] = useState(true);
   const [uploadStatus, setUploadStatus] = useState({});
   const [message, setMessage] = useState('');
+
+  // Objet qui suit l'état de téléchargement pour chaque inscription
+  // Ex: { 'uuid-inscription-1': true } = téléchargement en cours
   const [telechargement, setTelechargement] = useState({});
 
+  // useEffect s'exécute une seule fois au chargement de la page
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -55,7 +59,9 @@ export default function DashboardCandidat() {
     }
   };
 
+  // Fonction qui déclenche le téléchargement de la convocation PDF
   const handleTelechargerConvocation = async (inscriptionId) => {
+    // Marquer cette inscription comme "en téléchargement"
     setTelechargement(prev => ({ ...prev, [inscriptionId]: true }));
     try {
       await convocationService.telecharger(inscriptionId);
@@ -138,40 +144,49 @@ export default function DashboardCandidat() {
         <div className='bg-white rounded-xl shadow p-6'>
           <h2 className='text-lg font-bold text-gray-800 mb-4'>Mes inscriptions</h2>
           <div className='space-y-3'>
-            {candidat?.inscriptions?.length === 0 && (
+            {candidat?.inscriptions?.length === 0 ? (
               <p className='text-gray-500 text-sm'>Aucune inscription pour le moment.</p>
-            )}
-            {candidat?.inscriptions?.map((inscription) => (
-              <div key={inscription.id} className='p-4 border rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3'>
-                <div>
-                  <p className='font-medium'>{inscription.concours?.libelle}</p>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                    inscription.statut === 'VALIDE' ? 'bg-green-100 text-green-700' :
-                    inscription.statut === 'REJETE' ? 'bg-red-100 text-red-700' :
-                    'bg-yellow-100 text-yellow-700'
-                  }`}>
-                    {inscription.statut.replace('_', ' ')}
-                  </span>
+            ) : (
+              candidat?.inscriptions?.map((inscription) => (
+                <div
+                  key={inscription.id}
+                  className='p-4 border rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3'
+                >
+                  <div>
+                    {/* Nom du concours */}
+                    <p className='font-medium'>{inscription.concours?.libelle}</p>
+
+                    {/* Badge de statut coloré */}
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                      inscription.statut === 'VALIDE'
+                        ? 'bg-green-100 text-green-700'
+                        : inscription.statut === 'REJETE'
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {inscription.statut.replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  {/* Bouton visible UNIQUEMENT si le dossier est VALIDE */}
+                  {inscription.statut === 'VALIDE' && (
+                    <button
+                      onClick={() => handleTelechargerConvocation(inscription.id)}
+                      disabled={telechargement[inscription.id]}
+                      className='text-sm bg-blue-700 text-white px-3 py-2 rounded hover:bg-blue-800 disabled:opacity-50'
+                    >
+                      {telechargement[inscription.id] ? 'Génération...' : '📄 Télécharger convocation'}
+                    </button>
+                  )}
                 </div>
-                {inscription.statut === 'VALIDE' && (
-                  <button
-                    onClick={() => handleTelechargerConvocation(inscription.id)}
-                    disabled={telechargement[inscription.id]}
-                    className='text-sm bg-blue-700 text-white px-3 py-2 rounded hover:bg-blue-800 disabled:opacity-50'
-                  >
-                    {telechargement[inscription.id] ? 'Génération...' : '📄 Télécharger convocation'}
-                  </button>
-                )}
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
         {/* Section 3 : Concours disponibles */}
         <div className='bg-white rounded-xl shadow p-6'>
-          <h2 className='text-lg font-bold text-gray-800 mb-4'>
-            Concours disponibles
-          </h2>
+          <h2 className='text-lg font-bold text-gray-800 mb-4'>Concours disponibles</h2>
           <div className='space-y-3'>
             {concours.map((c) => {
               const dejaInscrit = candidat?.inscriptions?.some(
