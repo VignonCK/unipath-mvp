@@ -1,4 +1,3 @@
-// src/controllers/commission.controller.js
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { envoyerEmailValidation, envoyerEmailRejet } = require('../services/email.service');
@@ -54,6 +53,7 @@ exports.updateStatut = async (req, res) => {
         candidatPrenom: inscription.candidat.prenom,
         concours: inscription.concours.libelle,
         matricule: inscription.candidat.matricule,
+        inscriptionId: inscription.id,
       });
     } else {
       envoyerEmailRejet({
@@ -65,11 +65,10 @@ exports.updateStatut = async (req, res) => {
     }
 
     res.json({
-      message: `Dossier ${statut.toLowerCase()} avec succes. Email de notification envoye.`,
+      message: 'Dossier ' + statut.toLowerCase() + ' avec succes. Email de notification envoye.',
       inscription,
     });
   } catch (error) {
-   console.error('Erreur updateStatut:', error);
-res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 };
