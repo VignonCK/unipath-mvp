@@ -195,6 +195,9 @@ export default function Register() {
             Se connecter
           </a>
         </p>
+        <p className='text-center text-sm text-gray-500 mt-4'>
+  <a href='/' className='text-blue-700 hover:underline'>← Retour à l'accueil</a>
+</p>
       </div>
     </div>
   );
