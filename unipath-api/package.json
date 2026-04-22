@@ -4,8 +4,9 @@
   "description": "API backend du projet UniPath",
   "main": "index.js",
   "scripts": {
+    "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
-  },
+},
   "keywords": [],
   "author": "Groupe 4 de SGBD (GIT) — EPAC: 2025-2026",
   "license": "ISC",
