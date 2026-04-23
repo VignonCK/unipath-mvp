@@ -1,5 +1,6 @@
 // src/pages/Home.jsx
 import { useNavigate } from 'react-router-dom';
+import bgImage from '../assets/examen-eleves.jpg';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -112,9 +113,19 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* HERO */}
-      <section className='bg-gradient-to-br from-blue-900 via-blue-800 to-teal-700 text-white py-20 px-6'>
-        <div className='max-w-4xl mx-auto text-center'>
+      {/* HERO avec image de fond */}
+      <section className='relative text-white px-6' style={{minHeight: '550px', paddingTop: '8rem', paddingBottom: '8rem'}}>
+        {/* Image de fond */}
+        <img
+          src={bgImage}
+          alt='background'
+          className='absolute inset-0 w-full h-full object-cover'
+        />
+        {/* Overlay sombre */}
+        <div className='absolute inset-0' style={{backgroundColor: 'rgba(30, 58, 138, 0.6)'}} />
+
+        {/* Contenu */}
+        <div className='relative max-w-4xl mx-auto text-center'>
           <div className='inline-block bg-blue-700 bg-opacity-50 rounded-full px-4 py-1 text-sm text-blue-200 mb-6'>
             EPAC — Université d'Abomey-Calavi · Département GIT · 2025–2026
           </div>
