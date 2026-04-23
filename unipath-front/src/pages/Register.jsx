@@ -1,26 +1,17 @@
 // src/pages/Register.jsx
-// Page d'inscription — Formulaire multi-étapes
-// Étape 1 : Informations personnelles
-// Étape 2 : Email et mot de passe
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/api';
+import bgImage from '../assets/examen-eleves.jpg';
 
 export default function Register() {
-  // useNavigate permet de rediriger vers une autre page
   const navigate = useNavigate();
-
-  // Étape actuelle du formulaire : 1 ou 2
   const [etape, setEtape] = useState(1);
-
-  // true pendant l'appel API pour désactiver le bouton
   const [loading, setLoading] = useState(false);
-
-  // Message d'erreur à afficher si quelque chose échoue
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Toutes les données du formulaire dans un seul objet
   const [formData, setFormData] = useState({
     nom: '',
     prenom: '',
@@ -32,44 +23,31 @@ export default function Register() {
     confirmPassword: '',
   });
 
-  // Mise à jour d'un champ quand l'utilisateur tape
-  // e.target.name = nom du champ, e.target.value = valeur saisie
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
-    setError(''); // Effacer l'erreur quand l'utilisateur tape
+    setError('');
   };
 
-  // Validation et passage à l'étape 2
   const handleEtape1 = (e) => {
-    e.preventDefault(); // Empêcher le rechargement de la page
+    e.preventDefault();
     if (!formData.nom || !formData.prenom) {
       setError('Nom et prénom sont obligatoires');
       return;
     }
-    setEtape(2); // Passer à l'étape 2
+    setEtape(2);
   };
 
-  // Soumission finale du formulaire à l'étape 2
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // Vérifier que les deux mots de passe correspondent
     if (formData.password !== formData.confirmPassword) {
       setError('Les mots de passe ne correspondent pas');
       return;
     }
-
     setLoading(true);
     try {
-      // Appel API → backend de Harry → Supabase Auth + table Candidat
       await authService.register(formData);
-
-      // Rediriger vers Login avec un message de confirmation
-      navigate('/login', {
-        state: { message: 'Compte créé ! Connectez-vous.' }
-      });
+      navigate('/login', { state: { message: 'Compte créé ! Connectez-vous.' } });
     } catch (err) {
-      // Afficher l'erreur renvoyée par le backend
       setError(err.message);
     } finally {
       setLoading(false);
@@ -77,124 +55,173 @@ export default function Register() {
   };
 
   return (
-    <div className='min-h-screen bg-gray-100 flex items-center justify-center p-4'>
-      <div className='bg-white rounded-xl shadow-md w-full max-w-lg p-8'>
+    <div className='min-h-screen relative flex items-center justify-center p-4'>
 
-        {/* Titre */}
-        <h1 className='text-2xl font-bold text-blue-800 mb-2'>
-          Créer un compte
-        </h1>
+      {/* Image de fond */}
+      <img
+        src={bgImage}
+        alt='background'
+        className='absolute inset-0 w-full h-full object-cover'
+      />
+      {/* Overlay */}
+      <div className='absolute inset-0' style={{backgroundColor: 'rgba(30, 58, 138, 0.75)'}} />
 
-        {/* Barre de progression — bleue si étape atteinte, grise sinon */}
-        <div className='flex items-center gap-2 mb-6'>
-          <div className={`h-2 flex-1 rounded ${etape >= 1 ? 'bg-blue-600' : 'bg-gray-200'}`} />
-          <div className={`h-2 flex-1 rounded ${etape >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`} />
+      {/* Carte */}
+      <div className='relative w-full max-w-lg'>
+
+        {/* Logo */}
+        <div className='text-center mb-6'>
+          <h1 className='text-4xl font-black text-white tracking-tight'>UniPath</h1>
+          <p className='text-blue-200 text-sm mt-1'>Plateforme universitaire numérique</p>
+          <p className='text-blue-300 text-xs mt-1'>EPAC — Université d'Abomey-Calavi</p>
         </div>
 
-        {/* Message d'erreur — visible uniquement si error n'est pas vide */}
-        {error && (
-          <div className='bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4'>
-            {error}
+        <div className='bg-white rounded-2xl shadow-2xl p-8'>
+
+          <h2 className='text-xl font-bold text-blue-900 text-center mb-2'>
+            Créer un compte
+          </h2>
+
+          {/* Barre de progression */}
+          <div className='flex items-center gap-2 mb-6'>
+            <div className={`h-2 flex-1 rounded-full ${etape >= 1 ? 'bg-amber-500' : 'bg-gray-200'}`} />
+            <div className={`h-2 flex-1 rounded-full ${etape >= 2 ? 'bg-amber-500' : 'bg-gray-200'}`} />
           </div>
-        )}
 
-        {/* ── ÉTAPE 1 : Informations personnelles ── */}
-        {etape === 1 && (
-          <form onSubmit={handleEtape1} className='space-y-4'>
-            <p className='text-sm text-gray-500 mb-4'>
-              Étape 1/2 — Informations personnelles
-            </p>
-
-            {/* On génère les champs dynamiquement depuis un tableau */}
-            {[
-              { name: 'nom', label: 'Nom', type: 'text', required: true },
-              { name: 'prenom', label: 'Prénom', type: 'text', required: true },
-              { name: 'telephone', label: 'Téléphone', type: 'tel', required: false },
-              { name: 'dateNaiss', label: 'Date de naissance', type: 'date', required: false },
-              { name: 'lieuNaiss', label: 'Lieu de naissance', type: 'text', required: false },
-            ].map((field) => (
-              <div key={field.name}>
-                <label className='block text-sm font-medium text-gray-700 mb-1'>
-                  {field.label}{' '}
-                  {/* Astérisque rouge pour les champs obligatoires */}
-                  {field.required && <span className='text-red-500'>*</span>}
-                </label>
-                <input
-                  type={field.type}
-                  name={field.name}
-                  value={formData[field.name]}
-                  onChange={handleChange}
-                  required={field.required}
-                  className='w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
-                />
-              </div>
-            ))}
-
-            <button
-              type='submit'
-              className='w-full bg-blue-700 text-white py-2 rounded-lg hover:bg-blue-800 font-medium'
-            >
-              Suivant →
-            </button>
-          </form>
-        )}
-
-        {/* ── ÉTAPE 2 : Email et mot de passe ── */}
-        {etape === 2 && (
-          <form onSubmit={handleSubmit} className='space-y-4'>
-            <p className='text-sm text-gray-500 mb-4'>
-              Étape 2/2 — Connexion
-            </p>
-
-            {[
-              { name: 'email', label: 'Email', type: 'email', required: true },
-              { name: 'password', label: 'Mot de passe', type: 'password', required: true },
-              { name: 'confirmPassword', label: 'Confirmer le mot de passe', type: 'password', required: true },
-            ].map((field) => (
-              <div key={field.name}>
-                <label className='block text-sm font-medium text-gray-700 mb-1'>
-                  {field.label}
-                </label>
-                <input
-                  type={field.type}
-                  name={field.name}
-                  value={formData[field.name]}
-                  onChange={handleChange}
-                  required={field.required}
-                  className='w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
-                />
-              </div>
-            ))}
-
-            <div className='flex gap-3'>
-              {/* Bouton retour à l'étape 1 */}
-              <button
-                type='button'
-                onClick={() => setEtape(1)}
-                className='flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-50'
-              >
-                ← Retour
-              </button>
-
-              {/* Bouton de soumission — désactivé pendant le chargement */}
-              <button
-                type='submit'
-                disabled={loading}
-                className='flex-1 bg-blue-700 text-white py-2 rounded-lg hover:bg-blue-800 font-medium disabled:opacity-50'
-              >
-                {loading ? 'Création...' : 'Créer mon compte'}
-              </button>
+          {error && (
+            <div className='bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm'>
+              ❌ {error}
             </div>
-          </form>
-        )}
+          )}
 
-        {/* Lien vers Login */}
-        <p className='text-center text-sm text-gray-500 mt-4'>
-          Déjà un compte ?{' '}
-          <a href='/login' className='text-blue-700 hover:underline'>
-            Se connecter
-          </a>
-        </p>
+          {/* ÉTAPE 1 */}
+          {etape === 1 && (
+            <form onSubmit={handleEtape1} className='space-y-4'>
+              <p className='text-sm text-gray-500 mb-2'>Étape 1/2 — Informations personnelles</p>
+
+              {[
+                { name: 'nom', label: 'Nom', type: 'text', required: true },
+                { name: 'prenom', label: 'Prénom', type: 'text', required: true },
+                { name: 'telephone', label: 'Téléphone', type: 'tel', required: true },
+                { name: 'dateNaiss', label: 'Date de naissance', type: 'date', required: true },
+                { name: 'lieuNaiss', label: 'Lieu de naissance', type: 'text', required: true },
+              ].map((field) => (
+                <div key={field.name}>
+                  <label className='block text-sm font-medium text-gray-700 mb-1'>
+                    {field.label} {field.required && <span className='text-red-500'>*</span>}
+                  </label>
+                  <input
+                    type={field.type}
+                    name={field.name}
+                    value={formData[field.name]}
+                    onChange={handleChange}
+                    required={field.required}
+                    className='w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm'
+                  />
+                </div>
+              ))}
+
+              <button type='submit' className='w-full bg-amber-500 text-white py-3 rounded-xl hover:bg-amber-600 font-bold text-sm transition'>
+                Suivant →
+              </button>
+            </form>
+          )}
+
+          {/* ÉTAPE 2 */}
+          {etape === 2 && (
+            <form onSubmit={handleSubmit} className='space-y-4'>
+              <p className='text-sm text-gray-500 mb-2'>Étape 2/2 — Connexion</p>
+
+              {/* Email */}
+              <div>
+                <label className='block text-sm font-medium text-gray-700 mb-1'>Email</label>
+                <input
+                  type='email'
+                  name='email'
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                  className='w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm'
+                  placeholder='votre@email.com'
+                />
+              </div>
+
+              {/* Mot de passe avec œil */}
+              <div>
+                <label className='block text-sm font-medium text-gray-700 mb-1'>Mot de passe</label>
+                <div className='relative'>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    name='password'
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
+                    className='w-full border border-gray-300 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm'
+                    placeholder='••••••••'
+                  />
+                  <button
+                    type='button'
+                    onClick={() => setShowPassword(!showPassword)}
+                    className='absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg'
+                  >
+                    {showPassword ? '🙈' : '👁️'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Confirmer mot de passe avec œil */}
+              <div>
+                <label className='block text-sm font-medium text-gray-700 mb-1'>Confirmer le mot de passe</label>
+                <div className='relative'>
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    name='confirmPassword'
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    required
+                    className='w-full border border-gray-300 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm'
+                    placeholder='••••••••'
+                  />
+                  <button
+                    type='button'
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className='absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg'
+                  >
+                    {showConfirmPassword ? '🙈' : '👁️'}
+                  </button>
+                </div>
+              </div>
+
+              <div className='flex gap-3'>
+                <button
+                  type='button'
+                  onClick={() => setEtape(1)}
+                  className='flex-1 border border-gray-300 text-gray-700 py-3 rounded-xl hover:bg-gray-50 text-sm font-medium'
+                >
+                  ← Retour
+                </button>
+                <button
+                  type='submit'
+                  disabled={loading}
+                  className='flex-1 bg-amber-500 text-white py-3 rounded-xl hover:bg-amber-600 font-bold text-sm disabled:opacity-50 transition'
+                >
+                  {loading ? 'Création...' : 'Créer mon compte'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          <div className='mt-6 pt-6 border-t border-gray-100 space-y-2 text-center'>
+            <p className='text-sm text-gray-500'>
+              Déjà un compte ?{' '}
+              <a href='/login' className='text-amber-600 font-medium hover:underline'>Se connecter</a>
+            </p>
+            <p className='text-sm text-gray-500'>
+              <a href='/' className='text-amber-600 font-medium hover:underline'>← Retour à l'accueil</a>
+            </p>
+          </div>
+
+        </div>
       </div>
     </div>
   );

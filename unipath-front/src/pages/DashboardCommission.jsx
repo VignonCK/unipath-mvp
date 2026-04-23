@@ -75,7 +75,7 @@ export default function DashboardCommission() {
               onClick={() => setFiltre(s)}
               className={`px-4 py-2 rounded text-sm font-medium ${
                 filtre === s
-                  ? 'bg-blue-700 text-white'
+                  ? 'bg-amber-500 text-white'
                   : 'bg-white border text-gray-700'
               }`}
             >
@@ -91,7 +91,7 @@ export default function DashboardCommission() {
             placeholder='Rechercher par nom, matricule ou concours...'
             value={recherche}
             onChange={(e) => setRecherche(e.target.value)}
-            className='w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+            className='w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500'
           />
           {recherche && (
             <p className='text-xs text-gray-500 mt-1'>
@@ -118,7 +118,7 @@ export default function DashboardCommission() {
                       <h3 className='font-bold text-lg'>
                         {inscription.candidat.prenom} {inscription.candidat.nom}
                       </h3>
-                      <p className='text-blue-700 text-sm font-mono'>
+                      <p className='text-amber-600 text-sm font-mono'>
                         {inscription.candidat.matricule}
                       </p>
                       <p className='text-gray-500 text-sm'>

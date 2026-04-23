@@ -10,6 +10,7 @@ export default function Login() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -80,30 +81,39 @@ export default function Login() {
                 type='email'
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className='w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm'
+                className='w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm'
                 placeholder='votre@email.com'
                 required
               />
             </div>
 
             <div>
-              <label className='block text-sm font-medium text-gray-700 mb-1'>
-                Mot de passe
-              </label>
-              <input
-                type='password'
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className='w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm'
-                placeholder='••••••••'
-                required
-              />
-            </div>
+  <label className='block text-sm font-medium text-gray-700 mb-1'>
+    Mot de passe
+  </label>
+  <div className='relative'>
+    <input
+      type={showPassword ? 'text' : 'password'}
+      value={password}
+      onChange={(e) => setPassword(e.target.value)}
+      className='w-full border border-gray-300 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm'
+      placeholder='••••••••'
+      required
+    />
+    <button
+      type='button'
+      onClick={() => setShowPassword(!showPassword)}
+      className='absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg'
+    >
+      {showPassword ? '🙈' : '👁️'}
+    </button>
+  </div>
+</div>
 
             <button
               type='submit'
               disabled={loading}
-              className='w-full bg-blue-700 text-white py-3 rounded-xl hover:bg-blue-800 font-bold text-sm disabled:opacity-50 transition'
+              className='w-full bg-amber-500 text-white py-3 rounded-xl hover:bg-amber-600 font-bold text-sm disabled:opacity-50 transition'
             >
               {loading ? 'Connexion en cours...' : 'Se connecter →'}
             </button>
@@ -112,12 +122,12 @@ export default function Login() {
           <div className='mt-6 pt-6 border-t border-gray-100 space-y-2 text-center'>
             <p className='text-sm text-gray-500'>
               Pas encore de compte ?{' '}
-              <a href='/register' className='text-blue-700 font-medium hover:underline'>
+              <a href='/register' className='text-amber-600 font-medium hover:underline'>
                 Créer un compte
               </a>
             </p>
             <p className='text-sm text-gray-500'>
-              <a href='/' className='text-blue-700 font-medium hover:underline'>
+              <a href='/' className='text-amber-600 font-medium hover:underline'>
                 ← Retour à l'accueil
               </a>
             </p>
