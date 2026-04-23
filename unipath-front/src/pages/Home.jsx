@@ -126,9 +126,7 @@ export default function Home() {
 
         {/* Contenu */}
         <div className='relative max-w-4xl mx-auto text-center'>
-          <div className='inline-block bg-blue-700 bg-opacity-50 rounded-full px-4 py-1 text-sm text-blue-200 mb-6'>
-            EPAC — Université d'Abomey-Calavi · Département GIT · 2025–2026
-          </div>
+            
           <h1 className='text-4xl md:text-6xl font-black mb-6 leading-tight'>
             Gérez votre parcours
             <span className='text-teal-300'> universitaire</span>
