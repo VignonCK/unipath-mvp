@@ -23,51 +23,6 @@ export default function Home() {
     },
   ];
 
-  const espaces = [
-    {
-      role: 'Candidat',
-      icon: '👤',
-      couleur: 'bg-blue-50 border-blue-200',
-      couleurBadge: 'bg-blue-700',
-      actions: [
-        'Créer un compte et recevoir son matricule national',
-        'S\'inscrire à un ou plusieurs concours',
-        'Uploader ses pièces justificatives',
-        'Consulter son statut et télécharger sa convocation PDF',
-      ],
-      lien: '/register',
-      labelBtn: 'Créer un compte',
-    },
-    {
-      role: 'Commission',
-      icon: '✅',
-      couleur: 'bg-orange-50 border-orange-200',
-      couleurBadge: 'bg-orange-600',
-      actions: [
-        'Consulter la liste des dossiers soumis',
-        'Visualiser les pièces justificatives de chaque candidat',
-        'Valider ou rejeter les dossiers',
-        'Déclencher l\'envoi automatique de notifications email',
-      ],
-      lien: '/commission',
-      labelBtn: 'Accès commission',
-    },
-    {
-      role: 'DGES',
-      icon: '🏛️',
-      couleur: 'bg-blue-50 border-blue-300',
-      couleurBadge: 'bg-blue-800',
-      actions: [
-        'Tableau de bord national en temps réel',
-        'Statistiques par concours (inscrits, validés, rejetés)',
-        'Taux de validation calculé automatiquement via vue SQL',
-        'Graphiques interactifs de suivi',
-      ],
-      lien: '/dges',
-      labelBtn: 'Tableau de bord',
-    },
-  ];
-
   const etapes = [
     {
       numero: '01',
@@ -224,29 +179,52 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ESPACES */}
+      {/* FAQ - QUESTIONS FRÉQUENTES */}
       <section className='py-16 px-6 bg-gray-50'>
-        <div className='max-w-5xl mx-auto'>
-          <h2 className='text-3xl font-black text-center text-blue-900 mb-4'>Trois espaces dédiés</h2>
-          <p className='text-center text-gray-500 mb-12'>Chaque acteur dispose de son propre tableau de bord</p>
-          <div className='grid grid-cols-1 md:grid-cols-3 gap-8'>
-            {espaces.map((e) => (
-              <div key={e.role} className={`rounded-2xl p-8 border-2 ${e.couleur}`}>
-                <div className='text-4xl mb-3'>{e.icon}</div>
-                <h3 className='text-xl font-black text-blue-900 mb-4'>{e.role}</h3>
-                <ul className='space-y-2 mb-6'>
-                  {e.actions.map((a, i) => (
-                    <li key={i} className='flex items-start gap-2 text-sm text-gray-700'>
-                      <span className='text-green-500 mt-0.5 flex-shrink-0'>✓</span>
-                      {a}
-                    </li>
-                  ))}
-                </ul>
-                <button onClick={() => navigate(e.lien)} className={`w-full ${e.couleurBadge} text-white py-3 rounded-xl font-bold hover:opacity-90 transition text-sm`}>
-                  {e.labelBtn} →
-                </button>
-              </div>
+        <div className='max-w-4xl mx-auto'>
+          <h2 className='text-3xl font-black text-center text-blue-900 mb-4'>Questions fréquentes</h2>
+          <p className='text-center text-gray-500 mb-12'>Tout ce que vous devez savoir sur UniPath</p>
+          <div className='space-y-4'>
+            {[
+              {
+                question: 'Comment créer mon compte ?',
+                reponse: 'Cliquez sur "Créer un compte", remplissez vos informations personnelles (nom, prénom, email, téléphone) et créez un mot de passe. Vous recevrez immédiatement votre matricule national unique.',
+              },
+              {
+                question: 'Quels documents dois-je fournir ?',
+                reponse: 'Vous devez uploader 5 pièces justificatives : acte de naissance, carte d\'identité, photo d\'identité, relevé de notes du Bac et quittance d\'inscription. Tous les documents doivent être au format PDF, JPG ou PNG.',
+              },
+              {
+                question: 'Puis-je m\'inscrire à plusieurs concours ?',
+                reponse: 'Oui ! Vous pouvez vous inscrire à autant de concours que vous le souhaitez. Le système vérifie automatiquement les conflits de dates pour éviter les chevauchements.',
+              },
+              {
+                question: 'Comment savoir si mon dossier est validé ?',
+                reponse: 'Vous recevrez une notification par email dès que la commission aura traité votre dossier. Vous pouvez aussi consulter le statut en temps réel depuis votre tableau de bord.',
+              },
+              {
+                question: 'Quand puis-je télécharger ma convocation ?',
+                reponse: 'Votre convocation PDF sera disponible automatiquement dès que votre dossier sera validé par la commission. Un bouton de téléchargement apparaîtra dans votre espace candidat.',
+              },
+              {
+                question: 'Que faire si j\'ai oublié mon mot de passe ?',
+                reponse: 'Cliquez sur "Mot de passe oublié" sur la page de connexion. Vous recevrez un email avec un lien pour réinitialiser votre mot de passe en toute sécurité.',
+              },
+            ].map((faq, index) => (
+              <details key={index} className='bg-white rounded-xl border border-gray-200 p-6 cursor-pointer hover:border-orange-300 transition group'>
+                <summary className='font-bold text-blue-900 flex justify-between items-center'>
+                  <span>{faq.question}</span>
+                  <span className='text-orange-500 text-xl group-open:rotate-180 transition-transform'>▼</span>
+                </summary>
+                <p className='text-gray-600 mt-4 leading-relaxed'>{faq.reponse}</p>
+              </details>
             ))}
+          </div>
+          <div className='text-center mt-10'>
+            <p className='text-gray-500 text-sm mb-4'>Vous avez d'autres questions ?</p>
+            <button onClick={() => document.getElementById('contact-section')?.scrollIntoView({ behavior: 'smooth' })} className='text-orange-600 font-medium hover:underline'>
+              Contactez notre support →
+            </button>
           </div>
         </div>
       </section>
@@ -297,7 +275,7 @@ export default function Home() {
       </section>
 
       {/* CONTACT SUPPORT */}
-      <section className='py-16 px-6 bg-gray-50'>
+      <section id='contact-section' className='py-16 px-6 bg-gray-50'>
         <div className='max-w-2xl mx-auto'>
           <h2 className='text-3xl font-black text-center text-blue-900 mb-4'>Contacter le support</h2>
           <p className='text-center text-gray-500 mb-10'>Une question ou un problème technique ? Notre équipe vous répond dans les plus brefs délais.</p>
