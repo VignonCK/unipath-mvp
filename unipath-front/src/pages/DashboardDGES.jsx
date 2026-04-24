@@ -67,7 +67,7 @@ export default function DashboardDGES() {
         <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
           {[
             { label: 'Total concours', value: data?.totaux?.total_concours, color: 'bg-blue-50 border-blue-200 text-blue-900' },
-            { label: 'Total inscrits', value: data?.totaux?.total_inscrits, color: 'bg-amber-50 border-amber-200 text-amber-700' },
+            { label: 'Total inscrits', value: data?.totaux?.total_inscrits, color: 'bg-orange-50 border-orange-200 text-orange-700' },
             { label: 'Dossiers validés', value: data?.totaux?.total_valides, color: 'bg-green-50 border-green-200 text-green-700' },
             { label: 'En attente', value: data?.totaux?.total_attente, color: 'bg-yellow-50 border-yellow-200 text-yellow-700' },
           ].map(card => (

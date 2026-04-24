@@ -81,7 +81,7 @@ export default function Login() {
                 type='email'
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className='w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm'
+                className='w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm'
                 placeholder='votre@email.com'
                 required
               />
@@ -96,7 +96,7 @@ export default function Login() {
       type={showPassword ? 'text' : 'password'}
       value={password}
       onChange={(e) => setPassword(e.target.value)}
-      className='w-full border border-gray-300 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm'
+      className='w-full border border-gray-300 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm'
       placeholder='••••••••'
       required
     />
@@ -113,7 +113,7 @@ export default function Login() {
             <button
               type='submit'
               disabled={loading}
-              className='w-full bg-amber-500 text-white py-3 rounded-xl hover:bg-amber-600 font-bold text-sm disabled:opacity-50 transition'
+              className='w-full bg-orange-500 text-white py-3 rounded-xl hover:bg-orange-600 font-bold text-sm disabled:opacity-50 transition'
             >
               {loading ? 'Connexion en cours...' : 'Se connecter →'}
             </button>
@@ -122,12 +122,12 @@ export default function Login() {
           <div className='mt-6 pt-6 border-t border-gray-100 space-y-2 text-center'>
             <p className='text-sm text-gray-500'>
               Pas encore de compte ?{' '}
-              <a href='/register' className='text-amber-600 font-medium hover:underline'>
+              <a href='/register' className='text-orange-600 font-medium hover:underline'>
                 Créer un compte
               </a>
             </p>
             <p className='text-sm text-gray-500'>
-              <a href='/' className='text-amber-600 font-medium hover:underline'>
+              <a href='/' className='text-orange-600 font-medium hover:underline'>
                 ← Retour à l'accueil
               </a>
             </p>

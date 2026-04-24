@@ -98,10 +98,10 @@ export default function DashboardCandidat() {
       <header className='bg-blue-900 text-white px-6 py-4 flex justify-between items-center'>
         <h1 className='text-xl font-bold'>UniPath — Espace Candidat</h1>
         <div className='flex items-center gap-4'>
-          <span className='text-amber-300 text-sm'>{candidat?.matricule}</span>
+          <span className='text-orange-300 text-sm'>{candidat?.matricule}</span>
           <button
             onClick={handleDeconnexion}
-            className='text-sm bg-amber-500 px-3 py-1 rounded hover:bg-amber-600'
+            className='text-sm bg-orange-500 px-3 py-1 rounded hover:bg-orange-600'
           >
             Déconnexion
           </button>
@@ -127,7 +127,7 @@ export default function DashboardCandidat() {
             </div>
             <div>
               <span className='text-gray-500 text-sm'>Matricule</span>
-              <p className='font-medium text-amber-600'>{candidat?.matricule}</p>
+              <p className='font-medium text-orange-600'>{candidat?.matricule}</p>
             </div>
             <div>
               <span className='text-gray-500 text-sm'>Email</span>
@@ -173,7 +173,7 @@ export default function DashboardCandidat() {
                     <button
                       onClick={() => handleTelechargerConvocation(inscription.id)}
                       disabled={telechargement[inscription.id]}
-                      className='text-sm bg-amber-500 text-white px-3 py-2 rounded hover:bg-amber-600 disabled:opacity-50'
+                      className='text-sm bg-orange-500 text-white px-3 py-2 rounded hover:bg-orange-600 disabled:opacity-50'
                     >
                       {telechargement[inscription.id] ? 'Génération...' : '📄 Télécharger convocation'}
                     </button>
@@ -208,7 +208,7 @@ export default function DashboardCandidat() {
                   ) : (
                     <button
                       onClick={() => handleInscription(c.id)}
-                      className='bg-amber-500 text-white px-4 py-2 rounded hover:bg-amber-600 text-sm'
+                      className='bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 text-sm'
                     >
                       S'inscrire
                     </button>

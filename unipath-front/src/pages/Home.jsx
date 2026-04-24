@@ -41,8 +41,8 @@ export default function Home() {
     {
       role: 'Commission',
       icon: '✅',
-      couleur: 'bg-amber-50 border-amber-200',
-      couleurBadge: 'bg-amber-600',
+      couleur: 'bg-orange-50 border-orange-200',
+      couleurBadge: 'bg-orange-600',
       actions: [
         'Consulter la liste des dossiers soumis',
         'Visualiser les pièces justificatives de chaque candidat',
@@ -142,13 +142,13 @@ export default function Home() {
       <nav className='bg-blue-900 text-white px-6 py-4 flex justify-between items-center sticky top-0 z-50 shadow-lg'>
         <div className='flex items-center gap-3'>
           <span className='text-2xl font-black tracking-tight'>UniPath</span>
-          <span className='hidden sm:block text-amber-300 text-sm'>Plateforme universitaire numérique</span>
+          <span className='hidden sm:block text-orange-300 text-sm'>Plateforme universitaire numérique</span>
         </div>
         <div className='flex gap-3'>
-          <button onClick={() => navigate('/login')} className='text-sm border border-amber-400 px-4 py-2 rounded-lg hover:bg-blue-800 transition'>
+          <button onClick={() => navigate('/login')} className='text-sm border border-orange-400 px-4 py-2 rounded-lg hover:bg-blue-800 transition'>
             Se connecter
           </button>
-          <button onClick={() => navigate('/register')} className='text-sm bg-amber-400 text-blue-900 px-4 py-2 rounded-lg font-bold hover:bg-amber-500 transition'>
+          <button onClick={() => navigate('/register')} className='text-sm bg-orange-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition'>
             Créer un compte
           </button>
         </div>
@@ -161,7 +161,7 @@ export default function Home() {
         <div className='relative max-w-4xl mx-auto text-center'>
           <h1 className='text-4xl md:text-6xl font-black mb-6 leading-tight'>
             Gérez votre parcours
-            <span className='text-amber-400'> universitaire</span>
+            <span className='text-orange-400'> universitaire</span>
             <br />en toute simplicité
           </h1>
           <p className='text-lg md:text-xl text-blue-100 max-w-2xl mx-auto mb-10'>
@@ -169,10 +169,10 @@ export default function Home() {
             De la candidature à la convocation, tout se fait en ligne.
           </p>
           <div className='flex flex-col sm:flex-row gap-4 justify-center'>
-            <button onClick={() => navigate('/register')} className='bg-amber-500 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-amber-600 transition shadow-lg'>
+            <button onClick={() => navigate('/register')} className='bg-orange-500 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-orange-600 transition shadow-lg'>
               Créer mon compte →
             </button>
-            <button onClick={() => navigate('/login')} className='border-2 border-amber-400 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-800 transition'>
+            <button onClick={() => navigate('/login')} className='border-2 border-orange-400 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-800 transition'>
               Se connecter
             </button>
           </div>
@@ -205,19 +205,19 @@ export default function Home() {
             {etapes.map((e, i) => (
               <div key={e.numero} className='relative text-center'>
                 {i < etapes.length - 1 && (
-                  <div className='hidden md:block absolute top-10 left-3/4 w-1/2 h-0.5 bg-amber-200 z-0' />
+                  <div className='hidden md:block absolute top-10 left-3/4 w-1/2 h-0.5 bg-orange-200 z-0' />
                 )}
-                <div className='relative z-10 w-20 h-20 rounded-full bg-amber-50 border-2 border-amber-300 flex items-center justify-center text-3xl mx-auto mb-4'>
+                <div className='relative z-10 w-20 h-20 rounded-full bg-orange-50 border-2 border-orange-300 flex items-center justify-center text-3xl mx-auto mb-4'>
                   {e.icon}
                 </div>
-                <span className='text-xs font-black text-amber-600 tracking-widest'>{e.numero}</span>
+                <span className='text-xs font-black text-orange-600 tracking-widest'>{e.numero}</span>
                 <h3 className='text-base font-bold text-blue-900 mt-1 mb-2'>{e.titre}</h3>
                 <p className='text-gray-500 text-sm leading-relaxed'>{e.desc}</p>
               </div>
             ))}
           </div>
           <div className='text-center mt-10'>
-            <button onClick={() => navigate('/register')} className='bg-amber-500 text-white px-8 py-4 rounded-xl font-bold hover:bg-amber-600 transition'>
+            <button onClick={() => navigate('/register')} className='bg-orange-500 text-white px-8 py-4 rounded-xl font-bold hover:bg-orange-600 transition'>
               Commencer maintenant →
             </button>
           </div>
@@ -255,13 +255,13 @@ export default function Home() {
       <section className='py-16 px-6 bg-blue-900 text-white'>
         <div className='max-w-5xl mx-auto'>
           <h2 className='text-3xl font-black text-center mb-4'>Pourquoi UniPath ?</h2>
-          <p className='text-center text-amber-300 mb-12'>Une plateforme pensée pour simplifier la vie des étudiants béninois</p>
+          <p className='text-center text-orange-300 mb-12'>Une plateforme pensée pour simplifier la vie des étudiants béninois</p>
           <div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
             {avantages.map((a) => (
               <div key={a.titre} className='bg-blue-800 rounded-2xl p-8 flex gap-5 items-start hover:bg-blue-700 transition'>
                 <div className='text-4xl flex-shrink-0'>{a.icon}</div>
                 <div>
-                  <h3 className='text-lg font-bold text-amber-400 mb-2'>{a.titre}</h3>
+                  <h3 className='text-lg font-bold text-orange-400 mb-2'>{a.titre}</h3>
                   <p className='text-blue-100 text-sm leading-relaxed'>{a.desc}</p>
                 </div>
               </div>
@@ -310,7 +310,7 @@ export default function Home() {
                   type='text'
                   required
                   placeholder='Ex: AGOSSOU Kofi'
-                  className='w-full border border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm'
+                  className='w-full border border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm'
                 />
               </div>
               <div>
@@ -320,7 +320,7 @@ export default function Home() {
                   type='email'
                   required
                   placeholder='votre@email.com'
-                  className='w-full border border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm'
+                  className='w-full border border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm'
                 />
               </div>
               <div>
@@ -330,19 +330,19 @@ export default function Home() {
                   required
                   rows={5}
                   placeholder='Décrivez votre problème ou votre question...'
-                  className='w-full border border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm resize-none'
+                  className='w-full border border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm resize-none'
                 />
               </div>
               <button
                 type='submit'
-                className='w-full bg-amber-500 text-white py-3 rounded-xl font-bold hover:bg-amber-600 transition'
+                className='w-full bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600 transition'
               >
                 Envoyer le message →
               </button>
             </form>
             <div className='mt-6 pt-6 border-t border-gray-100 text-center'>
               <p className='text-gray-500 text-sm'>Ou contactez-nous directement par email :</p>
-              <a href='mailto:support.unipath@gmail.com' className='text-amber-600 font-medium text-sm hover:underline'>
+              <a href='mailto:support.unipath@gmail.com' className='text-orange-600 font-medium text-sm hover:underline'>
                 support.unipath@gmail.com
               </a>
             </div>
@@ -353,7 +353,7 @@ export default function Home() {
       {/* FOOTER */}
       <footer className='bg-blue-900 text-white py-10 px-6'>
         <div className='max-w-4xl mx-auto text-center'>
-          <p className='text-2xl font-black mb-2 text-amber-400'>UniPath</p>
+          <p className='text-2xl font-black mb-2 text-orange-400'>UniPath</p>
           <p className='text-blue-200 text-sm mb-4'>Plateforme numérique de gestion du parcours universitaire</p>
           <div className='border-t border-blue-700 pt-6 mt-6'>
             <p className='text-blue-300 text-xs'>

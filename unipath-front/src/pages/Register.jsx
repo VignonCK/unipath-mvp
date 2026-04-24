@@ -84,8 +84,8 @@ export default function Register() {
 
           {/* Barre de progression */}
           <div className='flex items-center gap-2 mb-6'>
-            <div className={`h-2 flex-1 rounded-full ${etape >= 1 ? 'bg-amber-500' : 'bg-gray-200'}`} />
-            <div className={`h-2 flex-1 rounded-full ${etape >= 2 ? 'bg-amber-500' : 'bg-gray-200'}`} />
+            <div className={`h-2 flex-1 rounded-full ${etape >= 1 ? 'bg-orange-500' : 'bg-gray-200'}`} />
+            <div className={`h-2 flex-1 rounded-full ${etape >= 2 ? 'bg-orange-500' : 'bg-gray-200'}`} />
           </div>
 
           {error && (
@@ -116,12 +116,12 @@ export default function Register() {
                     value={formData[field.name]}
                     onChange={handleChange}
                     required={field.required}
-                    className='w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm'
+                    className='w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm'
                   />
                 </div>
               ))}
 
-              <button type='submit' className='w-full bg-amber-500 text-white py-3 rounded-xl hover:bg-amber-600 font-bold text-sm transition'>
+              <button type='submit' className='w-full bg-orange-500 text-white py-3 rounded-xl hover:bg-orange-600 font-bold text-sm transition'>
                 Suivant →
               </button>
             </form>
@@ -141,7 +141,7 @@ export default function Register() {
                   value={formData.email}
                   onChange={handleChange}
                   required
-                  className='w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm'
+                  className='w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm'
                   placeholder='votre@email.com'
                 />
               </div>
@@ -156,7 +156,7 @@ export default function Register() {
                     value={formData.password}
                     onChange={handleChange}
                     required
-                    className='w-full border border-gray-300 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm'
+                    className='w-full border border-gray-300 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm'
                     placeholder='••••••••'
                   />
                   <button
@@ -179,7 +179,7 @@ export default function Register() {
                     value={formData.confirmPassword}
                     onChange={handleChange}
                     required
-                    className='w-full border border-gray-300 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm'
+                    className='w-full border border-gray-300 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm'
                     placeholder='••••••••'
                   />
                   <button
@@ -203,7 +203,7 @@ export default function Register() {
                 <button
                   type='submit'
                   disabled={loading}
-                  className='flex-1 bg-amber-500 text-white py-3 rounded-xl hover:bg-amber-600 font-bold text-sm disabled:opacity-50 transition'
+                  className='flex-1 bg-orange-500 text-white py-3 rounded-xl hover:bg-orange-600 font-bold text-sm disabled:opacity-50 transition'
                 >
                   {loading ? 'Création...' : 'Créer mon compte'}
                 </button>
@@ -214,10 +214,10 @@ export default function Register() {
           <div className='mt-6 pt-6 border-t border-gray-100 space-y-2 text-center'>
             <p className='text-sm text-gray-500'>
               Déjà un compte ?{' '}
-              <a href='/login' className='text-amber-600 font-medium hover:underline'>Se connecter</a>
+              <a href='/login' className='text-orange-600 font-medium hover:underline'>Se connecter</a>
             </p>
             <p className='text-sm text-gray-500'>
-              <a href='/' className='text-amber-600 font-medium hover:underline'>← Retour à l'accueil</a>
+              <a href='/' className='text-orange-600 font-medium hover:underline'>← Retour à l'accueil</a>
             </p>
           </div>
 
