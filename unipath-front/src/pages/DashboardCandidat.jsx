@@ -1,7 +1,7 @@
 // src/pages/DashboardCandidat.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { candidatService, concoursService, inscriptionService, dossierService, convocationService } from '../services/api';
+import { authService, candidatService, concoursService, inscriptionService, dossierService, convocationService } from '../services/api';
 
 export default function DashboardCandidat() {
   const navigate = useNavigate();
@@ -73,7 +73,7 @@ export default function DashboardCandidat() {
   };
 
   const handleDeconnexion = () => {
-    localStorage.removeItem('token');
+    authService.logout();
     navigate('/login');
   };
 

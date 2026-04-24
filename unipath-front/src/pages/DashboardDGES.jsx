@@ -4,13 +4,16 @@
 // avec un graphique en barres et un tableau détaillé
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
-import { dgesService } from '../services/api';
+import { dgesService, authService } from '../services/api';
 
 export default function DashboardDGES() {
+  const navigate = useNavigate();
+  
   // Données reçues du backend
   // Structure : { totaux: {...}, statistiques: [...] }
   const [data, setData] = useState(null);
@@ -53,11 +56,22 @@ export default function DashboardDGES() {
     <div className='min-h-screen bg-gray-50'>
 
       {/* Header */}
-      <header className='bg-blue-900 text-white px-6 py-4'>
-        <h1 className='text-xl font-bold'>UniPath — Tableau de bord DGES</h1>
-        <p className='text-blue-300 text-sm'>
-          Direction Générale de l'Enseignement Supérieur
-        </p>
+      <header className='bg-blue-900 text-white px-6 py-4 flex justify-between items-center'>
+        <div>
+          <h1 className='text-xl font-bold'>UniPath — Tableau de bord DGES</h1>
+          <p className='text-blue-300 text-sm'>
+            Direction Générale de l'Enseignement Supérieur
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            authService.logout();
+            navigate('/login');
+          }}
+          className='bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-lg text-sm font-medium transition'
+        >
+          Déconnexion
+        </button>
       </header>
 
       <main className='max-w-6xl mx-auto p-6 space-y-6'>

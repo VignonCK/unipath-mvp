@@ -23,8 +23,24 @@ export default function Login() {
 
     try {
       const data = await authService.login(email, password);
-      localStorage.setItem('token', data.token);
-      navigate('/dashboard');
+      
+      // Le token et user sont déjà stockés par authService.login
+      // Rediriger selon le rôle
+      const userRole = data.user?.role;
+      
+      switch (userRole) {
+        case 'CANDIDAT':
+          navigate('/dashboard');
+          break;
+        case 'COMMISSION':
+          navigate('/commission');
+          break;
+        case 'DGES':
+          navigate('/dges');
+          break;
+        default:
+          navigate('/dashboard');
+      }
     } catch (err) {
       setError(err.message || 'Email ou mot de passe incorrect');
     } finally {

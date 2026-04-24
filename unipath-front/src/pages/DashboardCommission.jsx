@@ -1,8 +1,10 @@
 // src/pages/DashboardCommission.jsx
 import { useState, useEffect } from 'react';
-import { commissionService } from '../services/api';
+import { useNavigate } from 'react-router-dom';
+import { commissionService, authService } from '../services/api';
 
 export default function DashboardCommission() {
+  const navigate = useNavigate();
   const [dossiers, setDossiers] = useState([]);
   const [filtre, setFiltre] = useState('EN_ATTENTE');
   const [loading, setLoading] = useState(true);
@@ -54,8 +56,17 @@ export default function DashboardCommission() {
     <div className='min-h-screen bg-gray-50'>
 
       {/* Header */}
-      <header className='bg-blue-900 text-white px-6 py-4'>
+      <header className='bg-blue-900 text-white px-6 py-4 flex justify-between items-center'>
         <h1 className='text-xl font-bold'>UniPath — Espace Commission</h1>
+        <button
+          onClick={() => {
+            authService.logout();
+            navigate('/login');
+          }}
+          className='bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-lg text-sm font-medium transition'
+        >
+          Déconnexion
+        </button>
       </header>
 
       <main className='max-w-5xl mx-auto p-6'>

@@ -27,17 +27,41 @@ async function request(endpoint, options = {}) {
 
 // ── Auth ─────────────────────────────────────────────────────────
 export const authService = {
-  login: (email, password) =>
-    request('/auth/login', {
+  login: async (email, password) => {
+    const data = await request('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
-    }),
+    });
+    
+    // Stocker le token ET les infos utilisateur (incluant le rôle)
+    if (data.token) {
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+    }
+    
+    return data;
+  },
 
   register: (userData) =>
     request('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
     }),
+
+  logout: () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  },
+
+  getCurrentUser: () => {
+    try {
+      const userStr = localStorage.getItem('user');
+      return userStr ? JSON.parse(userStr) : null;
+    } catch (error) {
+      console.error('Erreur parsing user:', error);
+      return null;
+    }
+  },
 };
 
 // ── Candidat ─────────────────────────────────────────────────────
