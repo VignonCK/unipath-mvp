@@ -58,7 +58,7 @@ export default function Login() {
         className='absolute inset-0 w-full h-full object-cover'
       />
       {/* Overlay */}
-      <div className='absolute inset-0' style={{backgroundColor: 'rgba(30, 58, 138, 0.75)'}} />
+      <div className='absolute inset-0' style={{backgroundColor: 'rgba(30, 58, 138, 0.4)'}} />
 
       {/* Carte de connexion */}
       <div className='relative w-full max-w-md'>
