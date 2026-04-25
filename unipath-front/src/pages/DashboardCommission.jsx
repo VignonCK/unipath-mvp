@@ -30,6 +30,8 @@ export default function DashboardCommission() {
   const [message, setMessage] = useState({ text: '', type: 'info' });
   const [recherche, setRecherche] = useState('');
   const [historiqueOuvert, setHistoriqueOuvert] = useState(null);
+  // Compteurs indépendants du filtre actif
+  const [counts, setCounts] = useState({ EN_ATTENTE: 0, VALIDE: 0, REJETE: 0 });
   const user = authService.getCurrentUser();
 
   const showMessage = (text, type = 'info') => {
@@ -37,6 +39,23 @@ export default function DashboardCommission() {
     setTimeout(() => setMessage({ text: '' }), 4000);
   };
 
+  // Charge les compteurs globaux (tous statuts en parallèle)
+  const chargerCounts = async () => {
+    try {
+      const [attente, valide, rejete] = await Promise.all([
+        commissionService.getDossiers('EN_ATTENTE'),
+        commissionService.getDossiers('VALIDE'),
+        commissionService.getDossiers('REJETE'),
+      ]);
+      setCounts({
+        EN_ATTENTE: attente.inscriptions?.length ?? 0,
+        VALIDE:     valide.inscriptions?.length ?? 0,
+        REJETE:     rejete.inscriptions?.length ?? 0,
+      });
+    } catch (err) { console.error(err); }
+  };
+
+  // Charge uniquement les dossiers du filtre actif
   const chargerDossiers = async () => {
     setLoading(true);
     try {
@@ -49,13 +68,20 @@ export default function DashboardCommission() {
     }
   };
 
+  // Au montage : charger les counts + les dossiers du filtre par défaut
+  useEffect(() => {
+    chargerCounts();
+  }, []);
+
   useEffect(() => { chargerDossiers(); }, [filtre]);
 
   const handleDecision = async (inscriptionId, statut) => {
     try {
       await commissionService.updateStatut(inscriptionId, statut);
       showMessage(`Dossier ${statut === 'VALIDE' ? 'validé ✅' : 'rejeté ❌'} avec succès`, statut === 'VALIDE' ? 'success' : 'error');
+      // Recharger les deux pour garder les counts à jour
       chargerDossiers();
+      chargerCounts();
     } catch (err) { showMessage(err.message, 'error'); }
   };
 
@@ -68,11 +94,7 @@ export default function DashboardCommission() {
     );
   });
 
-  const counts = {
-    EN_ATTENTE: dossiers.filter(d => d.statut === 'EN_ATTENTE').length,
-    VALIDE:     dossiers.filter(d => d.statut === 'VALIDE').length,
-    REJETE:     dossiers.filter(d => d.statut === 'REJETE').length,
-  };
+  const total = counts.EN_ATTENTE + counts.VALIDE + counts.REJETE;
 
   return (
     <div className='min-h-screen bg-gray-50'>
@@ -119,23 +141,40 @@ export default function DashboardCommission() {
           </div>
         )}
 
-        {/* ── STATS RAPIDES ── */}
-        <div className='grid grid-cols-3 gap-4'>
-          {[
-            { statut: 'EN_ATTENTE', label: 'En attente', color: 'border-yellow-400 bg-yellow-50', text: 'text-yellow-700', icon: '⏳' },
-            { statut: 'VALIDE',     label: 'Validés',    color: 'border-green-500 bg-green-50',   text: 'text-green-700',  icon: '✅' },
-            { statut: 'REJETE',     label: 'Rejetés',    color: 'border-red-500 bg-red-50',       text: 'text-red-700',    icon: '❌' },
-          ].map(({ statut, label, color, text, icon }) => (
-            <button
-              key={statut}
-              onClick={() => setFiltre(statut)}
-              className={`rounded-2xl border-2 p-4 text-left transition hover:shadow-sm ${color} ${filtre === statut ? 'ring-2 ring-offset-1 ring-blue-900' : ''}`}
-            >
-              <p className='text-2xl mb-1'>{icon}</p>
-              <p className={`text-2xl font-black ${text}`}>{counts[statut]}</p>
-              <p className={`text-xs font-medium ${text}`}>{label}</p>
-            </button>
-          ))}
+        {/* ── STATS GLOBALES (toujours visibles, indépendantes du filtre) ── */}
+        <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+          {/* Total */}
+          <div className='bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3'>
+            <div className='w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-lg'>📋</div>
+            <div>
+              <p className='text-2xl font-black text-blue-900'>{total}</p>
+              <p className='text-xs text-gray-500 font-medium'>Total dossiers</p>
+            </div>
+          </div>
+          {/* En attente */}
+          <div className='bg-yellow-50 rounded-2xl border-2 border-yellow-300 p-4 flex items-center gap-3'>
+            <div className='w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center text-lg'>⏳</div>
+            <div>
+              <p className='text-2xl font-black text-yellow-700'>{counts.EN_ATTENTE}</p>
+              <p className='text-xs text-yellow-600 font-medium'>En attente</p>
+            </div>
+          </div>
+          {/* Validés */}
+          <div className='bg-green-50 rounded-2xl border-2 border-green-300 p-4 flex items-center gap-3'>
+            <div className='w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center text-lg'>✅</div>
+            <div>
+              <p className='text-2xl font-black text-green-700'>{counts.VALIDE}</p>
+              <p className='text-xs text-green-600 font-medium'>Validés</p>
+            </div>
+          </div>
+          {/* Rejetés */}
+          <div className='bg-red-50 rounded-2xl border-2 border-red-300 p-4 flex items-center gap-3'>
+            <div className='w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center text-lg'>❌</div>
+            <div>
+              <p className='text-2xl font-black text-red-600'>{counts.REJETE}</p>
+              <p className='text-xs text-red-500 font-medium'>Rejetés</p>
+            </div>
+          </div>
         </div>
 
         {/* ── FILTRES + RECHERCHE ── */}
@@ -147,11 +186,16 @@ export default function DashboardCommission() {
                 <button
                   key={s}
                   onClick={() => setFiltre(s)}
-                  className={`px-4 py-2 rounded-xl text-xs font-semibold transition ${
+                  className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
                     filtre === s ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
                   {cfg.label}
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                    filtre === s ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-500'
+                  }`}>
+                    {counts[s]}
+                  </span>
                 </button>
               );
             })}
