@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { commissionService, authService } from '../services/api';
+import HistoriqueActions from '../components/HistoriqueActions';
 
 export default function DashboardCommission() {
   const navigate = useNavigate();
@@ -10,6 +11,7 @@ export default function DashboardCommission() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [recherche, setRecherche] = useState('');
+  const [historiqueOuvert, setHistoriqueOuvert] = useState(null); // dossierId ouvert
 
   const chargerDossiers = async () => {
     setLoading(true);
@@ -175,6 +177,31 @@ export default function DashboardCommission() {
                       >
                         ✗ Rejeter le dossier
                       </button>
+                    </div>
+                  )}
+
+                  {/* Bouton historique */}
+                  {inscription.candidat.dossier?.id && (
+                    <div className='mt-3'>
+                      <button
+                        onClick={() => setHistoriqueOuvert(
+                          historiqueOuvert === inscription.candidat.dossier.id
+                            ? null
+                            : inscription.candidat.dossier.id
+                        )}
+                        className='text-sm text-blue-900 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 flex items-center gap-1'
+                      >
+                        📋 {historiqueOuvert === inscription.candidat.dossier.id ? 'Masquer' : 'Voir'} l'historique
+                      </button>
+
+                      {historiqueOuvert === inscription.candidat.dossier.id && (
+                        <div className='mt-3'>
+                          <HistoriqueActions
+                            dossierId={inscription.candidat.dossier.id}
+                            nomCandidat={`${inscription.candidat.prenom} ${inscription.candidat.nom}`}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 

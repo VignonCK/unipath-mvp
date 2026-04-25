@@ -91,20 +91,20 @@ Implémentation des fonctionnalités de suivi de complétude des dossiers et d'h
     - Tester la gestion d'erreurs et codes de retour
     - _Exigences : 5.1, 5.2_
 
-- [ ] 6. Développer les composants React frontend
-  - [ ] 6.1 Créer le composant ProgressBar pour l'affichage de complétude
+- [x] 6. Développer les composants React frontend
+  - [x] 6.1 Créer le composant ProgressBar pour l'affichage de complétude
     - Implémenter l'affichage du pourcentage avec barre de progression visuelle
     - Créer le sous-composant PiecesList pour les pièces manquantes
     - Intégrer les appels API vers /api/completion/:candidatId
     - _Exigences : 1.5, 2.2, 2.3_
 
-  - [ ] 6.2 Créer le composant HistoryViewer pour l'historique des actions
+  - [x] 6.2 Créer le composant HistoryViewer pour l'historique des actions
     - Implémenter l'affichage chronologique des actions
     - Créer les filtres par période, utilisateur et type d'action
     - Intégrer le contrôle d'accès basé sur les rôles utilisateur
     - _Exigences : 3.5, 4.2, 8.1_
 
-  - [ ] 6.3 Implémenter les notifications de complétude
+  - [x] 6.3 Implémenter les notifications de complétude
     - Créer les notifications visuelles pour dossier complet (100%)
     - Implémenter le déclenchement automatique lors des transitions d'état
     - Ajouter le bouton de soumission officielle du dossier
@@ -121,14 +121,14 @@ Implémentation des fonctionnalités de suivi de complétude des dossiers et d'h
     - Tester la responsivité et l'accessibilité
     - _Exigences : 1.5, 2.2, 3.5_
 
-- [ ] 7. Intégrer les composants dans les pages existantes
-  - [ ] 7.1 Intégrer ProgressBar dans l'interface candidat
+- [x] 7. Intégrer les composants dans les pages existantes
+  - [x] 7.1 Intégrer ProgressBar dans l'interface candidat
     - Ajouter le composant dans la page de dossier candidat
     - Connecter aux données de session utilisateur
     - Tester l'affichage et les interactions
     - _Exigences : 1.5, 6.4_
 
-  - [ ] 7.2 Intégrer HistoryViewer dans l'interface commission
+  - [x] 7.2 Intégrer HistoryViewer dans l'interface commission
     - Ajouter le composant dans la page de gestion des dossiers
     - Implémenter les permissions d'accès par rôle
     - Tester l'export CSV et les filtres

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService, candidatService, concoursService, inscriptionService, dossierService, convocationService } from '../services/api';
+import DossierCompletion from '../components/DossierCompletion';
 
 export default function DashboardCandidat() {
   const navigate = useNavigate();
@@ -219,33 +220,15 @@ export default function DashboardCandidat() {
           </div>
         </div>
         {/* Complétude du dossier */}
-<div className='bg-white rounded-xl shadow p-6'>
-  <h2 className='text-lg font-bold text-gray-800 mb-4'>Complétude du dossier</h2>
-  {(() => {
-    const pieces = ['acteNaissance', 'carteIdentite', 'photo', 'releve', 'quittance'];
-    const deposees = pieces.filter(p => candidat?.dossier?.[p]).length;
-    const pourcentage = Math.round((deposees / pieces.length) * 100);
-    return (
-      <div>
-        <div className='flex justify-between mb-2'>
-          <span className='text-sm text-gray-600'>{deposees} / {pieces.length} pièces déposées</span>
-          <span className={`text-sm font-bold ${pourcentage === 100 ? 'text-green-600' : pourcentage >= 60 ? 'text-yellow-600' : 'text-red-600'}`}>
-            {pourcentage}%
-          </span>
-        </div>
-        <div className='w-full bg-gray-200 rounded-full h-4'>
-          <div
-            className={`h-4 rounded-full transition-all ${pourcentage === 100 ? 'bg-green-500' : pourcentage >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
-            style={{ width: `${pourcentage}%` }}
-          />
-        </div>
-        <p className='text-xs text-gray-500 mt-2'>
-          {pourcentage === 100 ? '✅ Dossier complet !' : `Il vous reste ${pieces.length - deposees} pièce(s) à déposer.`}
-        </p>
-      </div>
-    );
-  })()}
-</div>
+        <DossierCompletion
+          candidatId={candidat?.id}
+          dossier={candidat?.dossier}
+          onSoumettre={async () => {
+            setMessage('Dossier soumis avec succès ! La commission va étudier votre dossier.');
+            const updated = await candidatService.getProfil();
+            setCandidат(updated);
+          }}
+        />
 
         {/* Section 4 : Pièces justificatives */}
         <div className='bg-white rounded-xl shadow p-6'>

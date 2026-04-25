@@ -19,8 +19,10 @@ router.post('/action', protect, historyController.enregistrerAction);
 // Accessible uniquement à la commission et DGES
 router.get('/audit/rapport', protect, checkRole(['COMMISSION', 'DGES']), historyController.genererRapportAudit);
 
-// GET /api/history/export/csv/:dossierId? - Exporter l'historique en CSV
+// GET /api/history/export/csv - Exporter l'historique global en CSV
+// GET /api/history/export/csv/:dossierId - Exporter l'historique d'un dossier en CSV
 // Accessible uniquement à la commission et DGES
-router.get('/export/csv/:dossierId?', protect, checkRole(['COMMISSION', 'DGES']), historyController.exporterCSV);
+router.get('/export/csv/:dossierId', protect, checkRole(['COMMISSION', 'DGES']), historyController.exporterCSV);
+router.get('/export/csv', protect, checkRole(['COMMISSION', 'DGES']), historyController.exporterCSV);
 
 module.exports = router;

@@ -336,7 +336,8 @@ exports.genererRapportAudit = async (req, res) => {
 };
 
 /**
- * GET /api/history/export/csv/:dossierId?
+ * GET /api/history/export/csv/:dossierId
+ * GET /api/history/export/csv
  * Exporte l'historique au format CSV
  */
 exports.exporterCSV = async (req, res) => {
