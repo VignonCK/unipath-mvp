@@ -9,9 +9,9 @@ function initiales(prenom, nom) {
 }
 
 const STATUT_CONFIG = {
-  VALIDE:     { label: 'Validé',     bar: 'bg-green-500',  badge: 'bg-green-100 text-green-700',   dot: 'bg-green-500' },
-  REJETE:     { label: 'Rejeté',     bar: 'bg-red-500',    badge: 'bg-red-100 text-red-700',       dot: 'bg-red-500' },
-  EN_ATTENTE: { label: 'En attente', bar: 'bg-yellow-400', badge: 'bg-yellow-100 text-yellow-700', dot: 'bg-yellow-400' },
+  VALIDE:     { label: 'Validé',     bar: 'bg-green-500',  badge: 'bg-green-100 text-green-700' },
+  REJETE:     { label: 'Rejeté',     bar: 'bg-red-500',    badge: 'bg-red-100 text-red-700' },
+  EN_ATTENTE: { label: 'En attente', bar: 'bg-yellow-400', badge: 'bg-yellow-100 text-yellow-700' },
 };
 
 const PIECES_LABELS = {
@@ -30,7 +30,6 @@ export default function DashboardCommission() {
   const [message, setMessage] = useState({ text: '', type: 'info' });
   const [recherche, setRecherche] = useState('');
   const [historiqueOuvert, setHistoriqueOuvert] = useState(null);
-  // Compteurs indépendants du filtre actif
   const [counts, setCounts] = useState({ EN_ATTENTE: 0, VALIDE: 0, REJETE: 0 });
   const user = authService.getCurrentUser();
 
@@ -39,7 +38,6 @@ export default function DashboardCommission() {
     setTimeout(() => setMessage({ text: '' }), 4000);
   };
 
-  // Charge les compteurs globaux (tous statuts en parallèle)
   const chargerCounts = async () => {
     try {
       const [attente, valide, rejete] = await Promise.all([
@@ -55,7 +53,6 @@ export default function DashboardCommission() {
     } catch (err) { console.error(err); }
   };
 
-  // Charge uniquement les dossiers du filtre actif
   const chargerDossiers = async () => {
     setLoading(true);
     try {
@@ -68,18 +65,13 @@ export default function DashboardCommission() {
     }
   };
 
-  // Au montage : charger les counts + les dossiers du filtre par défaut
-  useEffect(() => {
-    chargerCounts();
-  }, []);
-
+  useEffect(() => { chargerCounts(); }, []);
   useEffect(() => { chargerDossiers(); }, [filtre]);
 
   const handleDecision = async (inscriptionId, statut) => {
     try {
       await commissionService.updateStatut(inscriptionId, statut);
-      showMessage(`Dossier ${statut === 'VALIDE' ? 'validé ✅' : 'rejeté ❌'} avec succès`, statut === 'VALIDE' ? 'success' : 'error');
-      // Recharger les deux pour garder les counts à jour
+      showMessage(`Dossier ${statut === 'VALIDE' ? 'validé' : 'rejeté'} avec succès`, statut === 'VALIDE' ? 'success' : 'error');
       chargerDossiers();
       chargerCounts();
     } catch (err) { showMessage(err.message, 'error'); }
@@ -99,13 +91,12 @@ export default function DashboardCommission() {
   return (
     <div className='min-h-screen bg-gray-50'>
 
-      {/* ── HEADER ── */}
+      {/* HEADER */}
       <header className='bg-blue-900 text-white px-6 py-3 flex items-center justify-between sticky top-0 z-40 shadow-lg'>
         <div className='flex items-center gap-3'>
           <span className='text-xl font-black tracking-tight'>UniPath</span>
           <span className='hidden sm:block text-blue-300 text-xs'>Espace Commission</span>
         </div>
-
         <div className='flex items-center gap-3'>
           <div className='flex items-center gap-2'>
             <div className='w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center text-sm font-bold text-white flex-shrink-0'>
@@ -137,47 +128,31 @@ export default function DashboardCommission() {
                                          'bg-blue-50 border border-blue-200 text-blue-700'
           }`}>
             <span>{message.text}</span>
-            <button onClick={() => setMessage({ text: '' })} className='ml-4 opacity-60 hover:opacity-100'>✕</button>
+            <button onClick={() => setMessage({ text: '' })} className='ml-4 opacity-60 hover:opacity-100 text-lg leading-none'>&times;</button>
           </div>
         )}
 
-        {/* ── STATS GLOBALES (toujours visibles, indépendantes du filtre) ── */}
+        {/* STATS GLOBALES */}
         <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
-          {/* Total */}
-          <div className='bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3'>
-            <div className='w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-lg'>📋</div>
-            <div>
-              <p className='text-2xl font-black text-blue-900'>{total}</p>
-              <p className='text-xs text-gray-500 font-medium'>Total dossiers</p>
-            </div>
+          <div className='bg-white rounded-2xl border border-gray-100 shadow-sm p-5'>
+            <p className='text-xs text-gray-500 font-medium mb-1'>Total dossiers</p>
+            <p className='text-3xl font-black text-blue-900'>{total}</p>
           </div>
-          {/* En attente */}
-          <div className='bg-yellow-50 rounded-2xl border-2 border-yellow-300 p-4 flex items-center gap-3'>
-            <div className='w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center text-lg'>⏳</div>
-            <div>
-              <p className='text-2xl font-black text-yellow-700'>{counts.EN_ATTENTE}</p>
-              <p className='text-xs text-yellow-600 font-medium'>En attente</p>
-            </div>
+          <div className='bg-yellow-50 rounded-2xl border-2 border-yellow-200 p-5'>
+            <p className='text-xs text-yellow-600 font-medium mb-1'>En attente</p>
+            <p className='text-3xl font-black text-yellow-700'>{counts.EN_ATTENTE}</p>
           </div>
-          {/* Validés */}
-          <div className='bg-green-50 rounded-2xl border-2 border-green-300 p-4 flex items-center gap-3'>
-            <div className='w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center text-lg'>✅</div>
-            <div>
-              <p className='text-2xl font-black text-green-700'>{counts.VALIDE}</p>
-              <p className='text-xs text-green-600 font-medium'>Validés</p>
-            </div>
+          <div className='bg-green-50 rounded-2xl border-2 border-green-200 p-5'>
+            <p className='text-xs text-green-600 font-medium mb-1'>Validés</p>
+            <p className='text-3xl font-black text-green-700'>{counts.VALIDE}</p>
           </div>
-          {/* Rejetés */}
-          <div className='bg-red-50 rounded-2xl border-2 border-red-300 p-4 flex items-center gap-3'>
-            <div className='w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center text-lg'>❌</div>
-            <div>
-              <p className='text-2xl font-black text-red-600'>{counts.REJETE}</p>
-              <p className='text-xs text-red-500 font-medium'>Rejetés</p>
-            </div>
+          <div className='bg-red-50 rounded-2xl border-2 border-red-200 p-5'>
+            <p className='text-xs text-red-500 font-medium mb-1'>Rejetés</p>
+            <p className='text-3xl font-black text-red-600'>{counts.REJETE}</p>
           </div>
         </div>
 
-        {/* ── FILTRES + RECHERCHE ── */}
+        {/* FILTRES + RECHERCHE */}
         <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-col sm:flex-row gap-3 items-center'>
           <div className='flex gap-2'>
             {['EN_ATTENTE', 'VALIDE', 'REJETE'].map(s => {
@@ -201,13 +176,12 @@ export default function DashboardCommission() {
             })}
           </div>
           <div className='flex-1 relative'>
-            <span className='absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm'>🔍</span>
             <input
               type='text'
               placeholder='Rechercher par nom, matricule ou concours...'
               value={recherche}
               onChange={e => setRecherche(e.target.value)}
-              className='w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-orange-500'
+              className='w-full pl-4 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-orange-500'
             />
           </div>
           {recherche && (
@@ -215,13 +189,13 @@ export default function DashboardCommission() {
           )}
         </div>
 
-        {/* ── LISTE DES DOSSIERS ── */}
+        {/* LISTE DES DOSSIERS */}
         {loading ? (
           <div className='space-y-4'>
             {[1, 2, 3].map(i => (
               <div key={i} className='bg-white rounded-2xl p-6 animate-pulse'>
                 <div className='flex gap-4'>
-                  <div className='w-12 h-12 bg-gray-200 rounded-xl' />
+                  <div className='w-11 h-11 bg-gray-200 rounded-xl' />
                   <div className='flex-1 space-y-2'>
                     <div className='h-4 bg-gray-200 rounded w-1/3' />
                     <div className='h-3 bg-gray-200 rounded w-1/4' />
@@ -232,8 +206,7 @@ export default function DashboardCommission() {
           </div>
         ) : dossiersFiltres.length === 0 ? (
           <div className='text-center py-16 text-gray-400'>
-            <p className='text-4xl mb-3'>📭</p>
-            <p className='text-sm'>{recherche ? 'Aucun résultat pour cette recherche' : 'Aucun dossier dans cette catégorie'}</p>
+            <p className='text-sm'>{recherche ? 'Aucun résultat pour cette recherche.' : 'Aucun dossier dans cette catégorie.'}</p>
           </div>
         ) : (
           <div className='space-y-4'>
@@ -246,10 +219,9 @@ export default function DashboardCommission() {
 
               return (
                 <div key={ins.id} className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
-                  {/* Barre colorée en haut */}
                   <div className={`h-1 ${cfg.bar}`} />
-
                   <div className='p-5'>
+
                     {/* En-tête candidat */}
                     <div className='flex items-start justify-between gap-3 mb-4'>
                       <div className='flex items-center gap-3'>
@@ -272,7 +244,7 @@ export default function DashboardCommission() {
                       </div>
                     </div>
 
-                    {/* Pièces justificatives */}
+                    {/* Pièces */}
                     <div className='mb-4'>
                       <div className='flex items-center justify-between mb-2'>
                         <p className='text-xs text-gray-500 font-medium'>Pièces justificatives</p>
@@ -285,13 +257,13 @@ export default function DashboardCommission() {
                           <div
                             key={p}
                             title={PIECES_LABELS[p]}
-                            className={`flex-1 text-center py-1.5 rounded-lg text-xs font-medium ${
+                            className={`flex-1 text-center py-1.5 rounded-lg text-xs font-semibold ${
                               ins.candidat.dossier?.[p]
                                 ? 'bg-green-100 text-green-700'
                                 : 'bg-gray-100 text-gray-400'
                             }`}
                           >
-                            {ins.candidat.dossier?.[p] ? '✓' : '✗'}
+                            {ins.candidat.dossier?.[p] ? '✓' : '—'}
                           </div>
                         ))}
                       </div>
@@ -312,28 +284,26 @@ export default function DashboardCommission() {
                             onClick={() => handleDecision(ins.id, 'VALIDE')}
                             className='flex-1 bg-green-600 text-white py-2 rounded-xl text-sm font-semibold hover:bg-green-700 transition'
                           >
-                            ✓ Valider
+                            Valider le dossier
                           </button>
                           <button
                             onClick={() => handleDecision(ins.id, 'REJETE')}
                             className='flex-1 bg-red-600 text-white py-2 rounded-xl text-sm font-semibold hover:bg-red-700 transition'
                           >
-                            ✗ Rejeter
+                            Rejeter le dossier
                           </button>
                         </div>
                       )}
-
                       {dossierId && (
                         <button
                           onClick={() => setHistoriqueOuvert(historiqueOuvert === dossierId ? null : dossierId)}
-                          className='text-xs text-blue-900 border border-blue-200 py-1.5 rounded-xl hover:bg-blue-50 transition flex items-center justify-center gap-1'
+                          className='text-xs text-blue-900 border border-blue-200 py-1.5 rounded-xl hover:bg-blue-50 transition'
                         >
-                          📋 {historiqueOuvert === dossierId ? 'Masquer' : 'Voir'} l'historique
+                          {historiqueOuvert === dossierId ? 'Masquer l\'historique' : 'Voir l\'historique'}
                         </button>
                       )}
                     </div>
 
-                    {/* Historique dépliable */}
                     {historiqueOuvert === dossierId && dossierId && (
                       <div className='mt-4 border-t border-gray-100 pt-4'>
                         <HistoriqueActions

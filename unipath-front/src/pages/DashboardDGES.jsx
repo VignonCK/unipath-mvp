@@ -32,7 +32,7 @@ export default function DashboardDGES() {
   if (loading) return (
     <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
       <div className='text-center'>
-        <div className='w-12 h-12 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin mx-auto mb-3' />
+        <div className='w-10 h-10 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin mx-auto mb-3' />
         <p className='text-gray-500 text-sm'>Chargement des statistiques...</p>
       </div>
     </div>
@@ -41,9 +41,8 @@ export default function DashboardDGES() {
   if (error) return (
     <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
       <div className='text-center'>
-        <p className='text-4xl mb-3'>⚠️</p>
-        <p className='text-red-500 text-sm'>{error}</p>
-        <button onClick={() => window.location.reload()} className='mt-3 text-sm text-orange-500 hover:underline'>
+        <p className='text-red-500 text-sm mb-3'>{error}</p>
+        <button onClick={() => window.location.reload()} className='text-sm text-orange-500 hover:underline'>
           Réessayer
         </button>
       </div>
@@ -58,17 +57,19 @@ export default function DashboardDGES() {
   })) || [];
 
   const nomUser = user?.prenom ? `${user.prenom} ${user.nom || ''}`.trim() : user?.email || 'DGES';
+  const tauxGlobal = data?.totaux?.total_inscrits > 0
+    ? Math.round((data.totaux.total_valides / data.totaux.total_inscrits) * 100)
+    : 0;
 
   return (
     <div className='min-h-screen bg-gray-50'>
 
-      {/* ── HEADER ── */}
+      {/* HEADER */}
       <header className='bg-blue-900 text-white px-6 py-3 flex items-center justify-between sticky top-0 z-40 shadow-lg'>
         <div className='flex items-center gap-3'>
           <span className='text-xl font-black tracking-tight'>UniPath</span>
           <span className='hidden sm:block text-blue-300 text-xs'>Tableau de bord DGES</span>
         </div>
-
         <div className='flex items-center gap-3'>
           <div className='flex items-center gap-2'>
             <div className='w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center text-sm font-bold text-white flex-shrink-0'>
@@ -90,73 +91,42 @@ export default function DashboardDGES() {
 
       <main className='max-w-6xl mx-auto p-6 space-y-6'>
 
-        {/* ── KPI CARDS ── */}
+        {/* KPI CARDS */}
         <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
           {[
-            {
-              label: 'Concours actifs',
-              value: data?.totaux?.total_concours ?? 0,
-              icon: '🏛️',
-              color: 'from-blue-900 to-blue-800',
-              text: 'text-white',
-              sub: 'text-blue-300',
-            },
-            {
-              label: 'Total inscrits',
-              value: data?.totaux?.total_inscrits ?? 0,
-              icon: '👥',
-              color: 'from-orange-500 to-orange-600',
-              text: 'text-white',
-              sub: 'text-orange-100',
-            },
-            {
-              label: 'Dossiers validés',
-              value: data?.totaux?.total_valides ?? 0,
-              icon: '✅',
-              color: 'from-green-600 to-green-700',
-              text: 'text-white',
-              sub: 'text-green-100',
-            },
-            {
-              label: 'En attente',
-              value: data?.totaux?.total_attente ?? 0,
-              icon: '⏳',
-              color: 'from-yellow-500 to-yellow-600',
-              text: 'text-white',
-              sub: 'text-yellow-100',
-            },
+            { label: 'Concours actifs', value: data?.totaux?.total_concours ?? 0,  color: 'bg-blue-900',   text: 'text-white', sub: 'text-blue-300' },
+            { label: 'Total inscrits',  value: data?.totaux?.total_inscrits ?? 0,   color: 'bg-orange-500', text: 'text-white', sub: 'text-orange-100' },
+            { label: 'Dossiers validés',value: data?.totaux?.total_valides ?? 0,    color: 'bg-green-600',  text: 'text-white', sub: 'text-green-100' },
+            { label: 'En attente',      value: data?.totaux?.total_attente ?? 0,    color: 'bg-yellow-500', text: 'text-white', sub: 'text-yellow-100' },
           ].map(card => (
-            <div key={card.label} className={`rounded-2xl bg-gradient-to-br ${card.color} p-5 shadow-sm`}>
-              <p className='text-2xl mb-2'>{card.icon}</p>
+            <div key={card.label} className={`rounded-2xl ${card.color} p-5 shadow-sm`}>
               <p className={`text-3xl font-black ${card.text}`}>{card.value}</p>
               <p className={`text-xs font-medium mt-1 ${card.sub}`}>{card.label}</p>
             </div>
           ))}
         </div>
 
-        {/* ── TAUX GLOBAL ── */}
+        {/* TAUX GLOBAL */}
         {data?.totaux?.total_inscrits > 0 && (
           <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
             <div className='flex items-center justify-between mb-3'>
               <h2 className='text-base font-bold text-gray-800'>Taux de validation global</h2>
-              <span className='text-2xl font-black text-green-600'>
-                {Math.round((data.totaux.total_valides / data.totaux.total_inscrits) * 100)}%
-              </span>
+              <span className='text-2xl font-black text-green-600'>{tauxGlobal}%</span>
             </div>
-            <div className='w-full bg-gray-100 rounded-full h-3 overflow-hidden'>
+            <div className='w-full bg-gray-100 rounded-full h-2.5 overflow-hidden'>
               <div
-                className='h-3 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-700'
-                style={{ width: `${Math.round((data.totaux.total_valides / data.totaux.total_inscrits) * 100)}%` }}
+                className='h-2.5 bg-green-500 rounded-full transition-all duration-700'
+                style={{ width: `${tauxGlobal}%` }}
               />
             </div>
-            <div className='flex justify-between text-xs text-gray-400 mt-1'>
+            <div className='flex justify-between text-xs text-gray-400 mt-1.5'>
               <span>{data.totaux.total_valides} validés</span>
               <span>{data.totaux.total_inscrits} inscrits au total</span>
             </div>
           </div>
         )}
 
-        {/* ── GRAPHIQUE ── */}
+        {/* GRAPHIQUE */}
         <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
           <h2 className='text-base font-bold text-gray-800 mb-6'>Inscriptions par concours</h2>
           {chartData.length === 0 ? (
@@ -167,9 +137,7 @@ export default function DashboardDGES() {
                 <CartesianGrid strokeDasharray='3 3' stroke='#f0f0f0' />
                 <XAxis dataKey='name' angle={-30} textAnchor='end' interval={0} tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}
-                />
+                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
                 <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
                 <Bar dataKey='En attente' fill='#F59E0B' radius={[4, 4, 0, 0]} />
                 <Bar dataKey='Validés'    fill='#10B981' radius={[4, 4, 0, 0]} />
@@ -179,7 +147,7 @@ export default function DashboardDGES() {
           )}
         </div>
 
-        {/* ── TABLEAU DÉTAILLÉ ── */}
+        {/* TABLEAU DÉTAILLÉ */}
         <div className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
           <div className='px-6 py-4 border-b border-gray-100 flex items-center justify-between'>
             <h2 className='text-base font-bold text-gray-800'>Détail par concours</h2>
@@ -201,25 +169,14 @@ export default function DashboardDGES() {
                   const taux = Number(s.taux_validation_pct) || 0;
                   return (
                     <tr key={s.concours_id} className='hover:bg-gray-50 transition'>
-                      <td className='px-4 py-3'>
-                        <div className='flex items-center gap-2'>
-                          <div className='w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center text-xs'>🏛️</div>
-                          <span className='font-medium text-gray-800'>{s.concours}</span>
-                        </div>
-                      </td>
+                      <td className='px-4 py-3 font-medium text-gray-800'>{s.concours}</td>
                       <td className='px-4 py-3 text-gray-500 text-xs'>
                         {new Date(s.dateDebut).toLocaleDateString('fr-FR')}
                       </td>
                       <td className='px-4 py-3 font-bold text-gray-900'>{Number(s.total_inscrits)}</td>
-                      <td className='px-4 py-3'>
-                        <span className='text-green-700 font-semibold'>{Number(s.dossiers_valides)}</span>
-                      </td>
-                      <td className='px-4 py-3'>
-                        <span className='text-red-600 font-semibold'>{Number(s.dossiers_rejetes)}</span>
-                      </td>
-                      <td className='px-4 py-3'>
-                        <span className='text-yellow-600 font-semibold'>{Number(s.en_attente)}</span>
-                      </td>
+                      <td className='px-4 py-3 text-green-700 font-semibold'>{Number(s.dossiers_valides)}</td>
+                      <td className='px-4 py-3 text-red-600 font-semibold'>{Number(s.dossiers_rejetes)}</td>
+                      <td className='px-4 py-3 text-yellow-600 font-semibold'>{Number(s.en_attente)}</td>
                       <td className='px-4 py-3'>
                         <div className='flex items-center gap-2'>
                           <div className='flex-1 bg-gray-100 rounded-full h-1.5 min-w-[40px]'>
