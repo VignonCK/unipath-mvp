@@ -150,33 +150,28 @@ export const dgesService = {
 };
 
 // ── Convocation PDF ───────────────────────────────────────────────
-// Service spécial pour télécharger un fichier PDF
-// Ne peut PAS utiliser request() car celle-ci est faite pour le JSON
+const telechargerPDF = async (url, filename) => {
+  const token = localStorage.getItem('token');
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.error || 'Erreur téléchargement');
+  }
+  const blob = await response.blob();
+  const objectUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(objectUrl);
+};
+
 export const convocationService = {
-  telecharger: async (inscriptionId) => {
-    const token = localStorage.getItem('token');
+  telecharger: (inscriptionId) =>
+    telechargerPDF(`${BASE_URL}/candidats/convocation/${inscriptionId}`, `convocation_${inscriptionId}.pdf`),
 
-    const response = await fetch(
-      `${BASE_URL}/candidats/convocation/${inscriptionId}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || 'Erreur téléchargement');
-    }
-
-    // Convertir la réponse en Blob (fichier binaire)
-    const blob = await response.blob();
-
-    // Créer une URL temporaire et déclencher le téléchargement
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `convocation_${inscriptionId}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-  },
+  telechargerPreinscription: (inscriptionId) =>
+    telechargerPDF(`${BASE_URL}/candidats/preinscription/${inscriptionId}`, `preinscription_${inscriptionId}.pdf`),
 };

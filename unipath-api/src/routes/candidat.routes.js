@@ -10,5 +10,6 @@ const pdfController = require('../controllers/pdf.controller');
 router.get('/profil', protect, checkRole(['CANDIDAT']), candidatController.getProfil);
 router.put('/profil', protect, checkRole(['CANDIDAT']), candidatController.updateProfil);
 router.get('/convocation/:inscriptionId', protect, checkRole(['CANDIDAT']), pdfController.telechargerConvocation);
+router.get('/preinscription/:inscriptionId', protect, checkRole(['CANDIDAT']), pdfController.telechargerPreinscription);
 
 module.exports = router;

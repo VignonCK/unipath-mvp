@@ -74,3 +74,61 @@ exports.telechargerConvocation = async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
+
+exports.telechargerPreinscription = async (req, res) => {
+  try {
+    const { inscriptionId } = req.params;
+
+    const inscription = await prisma.inscription.findUnique({
+      where: { id: inscriptionId },
+      include: { candidat: true, concours: true },
+    });
+
+    if (!inscription) {
+      return res.status(404).json({ error: 'Inscription non trouvée' });
+    }
+
+    if (inscription.candidatId !== req.user.id) {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+
+    const tmpInput  = path.join(os.tmpdir(), `preinsc_input_${Date.now()}.json`);
+    const tmpOutput = path.join(os.tmpdir(), `preinsc_output_${Date.now()}.pdf`);
+
+    fs.writeFileSync(tmpInput, JSON.stringify({
+      candidat:    inscription.candidat,
+      concours:    inscription.concours,
+      inscription: inscription,
+    }));
+
+    const phpScript = path.join(__dirname, '../../php/preinscription.php');
+    const cmd = `php "${phpScript}" "${tmpInput}" "${tmpOutput}"`;
+
+    exec(cmd, { timeout: 30000 }, (error, stdout, stderr) => {
+      if (error) {
+        console.error('Erreur PHP preinscription:', stderr);
+        fs.unlinkSync(tmpInput);
+        return res.status(500).json({ error: 'Erreur génération PDF' });
+      }
+
+      if (!fs.existsSync(tmpOutput)) {
+        fs.unlinkSync(tmpInput);
+        return res.status(500).json({ error: 'PDF non généré' });
+      }
+
+      const pdfBuffer = fs.readFileSync(tmpOutput);
+      const filename  = `preinscription_${inscription.candidat.matricule}_${inscription.concours.libelle.replace(/\s+/g, '_')}.pdf`;
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+      res.send(pdfBuffer);
+
+      fs.unlinkSync(tmpInput);
+      fs.unlinkSync(tmpOutput);
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
