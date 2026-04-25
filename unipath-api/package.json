@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
-},
+  },
   "keywords": [],
   "author": "Groupe 4 de SGBD (GIT) — EPAC: 2025-2026",
   "license": "ISC",
@@ -19,6 +19,7 @@
     "express": "^5.2.1",
     "install": "^0.13.0",
     "multer": "^2.1.1",
+    "nodemailer": "^8.0.6",
     "pdfkit": "^0.18.0",
     "prisma": "^5.22.0",
     "resend": "^6.11.0"

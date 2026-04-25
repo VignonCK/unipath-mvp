@@ -48,6 +48,18 @@ export const authService = {
       body: JSON.stringify(userData),
     }),
 
+  registerCommission: (userData) =>
+    request('/auth/register/commission', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    }),
+
+  registerDGES: (userData) =>
+    request('/auth/register/dges', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    }),
+
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');

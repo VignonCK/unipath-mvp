@@ -1,9 +1,38 @@
 // src/pages/Home.jsx
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import bgImage from '../assets/examen-eleves.jpg';
+
+// Import de toutes les images pour le carrousel
+import examEleves from '../assets/examen-eleves.jpg';
+import resultatsExam from '../assets/resultats_exam.jpg';
+import universite from '../assets/universite.jpg';
+import etudiants from '../assets/etudiants.jpg';
+import etudiantsUac from '../assets/etudiants_uac.jpg';
 
 export default function Home() {
   const navigate = useNavigate();
+
+  // Carrousel d'images pour la section HERO
+  const images = [
+    { src: examEleves, alt: 'Étudiants en examen' },
+    { src: resultatsExam, alt: 'Résultats d\'examen' },
+    { src: universite, alt: 'Campus universitaire' },
+    { src: etudiants, alt: 'Étudiants' },
+    { src: etudiantsUac, alt: 'Étudiants UAC' },
+  ];
+
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  // Changer d'image toutes les 10 secondes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentImageIndex((prevIndex) => 
+        prevIndex === images.length - 1 ? 0 : prevIndex + 1
+      );
+    }, 10000); // 10 secondes
+
+    return () => clearInterval(interval);
+  }, [images.length]);
 
   const fonctionnalites = [
     {
@@ -94,13 +123,13 @@ export default function Home() {
     <div className='min-h-screen bg-white'>
 
       {/* NAVBAR */}
-      <nav className='bg-blue-900 text-white px-6 py-4 flex justify-between items-center sticky top-0 z-50 shadow-lg'>
+      <nav className='bg-blue-900 text-white px-6 py-4 flex justify-between items-center sticky top-0 z-50'>
         <div className='flex items-center gap-3'>
           <span className='text-2xl font-black tracking-tight'>UniPath</span>
           <span className='hidden sm:block text-orange-300 text-sm'>Plateforme universitaire numérique</span>
         </div>
         <div className='flex gap-3'>
-          <button onClick={() => navigate('/login')} className='text-sm border border-orange-400 px-4 py-2 rounded-lg hover:bg-blue-800 transition'>
+          <button onClick={() => navigate('/login')} className='text-sm border-2 border-orange-400 px-4 py-2 rounded-lg hover:bg-orange-400 hover:text-blue-900 transition'>
             Se connecter
           </button>
           <button onClick={() => navigate('/register')} className='text-sm bg-orange-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition'>
@@ -111,9 +140,50 @@ export default function Home() {
 
       {/* HERO */}
       <section className='relative text-white px-6' style={{minHeight: '550px', paddingTop: '8rem', paddingBottom: '8rem'}}>
-        <img src={bgImage} alt='background' className='absolute inset-0 w-full h-full object-cover' />
-        <div className='absolute inset-0' style={{backgroundColor: 'rgba(30, 58, 138, 0.6)'}} />
-        <div className='relative max-w-4xl mx-auto text-center'>
+        {/* Carrousel d'images avec effet de glissement */}
+        <div className='absolute inset-0 overflow-hidden'>
+          <div 
+            className='flex h-full transition-transform duration-1000 ease-in-out'
+            style={{ 
+              transform: `translateX(-${currentImageIndex * 100}vw)`,
+            }}
+          >
+            {images.map((image, index) => (
+              <div
+                key={index}
+                className='relative flex-shrink-0 w-screen h-full'
+              >
+                <img
+                  src={image.src}
+                  alt={image.alt}
+                  className='w-full h-full object-cover'
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Overlay */}
+        <div className='absolute inset-0' style={{backgroundColor: 'rgba(30, 58, 138, 0.4)'}} />
+        
+        {/* Indicateurs du carrousel */}
+        <div className='absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-2 z-10'>
+          {images.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => setCurrentImageIndex(index)}
+              className={`w-4 h-4 rounded-full transition-all duration-300 ${
+                index === currentImageIndex 
+                  ? 'bg-orange-400 scale-110' 
+                  : 'bg-white/50 hover:bg-white/70'
+              }`}
+              aria-label={`Aller à l'image ${index + 1}`}
+            />
+          ))}
+        </div>
+        
+        {/* Contenu du hero */}
+        <div className='relative max-w-4xl mx-auto text-center z-10'>
           <h1 className='text-4xl md:text-6xl font-black mb-6 leading-tight'>
             Gérez votre parcours
             <span className='text-orange-400'> universitaire</span>
@@ -124,10 +194,10 @@ export default function Home() {
             De la candidature à la convocation, tout se fait en ligne.
           </p>
           <div className='flex flex-col sm:flex-row gap-4 justify-center'>
-            <button onClick={() => navigate('/register')} className='bg-orange-500 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-orange-600 transition shadow-lg'>
+            <button onClick={() => navigate('/register')} className='bg-orange-500 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-orange-600 transition'>
               Créer mon compte →
             </button>
-            <button onClick={() => navigate('/login')} className='border-2 border-orange-400 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-800 transition'>
+            <button onClick={() => navigate('/login')} className='border-2 border-orange-400 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-orange-400 hover:text-blue-900 transition'>
               Se connecter
             </button>
           </div>
@@ -141,7 +211,7 @@ export default function Home() {
           <p className='text-center text-gray-500 mb-12'>Trois fonctionnalités au cœur du Module 1</p>
           <div className='grid grid-cols-1 md:grid-cols-3 gap-8'>
             {fonctionnalites.map((f) => (
-              <div key={f.titre} className='bg-white rounded-2xl p-8 shadow-sm border border-gray-100 hover:shadow-md transition'>
+              <div key={f.titre} className='bg-white p-8 border-l-4 border-orange-500 hover:border-orange-600 transition'>
                 <div className='text-5xl mb-4'>{f.icon}</div>
                 <h3 className='text-xl font-bold text-blue-900 mb-3'>{f.titre}</h3>
                 <p className='text-gray-600 leading-relaxed'>{f.desc}</p>
@@ -160,9 +230,9 @@ export default function Home() {
             {etapes.map((e, i) => (
               <div key={e.numero} className='relative text-center'>
                 {i < etapes.length - 1 && (
-                  <div className='hidden md:block absolute top-10 left-3/4 w-1/2 h-0.5 bg-orange-200 z-0' />
+                  <div className='hidden md:block absolute top-10 left-3/4 w-1/2 h-1 bg-orange-200 z-0' />
                 )}
-                <div className='relative z-10 w-20 h-20 rounded-full bg-orange-50 border-2 border-orange-300 flex items-center justify-center text-3xl mx-auto mb-4'>
+                <div className='relative z-10 w-20 h-20 bg-orange-500 flex items-center justify-center text-3xl mx-auto mb-4 text-white'>
                   {e.icon}
                 </div>
                 <span className='text-xs font-black text-orange-600 tracking-widest'>{e.numero}</span>
@@ -211,7 +281,7 @@ export default function Home() {
                 reponse: 'Cliquez sur "Mot de passe oublié" sur la page de connexion. Vous recevrez un email avec un lien pour réinitialiser votre mot de passe en toute sécurité.',
               },
             ].map((faq, index) => (
-              <details key={index} className='bg-white rounded-xl border border-gray-200 p-6 cursor-pointer hover:border-orange-300 transition group'>
+              <details key={index} className='bg-white border-l-4 border-gray-200 rounded-lg p-6 cursor-pointer hover:border-orange-500 transition group'>
                 <summary className='font-bold text-blue-900 flex justify-between items-center'>
                   <span>{faq.question}</span>
                   <span className='text-orange-500 text-xl group-open:rotate-180 transition-transform'>▼</span>
@@ -236,7 +306,7 @@ export default function Home() {
           <p className='text-center text-orange-300 mb-12'>Une plateforme pensée pour simplifier la vie des étudiants béninois</p>
           <div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
             {avantages.map((a) => (
-              <div key={a.titre} className='bg-blue-800 rounded-2xl p-8 flex gap-5 items-start hover:bg-blue-700 transition'>
+              <div key={a.titre} className='bg-blue-800 p-8 flex gap-5 items-start hover:bg-blue-700 transition'>
                 <div className='text-4xl flex-shrink-0'>{a.icon}</div>
                 <div>
                   <h3 className='text-lg font-bold text-orange-400 mb-2'>{a.titre}</h3>
@@ -255,11 +325,11 @@ export default function Home() {
           <p className='text-center text-gray-500 mb-12'>Groupe 2 — Département Génie Informatique et Télécommunications</p>
           <div className='grid grid-cols-2 md:grid-cols-3 gap-8'>
             {equipe.map((m) => (
-              <div key={m.nom} className='text-center bg-gray-50 rounded-2xl p-8 border border-gray-100'>
+              <div key={m.nom} className='text-center bg-gray-50 p-8 border-b-4 border-blue-900'>
                 {m.photo ? (
-                  <img src={m.photo} alt={m.nom} className='w-24 h-24 rounded-full object-cover mx-auto mb-4 border-4 border-blue-100' />
+                  <img src={m.photo} alt={m.nom} className='w-24 h-24 object-cover mx-auto mb-4 border-4 border-blue-100' />
                 ) : (
-                  <div className='w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center text-4xl mx-auto mb-4 border-4 border-blue-200'>
+                  <div className='w-24 h-24 bg-blue-100 flex items-center justify-center text-4xl mx-auto mb-4 border-4 border-blue-200'>
                     👨‍💻
                   </div>
                 )}
@@ -279,7 +349,7 @@ export default function Home() {
         <div className='max-w-2xl mx-auto'>
           <h2 className='text-3xl font-black text-center text-blue-900 mb-4'>Contacter le support</h2>
           <p className='text-center text-gray-500 mb-10'>Une question ou un problème technique ? Notre équipe vous répond dans les plus brefs délais.</p>
-          <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-8'>
+          <div className='bg-white border-l-4 border-orange-500 p-8 rounded-lg'>
             <form onSubmit={handleContactSubmit} className='space-y-5'>
               <div>
                 <label className='block text-sm font-medium text-gray-700 mb-1'>Nom complet</label>
@@ -288,7 +358,7 @@ export default function Home() {
                   type='text'
                   required
                   placeholder='Ex: AGOSSOU Kofi'
-                  className='w-full border border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm'
+                  className='w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:border-orange-500 text-sm'
                 />
               </div>
               <div>
@@ -298,7 +368,7 @@ export default function Home() {
                   type='email'
                   required
                   placeholder='votre@email.com'
-                  className='w-full border border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm'
+                  className='w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:border-orange-500 text-sm'
                 />
               </div>
               <div>
@@ -308,7 +378,7 @@ export default function Home() {
                   required
                   rows={5}
                   placeholder='Décrivez votre problème ou votre question...'
-                  className='w-full border border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm resize-none'
+                  className='w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:border-orange-500 text-sm resize-none'
                 />
               </div>
               <button

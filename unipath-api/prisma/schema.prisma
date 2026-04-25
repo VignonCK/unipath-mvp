@@ -100,3 +100,23 @@ enum Role { // Définit les rôles des utilisateurs de la plateforme
   COMMISSION
   DGES
 }
+
+model ActionHistory { // Table de traçabilité des actions effectuées sur les dossiers
+  id            String   @id @default(uuid())
+  utilisateurId String   // ID de l'utilisateur qui a effectué l'action
+  dossierId     String   // ID du dossier concerné par l'action
+  typeAction    String   // Type d'action: DOSSIER_CREE, PIECE_AJOUTEE, PIECE_SUPPRIMEE, DOSSIER_VALIDE, DOSSIER_REJETE, DOSSIER_SOUMIS
+  details       Json?    // Détails optionnels de l'action au format JSON
+  timestamp     DateTime @default(now())
+  ipAddress     String?  // Adresse IP de l'utilisateur (pour audit)
+  userAgent     String?  // User Agent du navigateur (pour audit)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([dossierId])
+  @@index([utilisateurId])
+  @@index([timestamp])
+  @@index([typeAction])
+  @@index([dossierId, timestamp(sort: Desc)])
+  @@index([utilisateurId, timestamp(sort: Desc)])
+}
