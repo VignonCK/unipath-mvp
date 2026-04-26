@@ -90,20 +90,21 @@ const S = {
     boxShadow: "0 20px 60px rgba(0,0,0,0.14)",
     position: "relative",
     zIndex: 2,
+    flexDirection: "column", // mobile: colonne
   },
   left: {
     flex: 1,
     background: "#fff",
-    padding: "44px 48px",
+    padding: "32px 24px",
     display: "flex",
     flexDirection: "column",
     justifyContent: "center",
   },
   right: {
+    display: "none", // caché sur mobile, visible via media query CSS
     width: "46%",
-    background: "rgb(30, 58, 138)", // blue-900 équivalent
+    background: "rgb(30, 58, 138)",
     padding: "44px 40px",
-    display: "flex",
     flexDirection: "column",
     justifyContent: "center",
     position: "relative",

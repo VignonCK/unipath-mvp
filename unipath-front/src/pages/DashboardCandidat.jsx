@@ -210,7 +210,7 @@ export default function DashboardCandidat() {
         </div>
       </header>
 
-      <main className='max-w-4xl mx-auto p-6 space-y-6'>
+      <main className='max-w-4xl mx-auto px-4 py-4 sm:p-6 space-y-4 sm:space-y-6'>
 
         {/* Alerte profil incomplet */}
         {incomplet && (
@@ -247,7 +247,7 @@ export default function DashboardCandidat() {
         <div className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
           <div className='h-16 bg-gradient-to-r from-blue-900 to-blue-800' />
           <div className='px-6 pb-6'>
-            <div className='flex items-end justify-between gap-4 -mt-8 mb-4'>
+            <div className='flex items-end justify-between gap-2 -mt-8 mb-4 flex-wrap'>
               {/* Avatar cliquable pour changer la photo */}
               <div className='flex items-end gap-4'>
                 <label className='cursor-pointer group relative flex-shrink-0'>
@@ -336,13 +336,12 @@ export default function DashboardCandidat() {
                           </span>
                         </div>
                       </div>
-                      {/* Boutons PDF */}
-                      <div className='flex gap-2 flex-shrink-0'>
+                    <div className='flex flex-col gap-2 flex-shrink-0 w-full sm:w-auto'>
                         {/* Fiche de pré-inscription — toujours disponible */}
                         <button
                           onClick={() => handlePreinscription(ins.id)}
                           disabled={telechargement[`preinsc_${ins.id}`]}
-                          className='text-xs border border-blue-200 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition disabled:opacity-50'
+                          className='text-xs border border-blue-200 text-blue-700 px-3 py-2 rounded-lg hover:bg-blue-50 transition disabled:opacity-50 text-center'
                         >
                           {telechargement[`preinsc_${ins.id}`] ? 'Génération...' : 'Fiche pré-inscription'}
                         </button>
@@ -351,7 +350,7 @@ export default function DashboardCandidat() {
                           <button
                             onClick={() => handleConvocation(ins.id)}
                             disabled={telechargement[`conv_${ins.id}`]}
-                            className='text-xs border border-orange-400 text-orange-600 px-3 py-1.5 rounded-lg hover:bg-orange-500 hover:text-white transition disabled:opacity-50'
+                            className='text-xs border border-orange-400 text-orange-600 px-3 py-2 rounded-lg hover:bg-orange-500 hover:text-white transition disabled:opacity-50 text-center'
                           >
                             {telechargement[`conv_${ins.id}`] ? 'Génération...' : 'Convocation'}
                           </button>
