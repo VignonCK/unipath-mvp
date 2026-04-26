@@ -6,6 +6,7 @@ import {
   inscriptionService, dossierService, convocationService
 } from '../services/api';
 import DossierCompletion from '../components/DossierCompletion';
+import CandidatLayout from '../components/CandidatLayout';
 
 function initiales(prenom, nom) {
   return `${(prenom || '?')[0]}${(nom || '?')[0]}`.toUpperCase();
@@ -179,38 +180,8 @@ export default function DashboardCandidat() {
   const incomplet = profilIncomplet(candidat);
 
   return (
-    <div className='min-h-screen bg-gray-50'>
-
-      {/* HEADER */}
-      <header className='bg-blue-900 text-white px-6 py-3 flex items-center justify-between sticky top-0 z-40 shadow-lg'>
-        <div className='flex items-center gap-3'>
-          <span className='text-xl font-black tracking-tight'>UniPath</span>
-          <span className='hidden sm:block text-blue-300 text-xs'>Espace Candidat</span>
-        </div>
-        <div className='flex items-center gap-3'>
-          <div className='flex items-center gap-2'>
-            {/* Avatar avec photo ou initiales */}
-            <div className='w-9 h-9 rounded-full overflow-hidden bg-orange-500 flex items-center justify-center text-sm font-bold text-white flex-shrink-0 border-2 border-orange-400'>
-              {photoUrl
-                ? <img src={photoUrl} alt='profil' className='w-full h-full object-cover' />
-                : initiales(candidat?.prenom, candidat?.nom)
-              }
-            </div>
-            <div className='hidden sm:block'>
-              <p className='text-sm font-semibold leading-tight'>{nom}</p>
-              <p className='text-orange-300 text-xs font-mono'>{candidat?.matricule}</p>
-            </div>
-          </div>
-          <button
-            onClick={() => { authService.logout(); navigate('/login'); }}
-            className='text-xs border border-orange-400 text-orange-300 px-3 py-1.5 rounded-lg hover:bg-orange-500 hover:text-white transition'
-          >
-            Déconnexion
-          </button>
-        </div>
-      </header>
-
-      <main className='max-w-4xl mx-auto px-4 py-4 sm:p-6 space-y-4 sm:space-y-6'>
+    <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
+      <div className='max-w-3xl mx-auto space-y-4 sm:space-y-6'>
 
         {/* Alerte profil incomplet */}
         {incomplet && (
@@ -244,7 +215,7 @@ export default function DashboardCandidat() {
         )}
 
         {/* CARTE PROFIL */}
-        <div className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
+        <div id='profil' className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
           <div className='h-16 bg-gradient-to-r from-blue-900 to-blue-800' />
           <div className='px-6 pb-6'>
             <div className='flex items-end justify-between gap-2 -mt-8 mb-4 flex-wrap'>
@@ -439,7 +410,7 @@ export default function DashboardCandidat() {
           </div>
         </div>
 
-      </main>
+      </div>
 
       {/* MODALE ÉDITION PROFIL */}
       {editOpen && (
@@ -471,17 +442,10 @@ export default function DashboardCandidat() {
               ))}
             </div>
             <div className='px-6 py-4 border-t border-gray-100 flex gap-3 justify-end'>
-              <button
-                onClick={() => setEditOpen(false)}
-                className='text-sm border border-gray-200 text-gray-600 px-4 py-2 rounded-xl hover:bg-gray-50 transition'
-              >
+              <button onClick={() => setEditOpen(false)} className='text-sm border border-gray-200 text-gray-600 px-4 py-2 rounded-xl hover:bg-gray-50 transition'>
                 Annuler
               </button>
-              <button
-                onClick={handleSaveProfil}
-                disabled={editLoading}
-                className='text-sm bg-blue-900 text-white px-5 py-2 rounded-xl hover:bg-blue-800 transition disabled:opacity-50 font-medium'
-              >
+              <button onClick={handleSaveProfil} disabled={editLoading} className='text-sm bg-blue-900 text-white px-5 py-2 rounded-xl hover:bg-blue-800 transition disabled:opacity-50 font-medium'>
                 {editLoading ? 'Enregistrement...' : 'Enregistrer'}
               </button>
             </div>
@@ -489,6 +453,6 @@ export default function DashboardCandidat() {
         </div>
       )}
 
-    </div>
+    </CandidatLayout>
   );
 }

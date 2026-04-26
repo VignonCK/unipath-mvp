@@ -6,6 +6,7 @@ import Register from './pages/Register';
 import DashboardCandidat from './pages/DashboardCandidat';
 import DashboardCommission from './pages/DashboardCommission';
 import DashboardDGES from './pages/DashboardDGES';
+import PageConcours from './pages/PageConcours';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -23,6 +24,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['CANDIDAT']}>
               <DashboardCandidat />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/concours'
+          element={
+            <ProtectedRoute allowedRoles={['CANDIDAT']}>
+              <PageConcours />
             </ProtectedRoute>
           }
         />
