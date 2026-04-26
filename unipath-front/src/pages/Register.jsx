@@ -3,6 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/api';
 import etudiantsImage from '../assets/etudiants.jpg';
 
+// Hook responsive
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return isMobile;
+}
+
 // ── DATA ──────────────────────────────────────────────────────────────────────
 const MODULES = [
   {
@@ -101,7 +112,7 @@ const S = {
     justifyContent: "center",
   },
   right: {
-    display: "none", // caché sur mobile, visible via media query CSS
+    display: "flex",
     width: "46%",
     background: "rgb(30, 58, 138)",
     padding: "44px 40px",
@@ -260,7 +271,7 @@ function BtnSecondary({ children, onClick }) {
 }
 
 // ── FORM ──────────────────────────────────────────────────────────────────────
-function FormLeft({ onSuccess }) {
+function FormLeft({ onSuccess, isMobile }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -347,7 +358,7 @@ function FormLeft({ onSuccess }) {
   };
 
   return (
-    <div style={S.left}>
+    <div style={{ ...S.left, padding: isMobile ? "32px 24px" : "44px 48px" }}>
       <Logo />
       <h1 style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 4 }}>
         Créer un compte
@@ -703,10 +714,7 @@ function RightPanel() {
 
 // ── PAGE ──────────────────────────────────────────────────────────────────────
 export default function Register() {
-  const handleSuccess = () => {
-    // Cette fonction est appelée depuis FormLeft après succès
-    console.log("Compte créé avec succès");
-  };
+  const isMobile = useIsMobile();
 
   return (
     <div style={S.page}>
@@ -715,9 +723,14 @@ export default function Register() {
       {/* Overlay léger */}
       <div style={S.backgroundOverlay} />
       
-      <div style={S.wrap}>
-        <FormLeft onSuccess={handleSuccess} />
-        <RightPanel />
+      <div style={{
+        ...S.wrap,
+        flexDirection: isMobile ? "column" : "row",
+        maxWidth: isMobile ? 480 : 940,
+        minHeight: isMobile ? "auto" : 600,
+      }}>
+        <FormLeft isMobile={isMobile} onSuccess={() => {}} />
+        {!isMobile && <RightPanel />}
       </div>
     </div>
   );
