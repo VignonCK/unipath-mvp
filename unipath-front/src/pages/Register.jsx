@@ -101,12 +101,12 @@ const S = {
     boxShadow: "0 20px 60px rgba(0,0,0,0.14)",
     position: "relative",
     zIndex: 2,
-    flexDirection: "column", // mobile: colonne
+    flexDirection: "row", // desktop: côte à côte
   },
   left: {
     flex: 1,
     background: "#fff",
-    padding: "32px 24px",
+    padding: "44px 48px",
     display: "flex",
     flexDirection: "column",
     justifyContent: "center",
@@ -718,16 +718,13 @@ export default function Register() {
 
   return (
     <div style={S.page}>
-      {/* Image de fond */}
       <div style={S.backgroundImage} />
-      {/* Overlay léger */}
       <div style={S.backgroundOverlay} />
       
       <div style={{
         ...S.wrap,
-        flexDirection: isMobile ? "column" : "row",
+        flexDirection: "row",
         maxWidth: isMobile ? 480 : 940,
-        minHeight: isMobile ? "auto" : 600,
       }}>
         <FormLeft isMobile={isMobile} onSuccess={() => {}} />
         {!isMobile && <RightPanel />}

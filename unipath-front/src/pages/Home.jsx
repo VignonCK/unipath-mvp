@@ -184,20 +184,20 @@ export default function Home() {
         
         {/* Contenu du hero */}
         <div className='relative max-w-4xl mx-auto text-center z-10'>
-          <h1 className='text-4xl md:text-6xl font-black mb-6 leading-tight'>
+          <h1 className='text-3xl md:text-6xl font-black mb-4 leading-tight'>
             Gérez votre parcours
             <span className='text-orange-400'> universitaire</span>
             <br />en toute simplicité
           </h1>
-          <p className='text-lg md:text-xl text-blue-100 max-w-2xl mx-auto mb-10'>
+          <p className='text-base md:text-xl text-blue-100 max-w-2xl mx-auto mb-8'>
             UniPath digitalise les inscriptions aux concours universitaires.
             De la candidature à la convocation, tout se fait en ligne.
           </p>
-          <div className='flex flex-col sm:flex-row gap-4 justify-center'>
-            <button onClick={() => navigate('/register')} className='bg-orange-500 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-orange-600 transition'>
+          <div className='flex flex-col sm:flex-row gap-3 justify-center'>
+            <button onClick={() => navigate('/register')} className='bg-orange-500 text-white px-6 py-3 rounded-xl font-bold text-base hover:bg-orange-600 transition'>
               Créer mon compte →
             </button>
-            <button onClick={() => navigate('/login')} className='border-2 border-orange-400 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-orange-400 hover:text-blue-900 transition'>
+            <button onClick={() => navigate('/login')} className='border-2 border-orange-400 text-white px-6 py-3 rounded-xl font-bold text-base hover:bg-orange-400 hover:text-blue-900 transition'>
               Se connecter
             </button>
           </div>
