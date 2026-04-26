@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 
 exports.register = async (req, res) => {
   try {
-    const { email, password, nom, prenom, telephone } = req.body;
+    const { email, password, nom, prenom, telephone, dateNaiss, lieuNaiss } = req.body;
 
     const { data: authData, error: authError } =
       await supabase.auth.signUp({ email, password });
@@ -21,6 +21,8 @@ exports.register = async (req, res) => {
         nom,
         prenom,
         telephone,
+        dateNaiss: dateNaiss ? new Date(dateNaiss) : null,
+        lieuNaiss: lieuNaiss || null,
         matricule: 'TEMP',
       },
     });
