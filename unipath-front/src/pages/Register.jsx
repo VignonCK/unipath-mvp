@@ -557,7 +557,7 @@ function StepItem({ num, name, sub, lit, isLast }) {
   );
 }
 
-function RightPanel() {
+function RightPanelContent({ isMobile }) {
   const [activeModule, setActiveModule] = useState(0);
   const [litStep, setLitStep] = useState(0);
   const stepTimerRef = useRef(null);
@@ -608,7 +608,13 @@ function RightPanel() {
   const mod = MODULES[activeModule];
 
   return (
-    <div style={S.right}>
+    <div style={{
+      ...S.right,
+      width: isMobile ? "100%" : "46%",
+      padding: isMobile ? "32px 24px" : "44px 40px",
+      flexDirection: "column",
+      display: "flex",
+    }}>
       <div style={S.blob1} />
       <div style={S.blob2} />
       
@@ -723,11 +729,12 @@ export default function Register() {
       
       <div style={{
         ...S.wrap,
-        flexDirection: "row",
+        flexDirection: isMobile ? "column" : "row",
         maxWidth: isMobile ? 480 : 940,
+        minHeight: "auto",
       }}>
         <FormLeft isMobile={isMobile} onSuccess={() => {}} />
-        {!isMobile && <RightPanel />}
+        <RightPanelContent isMobile={isMobile} />
       </div>
     </div>
   );
