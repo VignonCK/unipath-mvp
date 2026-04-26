@@ -1,5 +1,5 @@
 // src/pages/Home.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 // Import de toutes les images pour le carrousel
@@ -8,6 +8,51 @@ import resultatsExam from '../assets/resultats_exam.jpg';
 import universite from '../assets/universite.jpg';
 import etudiants from '../assets/etudiants.jpg';
 import etudiantsUac from '../assets/etudiants_uac.jpg';
+
+// ── Carousel mobile ──────────────────────────────────────────────────────────
+function MobileCarousel({ items, renderItem, interval = 10000 }) {
+  const [index, setIndex] = useState(0);
+  const timerRef = useRef(null);
+
+  const goTo = (i) => {
+    setIndex(i);
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => setIndex(p => (p + 1) % items.length), interval);
+  };
+
+  useEffect(() => {
+    timerRef.current = setInterval(() => setIndex(p => (p + 1) % items.length), interval);
+    return () => clearInterval(timerRef.current);
+  }, [items.length, interval]);
+
+  return (
+    <div className='relative overflow-hidden'>
+      {/* Slides */}
+      <div
+        className='flex transition-transform duration-700 ease-in-out'
+        style={{ transform: `translateX(-${index * 100}%)` }}
+      >
+        {items.map((item, i) => (
+          <div key={i} className='w-full flex-shrink-0'>
+            {renderItem(item)}
+          </div>
+        ))}
+      </div>
+      {/* Dots */}
+      <div className='flex justify-center gap-2 mt-6'>
+        {items.map((_, i) => (
+          <button
+            key={i}
+            onClick={() => goTo(i)}
+            className={`w-2 h-2 rounded-full transition-all ${
+              i === index ? 'bg-orange-500 w-4' : 'bg-gray-300'
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   const navigate = useNavigate();
@@ -209,7 +254,9 @@ export default function Home() {
         <div className='max-w-5xl mx-auto'>
           <h2 className='text-3xl font-black text-center text-blue-900 mb-4'>Ce que fait UniPath</h2>
           <p className='text-center text-gray-500 mb-12'>Trois fonctionnalités au cœur du Module 1</p>
-          <div className='grid grid-cols-1 md:grid-cols-3 gap-8'>
+
+          {/* Desktop : grille */}
+          <div className='hidden md:grid grid-cols-3 gap-8'>
             {fonctionnalites.map((f) => (
               <div key={f.titre} className='bg-white p-8 border-l-4 border-orange-500 hover:border-orange-600 transition'>
                 <div className='text-5xl mb-4'>{f.icon}</div>
@@ -217,6 +264,20 @@ export default function Home() {
                 <p className='text-gray-600 leading-relaxed'>{f.desc}</p>
               </div>
             ))}
+          </div>
+
+          {/* Mobile : carousel */}
+          <div className='md:hidden'>
+            <MobileCarousel
+              items={fonctionnalites}
+              renderItem={(f) => (
+                <div className='bg-white p-8 border-l-4 border-orange-500 mx-1'>
+                  <div className='text-5xl mb-4'>{f.icon}</div>
+                  <h3 className='text-xl font-bold text-blue-900 mb-3'>{f.titre}</h3>
+                  <p className='text-gray-600 leading-relaxed'>{f.desc}</p>
+                </div>
+              )}
+            />
           </div>
         </div>
       </section>
@@ -304,7 +365,9 @@ export default function Home() {
         <div className='max-w-5xl mx-auto'>
           <h2 className='text-3xl font-black text-center mb-4'>Pourquoi UniPath ?</h2>
           <p className='text-center text-orange-300 mb-12'>Une plateforme pensée pour simplifier la vie des étudiants béninois</p>
-          <div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
+
+          {/* Desktop : grille */}
+          <div className='hidden md:grid grid-cols-2 gap-8'>
             {avantages.map((a) => (
               <div key={a.titre} className='bg-blue-800 p-8 flex gap-5 items-start hover:bg-blue-700 transition'>
                 <div className='text-4xl flex-shrink-0'>{a.icon}</div>
@@ -314,6 +377,22 @@ export default function Home() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Mobile : carousel */}
+          <div className='md:hidden'>
+            <MobileCarousel
+              items={avantages}
+              renderItem={(a) => (
+                <div className='bg-blue-800 p-8 flex gap-5 items-start mx-1'>
+                  <div className='text-4xl flex-shrink-0'>{a.icon}</div>
+                  <div>
+                    <h3 className='text-lg font-bold text-orange-400 mb-2'>{a.titre}</h3>
+                    <p className='text-blue-100 text-sm leading-relaxed'>{a.desc}</p>
+                  </div>
+                </div>
+              )}
+            />
           </div>
         </div>
       </section>
