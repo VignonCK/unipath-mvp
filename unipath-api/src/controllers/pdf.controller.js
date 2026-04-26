@@ -30,30 +30,38 @@ exports.telechargerConvocation = async (req, res) => {
       return res.status(400).json({ error: 'La convocation n\'est disponible que pour les dossiers valides' });
     }
 
-    // Écrire les données dans un fichier temporaire
-    const tmpInput = path.join(os.tmpdir(), `conv_input_${Date.now()}.json`);
-    const tmpOutput = path.join(os.tmpdir(), `conv_output_${Date.now()}.pdf`);
+    // Utiliser le répertoire du projet pour éviter les problèmes de chemin avec espaces
+    const tmpDir    = path.join(__dirname, '../../tmp');
+    const timestamp = Date.now();
+    const tmpInput  = path.join(tmpDir, `conv_input_${timestamp}.json`);
+    const tmpOutput = path.join(tmpDir, `conv_output_${timestamp}.pdf`);
+
+    // Créer le dossier tmp s'il n'existe pas
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
 
     const data = JSON.stringify({
       candidat: inscription.candidat,
       concours: inscription.concours,
     });
 
-    fs.writeFileSync(tmpInput, data);
+    fs.writeFileSync(tmpInput, data, 'utf8');
 
     const phpScript = path.join(__dirname, '../../php/convocation.php');
-    const cmd = `php "${phpScript}" "${tmpInput}" "${tmpOutput}"`;
+    const cmd = `php "${phpScript.replace(/\\/g, '/')}" "${tmpInput.replace(/\\/g, '/')}" "${tmpOutput.replace(/\\/g, '/')}"`;
 
     exec(cmd, { timeout: 30000 }, (error, stdout, stderr) => {
+      try { if (fs.existsSync(tmpInput)) fs.unlinkSync(tmpInput); } catch {}
+
       if (error) {
         console.error('Erreur PHP:', error);
         console.error('PHP stderr:', stderr);
-        fs.unlinkSync(tmpInput);
+        try { if (fs.existsSync(tmpOutput)) fs.unlinkSync(tmpOutput); } catch {}
         return res.status(500).json({ error: 'Erreur lors de la generation PHP du PDF' });
       }
 
       if (!fs.existsSync(tmpOutput)) {
-        fs.unlinkSync(tmpInput);
         return res.status(500).json({ error: 'Le PDF n\'a pas ete genere' });
       }
 
@@ -61,12 +69,10 @@ exports.telechargerConvocation = async (req, res) => {
       const filename = `convocation_${inscription.candidat.matricule}.pdf`;
 
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.send(pdfBuffer);
 
-      // Nettoyer les fichiers temporaires
-      fs.unlinkSync(tmpInput);
-      fs.unlinkSync(tmpOutput);
+      try { fs.unlinkSync(tmpOutput); } catch {}
     });
 
   } catch (error) {
@@ -92,39 +98,51 @@ exports.telechargerPreinscription = async (req, res) => {
       return res.status(403).json({ error: 'Accès refusé' });
     }
 
-    const tmpInput  = path.join(os.tmpdir(), `preinsc_input_${Date.now()}.json`);
-    const tmpOutput = path.join(os.tmpdir(), `preinsc_output_${Date.now()}.pdf`);
+    // Utiliser le répertoire du projet pour éviter les problèmes de chemin avec espaces
+    const tmpDir    = path.join(__dirname, '../../tmp');
+    const timestamp = Date.now();
+    const tmpInput  = path.join(tmpDir, `preinsc_input_${timestamp}.json`);
+    const tmpOutput = path.join(tmpDir, `preinsc_output_${timestamp}.pdf`);
+
+    // Créer le dossier tmp s'il n'existe pas
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
 
     fs.writeFileSync(tmpInput, JSON.stringify({
       candidat:    inscription.candidat,
       concours:    inscription.concours,
       inscription: inscription,
-    }));
+    }), 'utf8');
 
     const phpScript = path.join(__dirname, '../../php/preinscription.php');
-    const cmd = `php "${phpScript}" "${tmpInput}" "${tmpOutput}"`;
+    // Utiliser des guillemets doubles et normaliser les chemins
+    const cmd = `php "${phpScript.replace(/\\/g, '/')}" "${tmpInput.replace(/\\/g, '/')}" "${tmpOutput.replace(/\\/g, '/')}"`;
 
     exec(cmd, { timeout: 30000 }, (error, stdout, stderr) => {
+      // Nettoyer le fichier d'entrée dans tous les cas
+      try { if (fs.existsSync(tmpInput)) fs.unlinkSync(tmpInput); } catch {}
+
       if (error) {
-        console.error('Erreur PHP preinscription:', stderr);
-        fs.unlinkSync(tmpInput);
-        return res.status(500).json({ error: 'Erreur génération PDF' });
+        console.error('Erreur PHP preinscription:', error.message);
+        console.error('PHP stderr:', stderr);
+        try { if (fs.existsSync(tmpOutput)) fs.unlinkSync(tmpOutput); } catch {}
+        return res.status(500).json({ error: 'Erreur génération PDF', details: stderr });
       }
 
       if (!fs.existsSync(tmpOutput)) {
-        fs.unlinkSync(tmpInput);
         return res.status(500).json({ error: 'PDF non généré' });
       }
 
       const pdfBuffer = fs.readFileSync(tmpOutput);
-      const filename  = `preinscription_${inscription.candidat.matricule}_${inscription.concours.libelle.replace(/\s+/g, '_')}.pdf`;
+      const libelle   = inscription.concours.libelle.replace(/[^a-zA-Z0-9]/g, '_');
+      const filename  = `preinscription_${inscription.candidat.matricule}_${libelle}.pdf`;
 
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.send(pdfBuffer);
 
-      fs.unlinkSync(tmpInput);
-      fs.unlinkSync(tmpOutput);
+      try { fs.unlinkSync(tmpOutput); } catch {}
     });
 
   } catch (error) {

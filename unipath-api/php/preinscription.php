@@ -4,12 +4,19 @@ require(__DIR__ . '/fpdf.php');
 // Lire les données depuis le fichier passé en argument
 $inputFile = $argv[1];
 $outputFile = $argv[2];
-$input = file_get_contents($inputFile);
-$data = json_decode($input, true);
 
-$candidat = $data['candidat'];
-$concours = $data['concours'];
-$inscription = $data['inscription'];
+// Lire et nettoyer le BOM UTF-8 éventuel
+$raw = file_get_contents($inputFile);
+$raw = ltrim($raw, "\xEF\xBB\xBF"); // Supprimer le BOM UTF-8
+$data = json_decode($raw, true);
+
+if (!$data) {
+    die("Erreur: JSON invalide\n");
+}
+
+$candidat    = $data['candidat']    ?? [];
+$concours    = $data['concours']    ?? [];
+$inscription = $data['inscription'] ?? [];
 
 // Fonction pour nettoyer les caractères accentués
 function cleanText($text) {
@@ -74,7 +81,7 @@ $pdf->Rect(15, 68, 180, 10, 'F');
 $pdf->SetFont('Helvetica', 'B', 11);
 $pdf->SetTextColor(0, 0, 0);
 $pdf->SetY(70);
-$pdf->Cell(0, 6, cleanText('N° de dossier : ' . strtoupper(substr($inscription['id'], 0, 8))), 0, 1, 'C');
+$pdf->Cell(0, 6, cleanText('N° de dossier : ' . strtoupper(substr($inscription['id'] ?? 'XXXXXXXX', 0, 8))), 0, 1, 'C');
 
 // ── SECTION CANDIDAT ──────────────────────────────────────────
 $pdf->SetY(83);
@@ -87,10 +94,10 @@ $pdf->SetX(15);
 $pdf->Cell(180, 5, 'INFORMATIONS DU CANDIDAT', 0, 1, 'L');
 
 $infos = [
-    ['Matricule', cleanText($candidat['matricule'])],
-    ['Nom et Prenom', cleanText($candidat['nom'] . ' ' . $candidat['prenom'])],
-    ['Email', $candidat['email']],
-    ['Telephone', isset($candidat['telephone']) && $candidat['telephone'] ? cleanText($candidat['telephone']) : 'Non renseigne'],
+    ['Matricule',    cleanText($candidat['matricule'] ?? 'N/A')],
+    ['Nom et Prenom',cleanText(($candidat['nom'] ?? '') . ' ' . ($candidat['prenom'] ?? ''))],
+    ['Email',        $candidat['email'] ?? 'N/A'],
+    ['Telephone',    !empty($candidat['telephone']) ? cleanText($candidat['telephone']) : 'Non renseigne'],
 ];
 
 $y = 95;
@@ -118,14 +125,14 @@ $pdf->SetTextColor(255, 255, 255);
 $pdf->SetXY(15, $y + 1);
 $pdf->Cell(180, 6, 'INFORMATIONS DU CONCOURS', 0, 1, 'L');
 
-$dateDebut = date('d/m/Y', strtotime($concours['dateDebut']));
-$dateFin = date('d/m/Y', strtotime($concours['dateFin']));
+$dateDebut = !empty($concours['dateDebut']) ? date('d/m/Y', strtotime($concours['dateDebut'])) : 'N/A';
+$dateFin   = !empty($concours['dateFin'])   ? date('d/m/Y', strtotime($concours['dateFin']))   : 'N/A';
 
 $infoConcours = [
-    ['Concours', cleanText($concours['libelle'])],
-    ['Date debut', $dateDebut],
-    ['Date fin', $dateFin],
-    ['Description', isset($concours['description']) && $concours['description'] ? cleanText($concours['description']) : 'Non renseignee'],
+    ['Concours',    cleanText($concours['libelle']     ?? 'N/A')],
+    ['Date debut',  $dateDebut],
+    ['Date fin',    $dateFin],
+    ['Description', !empty($concours['description']) ? cleanText($concours['description']) : 'Non renseignee'],
 ];
 
 $y += 10;
