@@ -118,7 +118,7 @@ export default function DashboardCommission() {
         </div>
       </header>
 
-      <main className='max-w-5xl mx-auto p-6 space-y-6'>
+      <main className='max-w-5xl mx-auto px-4 py-4 sm:p-6 space-y-4 sm:space-y-6'>
 
         {/* Toast */}
         {message.text && (

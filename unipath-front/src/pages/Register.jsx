@@ -3,6 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/api';
 import etudiantsImage from '../assets/etudiants.jpg';
 
+// Hook responsive
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return isMobile;
+}
+
 // ── DATA ──────────────────────────────────────────────────────────────────────
 const MODULES = [
   {
@@ -90,6 +101,7 @@ const S = {
     boxShadow: "0 20px 60px rgba(0,0,0,0.14)",
     position: "relative",
     zIndex: 2,
+    flexDirection: "row", // desktop: côte à côte
   },
   left: {
     flex: 1,
@@ -100,10 +112,10 @@ const S = {
     justifyContent: "center",
   },
   right: {
-    width: "46%",
-    background: "rgb(30, 58, 138)", // blue-900 équivalent
-    padding: "44px 40px",
     display: "flex",
+    width: "46%",
+    background: "rgb(30, 58, 138)",
+    padding: "44px 40px",
     flexDirection: "column",
     justifyContent: "center",
     position: "relative",
@@ -259,7 +271,7 @@ function BtnSecondary({ children, onClick }) {
 }
 
 // ── FORM ──────────────────────────────────────────────────────────────────────
-function FormLeft({ onSuccess }) {
+function FormLeft({ onSuccess, isMobile }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -321,13 +333,25 @@ function FormLeft({ onSuccess }) {
       };
 
       // Utiliser l'endpoint approprié selon le rôle
+      let result;
       if (form.role === 'COMMISSION') {
-        await authService.registerCommission(userData);
+        result = await authService.registerCommission(userData);
       } else if (form.role === 'DGES') {
-        await authService.registerDGES(userData);
+        result = await authService.registerDGES(userData);
       } else {
-        // CANDIDAT par défaut
-        await authService.register(userData);
+        result = await authService.register(userData);
+      }
+
+      // Si Supabase demande une confirmation email
+      if (result?.emailConfirmationRequired) {
+        navigate('/login', {
+          state: {
+            message: '📧 Un email de confirmation a été envoyé à ' + form.email + '. Vérifiez votre boîte mail avant de vous connecter.',
+            type: 'warning',
+            email: form.email
+          }
+        });
+        return;
       }
       
       // Redirection vers login avec message de succès
@@ -346,7 +370,7 @@ function FormLeft({ onSuccess }) {
   };
 
   return (
-    <div style={S.left}>
+    <div style={{ ...S.left, padding: isMobile ? "32px 24px" : "44px 48px" }}>
       <Logo />
       <h1 style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 4 }}>
         Créer un compte
@@ -545,7 +569,7 @@ function StepItem({ num, name, sub, lit, isLast }) {
   );
 }
 
-function RightPanel() {
+function RightPanelContent({ isMobile }) {
   const [activeModule, setActiveModule] = useState(0);
   const [litStep, setLitStep] = useState(0);
   const stepTimerRef = useRef(null);
@@ -596,7 +620,13 @@ function RightPanel() {
   const mod = MODULES[activeModule];
 
   return (
-    <div style={S.right}>
+    <div style={{
+      ...S.right,
+      width: isMobile ? "100%" : "46%",
+      padding: isMobile ? "32px 24px" : "44px 40px",
+      flexDirection: "column",
+      display: "flex",
+    }}>
       <div style={S.blob1} />
       <div style={S.blob2} />
       
@@ -702,21 +732,21 @@ function RightPanel() {
 
 // ── PAGE ──────────────────────────────────────────────────────────────────────
 export default function Register() {
-  const handleSuccess = () => {
-    // Cette fonction est appelée depuis FormLeft après succès
-    console.log("Compte créé avec succès");
-  };
+  const isMobile = useIsMobile();
 
   return (
     <div style={S.page}>
-      {/* Image de fond */}
       <div style={S.backgroundImage} />
-      {/* Overlay léger */}
       <div style={S.backgroundOverlay} />
       
-      <div style={S.wrap}>
-        <FormLeft onSuccess={handleSuccess} />
-        <RightPanel />
+      <div style={{
+        ...S.wrap,
+        flexDirection: isMobile ? "column" : "row",
+        maxWidth: isMobile ? 480 : 940,
+        minHeight: "auto",
+      }}>
+        <FormLeft isMobile={isMobile} onSuccess={() => {}} />
+        <RightPanelContent isMobile={isMobile} />
       </div>
     </div>
   );

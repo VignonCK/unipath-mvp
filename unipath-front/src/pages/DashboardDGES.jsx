@@ -89,7 +89,7 @@ export default function DashboardDGES() {
         </div>
       </header>
 
-      <main className='max-w-6xl mx-auto p-6 space-y-6'>
+      <main className='max-w-6xl mx-auto px-4 py-4 sm:p-6 space-y-4 sm:space-y-6'>
 
         {/* KPI CARDS */}
         <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>

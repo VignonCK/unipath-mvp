@@ -30,6 +30,8 @@ exports.register = async (req, res) => {
     res.status(201).json({
       message: 'Compte créé avec succès',
       matricule: candidat.matricule,
+      // Si session est null, Supabase attend une confirmation email
+      emailConfirmationRequired: !authData.session,
     });
   } catch (error) {
     console.error(error);
