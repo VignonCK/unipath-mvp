@@ -77,7 +77,7 @@ export default function PageConcours() {
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
-      <div className='max-w-3xl mx-auto space-y-6'>
+      <div className='max-w-5xl mx-auto space-y-6'>
 
         {/* Toast */}
         {message.text && (
@@ -144,90 +144,111 @@ export default function PageConcours() {
 
         {/* Liste des concours */}
         {(() => {
-          // Filtrer par recherche
           let liste = concours.filter(c =>
             c.libelle.toLowerCase().includes(recherche.toLowerCase()) ||
             (c.description || '').toLowerCase().includes(recherche.toLowerCase())
           );
-          // Trier
           liste = [...liste].sort((a, b) => {
             const da = new Date(a.dateDebut);
             const db = new Date(b.dateDebut);
             return tri === 'recent' ? db - da : da - db;
           });
-          return liste.length === 0 ? (
+
+          if (liste.length === 0) return (
             <div className='bg-white rounded-2xl border border-gray-100 p-12 text-center'>
               <p className='text-gray-400 text-sm'>
                 {recherche ? `Aucun concours trouvé pour "${recherche}"` : 'Aucun concours disponible pour le moment.'}
               </p>
             </div>
-          ) : (
-            <div className='space-y-4'>
-              {liste.map((c) => {
-              const statut = statutConcours(c);
-              const dejaInscrit = candidat?.inscriptions?.some(i => i.concoursId === c.id);
-              const termine = new Date() > new Date(c.dateFin);
+          );
 
-              return (
-                <div key={c.id} className='bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition'>
-                  {/* Barre de statut */}
-                  <div className={`h-1 ${statut.dot}`} />
+          return (
+            <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>
+              {liste.map((c, index) => {
+                const statut      = statutConcours(c);
+                const dejaInscrit = candidat?.inscriptions?.some(i => i.concoursId === c.id);
+                const termine     = new Date() > new Date(c.dateFin);
+                const num         = String(index + 1).padStart(2, '0');
 
-                  <div className='p-5'>
-                    <div className='flex items-start justify-between gap-3 mb-4'>
-                      <div className='flex-1'>
-                        <div className='flex items-center gap-2 mb-1'>
-                          <h3 className='font-bold text-gray-900 text-base'>{c.libelle}</h3>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statut.color}`}>
-                            {statut.label}
-                          </span>
+                // Couleur du badge numéro selon statut
+                const badgeColor = dejaInscrit
+                  ? 'bg-green-500'
+                  : termine
+                  ? 'bg-gray-400'
+                  : statut.label === 'En cours'
+                  ? 'bg-teal-500'
+                  : 'bg-blue-900';
+
+                return (
+                  <div
+                    key={c.id}
+                    className='bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition p-5 flex flex-col gap-3 cursor-pointer'
+                    onClick={() => !dejaInscrit && !termine && handleInscription(c.id)}
+                  >
+                    {/* Titre + badge numéro */}
+                    <div className='flex items-start gap-3'>
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${badgeColor}`}>
+                        {num}
+                      </div>
+                      <h3 className='font-bold text-gray-900 text-sm leading-tight flex-1'>
+                        {c.libelle}
+                      </h3>
+                    </div>
+
+                    {/* Infos */}
+                    <div className='space-y-1.5 pl-1'>
+                      {/* Institution */}
+                      <div className='flex items-center gap-2 text-xs text-gray-500'>
+                        <svg className='w-3.5 h-3.5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' />
+                        </svg>
+                        <span>EPAC — Université d'Abomey-Calavi</span>
+                      </div>
+
+                      {/* Dates */}
+                      <div className='flex items-center gap-2 text-xs text-gray-500'>
+                        <svg className='w-3.5 h-3.5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' />
+                        </svg>
+                        <span>
+                          {new Date(c.dateDebut).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                          {' → '}
+                          {new Date(c.dateFin).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      </div>
+
+                      {/* Description / diplôme */}
+                      {c.description && (
+                        <div className='flex items-center gap-2 text-xs text-gray-500'>
+                          <svg className='w-3.5 h-3.5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 14l9-5-9-5-9 5 9 5z' />
+                            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z' />
+                          </svg>
+                          <span className='truncate'>{c.description}</span>
                         </div>
-                        {c.description && (
-                          <p className='text-gray-500 text-sm'>{c.description}</p>
-                        )}
-                      </div>
+                      )}
                     </div>
 
-                    {/* Dates */}
-                    <div className='grid grid-cols-2 gap-3 mb-4'>
-                      <div className='bg-gray-50 rounded-xl px-4 py-3'>
-                        <p className='text-xs text-gray-400 mb-0.5'>Ouverture des dépôts</p>
-                        <p className='text-sm font-semibold text-gray-800'>
-                          {new Date(c.dateDebut).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
-                        </p>
-                      </div>
-                      <div className={`rounded-xl px-4 py-3 ${termine ? 'bg-gray-50' : 'bg-orange-50'}`}>
-                        <p className='text-xs text-gray-400 mb-0.5'>Clôture des dépôts</p>
-                        <p className={`text-sm font-semibold ${termine ? 'text-gray-500' : 'text-orange-700'}`}>
-                          {new Date(c.dateFin).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
-                        </p>
-                      </div>
+                    {/* Statut / bouton */}
+                    <div className='mt-auto pt-2 border-t border-gray-50'>
+                      {dejaInscrit ? (
+                        <span className='text-xs text-green-600 font-semibold'>Inscrit</span>
+                      ) : termine ? (
+                        <span className='text-xs text-gray-400'>Inscriptions closes</span>
+                      ) : (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleInscription(c.id); }}
+                          disabled={inscLoading[c.id]}
+                          className='w-full bg-orange-500 text-white py-2 rounded-lg text-xs font-semibold hover:bg-orange-600 transition disabled:opacity-50'
+                        >
+                          {inscLoading[c.id] ? 'En cours...' : "S'inscrire"}
+                        </button>
+                      )}
                     </div>
-
-                    {/* Bouton */}
-                    {dejaInscrit ? (
-                      <div className='flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-2.5'>
-                        <span className='w-2 h-2 rounded-full bg-green-500 flex-shrink-0' />
-                        <span className='text-sm text-green-700 font-medium'>Vous êtes inscrit à ce concours</span>
-                      </div>
-                    ) : termine ? (
-                      <div className='bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-center'>
-                        <span className='text-sm text-gray-400'>Les inscriptions sont closes</span>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleInscription(c.id)}
-                        disabled={inscLoading[c.id]}
-                        className='w-full bg-orange-500 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-orange-600 transition disabled:opacity-50'
-                      >
-                        {inscLoading[c.id] ? 'Inscription en cours...' : "S'inscrire à ce concours"}
-                      </button>
-                    )}
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
           );
         })()}
       </div>
