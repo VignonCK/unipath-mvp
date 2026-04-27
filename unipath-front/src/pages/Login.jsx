@@ -77,8 +77,12 @@ export default function Login() {
           </h2>
 
           {successMessage && (
-            <div className='bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-4 text-sm'>
-              ✅ {successMessage}
+            <div className={`px-4 py-3 rounded-lg mb-4 text-sm border ${
+              location.state?.type === 'warning'
+                ? 'bg-orange-50 border-orange-200 text-orange-700'
+                : 'bg-green-50 border-green-200 text-green-700'
+            }`}>
+              {successMessage}
             </div>
           )}
 

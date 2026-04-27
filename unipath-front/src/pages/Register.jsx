@@ -333,13 +333,25 @@ function FormLeft({ onSuccess, isMobile }) {
       };
 
       // Utiliser l'endpoint approprié selon le rôle
+      let result;
       if (form.role === 'COMMISSION') {
-        await authService.registerCommission(userData);
+        result = await authService.registerCommission(userData);
       } else if (form.role === 'DGES') {
-        await authService.registerDGES(userData);
+        result = await authService.registerDGES(userData);
       } else {
-        // CANDIDAT par défaut
-        await authService.register(userData);
+        result = await authService.register(userData);
+      }
+
+      // Si Supabase demande une confirmation email
+      if (result?.emailConfirmationRequired) {
+        navigate('/login', {
+          state: {
+            message: '📧 Un email de confirmation a été envoyé à ' + form.email + '. Vérifiez votre boîte mail avant de vous connecter.',
+            type: 'warning',
+            email: form.email
+          }
+        });
+        return;
       }
       
       // Redirection vers login avec message de succès
