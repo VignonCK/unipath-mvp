@@ -15,9 +15,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Définit la connexion à la base de données PostgreSQL, en utilisant l’URL stockée dans la variable d’environnement DATABASE_URL
+// Définit la connexion à la base de données PostgreSQL, en utilisant l'URL stockée dans la variable d'environnement DATABASE_URL
 
-model Candidat { // Représente un bachelier qui s’inscrit à un concours.
+model Candidat { // Représente un bachelier qui s'inscrit à un concours.
   id String @id @default(uuid()) // Identifiant unique (UUID généré automatiquement).
   matricule String @unique // matricule: Numéro unique généré par la base (trigger PostgreSQL)
   nom String
@@ -26,18 +26,41 @@ model Candidat { // Représente un bachelier qui s’inscrit à un concours.
   telephone String?
   dateNaiss DateTime?
   lieuNaiss String? // telephone, dateNaiss, lieuNaiss: Champs optionnels (le ?).
+  role Role @default(CANDIDAT) // Rôle de l'utilisateur (par défaut CANDIDAT)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt // createdAt, updatedAt: Dates de création et de mise à jour (gérées automatiquement)
   inscriptions Inscription[] // inscriptions: Liste des inscriptions du candidat (relation 1-n).
   dossier Dossier? // dossier: Dossier du candidat (relation 1-1, optionnelle).
 }
 
-model Concours { // Représente un concours d’entrée à l’université.
+model MembreCommission { // Représente un membre de la commission d'évaluation
+  id String @id @default(uuid())
+  nom String
+  prenom String
+  email String @unique
+  telephone String?
+  role Role @default(COMMISSION)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AdministrateurDGES { // Représente un administrateur de la DGES
+  id String @id @default(uuid())
+  nom String
+  prenom String
+  email String @unique
+  telephone String?
+  role Role @default(DGES)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Concours { // Représente un concours d'entrée à l'université.
   id String @id @default(uuid())
   libelle String
   dateDebut DateTime
   dateFin DateTime
-  description String? // Champs principaux : nom, dates, description optionnelle.
+  description String? // Champs principaux : nom, dates, description optionnelle.
   createdAt DateTime @default(now())
   inscriptions Inscription[] // inscriptions: Liste des inscriptions à ce concours.
 }
@@ -46,14 +69,14 @@ model Inscription { // Fait le lien entre un candidat et un concours (table de j
   id String @id @default(uuid())
   candidatId String
   concoursId String
-  statut StatutDossier @default(EN_ATTENTE) // statut: État du dossier (enum, par défaut “EN_ATTENTE”)
+  statut StatutDossier @default(EN_ATTENTE) // statut: État du dossier (enum, par défaut "EN_ATTENTE")
   createdAt DateTime @default(now())
   candidat Candidat @relation(fields: [candidatId], references: [id])
-  concours Concours @relation(fields: [concoursId], references: [id]) // Relations : chaque inscription appartient à un candidat et un concours.
-  @@unique([candidatId, concoursId]) // Contrainte : un candidat ne peut s’inscrire qu’une seule fois à un même concours.
+  concours Concours @relation(fields: [concoursId], references: [id]) // Relations : chaque inscription appartient à un candidat et un concours.
+  @@unique([candidatId, concoursId]) // Contrainte : un candidat ne peut s'inscrire qu'une seule fois à un même concours.
 }
 
-model Dossier { // Contient les pièces justificatives d’un candidat (liens vers fichiers).
+model Dossier { // Contient les pièces justificatives d'un candidat (liens vers fichiers).
   id String @id @default(uuid())
   candidatId String @unique
   acteNaissance String?
@@ -66,10 +89,34 @@ model Dossier { // Contient les pièces justificatives d’un candidat (liens ve
   candidat Candidat @relation(fields: [candidatId], references: [id]) // Un dossier est lié à un seul candidat (relation 1-1, candidatId unique).
 }
 
-enum StatutDossier { // Définit les états possibles d’un dossier d’inscription.
+enum StatutDossier { // Définit les états possibles d'un dossier d'inscription.
   EN_ATTENTE
   VALIDE
   REJETE
 }
 
+enum Role { // Définit les rôles des utilisateurs de la plateforme
+  CANDIDAT
+  COMMISSION
+  DGES
+}
 
+model ActionHistory { // Table de traçabilité des actions effectuées sur les dossiers
+  id            String   @id @default(uuid())
+  utilisateurId String   // ID de l'utilisateur qui a effectué l'action
+  dossierId     String   // ID du dossier concerné par l'action
+  typeAction    String   // Type d'action: DOSSIER_CREE, PIECE_AJOUTEE, PIECE_SUPPRIMEE, DOSSIER_VALIDE, DOSSIER_REJETE, DOSSIER_SOUMIS
+  details       Json?    // Détails optionnels de l'action au format JSON
+  timestamp     DateTime @default(now())
+  ipAddress     String?  // Adresse IP de l'utilisateur (pour audit)
+  userAgent     String?  // User Agent du navigateur (pour audit)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([dossierId])
+  @@index([utilisateurId])
+  @@index([timestamp])
+  @@index([typeAction])
+  @@index([dossierId, timestamp(sort: Desc)])
+  @@index([utilisateurId, timestamp(sort: Desc)])
+}

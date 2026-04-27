@@ -2,12 +2,14 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth.middleware');
+const { checkRole } = require('../middleware/role.middleware');
 const candidatController = require('../controllers/candidat.controller');
-
-router.get('/profil', protect, candidatController.getProfil);
-router.put('/profil', protect, candidatController.updateProfil);
-
-module.exports = router;
 const pdfController = require('../controllers/pdf.controller');
 
-router.get('/convocation/:inscriptionId', protect, pdfController.telechargerConvocation);
+// Routes protégées - CANDIDAT uniquement
+router.get('/profil', protect, checkRole(['CANDIDAT']), candidatController.getProfil);
+router.put('/profil', protect, checkRole(['CANDIDAT']), candidatController.updateProfil);
+router.get('/convocation/:inscriptionId', protect, checkRole(['CANDIDAT']), pdfController.telechargerConvocation);
+router.get('/preinscription/:inscriptionId', protect, checkRole(['CANDIDAT']), pdfController.telechargerPreinscription);
+
+module.exports = router;

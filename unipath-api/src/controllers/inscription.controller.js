@@ -1,6 +1,32 @@
-// src/controllers/inscription.controller.js
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const { exec } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const { envoyerEmailPreInscription } = require('../services/email.service');
+
+const genererFichePreInscription = (candidat, concours, inscription) => {
+  return new Promise((resolve, reject) => {
+    const tmpInput = path.join(os.tmpdir(), `preinscription_input_${Date.now()}.json`);
+    const tmpOutput = path.join(os.tmpdir(), `preinscription_output_${Date.now()}.pdf`);
+
+    const data = JSON.stringify({ candidat, concours, inscription });
+    fs.writeFileSync(tmpInput, data);
+
+    const phpScript = path.join(__dirname, '../../php/preinscription.php');
+    const cmd = `php "${phpScript}" "${tmpInput}" "${tmpOutput}"`;
+
+    exec(cmd, { timeout: 30000 }, (error, stdout, stderr) => {
+      fs.unlinkSync(tmpInput);
+      if (error) {
+        console.error('Erreur PHP preinscription:', stderr);
+        return reject(error);
+      }
+      resolve(tmpOutput);
+    });
+  });
+};
 
 exports.creerInscription = async (req, res) => {
   try {
@@ -12,7 +38,7 @@ exports.creerInscription = async (req, res) => {
     });
 
     if (!concours) {
-      return res.status(404).json({ error: 'Concours non trouvé' });
+      return res.status(404).json({ error: 'Concours non trouve' });
     }
 
     const inscription = await prisma.inscription.create({
@@ -24,19 +50,39 @@ exports.creerInscription = async (req, res) => {
       include: { concours: true },
     });
 
+    const candidat = await prisma.candidat.findUnique({
+      where: { id: candidatId },
+    });
+
+    // Générer la fiche de pré-inscription en PHP et envoyer par email
+    genererFichePreInscription(candidat, concours, inscription)
+      .then(async (pdfPath) => {
+        await envoyerEmailPreInscription({
+          candidatEmail: candidat.email,
+          candidatNom: candidat.nom,
+          candidatPrenom: candidat.prenom,
+          concours: concours.libelle,
+          numeroDossier: inscription.id.substring(0, 8).toUpperCase(),
+          pdfPath,
+        });
+        // Supprimer le PDF temporaire après envoi
+        if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
+      })
+      .catch(err => console.error('Erreur generation fiche:', err));
+
     res.status(201).json({
-      message: 'Inscription créée avec succès',
+      message: 'Inscription creee avec succes. Une fiche de pre-inscription vous a ete envoyee par email.',
       inscription,
     });
   } catch (error) {
-    if (error.code === 'P2010' || error.message.includes('Conflit de dates')) {
+    if (error.code === 'P2010' || error.message?.includes('Conflit de dates')) {
       return res.status(409).json({
-        error: 'Conflit de dates : vous êtes déjà inscrit à un concours pendant cette période.',
+        error: 'Conflit de dates : vous etes deja inscrit a un concours pendant cette periode.',
       });
     }
     if (error.code === 'P2002') {
       return res.status(409).json({
-        error: 'Vous êtes déjà inscrit à ce concours.',
+        error: 'Vous etes deja inscrit a ce concours.',
       });
     }
     res.status(500).json({ error: 'Erreur serveur' });
@@ -52,7 +98,6 @@ exports.getMesInscriptions = async (req, res) => {
     });
     res.json(inscriptions);
   } catch (error) {
-    console.error('Erreur inscription:', error);
-res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 };

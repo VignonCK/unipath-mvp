@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 
 exports.register = async (req, res) => {
   try {
-    const { email, password, nom, prenom, telephone } = req.body;
+    const { email, password, nom, prenom, telephone, dateNaiss, lieuNaiss } = req.body;
 
     const { data: authData, error: authError } =
       await supabase.auth.signUp({ email, password });
@@ -21,6 +21,8 @@ exports.register = async (req, res) => {
         nom,
         prenom,
         telephone,
+        dateNaiss: dateNaiss ? new Date(dateNaiss) : null,
+        lieuNaiss: lieuNaiss || null,
         matricule: 'TEMP',
       },
     });
@@ -48,11 +50,58 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
     }
 
+    // Récupérer le rôle de l'utilisateur
+    const userId = data.user.id;
+    let role = null;
+    let userData = null;
+
+    // Chercher dans Candidat
+    const candidat = await prisma.candidat.findUnique({
+      where: { id: userId },
+      select: { role: true, nom: true, prenom: true, matricule: true },
+    });
+
+    if (candidat) {
+      role = candidat.role;
+      userData = candidat;
+    }
+
+    // Chercher dans MembreCommission
+    if (!role) {
+      const commission = await prisma.membreCommission.findUnique({
+        where: { id: userId },
+        select: { role: true, nom: true, prenom: true },
+      });
+
+      if (commission) {
+        role = commission.role;
+        userData = commission;
+      }
+    }
+
+    // Chercher dans AdministrateurDGES
+    if (!role) {
+      const dges = await prisma.administrateurDGES.findUnique({
+        where: { id: userId },
+        select: { role: true, nom: true, prenom: true },
+      });
+
+      if (dges) {
+        role = dges.role;
+        userData = dges;
+      }
+    }
+
     res.json({
       token: data.session.access_token,
-      user: { email: data.user.email },
+      user: {
+        email: data.user.email,
+        role: role || 'CANDIDAT',
+        ...userData,
+      },
     });
   } catch (error) {
+    console.error('Erreur login:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };

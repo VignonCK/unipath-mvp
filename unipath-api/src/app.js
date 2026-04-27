@@ -1,7 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    /\.vercel\.app$/,
+  ],
+  credentials: true,
+}));
 app.use(express.json());
 
 // ── Routes ──────────────────────────────────────────────────────
@@ -11,12 +18,10 @@ const concoursRoutes = require('./routes/concours.routes');
 const inscriptionRoutes = require('./routes/inscription.routes');
 const commissionRoutes = require('./routes/commission.routes');
 const dossierRoutes = require('./routes/dossier.routes');
-<<<<<<< HEAD
-const dgesRoutes = require('./routes/dges.routes'); // ← AJOUTÉ ICI avec les autres
-=======
 const dgesRoutes = require('./routes/dges.routes');
 const pdfRoutes = require('./routes/pdf.routes');
->>>>>>> f7bce72 (feat: jours 6-7 backend)
+const completionRoutes = require('./routes/completion.routes');
+const historyRoutes = require('./routes/history.routes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/candidats', candidatRoutes);
@@ -24,12 +29,10 @@ app.use('/api/concours', concoursRoutes);
 app.use('/api/inscriptions', inscriptionRoutes);
 app.use('/api/commission', commissionRoutes);
 app.use('/api/dossier', dossierRoutes);
-<<<<<<< HEAD
-app.use('/api/dges', dgesRoutes); // ← AJOUTÉ ICI avec les autres
-=======
 app.use('/api/dges', dgesRoutes);
 app.use('/api/pdf', pdfRoutes);
->>>>>>> f7bce72 (feat: jours 6-7 backend)
+app.use('/api/completion', completionRoutes);
+app.use('/api/history', historyRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'UniPath API fonctionne !' });

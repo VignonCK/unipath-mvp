@@ -1,30 +1,61 @@
 // src/pages/DashboardCommission.jsx
-// Tableau de bord de la commission de validation
-// Permet de consulter, valider ou rejeter les dossiers des candidats
-// Contient un système de filtres par statut : EN_ATTENTE, VALIDE, REJETE
-
 import { useState, useEffect } from 'react';
-import { commissionService } from '../services/api';
+import { useNavigate } from 'react-router-dom';
+import { commissionService, authService } from '../services/api';
+import HistoriqueActions from '../components/HistoriqueActions';
+
+function initiales(prenom, nom) {
+  return `${(prenom || '?')[0]}${(nom || '?')[0]}`.toUpperCase();
+}
+
+const STATUT_CONFIG = {
+  VALIDE:     { label: 'Validé',     bar: 'bg-green-500',  badge: 'bg-green-100 text-green-700' },
+  REJETE:     { label: 'Rejeté',     bar: 'bg-red-500',    badge: 'bg-red-100 text-red-700' },
+  EN_ATTENTE: { label: 'En attente', bar: 'bg-yellow-400', badge: 'bg-yellow-100 text-yellow-700' },
+};
+
+const PIECES_LABELS = {
+  acteNaissance: 'Acte',
+  carteIdentite: 'CNI',
+  photo:         'Photo',
+  releve:        'Relevé',
+  quittance:     'Quittance',
+};
 
 export default function DashboardCommission() {
-  // Liste des dossiers récupérés depuis le backend
+  const navigate = useNavigate();
   const [dossiers, setDossiers] = useState([]);
-
-  // Filtre actif : EN_ATTENTE par défaut
   const [filtre, setFiltre] = useState('EN_ATTENTE');
-
-  // true pendant le chargement des données
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState({ text: '', type: 'info' });
+  const [recherche, setRecherche] = useState('');
+  const [historiqueOuvert, setHistoriqueOuvert] = useState(null);
+  const [counts, setCounts] = useState({ EN_ATTENTE: 0, VALIDE: 0, REJETE: 0 });
+  const user = authService.getCurrentUser();
 
-  // Message de confirmation ou d'erreur
-  const [message, setMessage] = useState('');
+  const showMessage = (text, type = 'info') => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage({ text: '' }), 4000);
+  };
 
-  // Fonction pour charger les dossiers selon le filtre actif
+  const chargerCounts = async () => {
+    try {
+      const [attente, valide, rejete] = await Promise.all([
+        commissionService.getDossiers('EN_ATTENTE'),
+        commissionService.getDossiers('VALIDE'),
+        commissionService.getDossiers('REJETE'),
+      ]);
+      setCounts({
+        EN_ATTENTE: attente.inscriptions?.length ?? 0,
+        VALIDE:     valide.inscriptions?.length ?? 0,
+        REJETE:     rejete.inscriptions?.length ?? 0,
+      });
+    } catch (err) { console.error(err); }
+  };
+
   const chargerDossiers = async () => {
     setLoading(true);
     try {
-      // Appel API avec le filtre actif
-      // Ex: GET /api/commission/dossiers?statut=EN_ATTENTE
       const data = await commissionService.getDossiers(filtre);
       setDossiers(data.inscriptions);
     } catch (err) {
@@ -34,146 +65,259 @@ export default function DashboardCommission() {
     }
   };
 
-  // Recharger les dossiers chaque fois que le filtre change
-  useEffect(() => {
-    chargerDossiers();
-  }, [filtre]); // [filtre] = se déclenche quand filtre change
+  useEffect(() => { chargerCounts(); }, []);
+  useEffect(() => { chargerDossiers(); }, [filtre]);
 
-  // Valider ou rejeter un dossier
   const handleDecision = async (inscriptionId, statut) => {
     try {
-      // Appel API → PATCH /api/commission/dossiers/:id
       await commissionService.updateStatut(inscriptionId, statut);
-      setMessage(`Dossier ${statut === 'VALIDE' ? 'validé' : 'rejeté'} avec succès`);
-      // Recharger la liste pour refléter le changement
+      showMessage(`Dossier ${statut === 'VALIDE' ? 'validé' : 'rejeté'} avec succès`, statut === 'VALIDE' ? 'success' : 'error');
       chargerDossiers();
-    } catch (err) {
-      setMessage(err.message);
-    }
+      chargerCounts();
+    } catch (err) { showMessage(err.message, 'error'); }
   };
 
-  // Couleurs associées à chaque statut
-  const couleurStatut = {
-    EN_ATTENTE: 'bg-yellow-100 text-yellow-700',
-    VALIDE: 'bg-green-100 text-green-700',
-    REJETE: 'bg-red-100 text-red-700',
-  };
+  const dossiersFiltres = dossiers.filter((ins) => {
+    const q = recherche.toLowerCase();
+    return (
+      `${ins.candidat.prenom} ${ins.candidat.nom}`.toLowerCase().includes(q) ||
+      ins.candidat.matricule.toLowerCase().includes(q) ||
+      ins.concours.libelle.toLowerCase().includes(q)
+    );
+  });
+
+  const total = counts.EN_ATTENTE + counts.VALIDE + counts.REJETE;
 
   return (
     <div className='min-h-screen bg-gray-50'>
 
-      {/* ── Header ── */}
-      <header className='bg-blue-900 text-white px-6 py-4'>
-        <h1 className='text-xl font-bold'>UniPath — Espace Commission</h1>
+      {/* HEADER */}
+      <header className='bg-blue-900 text-white px-6 py-3 flex items-center justify-between sticky top-0 z-40 shadow-lg'>
+        <div className='flex items-center gap-3'>
+          <span className='text-xl font-black tracking-tight'>UniPath</span>
+          <span className='hidden sm:block text-blue-300 text-xs'>Espace Commission</span>
+        </div>
+        <div className='flex items-center gap-3'>
+          <div className='flex items-center gap-2'>
+            <div className='w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center text-sm font-bold text-white flex-shrink-0'>
+              {user ? initiales(user.prenom || user.email?.[0], user.nom || user.email?.[1]) : 'C'}
+            </div>
+            <div className='hidden sm:block'>
+              <p className='text-sm font-semibold leading-tight'>
+                {user?.prenom ? `${user.prenom} ${user.nom}` : user?.email}
+              </p>
+              <p className='text-orange-300 text-xs'>Commission</p>
+            </div>
+          </div>
+          <button
+            onClick={() => { authService.logout(); navigate('/login'); }}
+            className='text-xs border border-orange-400 text-orange-300 px-3 py-1.5 rounded-lg hover:bg-orange-500 hover:text-white transition'
+          >
+            Déconnexion
+          </button>
+        </div>
       </header>
 
-      <main className='max-w-5xl mx-auto p-6'>
+      <main className='max-w-5xl mx-auto p-6 space-y-6'>
 
-        {/* Message de confirmation ou d'erreur */}
-        {message && (
-          <div className='bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded mb-4'>
-            {message}
-            {/* Bouton pour fermer le message */}
-            <button onClick={() => setMessage('')} className='float-right'>✕</button>
+        {/* Toast */}
+        {message.text && (
+          <div className={`px-4 py-3 rounded-lg text-sm flex items-center justify-between ${
+            message.type === 'success' ? 'bg-green-50 border border-green-200 text-green-700' :
+            message.type === 'error'   ? 'bg-red-50 border border-red-200 text-red-700' :
+                                         'bg-blue-50 border border-blue-200 text-blue-700'
+          }`}>
+            <span>{message.text}</span>
+            <button onClick={() => setMessage({ text: '' })} className='ml-4 opacity-60 hover:opacity-100 text-lg leading-none'>&times;</button>
           </div>
         )}
 
-        {/* ── Boutons de filtre ── */}
-        <div className='flex gap-2 mb-6'>
-          {['EN_ATTENTE', 'VALIDE', 'REJETE'].map(s => (
-            <button
-              key={s}
-              onClick={() => setFiltre(s)}
-              // Bouton bleu si filtre actif, blanc sinon
-              className={`px-4 py-2 rounded text-sm font-medium ${
-                filtre === s
-                  ? 'bg-blue-700 text-white'
-                  : 'bg-white border text-gray-700'
-              }`}
-            >
-              {s.replace('_', ' ')}
-            </button>
-          ))}
+        {/* STATS GLOBALES */}
+        <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+          <div className='bg-white rounded-2xl border border-gray-100 shadow-sm p-5'>
+            <p className='text-xs text-gray-500 font-medium mb-1'>Total dossiers</p>
+            <p className='text-3xl font-black text-blue-900'>{total}</p>
+          </div>
+          <div className='bg-yellow-50 rounded-2xl border-2 border-yellow-200 p-5'>
+            <p className='text-xs text-yellow-600 font-medium mb-1'>En attente</p>
+            <p className='text-3xl font-black text-yellow-700'>{counts.EN_ATTENTE}</p>
+          </div>
+          <div className='bg-green-50 rounded-2xl border-2 border-green-200 p-5'>
+            <p className='text-xs text-green-600 font-medium mb-1'>Validés</p>
+            <p className='text-3xl font-black text-green-700'>{counts.VALIDE}</p>
+          </div>
+          <div className='bg-red-50 rounded-2xl border-2 border-red-200 p-5'>
+            <p className='text-xs text-red-500 font-medium mb-1'>Rejetés</p>
+            <p className='text-3xl font-black text-red-600'>{counts.REJETE}</p>
+          </div>
         </div>
 
-        {/* ── Liste des dossiers ── */}
+        {/* FILTRES + RECHERCHE */}
+        <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-col sm:flex-row gap-3 items-center'>
+          <div className='flex gap-2'>
+            {['EN_ATTENTE', 'VALIDE', 'REJETE'].map(s => {
+              const cfg = STATUT_CONFIG[s];
+              return (
+                <button
+                  key={s}
+                  onClick={() => setFiltre(s)}
+                  className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
+                    filtre === s ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {cfg.label}
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                    filtre === s ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-500'
+                  }`}>
+                    {counts[s]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div className='flex-1 relative'>
+            <input
+              type='text'
+              placeholder='Rechercher par nom, matricule ou concours...'
+              value={recherche}
+              onChange={e => setRecherche(e.target.value)}
+              className='w-full pl-4 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-orange-500'
+            />
+          </div>
+          {recherche && (
+            <span className='text-xs text-gray-400 whitespace-nowrap'>{dossiersFiltres.length} résultat(s)</span>
+          )}
+        </div>
+
+        {/* LISTE DES DOSSIERS */}
         {loading ? (
-          <p className='text-center text-gray-500'>Chargement...</p>
+          <div className='space-y-4'>
+            {[1, 2, 3].map(i => (
+              <div key={i} className='bg-white rounded-2xl p-6 animate-pulse'>
+                <div className='flex gap-4'>
+                  <div className='w-11 h-11 bg-gray-200 rounded-xl' />
+                  <div className='flex-1 space-y-2'>
+                    <div className='h-4 bg-gray-200 rounded w-1/3' />
+                    <div className='h-3 bg-gray-200 rounded w-1/4' />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : dossiersFiltres.length === 0 ? (
+          <div className='text-center py-16 text-gray-400'>
+            <p className='text-sm'>{recherche ? 'Aucun résultat pour cette recherche.' : 'Aucun dossier dans cette catégorie.'}</p>
+          </div>
         ) : (
           <div className='space-y-4'>
+            {dossiersFiltres.map((ins) => {
+              const cfg = STATUT_CONFIG[ins.statut] || STATUT_CONFIG.EN_ATTENTE;
+              const pieces = ['acteNaissance', 'carteIdentite', 'photo', 'releve', 'quittance'];
+              const nbPieces = pieces.filter(p => ins.candidat.dossier?.[p]).length;
+              const pct = Math.round((nbPieces / pieces.length) * 100);
+              const dossierId = ins.candidat.dossier?.id;
 
-            {/* Message si aucun dossier dans cette catégorie */}
-            {dossiers.length === 0 ? (
-              <p className='text-gray-500 text-center py-10'>
-                Aucun dossier dans cette catégorie
-              </p>
-            ) : (
-              dossiers.map((inscription) => (
-                <div key={inscription.id} className='bg-white rounded-xl shadow p-6'>
+              return (
+                <div key={ins.id} className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
+                  <div className={`h-1 ${cfg.bar}`} />
+                  <div className='p-5'>
 
-                  {/* ── Infos candidat et statut ── */}
-                  <div className='flex justify-between items-start mb-4'>
-                    <div>
-                      <h3 className='font-bold text-lg'>
-                        {inscription.candidat.prenom} {inscription.candidat.nom}
-                      </h3>
-                      {/* Matricule en bleu */}
-                      <p className='text-blue-700 text-sm font-mono'>
-                        {inscription.candidat.matricule}
-                      </p>
-                      {/* Nom du concours */}
-                      <p className='text-gray-500 text-sm'>
-                        {inscription.concours.libelle}
-                      </p>
-                    </div>
-                    {/* Badge de statut coloré */}
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${couleurStatut[inscription.statut]}`}>
-                      {inscription.statut.replace('_', ' ')}
-                    </span>
-                  </div>
-
-                  {/* ── Pièces justificatives ── */}
-                  {/* Affiche ✓ en vert si déposée, ✗ en gris sinon */}
-                  <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 mb-4'>
-                    {['acteNaissance', 'carteIdentite', 'photo', 'releve', 'quittance'].map(p => (
-                      <div
-                        key={p}
-                        className={`text-xs text-center p-2 rounded ${
-                          inscription.candidat.dossier?.[p]
-                            ? 'bg-green-50 text-green-700'
-                            : 'bg-gray-50 text-gray-400'
-                        }`}
-                      >
-                        {inscription.candidat.dossier?.[p] ? '✓' : '✗'} {p}
+                    {/* En-tête candidat */}
+                    <div className='flex items-start justify-between gap-3 mb-4'>
+                      <div className='flex items-center gap-3'>
+                        <div className='w-11 h-11 rounded-xl bg-blue-900 flex items-center justify-center text-sm font-bold text-white flex-shrink-0'>
+                          {initiales(ins.candidat.prenom, ins.candidat.nom)}
+                        </div>
+                        <div>
+                          <p className='font-bold text-gray-900'>{ins.candidat.prenom} {ins.candidat.nom}</p>
+                          <p className='text-orange-600 text-xs font-mono'>{ins.candidat.matricule}</p>
+                          <p className='text-gray-400 text-xs'>{ins.concours.libelle}</p>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-
-                  {/* ── Boutons Valider/Rejeter ── */}
-                  {/* Visibles uniquement si le dossier est EN_ATTENTE */}
-                  {inscription.statut === 'EN_ATTENTE' && (
-                    <div className='flex flex-col sm:flex-row gap-3'>
-                      <button
-                        onClick={() => handleDecision(inscription.id, 'VALIDE')}
-                        className='flex-1 bg-green-600 text-white py-2 rounded hover:bg-green-700 font-medium'
-                      >
-                        ✓ Valider le dossier
-                      </button>
-                      <button
-                        onClick={() => handleDecision(inscription.id, 'REJETE')}
-                        className='flex-1 bg-red-600 text-white py-2 rounded hover:bg-red-700 font-medium'
-                      >
-                        ✗ Rejeter le dossier
-                      </button>
+                      <div className='text-right flex-shrink-0'>
+                        <span className={`text-xs px-2 py-1 rounded-full font-semibold ${cfg.badge}`}>
+                          {cfg.label}
+                        </span>
+                        <p className='text-gray-400 text-xs mt-1'>
+                          {new Date(ins.createdAt).toLocaleDateString('fr-FR')}
+                        </p>
+                      </div>
                     </div>
-                  )}
 
+                    {/* Pièces */}
+                    <div className='mb-4'>
+                      <div className='flex items-center justify-between mb-2'>
+                        <p className='text-xs text-gray-500 font-medium'>Pièces justificatives</p>
+                        <span className={`text-xs font-bold ${pct === 100 ? 'text-green-600' : pct >= 60 ? 'text-yellow-600' : 'text-red-500'}`}>
+                          {nbPieces}/5 — {pct}%
+                        </span>
+                      </div>
+                      <div className='flex gap-1.5'>
+                        {pieces.map(p => (
+                          <div
+                            key={p}
+                            title={PIECES_LABELS[p]}
+                            className={`flex-1 text-center py-1.5 rounded-lg text-xs font-semibold ${
+                              ins.candidat.dossier?.[p]
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-gray-100 text-gray-400'
+                            }`}
+                          >
+                            {ins.candidat.dossier?.[p] ? '✓' : '—'}
+                          </div>
+                        ))}
+                      </div>
+                      <div className='flex gap-1.5 mt-1'>
+                        {pieces.map(p => (
+                          <p key={p} className='flex-1 text-center text-gray-400' style={{ fontSize: '9px' }}>
+                            {PIECES_LABELS[p]}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className='flex flex-col gap-2'>
+                      {ins.statut === 'EN_ATTENTE' && (
+                        <div className='flex gap-2'>
+                          <button
+                            onClick={() => handleDecision(ins.id, 'VALIDE')}
+                            className='flex-1 bg-green-600 text-white py-2 rounded-xl text-sm font-semibold hover:bg-green-700 transition'
+                          >
+                            Valider le dossier
+                          </button>
+                          <button
+                            onClick={() => handleDecision(ins.id, 'REJETE')}
+                            className='flex-1 bg-red-600 text-white py-2 rounded-xl text-sm font-semibold hover:bg-red-700 transition'
+                          >
+                            Rejeter le dossier
+                          </button>
+                        </div>
+                      )}
+                      {dossierId && (
+                        <button
+                          onClick={() => setHistoriqueOuvert(historiqueOuvert === dossierId ? null : dossierId)}
+                          className='text-xs text-blue-900 border border-blue-200 py-1.5 rounded-xl hover:bg-blue-50 transition'
+                        >
+                          {historiqueOuvert === dossierId ? 'Masquer l\'historique' : 'Voir l\'historique'}
+                        </button>
+                      )}
+                    </div>
+
+                    {historiqueOuvert === dossierId && dossierId && (
+                      <div className='mt-4 border-t border-gray-100 pt-4'>
+                        <HistoriqueActions
+                          dossierId={dossierId}
+                          nomCandidat={`${ins.candidat.prenom} ${ins.candidat.nom}`}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
-              ))
-            )}
+              );
+            })}
           </div>
         )}
-
       </main>
     </div>
   );

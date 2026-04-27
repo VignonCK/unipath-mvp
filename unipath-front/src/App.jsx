@@ -6,41 +6,49 @@ import Register from './pages/Register';
 import DashboardCandidat from './pages/DashboardCandidat';
 import DashboardCommission from './pages/DashboardCommission';
 import DashboardDGES from './pages/DashboardDGES';
-
-function RouteProtegee({ children }) {
-  const token = localStorage.getItem('token');
-  return token ? children : <Navigate to='/login' />;
-}
+import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Routes publiques */}
         <Route path='/' element={<Home />} />
-        <Route path='/' element={<Navigate to='/login' />} />
         <Route path='/login' element={<Login />} />
         <Route path='/register' element={<Register />} />
-        <Route path='/dashboard'
+
+        {/* Routes protégées - CANDIDAT uniquement */}
+        <Route
+          path='/dashboard'
           element={
-            <RouteProtegee>
+            <ProtectedRoute allowedRoles={['CANDIDAT']}>
               <DashboardCandidat />
-            </RouteProtegee>
+            </ProtectedRoute>
           }
         />
-        <Route path='/commission'
+
+        {/* Routes protégées - COMMISSION uniquement */}
+        <Route
+          path='/commission'
           element={
-            <RouteProtegee>
+            <ProtectedRoute allowedRoles={['COMMISSION']}>
               <DashboardCommission />
-            </RouteProtegee>
+            </ProtectedRoute>
           }
         />
-        <Route path='/dges'
+
+        {/* Routes protégées - DGES et COMMISSION */}
+        <Route
+          path='/dges'
           element={
-            <RouteProtegee>
+            <ProtectedRoute allowedRoles={['DGES', 'COMMISSION']}>
               <DashboardDGES />
-            </RouteProtegee>
+            </ProtectedRoute>
           }
         />
+
+        {/* Route par défaut - 404 */}
+        <Route path='*' element={<Navigate to='/' replace />} />
       </Routes>
     </BrowserRouter>
   );

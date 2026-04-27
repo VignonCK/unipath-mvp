@@ -1,47 +1,52 @@
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
+const fs = require('fs');
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST,
+  port: process.env.EMAIL_PORT,
+  secure: false,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
-const envoyerEmailValidation = async ({ candidatEmail, candidatNom, candidatPrenom, concours, matricule }) => {
+// ── Email de pré-inscription ──────────────────────────────────
+const envoyerEmailPreInscription = async ({ candidatEmail, candidatNom, candidatPrenom, concours, numeroDossier, pdfPath }) => {
   try {
-    const { data, error } = await resend.emails.send({
-      from: process.env.EMAIL_FROM,
-      to: [candidatEmail],
-      subject: '[UniPath] Votre dossier a ete valide',
-      html: '<div style="font-family: Arial, sans-serif;"><h2 style="color: #1E7D3A;">Dossier valide</h2><p>Bonjour <strong>' + candidatPrenom + ' ' + candidatNom + '</strong>,</p><p>Votre dossier pour le concours <strong>' + concours + '</strong> a ete valide.</p><p>Matricule : <strong>' + matricule + '</strong></p><p>Vous recevrez bientot votre convocation.</p></div>'
+    const pdfBuffer = fs.readFileSync(pdfPath);
+    await transporter.sendMail({
+      from: `"UniPath" <${process.env.EMAIL_FROM}>`,
+      to: candidatEmail,
+      subject: '[UniPath] Confirmation de votre pré-inscription',
+      html: `
+        <div style="font-family: Arial, sans-serif;">
+          <h2 style="color: #008751;">Pré-inscription confirmée</h2>
+          <p>Bonjour <strong>${candidatPrenom} ${candidatNom}</strong>,</p>
+          <p>Votre pré-inscription au concours <strong>${concours}</strong> a bien été enregistrée.</p>
+          <p>Numéro de dossier : <strong>${numeroDossier}</strong></p>
+          <p>Votre fiche de pré-inscription est jointe à cet email. La commission étudiera votre dossier et vous serez notifié par email.</p>
+          <hr/>
+          <p style="color:#888;font-size:12px;">Université d'Abomey-Calavi | Année 2025-2026</p>
+        </div>
+      `,
+      attachments: [
+        {
+          filename: `fiche-preinscription-${numeroDossier}.pdf`,
+          content: pdfBuffer,
+          contentType: 'application/pdf'
+        }
+      ]
     });
-
-    if (error) {
-      console.error('Erreur email validation:', error);
-      return false;
-    }
-    console.log('Email validation envoye:', data.id);
-    return true;
-  } catch (err) {
-    console.error('Exception email validation:', err);
-    return false;
+    
+    console.log(`✅ Email de pré-inscription envoyé à ${candidatEmail}`);
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Erreur envoi email pré-inscription:', error);
+    throw new Error(`Erreur envoi email: ${error.message}`);
   }
 };
 
-const envoyerEmailRejet = async ({ candidatEmail, candidatNom, candidatPrenom, concours }) => {
-  try {
-    const { data, error } = await resend.emails.send({
-      from: process.env.EMAIL_FROM,
-      to: [candidatEmail],
-      subject: '[UniPath] Votre dossier n a pas ete retenu',
-      html: '<div style="font-family: Arial, sans-serif;"><h2 style="color: #C0392B;">Dossier non retenu</h2><p>Bonjour <strong>' + candidatPrenom + ' ' + candidatNom + '</strong>,</p><p>Votre dossier pour le concours <strong>' + concours + '</strong> n a pas ete retenu.</p><p>Rapprochez-vous de l administration pour plus d informations.</p></div>'
-    });
-
-    if (error) {
-      console.error('Erreur email rejet:', error);
-      return false;
-    }
-    console.log('Email rejet envoye:', data.id);
-    return true;
-  } catch (err) {
-    console.error('Exception email rejet:', err);
-    return false;
-  }
+module.exports = {
+  envoyerEmailPreInscription,
 };
-
-module.exports = { envoyerEmailValidation, envoyerEmailRejet };
