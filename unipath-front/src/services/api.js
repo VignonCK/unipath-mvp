@@ -65,6 +65,12 @@ export const authService = {
     localStorage.removeItem('user');
   },
 
+  resetPassword: (email) =>
+    request('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
   getCurrentUser: () => {
     try {
       const userStr = localStorage.getItem('user');

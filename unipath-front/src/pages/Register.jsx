@@ -517,6 +517,13 @@ function FormLeft({ onSuccess, isMobile }) {
         >
           Se connecter
         </a>
+        {" · "}
+        <a
+          href="/"
+          style={{ color: "rgb(249, 115, 22)", textDecoration: "none", fontWeight: 600 }}
+        >
+          Retour à l'accueil
+        </a>
       </p>
     </div>
   );

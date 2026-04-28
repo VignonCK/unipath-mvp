@@ -107,3 +107,13 @@ exports.login = async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
+exports.resetPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ message: 'Email de réinitialisation envoyé' });
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
