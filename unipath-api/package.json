@@ -5,7 +5,10 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "node server.js",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "create-admins": "node scripts/create-admin-accounts.js"
   },
   "keywords": [],
   "author": "Groupe 4 de SGBD (GIT) — EPAC: 2025-2026",
@@ -22,7 +25,12 @@
     "nodemailer": "^8.0.6",
     "pdfkit": "^0.18.0",
     "prisma": "^5.22.0",
-    "resend": "^6.11.0"
+    "resend": "^6.11.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

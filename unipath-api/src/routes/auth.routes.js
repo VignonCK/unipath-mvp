@@ -9,8 +9,9 @@ router.post('/register', authController.register);
 router.post('/login', authController.login);
 router.post('/reset-password', authController.resetPassword);
 
-// Routes d'inscription pour Commission et DGES (à protéger en production)
-router.post('/register/commission', commissionAuthController.registerCommission);
-router.post('/register/dges', commissionAuthController.registerDGES);
+// Routes d'inscription pour Commission et DGES
+// ⚠️ DÉSACTIVÉES EN PRODUCTION - Utiliser le script create-admin-accounts.js
+// router.post('/register/commission', commissionAuthController.registerCommission);
+// router.post('/register/dges', commissionAuthController.registerDGES);
 
 module.exports = router;

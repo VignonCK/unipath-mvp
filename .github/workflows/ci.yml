@@ -1,0 +1,93 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # ── Backend Tests ──────────────────────────────────────────────
+  backend-test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./unipath-api
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: unipath-api/package-lock.json
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run tests
+        run: npm test
+        env:
+          NODE_ENV: test
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./unipath-api/coverage/coverage-final.json
+          flags: backend
+          fail_ci_if_error: false
+
+  # ── Frontend Tests ─────────────────────────────────────────────
+  frontend-test:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./unipath-front
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: unipath-front/package-lock.json
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run linter
+        run: npm run lint
+      
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_URL: http://localhost:3001/api
+
+  # ── Security Audit ─────────────────────────────────────────────
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run npm audit (Backend)
+        run: npm audit --audit-level=moderate
+        working-directory: ./unipath-api
+        continue-on-error: true
+      
+      - name: Run npm audit (Frontend)
+        run: npm audit --audit-level=moderate
+        working-directory: ./unipath-front
+        continue-on-error: true

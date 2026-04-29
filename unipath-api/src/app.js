@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const app = express();
+
+// ── Middlewares ─────────────────────────────────────────────────
 app.use(cors({
   origin: [
     'http://localhost:5173',
@@ -34,8 +36,23 @@ app.use('/api/pdf', pdfRoutes);
 app.use('/api/completion', completionRoutes);
 app.use('/api/history', historyRoutes);
 
+// ── Health check ────────────────────────────────────────────────
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', message: 'UniPath API fonctionne !' });
+  res.json({ 
+    status: 'OK', 
+    message: 'UniPath API fonctionne !',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
-module.exports = app; // ← Toujours en dernier
+// ── Gestion des erreurs globales ───────────────────────────────
+app.use((err, req, res, next) => {
+  console.error('❌ Erreur serveur:', err.stack);
+  res.status(err.status || 500).json({ 
+    error: err.message || 'Erreur interne du serveur',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
+});
+
+module.exports = app;

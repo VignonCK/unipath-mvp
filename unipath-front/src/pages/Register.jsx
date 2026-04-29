@@ -46,17 +46,8 @@ const MODULES = [
   },
 ];
 
-const ROLES = [
-  "CANDIDAT",
-  "COMMISSION", 
-  "DGES"
-];
-
-const ROLE_LABELS = {
-  "CANDIDAT": "Candidat (bachelier)",
-  "COMMISSION": "Membre de commission",
-  "DGES": "Administrateur DGES"
-};
+// Seul le rôle CANDIDAT est disponible à l'inscription publique
+// Les comptes COMMISSION et DGES sont créés par les administrateurs
 
 // ── STYLES (inline) ───────────────────────────────────────────────────────────
 const S = {
@@ -285,7 +276,6 @@ function FormLeft({ onSuccess, isMobile }) {
     email: "", 
     password: "", 
     confirmPassword: "",
-    role: "",
   });
 
   const set = (key) => (e) => {
@@ -304,7 +294,7 @@ function FormLeft({ onSuccess, isMobile }) {
 
   const handleSubmit = async () => {
     // Validation étape 2
-    if (!form.email || !form.password || !form.confirmPassword || !form.role) {
+    if (!form.email || !form.password || !form.confirmPassword) {
       setError('Tous les champs sont obligatoires');
       return;
     }
@@ -321,7 +311,7 @@ function FormLeft({ onSuccess, isMobile }) {
 
     setLoading(true);
     try {
-      // Préparer les données selon le rôle
+      // Inscription uniquement en tant que CANDIDAT
       let userData = {
         nom: form.nom,
         prenom: form.prenom,
@@ -332,15 +322,7 @@ function FormLeft({ onSuccess, isMobile }) {
         password: form.password,
       };
 
-      // Utiliser l'endpoint approprié selon le rôle
-      let result;
-      if (form.role === 'COMMISSION') {
-        result = await authService.registerCommission(userData);
-      } else if (form.role === 'DGES') {
-        result = await authService.registerDGES(userData);
-      } else {
-        result = await authService.register(userData);
-      }
+      const result = await authService.register(userData);
 
       // Si Supabase demande une confirmation email
       if (result?.emailConfirmationRequired) {
@@ -472,7 +454,7 @@ function FormLeft({ onSuccess, isMobile }) {
             </Field>
           </div>
 
-          <div style={{ marginBottom: 14 }}>
+          <div style={{ marginBottom: 20 }}>
             <Field label="Confirmer le mot de passe" required>
               <Input 
                 value={form.confirmPassword} 
@@ -483,15 +465,16 @@ function FormLeft({ onSuccess, isMobile }) {
             </Field>
           </div>
           
-          <div style={{ marginBottom: 20 }}>
-            <Field label="Profil" required>
-              <Select value={form.role} onChange={set("role")}>
-                <option value="" disabled>Sélectionner votre rôle</option>
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-                ))}
-              </Select>
-            </Field>
+          <div style={{
+            background: "#eff6ff",
+            border: "1px solid #bfdbfe",
+            borderRadius: 8,
+            padding: "12px 16px",
+            marginBottom: 20,
+            fontSize: 12,
+            color: "#1e40af",
+          }}>
+            ℹ️ Vous vous inscrivez en tant que <strong>candidat</strong>. Les comptes commission et DGES sont créés par les administrateurs.
           </div>
           
           <div style={{ display: "flex", gap: 10 }}>
