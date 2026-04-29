@@ -211,8 +211,8 @@ export default function Home() {
           </div>
         </div>
         
-        {/* Overlay plus foncé sur mobile pour meilleure lisibilité */}
-        <div className='absolute inset-0' style={{backgroundColor: 'rgba(30, 58, 138, 0.5)'}} />
+        {/* Overlay léger pour meilleure visibilité des images */}
+        <div className='absolute inset-0' style={{backgroundColor: 'rgba(30, 58, 138, 0.3)'}} />
         
         {/* Indicateurs du carrousel */}
         <div className='absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-2 z-10'>
@@ -232,12 +232,12 @@ export default function Home() {
         
         {/* Contenu du hero */}
         <div className='relative max-w-4xl mx-auto text-center z-10'>
-          <h1 className='text-3xl md:text-6xl font-black mb-4 leading-tight'>
+          <h1 className='text-3xl md:text-6xl font-black mb-4 leading-tight' style={{textShadow: '0 2px 10px rgba(0,0,0,0.5)'}}>
             Gérez votre parcours
             <span className='text-orange-400'> universitaire</span>
             <br />en toute simplicité
           </h1>
-          <p className='text-base md:text-xl text-blue-100 max-w-2xl mx-auto mb-8'>
+          <p className='text-base md:text-xl text-blue-100 max-w-2xl mx-auto mb-8' style={{textShadow: '0 1px 8px rgba(0,0,0,0.5)'}}>
             UniPath digitalise les inscriptions aux concours universitaires.
             De la candidature à la convocation, tout se fait en ligne.
           </p>
