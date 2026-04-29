@@ -239,10 +239,10 @@ export default function Home() {
             De la candidature à la convocation, tout se fait en ligne.
           </p>
           <div className='flex flex-col sm:flex-row gap-3 justify-center'>
-            <button onClick={() => navigate('/register')} className='bg-orange-500 text-white px-6 py-3 rounded-xl font-bold text-base hover:bg-orange-600 transition'>
+            <button onClick={() => navigate('/register')} className='bg-orange-500 text-white px-4 py-2.5 sm:px-6 sm:py-3 rounded-xl font-bold text-sm sm:text-base hover:bg-orange-600 transition'>
               Créer mon compte →
             </button>
-            <button onClick={() => navigate('/login')} className='border-2 border-orange-400 text-white px-6 py-3 rounded-xl font-bold text-base hover:bg-orange-400 hover:text-blue-900 transition'>
+            <button onClick={() => navigate('/login')} className='border-2 border-orange-400 text-white px-4 py-2.5 sm:px-6 sm:py-3 rounded-xl font-bold text-sm sm:text-base hover:bg-orange-400 hover:text-blue-900 transition'>
               Se connecter
             </button>
           </div>
@@ -303,7 +303,7 @@ export default function Home() {
             ))}
           </div>
           <div className='text-center mt-10'>
-            <button onClick={() => navigate('/register')} className='bg-orange-500 text-white px-8 py-4 rounded-xl font-bold hover:bg-orange-600 transition'>
+            <button onClick={() => navigate('/register')} className='bg-orange-500 text-white px-6 py-3 sm:px-8 sm:py-4 rounded-xl font-bold text-sm sm:text-base hover:bg-orange-600 transition'>
               Commencer maintenant →
             </button>
           </div>
