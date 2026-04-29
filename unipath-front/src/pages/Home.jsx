@@ -184,7 +184,7 @@ export default function Home() {
       </nav>
 
       {/* HERO */}
-      <section className='relative text-white px-6' style={{minHeight: '550px', paddingTop: '8rem', paddingBottom: '8rem'}}>
+      <section className='relative text-white px-6' style={{minHeight: '450px', paddingTop: '6rem', paddingBottom: '6rem'}}>
         {/* Carrousel d'images avec effet de glissement */}
         <div className='absolute inset-0 overflow-hidden'>
           <div 
@@ -202,14 +202,17 @@ export default function Home() {
                   src={image.src}
                   alt={image.alt}
                   className='w-full h-full object-cover'
+                  style={{
+                    objectPosition: 'center 40%'
+                  }}
                 />
               </div>
             ))}
           </div>
         </div>
         
-        {/* Overlay */}
-        <div className='absolute inset-0' style={{backgroundColor: 'rgba(30, 58, 138, 0.4)'}} />
+        {/* Overlay plus foncé sur mobile pour meilleure lisibilité */}
+        <div className='absolute inset-0' style={{backgroundColor: 'rgba(30, 58, 138, 0.5)'}} />
         
         {/* Indicateurs du carrousel */}
         <div className='absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-2 z-10'>
