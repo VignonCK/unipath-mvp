@@ -25,7 +25,6 @@ export default function Login() {
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState('');
 
-  // Mode mot de passe oublié
   const [resetMode, setResetMode]   = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
@@ -36,7 +35,6 @@ export default function Login() {
   const messageType    = location.state?.type;
   const premiereFois   = estPremiereVisite();
 
-  // ── Connexion ──────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -56,7 +54,6 @@ export default function Login() {
     }
   };
 
-  // ── Réinitialisation mot de passe ──────────────────────────
   const handleReset = async (e) => {
     e.preventDefault();
     setResetLoading(true);
@@ -84,13 +81,11 @@ export default function Login() {
         {/* ── GAUCHE : Formulaire ── */}
         <div className='flex-1 bg-white flex flex-col justify-center px-8 py-10 sm:px-12'>
 
-          {/* Logo */}
           <div className='flex items-center gap-2 mb-8'>
             <div className='w-8 h-8 bg-blue-900 rounded-lg flex items-center justify-center text-white text-xs font-black'>U</div>
             <span className='text-base font-black text-blue-900 tracking-tight'>UniPath</span>
           </div>
 
-          {/* Titre */}
           <h1 className='text-2xl font-black text-gray-900 mb-1'>
             {resetMode ? 'Mot de passe oublié' : (premiereFois ? 'Bienvenue sur UniPath' : 'Bon retour !')}
           </h1>
@@ -102,7 +97,6 @@ export default function Login() {
               : 'Connectez-vous à votre compte.'}
           </p>
 
-          {/* Message succès/avertissement depuis Register */}
           {!resetMode && successMessage && (
             <div className={`px-4 py-3 rounded-xl mb-4 text-sm border ${
               messageType === 'warning'
@@ -113,7 +107,6 @@ export default function Login() {
             </div>
           )}
 
-          {/* ── MODE RESET ── */}
           {resetMode ? (
             resetSent ? (
               <div className='bg-green-50 border border-green-200 text-green-700 px-4 py-4 rounded-xl text-sm'>
@@ -161,7 +154,6 @@ export default function Login() {
               </form>
             )
           ) : (
-          /* ── MODE CONNEXION ── */
             <form onSubmit={handleSubmit} className='space-y-4'>
               {error && (
                 <div className='bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm'>
@@ -232,12 +224,25 @@ export default function Login() {
           </p>
         </div>
 
-        {/* ── DROITE : Message ── */}
+        {/* ── DROITE : Message + Lottie ── */}
         <div className='hidden md:flex w-5/12 bg-blue-900 flex-col justify-center px-10 py-10 relative overflow-hidden'>
           <div className='absolute top-[-60px] right-[-60px] w-48 h-48 rounded-full bg-orange-500/10' />
           <div className='absolute bottom-[-40px] left-[-30px] w-32 h-32 rounded-full bg-orange-500/8' />
 
           <div className='relative z-10'>
+
+            {/* Animation Lottie */}
+            <div className='flex justify-center mb-4'>
+              <dotlottie-player
+                src="https://lottie.host/embed/sVtX2lr3eG/sVtX2lr3eG.lottie"
+                background="transparent"
+                speed="1"
+                style={{ width: '220px', height: '220px' }}
+                loop
+                autoplay
+              />
+            </div>
+
             <div className='text-orange-400 text-6xl font-black leading-none mb-4 opacity-60'>"</div>
 
             <h2 className='text-white text-xl font-bold leading-snug mb-4'>

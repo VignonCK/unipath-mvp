@@ -6,3 +6,5 @@ node_modules
 
 # Fichiers temporaires PDF
 /tmp/
+.vercel
+.env*.local
