@@ -55,8 +55,6 @@ function validateConfig() {
     'DATABASE_URL',
     'SUPABASE_URL',
     'SUPABASE_ANON_KEY',
-    'EMAIL_USER',
-    'EMAIL_PASS',
   ];
 
   const missing = required.filter((key) => !process.env[key]);
@@ -66,6 +64,11 @@ function validateConfig() {
       `Variables d'environnement manquantes: ${missing.join(', ')}\n` +
       `Vérifiez votre fichier .env`
     );
+  }
+
+  // Avertissement si les variables email sont manquantes
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.warn('⚠️  Variables EMAIL_USER et EMAIL_PASS non configurées - Les fonctionnalités email seront désactivées');
   }
 }
 
