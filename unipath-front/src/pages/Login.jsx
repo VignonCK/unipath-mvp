@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../services/api';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -233,13 +234,11 @@ export default function Login() {
 
             {/* Animation Lottie */}
             <div className='flex justify-center mb-4'>
-              <dotlottie-player
-                src="https://lottie.host/embed/sVtX2lr3eG/sVtX2lr3eG.lottie"
-                background="transparent"
-                speed="1"
-                style={{ width: '220px', height: '220px' }}
+              <DotLottieReact
+                src="https://lottie.host/b2baaa96-a00b-4288-a7c7-26119042edb5/PxuulpDn7B.lottie"
                 loop
                 autoplay
+                style={{ width: '220px', height: '220px' }}
               />
             </div>
 

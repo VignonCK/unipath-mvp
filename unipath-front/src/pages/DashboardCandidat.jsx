@@ -126,17 +126,50 @@ export default function DashboardCandidat() {
 
   // ── Inscription ───────────────────────────────────────────
   const handleInscription = async (concoursId) => {
+    // Vérifier d'abord si le profil est complet
     if (profilIncomplet(candidat)) {
       showMessage('Veuillez compléter votre profil avant de vous inscrire.', 'warning');
       setEditOpen(true);
       return;
     }
+
+    // Vérifier si le dossier est complet (toutes les pièces déposées)
+    const pieces = Object.keys(PIECES_LABELS);
+    const piecesManquantes = pieces.filter(piece => !candidat?.dossier?.[piece]);
+    
+    if (piecesManquantes.length > 0) {
+      const piecesManquantesLabels = piecesManquantes.map(p => PIECES_LABELS[p]).join(', ');
+      showMessage(
+        `Votre dossier est incomplet. Veuillez déposer les pièces suivantes : ${piecesManquantesLabels}`,
+        'warning'
+      );
+      // Scroll vers la section des pièces justificatives
+      setTimeout(() => {
+        document.querySelector('#pieces-justificatives')?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+      return;
+    }
+    
     try {
-      await inscriptionService.creer(concoursId);
-      showMessage('Inscription réussie !', 'success');
+      const response = await inscriptionService.creer(concoursId);
+      showMessage('Inscription réussie ! Une fiche de pré-inscription vous a été envoyée par email.', 'success');
       const updated = await candidatService.getProfil();
       setCandidат(updated);
-    } catch (err) { showMessage(err.message, 'error'); }
+    } catch (err) {
+      // Si le dossier est incomplet (vérification backend)
+      if (err.message.includes('Dossier incomplet') || err.message.includes('pièces manquantes')) {
+        showMessage(
+          'Votre dossier est incomplet. Veuillez déposer toutes les pièces justificatives requises avant de vous inscrire.',
+          'warning'
+        );
+        // Scroll vers la section des pièces justificatives
+        setTimeout(() => {
+          document.querySelector('#pieces-justificatives')?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      } else {
+        showMessage(err.message, 'error');
+      }
+    }
   };
 
   // ── Upload pièces ─────────────────────────────────────────
@@ -178,6 +211,11 @@ export default function DashboardCandidat() {
 
   const nom = `${candidat?.prenom || ''} ${candidat?.nom || ''}`.trim();
   const incomplet = profilIncomplet(candidat);
+  
+  // Vérifier si le dossier est complet (toutes les pièces déposées)
+  const pieces = Object.keys(PIECES_LABELS);
+  const dossierIncomplet = pieces.some(piece => !candidat?.dossier?.[piece]);
+  const nbPiecesDeposees = pieces.filter(piece => candidat?.dossier?.[piece]).length;
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
@@ -197,6 +235,24 @@ export default function DashboardCandidat() {
               className='flex-shrink-0 text-xs bg-orange-500 text-white px-3 py-1.5 rounded-lg hover:bg-orange-600 transition font-medium'
             >
               Compléter
+            </button>
+          </div>
+        )}
+
+        {/* Alerte dossier incomplet */}
+        {!incomplet && dossierIncomplet && (
+          <div className='bg-red-50 border-l-4 border-red-500 px-5 py-4 rounded-xl flex items-start justify-between gap-4'>
+            <div>
+              <p className='font-semibold text-red-800 text-sm'>Dossier incomplet ({nbPiecesDeposees}/{pieces.length} pièces)</p>
+              <p className='text-red-700 text-xs mt-0.5'>
+                Vous devez déposer toutes les pièces justificatives avant de pouvoir vous inscrire à un concours.
+              </p>
+            </div>
+            <button
+              onClick={() => document.querySelector('#pieces-justificatives')?.scrollIntoView({ behavior: 'smooth' })}
+              className='flex-shrink-0 text-xs bg-red-500 text-white px-3 py-1.5 rounded-lg hover:bg-red-600 transition font-medium'
+            >
+              Voir les pièces
             </button>
           </div>
         )}
@@ -350,6 +406,7 @@ export default function DashboardCandidat() {
             <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
               {concours.map((c) => {
                 const dejaInscrit = candidat?.inscriptions?.some(i => i.concoursId === c.id);
+                const peutInscrire = !incomplet && !dossierIncomplet;
                 return (
                   <div key={c.id} className='border border-gray-100 rounded-xl p-4 hover:shadow-sm transition flex flex-col gap-3'>
                     <div>
@@ -365,9 +422,15 @@ export default function DashboardCandidat() {
                     ) : (
                       <button
                         onClick={() => handleInscription(c.id)}
-                        className='text-xs bg-orange-500 text-white px-3 py-1.5 rounded-lg hover:bg-orange-600 transition font-medium'
+                        disabled={!peutInscrire}
+                        className={`text-xs px-3 py-1.5 rounded-lg transition font-medium ${
+                          peutInscrire
+                            ? 'bg-orange-500 text-white hover:bg-orange-600'
+                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        }`}
+                        title={!peutInscrire ? 'Complétez votre profil et déposez toutes les pièces justificatives' : ''}
                       >
-                        S'inscrire
+                        {peutInscrire ? "S'inscrire" : 'Dossier incomplet'}
                       </button>
                     )}
                   </div>
@@ -378,7 +441,7 @@ export default function DashboardCandidat() {
         </div>
 
         {/* PIÈCES JUSTIFICATIVES */}
-        <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
+        <div id='pieces-justificatives' className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
           <h2 className='text-base font-bold text-gray-800 mb-4'>Pièces justificatives</h2>
           <div className='space-y-2'>
             {Object.entries(PIECES_LABELS).map(([key, label]) => {
