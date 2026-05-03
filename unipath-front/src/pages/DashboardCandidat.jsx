@@ -349,7 +349,11 @@ export default function DashboardCandidat() {
               {candidat.inscriptions.map((ins) => {
                 const cfg = STATUT_CONFIG[ins.statut] || STATUT_CONFIG.EN_ATTENTE;
                 return (
-                  <div key={ins.id} className='flex overflow-hidden rounded-xl border border-gray-100 hover:shadow-sm transition'>
+                  <div 
+                    key={ins.id} 
+                    className='flex overflow-hidden rounded-xl border border-gray-100 hover:shadow-sm transition cursor-pointer'
+                    onClick={() => navigate(`/inscription/${ins.id}`)}
+                  >
                     <div className={`w-1.5 flex-shrink-0 ${cfg.bar}`} />
                     <div className='flex-1 flex items-center justify-between gap-3 px-4 py-3 flex-wrap'>
                       <div>
@@ -363,25 +367,13 @@ export default function DashboardCandidat() {
                           </span>
                         </div>
                       </div>
-                    <div className='flex flex-col gap-2 flex-shrink-0 w-full sm:w-auto'>
-                        {/* Fiche de pré-inscription — toujours disponible */}
+                      <div className='flex items-center gap-2'>
                         <button
-                          onClick={() => handlePreinscription(ins.id)}
-                          disabled={telechargement[`preinsc_${ins.id}`]}
-                          className='text-xs border border-blue-200 text-blue-700 px-3 py-2 rounded-lg hover:bg-blue-50 transition disabled:opacity-50 text-center'
+                          onClick={(e) => { e.stopPropagation(); navigate(`/inscription/${ins.id}`); }}
+                          className='text-xs border border-gray-200 text-gray-600 px-3 py-2 rounded-lg hover:bg-gray-50 transition'
                         >
-                          {telechargement[`preinsc_${ins.id}`] ? 'Génération...' : 'Fiche pré-inscription'}
+                          Voir détails
                         </button>
-                        {/* Convocation — uniquement si validé */}
-                        {ins.statut === 'VALIDE' && (
-                          <button
-                            onClick={() => handleConvocation(ins.id)}
-                            disabled={telechargement[`conv_${ins.id}`]}
-                            className='text-xs border border-orange-400 text-orange-600 px-3 py-2 rounded-lg hover:bg-orange-500 hover:text-white transition disabled:opacity-50 text-center'
-                          >
-                            {telechargement[`conv_${ins.id}`] ? 'Génération...' : 'Convocation'}
-                          </button>
-                        )}
                       </div>
                     </div>
                   </div>

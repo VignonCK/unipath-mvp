@@ -9,6 +9,7 @@ import DashboardDGES from './pages/DashboardDGES';
 import PageConcours from './pages/PageConcours';
 import AccueilCandidat from './pages/AccueilCandidat';
 import MonCompte from './pages/MonCompte';
+import DetailInscription from './pages/DetailInscription';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -44,6 +45,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['CANDIDAT']}>
               <PageConcours />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/inscription/:inscriptionId'
+          element={
+            <ProtectedRoute allowedRoles={['CANDIDAT']}>
+              <DetailInscription />
             </ProtectedRoute>
           }
         />
