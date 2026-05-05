@@ -26,8 +26,8 @@
 **Résultat:**
 ```
 ✅ EMAIL ENVOYÉ AVEC SUCCÈS !
-Message ID: <750c03cc-32a1-e347-46b8-4488a21fd538@gmail.com>
-📧 Vérifiez votre boîte: harrydedji@gmail.com
+Message ID: <message-id@gmail.com>
+📧 Vérifiez votre boîte: your-email@gmail.com
 ```
 
 **Statut:** ✅ RÉUSSI  

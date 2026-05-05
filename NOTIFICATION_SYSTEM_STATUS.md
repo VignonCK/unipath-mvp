@@ -61,12 +61,12 @@
 # Email SMTP (Gmail)
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
-EMAIL_USER=harrydedji@gmail.com
-EMAIL_PASS=mtiu qspg iuzw jgot
-EMAIL_FROM=harrydedji@gmail.com
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=your-app-password-here
+EMAIL_FROM=your-email@gmail.com
 
 # Base de données
-DATABASE_URL=postgresql://postgres.krqxuoqijkwxouixqudo:...@aws-0-eu-west-1.pooler.supabase.com:5432/postgres
+DATABASE_URL=postgresql://user:password@host:5432/database
 
 # Redis (pour phase 2)
 REDIS_HOST=localhost

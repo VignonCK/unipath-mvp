@@ -9,7 +9,7 @@ cd unipath-api
 node test-emails-tous-types.js
 ```
 
-**Résultat attendu:** 3 emails envoyés à harrydedji@gmail.com
+**Résultat attendu:** 3 emails envoyés à test@example.com
 - Email de pré-inscription
 - Email de validation/convocation
 - Email de rejet
@@ -104,12 +104,12 @@ import NotificationCenter from './components/NotificationCenter';
 # Email SMTP
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
-EMAIL_USER=harrydedji@gmail.com
-EMAIL_PASS=mtiu qspg iuzw jgot
-EMAIL_FROM=harrydedji@gmail.com
+EMAIL_USER=votre-email@gmail.com
+EMAIL_PASS=votre-mot-de-passe-app
+EMAIL_FROM=votre-email@gmail.com
 
 # Base de données (Supabase ou MySQL)
-DATABASE_URL=postgresql://...
+DATABASE_URL=postgresql://user:password@host:5432/database
 ```
 
 ---

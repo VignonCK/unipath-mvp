@@ -146,9 +146,9 @@ app.use('/api/notifications', notificationsRoutes);
 ```env
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
-EMAIL_USER=harrydedji@gmail.com
-EMAIL_PASS=mtiu qspg iuzw jgot
-EMAIL_FROM=harrydedji@gmail.com
+EMAIL_USER=votre-email@gmail.com
+EMAIL_PASS=votre-mot-de-passe-app
+EMAIL_FROM=votre-email@gmail.com
 ```
 
 ### 3. unipath-front/src/components/CandidatLayout.jsx
