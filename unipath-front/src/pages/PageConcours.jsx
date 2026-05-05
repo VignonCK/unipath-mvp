@@ -64,47 +64,8 @@ export default function PageConcours() {
     setTimeout(() => setMessage({ text: '' }), 4000);
   };
 
-  const handleInscription = async (concoursId) => {
-    // Vérifier d'abord si le profil est complet
-    if (profilIncomplet(candidat)) {
-      showMessage('Veuillez compléter votre profil avant de vous inscrire.', 'warning');
-      navigate('/dashboard');
-      return;
-    }
-
-    // Vérifier si le dossier est complet (toutes les pièces déposées)
-    if (dossierIncomplet(candidat)) {
-      const pieces = Object.keys(PIECES_LABELS);
-      const piecesManquantes = pieces.filter(piece => !candidat?.dossier?.[piece]);
-      const piecesManquantesLabels = piecesManquantes.map(p => PIECES_LABELS[p]).join(', ');
-      showMessage(
-        `Votre dossier est incomplet. Pièces manquantes : ${piecesManquantesLabels}`,
-        'warning'
-      );
-      setTimeout(() => navigate('/dashboard'), 2000);
-      return;
-    }
-
-    setInscLoading(prev => ({ ...prev, [concoursId]: true }));
-    try {
-      await inscriptionService.creer(concoursId);
-      showMessage('Inscription réussie ! Une fiche de pré-inscription vous a été envoyée par email.', 'success');
-      const updated = await candidatService.getProfil();
-      setCandidат(updated);
-    } catch (err) {
-      // Si le dossier est incomplet (vérification backend)
-      if (err.message.includes('Dossier incomplet') || err.message.includes('pièces manquantes')) {
-        showMessage(
-          'Votre dossier est incomplet. Veuillez déposer toutes les pièces justificatives requises.',
-          'warning'
-        );
-        setTimeout(() => navigate('/dashboard'), 2000);
-      } else {
-        showMessage(err.message, 'error');
-      }
-    } finally {
-      setInscLoading(prev => ({ ...prev, [concoursId]: false }));
-    }
+  const handleVoirConcours = (concoursId) => {
+    navigate(`/concours/${concoursId}`);
   };
 
   if (loading) return (
@@ -206,7 +167,6 @@ export default function PageConcours() {
                 const statut      = statutConcours(c);
                 const dejaInscrit = candidat?.inscriptions?.some(i => i.concoursId === c.id);
                 const termine     = new Date() > new Date(c.dateFin);
-                const peutInscrire = !profilIncomplet(candidat) && !dossierIncomplet(candidat);
                 const num         = String(index + 1).padStart(2, '0');
 
                 // Couleur du badge numéro selon statut
@@ -222,7 +182,7 @@ export default function PageConcours() {
                   <div
                     key={c.id}
                     className='bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition p-5 flex flex-col gap-3 cursor-pointer'
-                    onClick={() => !dejaInscrit && !termine && peutInscrire && handleInscription(c.id)}
+                    onClick={() => handleVoirConcours(c.id)}
                   >
                     {/* Titre + badge numéro */}
                     <div className='flex items-start gap-3'>
@@ -271,24 +231,15 @@ export default function PageConcours() {
                     {/* Statut / bouton */}
                     <div className='mt-auto pt-2 border-t border-gray-50'>
                       {dejaInscrit ? (
-                        <span className='text-xs text-green-600 font-semibold'>Inscrit</span>
+                        <span className='text-xs text-green-600 font-semibold'>✓ Inscrit</span>
                       ) : termine ? (
                         <span className='text-xs text-gray-400'>Inscriptions closes</span>
-                      ) : !peutInscrire ? (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); navigate('/dashboard'); }}
-                          className='w-full bg-gray-200 text-gray-500 py-2 rounded-lg text-xs font-semibold cursor-not-allowed'
-                          title='Complétez votre profil et déposez toutes les pièces justificatives'
-                        >
-                          Dossier incomplet
-                        </button>
                       ) : (
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleInscription(c.id); }}
-                          disabled={inscLoading[c.id]}
-                          className='w-full bg-orange-500 text-white py-2 rounded-lg text-xs font-semibold hover:bg-orange-600 transition disabled:opacity-50'
+                          onClick={(e) => { e.stopPropagation(); handleVoirConcours(c.id); }}
+                          className='w-full bg-orange-500 text-white py-2 rounded-lg text-xs font-semibold hover:bg-orange-600 transition'
                         >
-                          {inscLoading[c.id] ? 'En cours...' : "S'inscrire"}
+                          S'inscrire
                         </button>
                       )}
                     </div>
