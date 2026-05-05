@@ -112,6 +112,15 @@ class EmailService {
         from: `"UniPath" <${process.env.EMAIL_FROM}>`,
         to: data.candidatEmail,
         subject: `[UniPath] Décision concernant votre candidature - ${data.concours}`,
+  /**
+   * Email de rejet
+   */
+  async envoyerEmailRejet(data) {
+    try {
+      await transporter.sendMail({
+        from: `"UniPath" <${process.env.EMAIL_FROM}>`,
+        to: data.candidatEmail,
+        subject: `[UniPath] Décision concernant votre candidature - ${data.concours}`,
         html: `
           <div style="font-family: Arial, sans-serif;">
             <h2 style="color: #dc2626;">Décision de la commission</h2>
@@ -131,9 +140,6 @@ class EmailService {
       throw error;
     }
   }
-}
-
-module.exports = new EmailService();
 
   /**
    * Email de bienvenue après création de compte
@@ -192,3 +198,6 @@ module.exports = new EmailService();
       throw error;
     }
   }
+}
+
+module.exports = new EmailService();
