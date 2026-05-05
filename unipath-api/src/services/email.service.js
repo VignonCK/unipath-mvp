@@ -134,3 +134,61 @@ class EmailService {
 }
 
 module.exports = new EmailService();
+
+  /**
+   * Email de bienvenue après création de compte
+   */
+  async envoyerEmailBienvenue(data) {
+    try {
+      await transporter.sendMail({
+        from: `"UniPath" <${process.env.EMAIL_FROM}>`,
+        to: data.email,
+        subject: '[UniPath] Bienvenue sur la plateforme',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px;">
+            <div style="background: linear-gradient(135deg, #1e3a8a 0%, #008751 100%); padding: 30px; text-align: center;">
+              <h1 style="color: white; margin: 0;">🎓 Bienvenue sur UniPath</h1>
+            </div>
+            
+            <div style="background: #ffffff; padding: 30px;">
+              <p>Bonjour <strong>${data.prenom} ${data.nom}</strong>,</p>
+              
+              <p>Votre compte a été créé avec succès ! Vous pouvez maintenant accéder à la plateforme UniPath.</p>
+
+              <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 0;"><strong>📧 Email :</strong> ${data.email}</p>
+              </div>
+
+              <div style="background: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0;">
+                <p style="margin: 0;"><strong>📝 Prochaines étapes :</strong></p>
+                <ol style="margin: 10px 0 0 0;">
+                  <li>Complétez votre profil</li>
+                  <li>Déposez vos pièces justificatives</li>
+                  <li>Inscrivez-vous aux concours</li>
+                </ol>
+              </div>
+
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${process.env.APP_URL || 'http://localhost:5173'}/dashboard" 
+                   style="background: #f97316; color: white; padding: 12px 30px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold;">
+                  Accéder à mon compte
+                </a>
+              </div>
+
+              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;"/>
+              <p style="color:#888; font-size:12px; text-align: center;">
+                Université d'Abomey-Calavi | Année 2025-2026<br/>
+                Pour toute question, contactez-nous
+              </p>
+            </div>
+          </div>
+        `
+      });
+      
+      console.log(`✅ Email de bienvenue envoyé à ${data.email}`);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Erreur envoi email de bienvenue:', error);
+      throw error;
+    }
+  }

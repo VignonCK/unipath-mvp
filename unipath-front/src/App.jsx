@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import AuthCallback from './pages/AuthCallback';
 import DashboardCandidat from './pages/DashboardCandidat';
 import DashboardCommission from './pages/DashboardCommission';
 import DashboardDGES from './pages/DashboardDGES';
@@ -21,6 +22,7 @@ function App() {
         <Route path='/' element={<Home />} />
         <Route path='/login' element={<Login />} />
         <Route path='/register' element={<Register />} />
+        <Route path='/auth/callback' element={<AuthCallback />} />
 
         {/* Routes protégées - CANDIDAT uniquement */}
         <Route
