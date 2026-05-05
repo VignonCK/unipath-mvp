@@ -24,6 +24,7 @@ const dgesRoutes = require('./routes/dges.routes');
 const pdfRoutes = require('./routes/pdf.routes');
 const completionRoutes = require('./routes/completion.routes');
 const historyRoutes = require('./routes/history.routes');
+const notificationRoutes = require('./routes/notifications.routes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/candidats', candidatRoutes);
@@ -35,6 +36,30 @@ app.use('/api/dges', dgesRoutes);
 app.use('/api/pdf', pdfRoutes);
 app.use('/api/completion', completionRoutes);
 app.use('/api/history', historyRoutes);
+app.use('/api/notifications', notificationRoutes);
+
+// ── Servir les fichiers PHP ────────────────────────────────────
+const { exec } = require('child_process');
+const path = require('path');
+
+app.post('/php/:file', (req, res) => {
+  const phpFile = path.join(__dirname, '../php', req.params.file);
+  const input = JSON.stringify(req.body);
+  
+  exec(`php ${phpFile}`, { input }, (error, stdout, stderr) => {
+    if (error) {
+      console.error('Erreur PHP:', stderr);
+      return res.status(500).json({ error: stderr });
+    }
+    
+    try {
+      const result = JSON.parse(stdout);
+      res.json(result);
+    } catch (e) {
+      res.json({ success: true, output: stdout });
+    }
+  });
+});
 
 // ── Health check ────────────────────────────────────────────────
 app.get('/health', (req, res) => {
