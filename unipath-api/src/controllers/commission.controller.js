@@ -77,10 +77,9 @@ exports.updateStatut = async (req, res) => {
             candidatPrenom: inscription.candidat.prenom,
             concours: inscription.concours.libelle,
             numeroDossier: inscription.id.substring(0, 8).toUpperCase(),
-            pdfPath: null,
             dateExamen: inscription.concours.dateDebut ? new Date(inscription.concours.dateDebut).toLocaleDateString('fr-FR') : null,
             lieuExamen: 'EPAC - Université d\'Abomey-Calavi',
-          }).catch(err => console.error('Erreur envoi email:', err));
+          }, null).catch(err => console.error('Erreur envoi email:', err));
         } else {
           // Envoyer l'email avec la convocation
           await envoyerEmailConvocation({
@@ -89,10 +88,9 @@ exports.updateStatut = async (req, res) => {
             candidatPrenom: inscription.candidat.prenom,
             concours: inscription.concours.libelle,
             numeroDossier: inscription.id.substring(0, 8).toUpperCase(),
-            pdfPath: tmpOutput,
             dateExamen: inscription.concours.dateDebut ? new Date(inscription.concours.dateDebut).toLocaleDateString('fr-FR') : null,
             lieuExamen: 'EPAC - Université d\'Abomey-Calavi',
-          }).catch(err => console.error('Erreur envoi email:', err));
+          }, tmpOutput).catch(err => console.error('Erreur envoi email:', err));
           
           // Supprimer le PDF temporaire
           if (fs.existsSync(tmpOutput)) fs.unlinkSync(tmpOutput);

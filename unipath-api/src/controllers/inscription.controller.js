@@ -40,7 +40,7 @@ const genererFichePreInscription = (candidat, concours, inscription) => {
     const data = JSON.stringify({ candidat, concours, inscription });
     fs.writeFileSync(tmpInput, data);
 
-    const phpScript = path.join(__dirname, '../../php/preinscription.php');
+    const phpScript = path.join(__dirname, '../../php/fiche-preinscription.php');
     const cmd = `php "${phpScript}" "${tmpInput}" "${tmpOutput}"`;
 
     exec(cmd, { timeout: 30000 }, (error, stdout, stderr) => {
@@ -101,8 +101,7 @@ exports.creerInscription = async (req, res) => {
           candidatPrenom: candidat.prenom,
           concours: concours.libelle,
           numeroDossier: inscription.id.substring(0, 8).toUpperCase(),
-          pdfPath,
-        });
+        }, pdfPath);  // Passer le chemin en 2ème paramètre
         // Supprimer le PDF temporaire après envoi
         if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
       })
