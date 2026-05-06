@@ -14,7 +14,6 @@ const PIECES_LABELS = {
   carteIdentite: "Carte d'identité",
   photo:         "Photo d'identité",
   releve:        'Relevé de notes Bac',
-  quittance:     "Quittance d'inscription",
 };
 
 // Formats acceptés par type de pièce
@@ -46,6 +45,8 @@ export default function MonCompte() {
         setEditForm({
           nom:       p.nom       || '',
           prenom:    p.prenom    || '',
+          sexe:      p.sexe      || '',
+          nationalite: p.nationalite || '',
           telephone: p.telephone || '',
           dateNaiss: p.dateNaiss ? p.dateNaiss.split('T')[0] : '',
           lieuNaiss: p.lieuNaiss || '',
@@ -161,6 +162,8 @@ export default function MonCompte() {
             <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
               {[
                 { label: 'Email',      value: candidat?.email },
+                { label: 'Sexe',       value: candidat?.sexe === 'M' ? 'Masculin' : candidat?.sexe === 'F' ? 'Féminin' : <span className='text-orange-500 text-xs'>Non renseigné</span> },
+                { label: 'Nationalité', value: candidat?.nationalite || <span className='text-orange-500 text-xs'>Non renseigné</span> },
                 { label: 'Téléphone', value: candidat?.telephone || <span className='text-orange-500 text-xs'>Non renseigné</span> },
                 { label: 'Naissance', value: candidat?.dateNaiss ? new Date(candidat.dateNaiss).toLocaleDateString('fr-FR') : <span className='text-orange-500 text-xs'>Non renseigné</span> },
                 { label: 'Lieu',      value: candidat?.lieuNaiss || <span className='text-orange-500 text-xs'>Non renseigné</span> },
@@ -232,20 +235,34 @@ export default function MonCompte() {
               {[
                 { key: 'prenom',    label: 'Prénom',           type: 'text' },
                 { key: 'nom',       label: 'Nom',              type: 'text' },
+                { key: 'sexe',      label: 'Sexe',             type: 'select', options: [{ value: '', label: 'Sélectionner' }, { value: 'M', label: 'Masculin' }, { value: 'F', label: 'Féminin' }] },
+                { key: 'nationalite', label: 'Nationalité',    type: 'text' },
                 { key: 'telephone', label: 'Téléphone',        type: 'tel',  required: true },
                 { key: 'dateNaiss', label: 'Date de naissance',type: 'date', required: true },
                 { key: 'lieuNaiss', label: 'Lieu de naissance',type: 'text', required: true },
-              ].map(({ key, label, type, required }) => (
+              ].map(({ key, label, type, required, options }) => (
                 <div key={key}>
                   <label className='block text-xs text-gray-500 mb-1'>
                     {label} {required && <span className='text-orange-500'>*</span>}
                   </label>
-                  <input
-                    type={type}
-                    value={editForm[key] || ''}
-                    onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
-                    className='w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500'
-                  />
+                  {type === 'select' ? (
+                    <select
+                      value={editForm[key] || ''}
+                      onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
+                      className='w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500'
+                    >
+                      {options.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type={type}
+                      value={editForm[key] || ''}
+                      onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
+                      className='w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500'
+                    />
+                  )}
                 </div>
               ))}
             </div>

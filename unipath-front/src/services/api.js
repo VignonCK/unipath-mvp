@@ -85,6 +85,25 @@ export const candidatService = {
 export const concoursService = {
   getAll: () => request('/concours'),
   getById: (id) => request(`/concours/${id}`),
+  getClassement: (id) => request(`/concours/${id}/classement`),
+  
+  // CRUD pour DGES
+  create: (data) =>
+    request('/concours', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  update: (id, data) =>
+    request(`/concours/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  delete: (id) =>
+    request(`/concours/${id}`, {
+      method: 'DELETE',
+    }),
 };
 
 // ── Inscriptions ─────────────────────────────────────────────────
@@ -96,6 +115,23 @@ export const inscriptionService = {
     }),
 
   getMesInscriptions: () => request('/inscriptions/mes-inscriptions'),
+
+  uploadQuittance: async (inscriptionId, fichier) => {
+    const token = localStorage.getItem('token');
+
+    const formData = new FormData();
+    formData.append('quittance', fichier);
+
+    const response = await fetch(`${BASE_URL}/inscriptions/${inscriptionId}/quittance`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error);
+    return data;
+  },
 };
 
 // ── Dossier ──────────────────────────────────────────────────────
@@ -126,10 +162,19 @@ export const commissionService = {
   getDossiers: (statut) =>
     request(`/commission/dossiers${statut ? `?statut=${statut}` : ''}`),
 
-  updateStatut: (inscriptionId, statut) =>
+  updateStatut: (inscriptionId, payload) =>
     request(`/commission/dossiers/${inscriptionId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ statut }),
+      body: JSON.stringify(payload),
+    }),
+
+  // Nouvelles méthodes pour la gestion des notes
+  getConcours: () => request('/commission/concours'),
+
+  updateNote: (inscriptionId, note) =>
+    request(`/commission/notes/${inscriptionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ note }),
     }),
 };
 

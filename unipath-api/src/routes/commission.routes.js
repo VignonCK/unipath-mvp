@@ -9,4 +9,8 @@ const commissionController = require('../controllers/commission.controller');
 router.get('/dossiers', protect, checkRole(['COMMISSION']), commissionController.getDossiers);
 router.patch('/dossiers/:inscriptionId', protect, checkRole(['COMMISSION']), commissionController.updateStatut);
 
+// Nouvelles routes pour la gestion des notes
+router.get('/concours', protect, checkRole(['COMMISSION']), commissionController.getCandidatsParConcours);
+router.patch('/notes/:inscriptionId', protect, checkRole(['COMMISSION']), commissionController.updateNote);
+
 module.exports = router;

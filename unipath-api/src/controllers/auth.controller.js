@@ -6,10 +6,52 @@ const prisma = new PrismaClient();
 
 exports.register = async (req, res) => {
   try {
-    const { email, password, nom, prenom, telephone, dateNaiss, lieuNaiss } = req.body;
+    const { 
+      email, password, nom, prenom, anip, serie,
+      sexe, nationalite, telephone, dateNaiss, lieuNaiss 
+    } = req.body;
+
+    // Validation ANIP (obligatoire - Numéro Personnel d'Identification à 12 chiffres)
+    if (!anip) {
+      return res.status(400).json({ 
+        error: 'L\'identifiant ANIP est obligatoire pour l\'inscription' 
+      });
+    }
+    
+    // Format ANIP : exactement 12 chiffres
+    if (!/^\d{12}$/.test(anip)) {
+      return res.status(400).json({ 
+        error: 'Format ANIP invalide. L\'ANIP doit contenir exactement 12 chiffres' 
+      });
+    }
+
+    // Vérifier si l'ANIP est déjà utilisé
+    const anipExistant = await prisma.candidat.findFirst({
+      where: { anip }
+    });
+    
+    if (anipExistant) {
+      return res.status(400).json({ 
+        error: 'Cet identifiant ANIP est déjà enregistré dans le système' 
+      });
+    }
+
+    // Validation série
+    const seriesValides = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+    if (serie && !seriesValides.includes(serie)) {
+      return res.status(400).json({ 
+        error: 'Série invalide. Séries acceptées : A, B, C, D, E, F, G' 
+      });
+    }
 
     const { data: authData, error: authError } =
-      await supabase.auth.signUp({ email, password });
+      await supabase.auth.signUp({ 
+        email, 
+        password,
+        options: {
+          emailRedirectTo: `${process.env.APP_URL || 'http://localhost:5173'}/auth/callback`,
+        }
+      });
 
     if (authError) {
       return res.status(400).json({ error: authError.message });
@@ -21,12 +63,29 @@ exports.register = async (req, res) => {
         email,
         nom,
         prenom,
+        anip, // ANIP obligatoire et validé
+        serie: serie || null,
+        sexe: sexe || null,
+        nationalite: nationalite || null,
         telephone,
         dateNaiss: dateNaiss ? new Date(dateNaiss) : null,
         lieuNaiss: lieuNaiss || null,
         matricule: 'TEMP',
+        emailConfirme: false,
       },
     });
+
+    // Envoyer l'email de confirmation
+    try {
+      await emailService.envoyerEmailConfirmation({
+        email: candidat.email,
+        nom: candidat.nom,
+        prenom: candidat.prenom,
+        confirmationUrl: `${process.env.APP_URL || 'http://localhost:5173'}/auth/confirm?token=${authData.user.id}`
+      });
+    } catch (emailError) {
+      console.error('Erreur envoi email de confirmation:', emailError);
+    }
 
     // Envoyer l'email de bienvenue
     try {
@@ -38,14 +97,12 @@ exports.register = async (req, res) => {
       });
     } catch (emailError) {
       console.error('Erreur envoi email de bienvenue:', emailError);
-      // Ne pas bloquer la création du compte si l'email échoue
     }
 
     res.status(201).json({
-      message: 'Compte créé avec succès',
+      message: 'Compte créé avec succès. Vérifiez votre email pour confirmer votre compte.',
       matricule: candidat.matricule,
-      // Si session est null, Supabase attend une confirmation email
-      emailConfirmationRequired: !authData.session,
+      emailConfirmationRequired: true,
     });
   } catch (error) {
     console.error(error);

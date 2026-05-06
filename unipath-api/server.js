@@ -1,12 +1,9 @@
 // Point d'entrée du serveur UniPath API
 require('dotenv').config({ path: require('path').resolve(__dirname, '.env') });
-
 const config = require('./src/config');
 const logger = require('./src/utils/logger');
 const app = require('./src/app');
-
 const PORT = config.port;
-
 const server = app.listen(PORT, () => {
   logger.success(`Serveur UniPath démarré sur le port ${PORT}`);
   logger.info(`Health check: ${config.appUrl}/health`);
@@ -14,15 +11,15 @@ const server = app.listen(PORT, () => {
   logger.info(`Environnement: ${config.env}`);
 });
 
-// Gestion propre de l'arrêt du serveur
+// Force le process à rester actif
+setInterval(() => {}, 1 << 30);
+
 const gracefulShutdown = (signal) => {
   logger.warn(`Signal ${signal} reçu, arrêt du serveur...`);
   server.close(() => {
     logger.success('Serveur arrêté proprement');
     process.exit(0);
   });
-
-  // Force l'arrêt après 10 secondes
   setTimeout(() => {
     logger.error('Arrêt forcé après timeout');
     process.exit(1);
@@ -32,15 +29,13 @@ const gracefulShutdown = (signal) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Gestion des erreurs non capturées
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  gracefulShutdown('unhandledRejection');
+  // gracefulShutdown('unhandledRejection');
 });
-
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught Exception:', error);
-  gracefulShutdown('uncaughtException');
+  // gracefulShutdown('uncaughtException');
 });
 
 module.exports = server;

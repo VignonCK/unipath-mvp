@@ -22,7 +22,12 @@ model Candidat { // Représente un bachelier qui s'inscrit à un concours.
   matricule String @unique // matricule: Numéro unique généré par la base (trigger PostgreSQL)
   nom String
   prenom String
+  anip String? @unique // Identifiant ANIP du candidat (12 chiffres, unique)
+  serie String? // Série du cursus scolaire (A, B, C, D, E, F, G)
+  sexe String? // Sexe du candidat (M/F)
+  nationalite String? // Nationalité du candidat
   email String @unique // nom, prenom, email: Informations personnelles, email doit être unique
+  emailConfirme Boolean @default(false) // Confirmation de l'email par le candidat
   telephone String?
   dateNaiss DateTime?
   lieuNaiss String? // telephone, dateNaiss, lieuNaiss: Champs optionnels (le ?).
@@ -31,6 +36,8 @@ model Candidat { // Représente un bachelier qui s'inscrit à un concours.
   updatedAt DateTime @updatedAt // createdAt, updatedAt: Dates de création et de mise à jour (gérées automatiquement)
   inscriptions Inscription[] // inscriptions: Liste des inscriptions du candidat (relation 1-n).
   dossier Dossier? // dossier: Dossier du candidat (relation 1-1, optionnelle).
+  
+  @@index([anip]) // Index pour optimiser les recherches par ANIP
 }
 
 model MembreCommission { // Représente un membre de la commission d'évaluation
@@ -58,18 +65,35 @@ model AdministrateurDGES { // Représente un administrateur de la DGES
 model Concours { // Représente un concours d'entrée à l'université.
   id String @id @default(uuid())
   libelle String
+  etablissement String? // Établissement organisateur du concours
   dateDebut DateTime
   dateFin DateTime
+  dateComposition DateTime? // Date de composition du concours
   description String? // Champs principaux : nom, dates, description optionnelle.
+  fraisParticipation Int? // Frais de participation au concours (en FCFA)
+  seriesAcceptees String[] @default([]) // Séries acceptées pour ce concours (ex: ["C", "D"])
+  piecesRequises Json? // Configuration des pièces requises pour le dossier candidat
+  dateDebutDepot DateTime? // Date de début de dépôt des dossiers
+  dateFinDepot DateTime? // Date de fin de dépôt des dossiers
+  dateDebutComposition DateTime? // Date de début de composition
+  dateFinComposition DateTime? // Date de fin de composition
   createdAt DateTime @default(now())
   inscriptions Inscription[] // inscriptions: Liste des inscriptions à ce concours.
+  
+  @@index([dateDebutDepot])
+  @@index([dateFinDepot])
 }
 
 model Inscription { // Fait le lien entre un candidat et un concours (table de jointure).
   id String @id @default(uuid())
+  numeroInscription String? @unique // Numéro d'inscription unique (ex: UAC-2026-MED-00123)
   candidatId String
   concoursId String
   statut StatutDossier @default(EN_ATTENTE) // statut: État du dossier (enum, par défaut "EN_ATTENTE")
+  quittanceUrl String? // URL de la quittance de paiement spécifique à cette inscription
+  commentaireRejet String? // Commentaire de la commission en cas de rejet
+  commentaireSousReserve String? // Commentaire de la commission en cas de validation sous réserve
+  note Float? // Note obtenue au concours (null = absent)
   createdAt DateTime @default(now())
   candidat Candidat @relation(fields: [candidatId], references: [id])
   concours Concours @relation(fields: [concoursId], references: [id]) // Relations : chaque inscription appartient à un candidat et un concours.
@@ -83,7 +107,6 @@ model Dossier { // Contient les pièces justificatives d'un candidat (liens vers
   carteIdentite String?
   photo String?
   releve String?
-  quittance String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   candidat Candidat @relation(fields: [candidatId], references: [id]) // Un dossier est lié à un seul candidat (relation 1-1, candidatId unique).
@@ -93,6 +116,7 @@ enum StatutDossier { // Définit les états possibles d'un dossier d'inscription
   EN_ATTENTE
   VALIDE
   REJETE
+  SOUS_RESERVE
 }
 
 enum Role { // Définit les rôles des utilisateurs de la plateforme

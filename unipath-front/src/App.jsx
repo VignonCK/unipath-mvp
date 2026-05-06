@@ -4,11 +4,15 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import AuthCallback from './pages/AuthCallback';
-import DashboardCandidat from './pages/DashboardCandidat';
 import DashboardCommission from './pages/DashboardCommission';
+import DetailCandidatCommission from './pages/DetailCandidatCommission';
 import DashboardDGES from './pages/DashboardDGES';
+import GestionConcours from './pages/GestionConcours';
+import GestionNotes from './pages/GestionNotes';
+import ClassementConcours from './pages/ClassementConcours';
 import PageConcours from './pages/PageConcours';
 import DetailConcours from './pages/DetailConcours';
+import CarteCandidat from './pages/CarteCandidat';
 import AccueilCandidat from './pages/AccueilCandidat';
 import MonCompte from './pages/MonCompte';
 import DetailInscription from './pages/DetailInscription';
@@ -44,6 +48,15 @@ function App() {
         />
 
         <Route
+          path='/ma-carte'
+          element={
+            <ProtectedRoute allowedRoles={['CANDIDAT']}>
+              <CarteCandidat />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path='/concours'
           element={
             <ProtectedRoute allowedRoles={['CANDIDAT']}>
@@ -57,6 +70,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['CANDIDAT']}>
               <DetailConcours />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/concours/:id/classement'
+          element={
+            <ProtectedRoute allowedRoles={['CANDIDAT']}>
+              <ClassementConcours />
             </ProtectedRoute>
           }
         />
@@ -80,12 +102,39 @@ function App() {
           }
         />
 
-        {/* Routes protégées - DGES et COMMISSION */}
         <Route
-          path='/dges'
+          path='/commission/notes'
           element={
-            <ProtectedRoute allowedRoles={['DGES', 'COMMISSION']}>
+            <ProtectedRoute allowedRoles={['COMMISSION']}>
+              <GestionNotes />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/commission/candidat/:inscriptionId'
+          element={
+            <ProtectedRoute allowedRoles={['COMMISSION']}>
+              <DetailCandidatCommission />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Routes protégées - DGES uniquement */}
+        <Route
+          path='/dashboard-dges'
+          element={
+            <ProtectedRoute allowedRoles={['DGES']}>
               <DashboardDGES />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/gestion-concours'
+          element={
+            <ProtectedRoute allowedRoles={['DGES']}>
+              <GestionConcours />
             </ProtectedRoute>
           }
         />

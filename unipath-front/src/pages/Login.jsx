@@ -45,7 +45,7 @@ export default function Login() {
       switch (data.user?.role) {
         case 'CANDIDAT':   navigate('/dashboard');  break;
         case 'COMMISSION': navigate('/commission'); break;
-        case 'DGES':       navigate('/dges');       break;
+        case 'DGES':       navigate('/dashboard-dges'); break;
         default:           navigate('/dashboard');
       }
     } catch (err) {
@@ -76,21 +76,21 @@ export default function Login() {
   };
 
   return (
-    <div className='min-h-screen bg-gray-50 flex items-center justify-center p-4'>
-      <div className='w-full max-w-4xl flex rounded-2xl overflow-hidden shadow-2xl' style={{ minHeight: 560 }}>
+    <div className='min-h-screen bg-gray-50 flex items-center justify-center p-3 sm:p-4'>
+      <div className='w-full max-w-4xl flex flex-col md:flex-row rounded-2xl overflow-hidden shadow-2xl' style={{ minHeight: 560 }}>
 
         {/* ── GAUCHE : Formulaire ── */}
-        <div className='flex-1 bg-white flex flex-col justify-center px-8 py-10 sm:px-12'>
+        <div className='flex-1 bg-white flex flex-col justify-center px-6 py-8 sm:px-8 sm:py-10 md:px-12'>
 
-          <div className='flex items-center gap-2 mb-8'>
+          <div className='flex items-center gap-2 mb-6 sm:mb-8'>
             <div className='w-8 h-8 bg-blue-900 rounded-lg flex items-center justify-center text-white text-xs font-black'>U</div>
             <span className='text-base font-black text-blue-900 tracking-tight'>UniPath</span>
           </div>
 
-          <h1 className='text-2xl font-black text-gray-900 mb-1'>
+          <h1 className='text-xl sm:text-2xl font-black text-gray-900 mb-1'>
             {resetMode ? 'Mot de passe oublié' : (premiereFois ? 'Bienvenue sur UniPath' : 'Bon retour !')}
           </h1>
-          <p className='text-gray-500 text-sm mb-6'>
+          <p className='text-gray-500 text-xs sm:text-sm mb-4 sm:mb-6'>
             {resetMode
               ? 'Entrez votre email pour recevoir un lien de réinitialisation.'
               : premiereFois
@@ -226,7 +226,7 @@ export default function Login() {
         </div>
 
         {/* ── DROITE : Message + Lottie ── */}
-        <div className='hidden md:flex w-5/12 bg-blue-900 flex-col justify-center px-10 py-10 relative overflow-hidden'>
+        <div className='hidden lg:flex w-5/12 bg-blue-900 flex-col justify-center px-8 py-8 md:px-10 md:py-10 relative overflow-hidden'>
           <div className='absolute top-[-60px] right-[-60px] w-48 h-48 rounded-full bg-orange-500/10' />
           <div className='absolute bottom-[-40px] left-[-30px] w-32 h-32 rounded-full bg-orange-500/8' />
 
@@ -238,19 +238,19 @@ export default function Login() {
                 src="https://lottie.host/b2baaa96-a00b-4288-a7c7-26119042edb5/PxuulpDn7B.lottie"
                 loop
                 autoplay
-                style={{ width: '220px', height: '220px' }}
+                style={{ width: '200px', height: '200px' }}
               />
             </div>
 
-            <div className='text-orange-400 text-6xl font-black leading-none mb-4 opacity-60'>"</div>
+            <div className='text-orange-400 text-5xl md:text-6xl font-black leading-none mb-4 opacity-60'>"</div>
 
-            <h2 className='text-white text-xl font-bold leading-snug mb-4'>
+            <h2 className='text-white text-lg md:text-xl font-bold leading-snug mb-4'>
               {premiereFois
                 ? 'Bienvenue sur la plateforme officielle des concours universitaires du Bénin.'
                 : 'Bon retour ! Vos concours et votre dossier vous attendent.'}
             </h2>
 
-            <p className='text-blue-200 text-sm leading-relaxed mb-8'>
+            <p className='text-blue-200 text-xs md:text-sm leading-relaxed mb-6 md:mb-8'>
               {premiereFois
                 ? MSG.texte
                 : "Consultez l'état de vos inscriptions, déposez vos pièces manquantes et téléchargez votre convocation en quelques clics."}

@@ -8,7 +8,6 @@ const PIECES_LABELS = {
   carteIdentite: "Carte d'identité",
   photo:         "Photo d'identité",
   releve:        'Relevé de notes Bac',
-  quittance:     "Quittance d'inscription",
 };
 
 export default function DossierCompletion({ candidatId, dossier, onSoumettre }) {

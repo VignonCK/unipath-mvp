@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { candidatService, concoursService, inscriptionService } from '../services/api';
 import CandidatLayout from '../components/CandidatLayout';
+import PiecesRequisesCandidats from '../components/PiecesRequisesCandidats';
 
 const CHAMPS_REQUIS = ['telephone', 'dateNaiss', 'lieuNaiss'];
 
@@ -11,7 +12,6 @@ const PIECES_LABELS = {
   carteIdentite: "Carte d'identité",
   photo:         "Photo d'identité",
   releve:        'Relevé de notes Bac',
-  quittance:     "Quittance d'inscription",
 };
 
 function profilIncomplet(candidat) {
@@ -76,7 +76,7 @@ export default function PageConcours() {
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
-      <div className='max-w-5xl mx-auto space-y-6'>
+      <div className='max-w-5xl mx-auto space-y-4 sm:space-y-6 px-3 sm:px-0'>
 
         {/* Toast */}
         {message.text && (
@@ -93,8 +93,8 @@ export default function PageConcours() {
 
         {/* En-tête */}
         <div>
-          <h1 className='text-2xl font-black text-gray-900'>Concours disponibles</h1>
-          <p className='text-gray-500 text-sm mt-1'>
+          <h1 className='text-xl sm:text-2xl font-black text-gray-900'>Concours disponibles</h1>
+          <p className='text-gray-500 text-xs sm:text-sm mt-1'>
             {concours.length} concours — Inscrivez-vous avant la date limite de dépôt
           </p>
         </div>
@@ -226,12 +226,38 @@ export default function PageConcours() {
                           <span className='truncate'>{c.description}</span>
                         </div>
                       )}
+
+                      {/* Pièces requises */}
+                      {c.piecesRequises && (
+                        <div className='flex items-center gap-2 text-xs text-gray-500'>
+                          <PiecesRequisesCandidats pieces={c.piecesRequises} compact={true} />
+                        </div>
+                      )}
+
+                      {/* Dates de dépôt */}
+                      {c.dateDebutDepot && c.dateFinDepot && (
+                        <div className='flex items-center gap-2 text-xs text-gray-500'>
+                          <svg className='w-3.5 h-3.5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' />
+                          </svg>
+                          <span>
+                            Dépôt : {new Date(c.dateDebutDepot).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                            {' → '}
+                            {new Date(c.dateFinDepot).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Statut / bouton */}
                     <div className='mt-auto pt-2 border-t border-gray-50'>
                       {dejaInscrit ? (
-                        <span className='text-xs text-green-600 font-semibold'>✓ Inscrit</span>
+                        <span className='text-xs text-green-600 font-semibold flex items-center gap-1'>
+                          <svg className='w-3 h-3' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
+                          </svg>
+                          Inscrit
+                        </span>
                       ) : termine ? (
                         <span className='text-xs text-gray-400'>Inscriptions closes</span>
                       ) : (

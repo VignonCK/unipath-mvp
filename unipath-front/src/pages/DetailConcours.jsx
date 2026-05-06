@@ -10,7 +10,6 @@ const PIECES_LABELS = {
   carteIdentite: "Carte d'identité",
   photo: "Photo d'identité",
   releve: 'Relevé de notes Bac',
-  quittance: "Quittance d'inscription",
 };
 
 function profilIncomplet(candidat) {
@@ -37,6 +36,7 @@ export default function DetailConcours() {
   const [concours, setConcours] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingQuittance, setUploadingQuittance] = useState(false);
   const [message, setMessage] = useState({ text: '', type: 'info' });
   const [photoUrl, setPhotoUrl] = useState(null);
   const [inscription, setInscription] = useState(null);
@@ -99,6 +99,32 @@ export default function DetailConcours() {
     }
   };
 
+  const handleUploadQuittance = async (e) => {
+    const fichier = e.target.files[0];
+    if (!fichier) return;
+
+    // Vérifier que c'est un PDF
+    if (fichier.type !== 'application/pdf') {
+      showMessage('La quittance doit être au format PDF.', 'error');
+      return;
+    }
+
+    setUploadingQuittance(true);
+    try {
+      await inscriptionService.uploadQuittance(inscription.id, fichier);
+      showMessage('Quittance uploadée avec succès !', 'success');
+      // Recharger les données
+      const updated = await candidatService.getProfil();
+      setCandidат(updated);
+      const inscriptionExistante = updated.inscriptions?.find(i => i.concoursId === concours.id);
+      if (inscriptionExistante) setInscription(inscriptionExistante);
+    } catch (err) {
+      showMessage('Erreur lors de l\'upload de la quittance.', 'error');
+    } finally {
+      setUploadingQuittance(false);
+    }
+  };
+
   if (loading) return (
     <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
       <div className='w-10 h-10 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin' />
@@ -119,8 +145,8 @@ export default function DetailConcours() {
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
-      <div className='max-w-4xl mx-auto space-y-6'>
-        <button onClick={() => navigate('/concours')} className='flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm font-medium'>
+      <div className='max-w-4xl mx-auto space-y-4 sm:space-y-6 px-3 sm:px-0'>
+        <button onClick={() => navigate('/concours')} className='flex items-center gap-2 text-gray-600 hover:text-gray-900 text-xs sm:text-sm font-medium'>
           <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
             <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 19l-7-7 7-7' />
           </svg>
@@ -128,7 +154,7 @@ export default function DetailConcours() {
         </button>
 
         {message.text && (
-          <div className={`px-4 py-3 rounded-lg text-sm ${
+          <div className={`px-4 py-3 rounded-lg text-xs sm:text-sm ${
             message.type === 'success' ? 'bg-green-50 border border-green-200 text-green-700' :
             message.type === 'error' ? 'bg-red-50 border border-red-200 text-red-700' :
             'bg-blue-50 border border-blue-200 text-blue-700'
@@ -137,10 +163,10 @@ export default function DetailConcours() {
           </div>
         )}
 
-        <div className='bg-white rounded-2xl border border-gray-100 shadow-sm p-8 space-y-6'>
+        <div className='bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-8 space-y-4 sm:space-y-6'>
           <div>
-            <h1 className='text-3xl font-black text-gray-900 mb-2'>{concours.libelle}</h1>
-            <p className='text-gray-500'>EPAC — Université d Abomey-Calavi</p>
+            <h1 className='text-2xl sm:text-3xl font-black text-gray-900 mb-2'>{ concours.libelle}</h1>
+            <p className='text-gray-500 text-xs sm:text-sm'>EPAC — Université d Abomey-Calavi</p>
           </div>
 
           <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
@@ -158,6 +184,22 @@ export default function DetailConcours() {
             </div>
           </div>
 
+          {concours.fraisParticipation && (
+            <div className='bg-orange-50 border border-orange-200 rounded-xl p-4'>
+              <div className='flex items-center gap-3'>
+                <div className='w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center text-white'>
+                  <svg className='w-6 h-6' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' />
+                  </svg>
+                </div>
+                <div>
+                  <p className='text-xs text-orange-600 font-medium'>Frais de participation</p>
+                  <p className='text-2xl font-black text-orange-900'>{concours.fraisParticipation.toLocaleString('fr-FR')} FCFA</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {concours.description && (
             <div>
               <h2 className='text-lg font-bold text-gray-900 mb-2'>Description</h2>
@@ -169,15 +211,21 @@ export default function DetailConcours() {
             <h2 className='text-lg font-bold text-gray-900 mb-3'>Critères de participation</h2>
             <ul className='space-y-2'>
               <li className='flex items-start gap-2'>
-                <span className='text-green-500 mt-1'>✓</span>
+                <svg className='w-5 h-5 text-green-500 mt-0.5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                  <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
+                </svg>
                 <span className='text-gray-700'>Être titulaire du Baccalauréat</span>
               </li>
               <li className='flex items-start gap-2'>
-                <span className='text-green-500 mt-1'>✓</span>
+                <svg className='w-5 h-5 text-green-500 mt-0.5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                  <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
+                </svg>
                 <span className='text-gray-700'>Avoir un dossier complet (acte de naissance, carte d identité, photo, relevé de notes, quittance)</span>
               </li>
               <li className='flex items-start gap-2'>
-                <span className='text-green-500 mt-1'>✓</span>
+                <svg className='w-5 h-5 text-green-500 mt-0.5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                  <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
+                </svg>
                 <span className='text-gray-700'>S inscrire avant la date limite</span>
               </li>
             </ul>
@@ -198,7 +246,9 @@ export default function DetailConcours() {
               <div className='bg-green-50 border border-green-200 rounded-xl p-4'>
                 <div className='flex items-center gap-3 mb-2'>
                   <div className='w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white'>
-                    ✓
+                    <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
+                    </svg>
                   </div>
                   <div>
                     <p className='font-bold text-green-900'>Inscription réussie</p>
@@ -206,6 +256,60 @@ export default function DetailConcours() {
                   </div>
                 </div>
               </div>
+
+              {/* Bouton Voir le Classement */}
+              <button
+                onClick={() => navigate(`/concours/${id}/classement`)}
+                className='w-full bg-blue-900 text-white py-3 rounded-xl font-semibold hover:bg-blue-800 transition flex items-center justify-center gap-2'
+              >
+                <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                  <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' />
+                </svg>
+                Voir le classement
+              </button>
+
+              {/* Section Quittance */}
+              {concours.fraisParticipation && (
+                <div className='bg-white border border-gray-200 rounded-xl p-5'>
+                  <div className='flex items-center gap-3 mb-4'>
+                    <svg className='w-6 h-6 text-orange-500' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' />
+                    </svg>
+                    <div>
+                      <h3 className='font-bold text-gray-900'>Quittance de paiement</h3>
+                      <p className='text-xs text-gray-500'>Montant : {concours.fraisParticipation.toLocaleString('fr-FR')} FCFA</p>
+                    </div>
+                  </div>
+
+                  {inscription.quittanceUrl ? (
+                    <div className='bg-green-50 border border-green-200 rounded-lg p-3 flex items-center justify-between'>
+                      <div className='flex items-center gap-2'>
+                        <svg className='w-5 h-5 text-green-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
+                        </svg>
+                        <span className='text-sm font-medium text-green-700'>Quittance déposée</span>
+                      </div>
+                      <label className='cursor-pointer'>
+                        <span className='text-xs text-green-600 hover:text-green-700 underline'>Modifier</span>
+                        <input type='file' accept='.pdf' onChange={handleUploadQuittance} className='hidden' disabled={uploadingQuittance} />
+                      </label>
+                    </div>
+                  ) : (
+                    <label className='block cursor-pointer'>
+                      <div className='border-2 border-dashed border-orange-300 rounded-lg p-4 hover:border-orange-500 hover:bg-orange-50 transition text-center'>
+                        <svg className='w-8 h-8 text-orange-500 mx-auto mb-2' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12' />
+                        </svg>
+                        <p className='text-sm font-medium text-gray-700 mb-1'>
+                          {uploadingQuittance ? 'Upload en cours...' : 'Cliquez pour uploader votre quittance'}
+                        </p>
+                        <p className='text-xs text-gray-500'>Format PDF uniquement</p>
+                      </div>
+                      <input type='file' accept='.pdf' onChange={handleUploadQuittance} className='hidden' disabled={uploadingQuittance} />
+                    </label>
+                  )}
+                </div>
+              )}
 
               <button
                 onClick={handleTelechargerFiche}

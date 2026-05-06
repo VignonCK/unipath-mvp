@@ -1,26 +1,16 @@
 // src/pages/DashboardDGES.jsx
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
-import { dgesService, authService } from '../services/api';
-
-function initiales(str) {
-  if (!str) return 'D';
-  const parts = str.trim().split(' ');
-  return parts.length >= 2
-    ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
-    : str.slice(0, 2).toUpperCase();
-}
+import { dgesService } from '../services/api';
+import DGESLayout from '../components/DGESLayout';
 
 export default function DashboardDGES() {
-  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const user = authService.getCurrentUser();
 
   useEffect(() => {
     dgesService.getStatistiques()
@@ -30,23 +20,27 @@ export default function DashboardDGES() {
   }, []);
 
   if (loading) return (
-    <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
-      <div className='text-center'>
-        <div className='w-10 h-10 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin mx-auto mb-3' />
-        <p className='text-gray-500 text-sm'>Chargement des statistiques...</p>
+    <DGESLayout>
+      <div className='flex items-center justify-center min-h-[60vh]'>
+        <div className='text-center'>
+          <div className='w-10 h-10 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin mx-auto mb-3' />
+          <p className='text-gray-500 text-sm'>Chargement des statistiques...</p>
+        </div>
       </div>
-    </div>
+    </DGESLayout>
   );
 
   if (error) return (
-    <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
-      <div className='text-center'>
-        <p className='text-red-500 text-sm mb-3'>{error}</p>
-        <button onClick={() => window.location.reload()} className='text-sm text-orange-500 hover:underline'>
-          Réessayer
-        </button>
+    <DGESLayout>
+      <div className='flex items-center justify-center min-h-[60vh]'>
+        <div className='text-center'>
+          <p className='text-red-500 text-sm mb-3'>{error}</p>
+          <button onClick={() => window.location.reload()} className='text-sm text-orange-500 hover:underline'>
+            Réessayer
+          </button>
+        </div>
       </div>
-    </div>
+    </DGESLayout>
   );
 
   const chartData = data?.statistiques?.map(s => ({
@@ -56,40 +50,13 @@ export default function DashboardDGES() {
     'Rejetés':    Number(s.dossiers_rejetes),
   })) || [];
 
-  const nomUser = user?.prenom ? `${user.prenom} ${user.nom || ''}`.trim() : user?.email || 'DGES';
   const tauxGlobal = data?.totaux?.total_inscrits > 0
     ? Math.round((data.totaux.total_valides / data.totaux.total_inscrits) * 100)
     : 0;
 
   return (
-    <div className='min-h-screen bg-gray-50'>
-
-      {/* HEADER */}
-      <header className='bg-blue-900 text-white px-6 py-3 flex items-center justify-between sticky top-0 z-40 shadow-lg'>
-        <div className='flex items-center gap-3'>
-          <span className='text-xl font-black tracking-tight'>UniPath</span>
-          <span className='hidden sm:block text-blue-300 text-xs'>Tableau de bord DGES</span>
-        </div>
-        <div className='flex items-center gap-3'>
-          <div className='flex items-center gap-2'>
-            <div className='w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center text-sm font-bold text-white flex-shrink-0'>
-              {initiales(nomUser)}
-            </div>
-            <div className='hidden sm:block'>
-              <p className='text-sm font-semibold leading-tight'>{nomUser}</p>
-              <p className='text-orange-300 text-xs'>DGES</p>
-            </div>
-          </div>
-          <button
-            onClick={() => { authService.logout(); navigate('/login'); }}
-            className='text-xs border border-orange-400 text-orange-300 px-3 py-1.5 rounded-lg hover:bg-orange-500 hover:text-white transition'
-          >
-            Déconnexion
-          </button>
-        </div>
-      </header>
-
-      <main className='max-w-6xl mx-auto px-4 py-4 sm:p-6 space-y-4 sm:space-y-6'>
+    <DGESLayout>
+      <div className='max-w-6xl mx-auto px-4 py-4 sm:p-6 space-y-4 sm:space-y-6'>
 
         {/* KPI CARDS */}
         <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
@@ -198,7 +165,7 @@ export default function DashboardDGES() {
           </div>
         </div>
 
-      </main>
-    </div>
+      </div>
+    </DGESLayout>
   );
 }

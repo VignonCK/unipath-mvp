@@ -23,7 +23,6 @@ const PIECES_LABELS = {
   carteIdentite: "Carte d'identité",
   photo:         "Photo d'identité",
   releve:        'Relevé de notes Bac',
-  quittance:     "Quittance d'inscription",
 };
 
 // Formats acceptés par type de pièce
@@ -71,6 +70,8 @@ export default function DashboardCandidat() {
         setEditForm({
           nom:       p.nom       || '',
           prenom:    p.prenom    || '',
+          sexe:      p.sexe      || '',
+          nationalite: p.nationalite || '',
           telephone: p.telephone || '',
           dateNaiss: p.dateNaiss ? p.dateNaiss.split('T')[0] : '',
           lieuNaiss: p.lieuNaiss || '',
@@ -228,20 +229,20 @@ export default function DashboardCandidat() {
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
-      <div className='max-w-3xl mx-auto space-y-4 sm:space-y-6'>
+      <div className='max-w-3xl mx-auto space-y-4 sm:space-y-6 px-3 sm:px-0'>
 
         {/* Alerte profil incomplet */}
         {incomplet && (
-          <div className='bg-orange-50 border-l-4 border-orange-500 px-5 py-4 rounded-xl flex items-start justify-between gap-4'>
+          <div className='bg-orange-50 border-l-4 border-orange-500 px-4 sm:px-5 py-3 sm:py-4 rounded-xl flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4'>
             <div>
-              <p className='font-semibold text-orange-800 text-sm'>Profil incomplet</p>
+              <p className='font-semibold text-orange-800 text-xs sm:text-sm'>Profil incomplet</p>
               <p className='text-orange-700 text-xs mt-0.5'>
                 Veuillez renseigner votre téléphone, date et lieu de naissance pour pouvoir vous inscrire aux concours.
               </p>
             </div>
             <button
               onClick={() => setEditOpen(true)}
-              className='flex-shrink-0 text-xs bg-orange-500 text-white px-3 py-1.5 rounded-lg hover:bg-orange-600 transition font-medium'
+              className='flex-shrink-0 text-xs bg-orange-500 text-white px-3 py-1.5 rounded-lg hover:bg-orange-600 transition font-medium w-full sm:w-auto'
             >
               Compléter
             </button>
@@ -250,16 +251,16 @@ export default function DashboardCandidat() {
 
         {/* Alerte dossier incomplet */}
         {!incomplet && dossierIncomplet && (
-          <div className='bg-red-50 border-l-4 border-red-500 px-5 py-4 rounded-xl flex items-start justify-between gap-4'>
+          <div className='bg-red-50 border-l-4 border-red-500 px-4 sm:px-5 py-3 sm:py-4 rounded-xl flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4'>
             <div>
-              <p className='font-semibold text-red-800 text-sm'>Dossier incomplet ({nbPiecesDeposees}/{pieces.length} pièces)</p>
+              <p className='font-semibold text-red-800 text-xs sm:text-sm'>Dossier incomplet ({nbPiecesDeposees}/{pieces.length} pièces)</p>
               <p className='text-red-700 text-xs mt-0.5'>
                 Vous devez déposer toutes les pièces justificatives avant de pouvoir vous inscrire à un concours.
               </p>
             </div>
             <button
               onClick={() => document.querySelector('#pieces-justificatives')?.scrollIntoView({ behavior: 'smooth' })}
-              className='flex-shrink-0 text-xs bg-red-500 text-white px-3 py-1.5 rounded-lg hover:bg-red-600 transition font-medium'
+              className='flex-shrink-0 text-xs bg-red-500 text-white px-3 py-1.5 rounded-lg hover:bg-red-600 transition font-medium w-full sm:w-auto'
             >
               Voir les pièces
             </button>
@@ -281,13 +282,13 @@ export default function DashboardCandidat() {
 
         {/* CARTE PROFIL */}
         <div id='profil' className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
-          <div className='h-16 bg-gradient-to-r from-blue-900 to-blue-800' />
-          <div className='px-6 pb-6'>
-            <div className='flex items-end justify-between gap-2 -mt-8 mb-4 flex-wrap'>
+          <div className='h-12 sm:h-16 bg-gradient-to-r from-blue-900 to-blue-800' />
+          <div className='px-4 sm:px-6 pb-4 sm:pb-6'>
+            <div className='flex items-end justify-between gap-2 -mt-6 sm:-mt-8 mb-4 flex-wrap'>
               {/* Avatar cliquable pour changer la photo */}
-              <div className='flex items-end gap-4'>
+              <div className='flex items-end gap-3 sm:gap-4'>
                 <label className='cursor-pointer group relative flex-shrink-0'>
-                  <div className='w-16 h-16 rounded-2xl overflow-hidden bg-orange-500 flex items-center justify-center text-2xl font-black text-white shadow-lg border-4 border-white'>
+                  <div className='w-12 h-12 sm:w-16 sm:h-16 rounded-2xl overflow-hidden bg-orange-500 flex items-center justify-center text-xl sm:text-2xl font-black text-white shadow-lg border-4 border-white'>
                     {photoUrl
                       ? <img src={photoUrl} alt='profil' className='w-full h-full object-cover' />
                       : initiales(candidat?.prenom, candidat?.nom)
@@ -300,7 +301,7 @@ export default function DashboardCandidat() {
                   <input type='file' accept='image/*' onChange={handlePhotoProfil} className='hidden' />
                 </label>
                 <div className='pb-1'>
-                  <h2 className='text-lg font-bold text-gray-900'>{nom}</h2>
+                  <h2 className='text-base sm:text-lg font-bold text-gray-900'>{nom}</h2>
                   <span className='inline-block bg-blue-900 text-orange-300 text-xs font-mono px-2 py-0.5 rounded-md'>
                     {candidat?.matricule}
                   </span>
@@ -309,7 +310,7 @@ export default function DashboardCandidat() {
               {/* Bouton modifier */}
               <button
                 onClick={() => setEditOpen(true)}
-                className='pb-1 text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition flex-shrink-0'
+                className='pb-1 text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition flex-shrink-0 w-full sm:w-auto'
               >
                 Modifier le profil
               </button>
@@ -318,6 +319,8 @@ export default function DashboardCandidat() {
             <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
               {[
                 { label: 'Email',      value: candidat?.email },
+                { label: 'Sexe',       value: candidat?.sexe === 'M' ? 'Masculin' : candidat?.sexe === 'F' ? 'Féminin' : <span className='text-orange-500 text-xs'>Non renseigné</span> },
+                { label: 'Nationalité', value: candidat?.nationalite || <span className='text-orange-500 text-xs'>Non renseigné</span> },
                 { label: 'Téléphone', value: candidat?.telephone || <span className='text-orange-500 text-xs'>Non renseigné</span> },
                 { label: 'Naissance', value: candidat?.dateNaiss ? new Date(candidat.dateNaiss).toLocaleDateString('fr-FR') : <span className='text-orange-500 text-xs'>Non renseigné</span> },
                 { label: 'Lieu',      value: candidat?.lieuNaiss || <span className='text-orange-500 text-xs'>Non renseigné</span> },
@@ -367,10 +370,15 @@ export default function DashboardCandidat() {
                     <div className='flex-1 flex items-center justify-between gap-3 px-4 py-3 flex-wrap'>
                       <div>
                         <p className='font-semibold text-gray-800 text-sm'>{ins.concours?.libelle}</p>
-                        <div className='flex items-center gap-2 mt-1'>
+                        <div className='flex items-center gap-2 mt-1 flex-wrap'>
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cfg.badge}`}>
                             {cfg.label}
                           </span>
+                          {ins.numeroInscription && (
+                            <span className='text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-mono font-medium'>
+                              {ins.numeroInscription}
+                            </span>
+                          )}
                           <span className='text-xs text-gray-400'>
                             {new Date(ins.createdAt).toLocaleDateString('fr-FR')}
                           </span>
@@ -488,20 +496,34 @@ export default function DashboardCandidat() {
               {[
                 { key: 'prenom',    label: 'Prénom',           type: 'text' },
                 { key: 'nom',       label: 'Nom',              type: 'text' },
+                { key: 'sexe',      label: 'Sexe',             type: 'select', options: [{ value: '', label: 'Sélectionner' }, { value: 'M', label: 'Masculin' }, { value: 'F', label: 'Féminin' }] },
+                { key: 'nationalite', label: 'Nationalité',    type: 'text' },
                 { key: 'telephone', label: 'Téléphone',        type: 'tel',  required: true },
                 { key: 'dateNaiss', label: 'Date de naissance',type: 'date', required: true },
                 { key: 'lieuNaiss', label: 'Lieu de naissance',type: 'text', required: true },
-              ].map(({ key, label, type, required }) => (
+              ].map(({ key, label, type, required, options }) => (
                 <div key={key}>
                   <label className='block text-xs text-gray-500 mb-1'>
                     {label} {required && <span className='text-orange-500'>*</span>}
                   </label>
-                  <input
-                    type={type}
-                    value={editForm[key] || ''}
-                    onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
-                    className='w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500'
-                  />
+                  {type === 'select' ? (
+                    <select
+                      value={editForm[key] || ''}
+                      onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
+                      className='w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500'
+                    >
+                      {options.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type={type}
+                      value={editForm[key] || ''}
+                      onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
+                      className='w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500'
+                    />
+                  )}
                 </div>
               ))}
             </div>

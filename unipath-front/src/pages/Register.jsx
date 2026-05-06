@@ -24,7 +24,7 @@ const MODULES = [
     desc: "De la candidature à la convocation, tout se fait en ligne. Plus de déplacements, plus de files d'attente.",
     tab: "Concours",
     steps: [
-      { name: "Créez votre compte candidat", sub: "Vérification via l'ANIP ou saisie manuelle" },
+      { name: "Créez votre compte candidat", sub: "Enregistrement avec votre identifiant ANIP" },
       { name: "Soumettez votre dossier", sub: "Pièces justificatives & choix des concours" },
       { name: "Commission valide", sub: "Traitement en ligne, notification par email" },
       { name: "Téléchargez votre convocation", sub: "PDF généré automatiquement avec date et salle" },
@@ -270,6 +270,10 @@ function FormLeft({ onSuccess, isMobile }) {
   const [form, setForm] = useState({
     nom: "", 
     prenom: "", 
+    anip: "",
+    serie: "",
+    sexe: "",
+    nationalite: "",
     telephone: "",
     dateNaiss: "", 
     lieuNaiss: "",
@@ -285,10 +289,24 @@ function FormLeft({ onSuccess, isMobile }) {
 
   const handleStep1 = () => {
     // Validation étape 1
-    if (!form.nom || !form.prenom || !form.telephone || !form.dateNaiss || !form.lieuNaiss) {
+    if (!form.nom || !form.prenom || !form.anip || !form.serie || !form.sexe || 
+        !form.nationalite || !form.telephone || !form.dateNaiss || !form.lieuNaiss) {
       setError('Tous les champs sont obligatoires');
       return;
     }
+    
+    // Validation format ANIP (exactement 12 chiffres)
+    if (!/^\d{12}$/.test(form.anip)) {
+      setError('L\'ANIP doit contenir exactement 12 chiffres');
+      return;
+    }
+    
+    // Validation téléphone (format béninois)
+    if (!/^(\+229)?[0-9]{8,10}$/.test(form.telephone.replace(/\s/g, ''))) {
+      setError('Format de téléphone invalide');
+      return;
+    }
+    
     setStep(2);
   };
 
@@ -315,6 +333,10 @@ function FormLeft({ onSuccess, isMobile }) {
       let userData = {
         nom: form.nom,
         prenom: form.prenom,
+        anip: form.anip,
+        serie: form.serie,
+        sexe: form.sexe,
+        nationalite: form.nationalite,
         telephone: form.telephone,
         dateNaiss: form.dateNaiss,
         lieuNaiss: form.lieuNaiss,
@@ -328,7 +350,7 @@ function FormLeft({ onSuccess, isMobile }) {
       if (result?.emailConfirmationRequired) {
         navigate('/login', {
           state: {
-            message: '📧 Un email de confirmation a été envoyé à ' + form.email + '. Vérifiez votre boîte mail avant de vous connecter.',
+            message: 'Un email de confirmation a été envoyé à ' + form.email + '. Vérifiez votre boîte mail avant de vous connecter.',
             type: 'warning',
             email: form.email
           }
@@ -373,7 +395,10 @@ function FormLeft({ onSuccess, isMobile }) {
           fontSize: 13,
           marginBottom: 16,
         }}>
-          ❌ {error}
+          <svg style={{ width: 16, height: 16, display: 'inline-block', marginRight: 8, verticalAlign: 'middle' }} fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
+          </svg>
+          {error}
         </div>
       )}
 
@@ -392,6 +417,70 @@ function FormLeft({ onSuccess, isMobile }) {
                 value={form.prenom} 
                 onChange={set("prenom")} 
                 placeholder="Harry" 
+              />
+            </Field>
+          </div>
+          
+          <div style={{ marginBottom: 14 }}>
+            <Field label="Identifiant ANIP (Numéro Personnel d'Identification)" required>
+              <Input 
+                value={form.anip} 
+                onChange={set("anip")} 
+                placeholder="123456789012"
+                maxLength="12"
+                pattern="\d{12}"
+                title="L'ANIP doit contenir exactement 12 chiffres"
+              />
+              <div style={{ 
+                fontSize: 11, 
+                color: "#6b7280", 
+                marginTop: 4,
+                display: "flex",
+                alignItems: "center",
+                gap: 4
+              }}>
+                <svg style={{ width: 14, height: 14, flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Code unique à 12 chiffres du Registre National des Personnes Physiques (RNPP)
+              </div>
+            </Field>
+          </div>
+          
+          <div style={{ marginBottom: 14 }}>
+            <Field label="Série du cursus scolaire" required>
+              <Select 
+                value={form.serie} 
+                onChange={set("serie")}
+              >
+                <option value="">Sélectionner votre série</option>
+                <option value="A">Série A (Littéraire)</option>
+                <option value="B">Série B (Sciences Sociales)</option>
+                <option value="C">Série C (Mathématiques)</option>
+                <option value="D">Série D (Sciences Expérimentales)</option>
+                <option value="E">Série E (Technique)</option>
+                <option value="F">Série F (Industrielle)</option>
+                <option value="G">Série G (Gestion)</option>
+              </Select>
+            </Field>
+          </div>
+          
+          <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
+            <Field label="Sexe" required>
+              <Select 
+                value={form.sexe} 
+                onChange={set("sexe")}
+              >
+                <option value="">Sélectionner</option>
+                <option value="M">Masculin</option>
+                <option value="F">Féminin</option>
+              </Select>
+            </Field>
+            <Field label="Nationalité" required>
+              <Input 
+                value={form.nationalite} 
+                onChange={set("nationalite")} 
+                placeholder="Béninoise" 
               />
             </Field>
           </div>

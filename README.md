@@ -215,6 +215,39 @@ npm test
 - React Hook Form
 - Recharts (graphiques)
 
+## 📚 Documentation
+
+Toute la documentation du projet a été organisée dans le dossier [`docs/documentation-projet/`](docs/documentation-projet/).
+
+### 🚀 Démarrage Rapide
+
+- **Point d'entrée** : [`docs/documentation-projet/README.md`](docs/documentation-projet/README.md)
+- **Organisation** : [`docs/ORGANISATION_DOCUMENTATION.md`](docs/ORGANISATION_DOCUMENTATION.md)
+
+### 📖 Documentation par Thématique
+
+- 📝 **Guides** : [`docs/documentation-projet/guides/`](docs/documentation-projet/guides/)
+- 🏗️ **Architecture** : [`docs/documentation-projet/ARCHITECTURE.md`](docs/documentation-projet/ARCHITECTURE.md)
+- 🧪 **Tests** : [`docs/documentation-projet/tests/`](docs/documentation-projet/tests/)
+- 🔒 **Sécurité** : [`docs/documentation-projet/securite/`](docs/documentation-projet/securite/)
+- ⚙️ **Configuration** : [`docs/documentation-projet/configuration/`](docs/documentation-projet/configuration/)
+- 👥 **Commission** : [`docs/documentation-projet/commission/`](docs/documentation-projet/commission/)
+- 🔔 **Notifications** : [`docs/documentation-projet/notifications/`](docs/documentation-projet/notifications/)
+- 📊 **Flux Candidat** : [`docs/documentation-projet/flux-candidat/`](docs/documentation-projet/flux-candidat/)
+- 🎨 **Responsive** : [`docs/documentation-projet/responsive/`](docs/documentation-projet/responsive/)
+- 🔄 **Migrations** : [`docs/documentation-projet/migrations/`](docs/documentation-projet/migrations/)
+
+### 🆔 Intégration ANIP
+
+L'identifiant ANIP (Numéro Personnel d'Identification) est un code unique à **12 chiffres** obligatoire pour tous les candidats.
+
+**Documentation ANIP :**
+- 🚀 [`docs/documentation-projet/guides/START_HERE_ANIP.md`](docs/documentation-projet/guides/START_HERE_ANIP.md)
+- ⚡ [`docs/documentation-projet/ANIP_TL_DR.md`](docs/documentation-projet/ANIP_TL_DR.md)
+- 📖 [`docs/documentation-projet/guides/README_ANIP.md`](docs/documentation-projet/guides/README_ANIP.md)
+
+---
+
 ## 📝 Licence
 
 ISC
