@@ -35,7 +35,6 @@ class EmailService {
         `
       };
 
-      // Ajouter la pièce jointe si fournie
       if (pdfPath) {
         mailOptions.attachments = [{
           filename: `fiche-preinscription-${data.numeroDossier}.pdf`,
@@ -44,7 +43,6 @@ class EmailService {
       }
 
       await transporter.sendMail(mailOptions);
-      
       console.log(`✅ Email de pré-inscription envoyé à ${data.candidatEmail}`);
       return { success: true };
     } catch (error) {
@@ -78,7 +76,6 @@ class EmailService {
         `
       };
 
-      // Ajouter la pièce jointe si fournie
       if (pdfPath) {
         mailOptions.attachments = [{
           filename: `convocation-${data.candidatNom}-${data.candidatPrenom}.pdf`,
@@ -87,7 +84,6 @@ class EmailService {
       }
 
       await transporter.sendMail(mailOptions);
-      
       console.log(`✅ Email de validation envoyé à ${data.candidatEmail}`);
       return { success: true };
     } catch (error) {
@@ -112,15 +108,6 @@ class EmailService {
         from: `"UniPath" <${process.env.EMAIL_FROM}>`,
         to: data.candidatEmail,
         subject: `[UniPath] Décision concernant votre candidature - ${data.concours}`,
-  /**
-   * Email de rejet
-   */
-  async envoyerEmailRejet(data) {
-    try {
-      await transporter.sendMail({
-        from: `"UniPath" <${process.env.EMAIL_FROM}>`,
-        to: data.candidatEmail,
-        subject: `[UniPath] Décision concernant votre candidature - ${data.concours}`,
         html: `
           <div style="font-family: Arial, sans-serif;">
             <h2 style="color: #dc2626;">Décision de la commission</h2>
@@ -132,7 +119,7 @@ class EmailService {
           </div>
         `
       });
-      
+
       console.log(`✅ Email de rejet envoyé à ${data.candidatEmail}`);
       return { success: true };
     } catch (error) {
@@ -190,7 +177,7 @@ class EmailService {
           </div>
         `
       });
-      
+
       console.log(`✅ Email de bienvenue envoyé à ${data.email}`);
       return { success: true };
     } catch (error) {

@@ -26,6 +26,15 @@ const PIECES_LABELS = {
   quittance:     "Quittance d'inscription",
 };
 
+// Formats acceptés par type de pièce
+const PIECES_FORMATS = {
+  photo: 'image/*',  // JPG, JPEG, PNG
+  carteIdentite: '.pdf,.jpg,.jpeg,.png',  // PDF ou images
+  acteNaissance: '.pdf',  // PDF uniquement
+  releve: '.pdf',  // PDF uniquement
+  quittance: '.pdf',  // PDF uniquement
+};
+
 // Champs obligatoires du profil
 const CHAMPS_REQUIS = ['telephone', 'dateNaiss', 'lieuNaiss'];
 
@@ -457,7 +466,7 @@ export default function DashboardCandidat() {
                     }`}>
                       {isLoading ? 'Envoi...' : isOk ? 'Modifier' : 'Déposer'}
                     </span>
-                    <input type='file' accept='.pdf,.jpg,.jpeg,.png' onChange={(e) => handleUpload(key, e)} className='hidden' />
+                    <input type='file' accept={PIECES_FORMATS[key]} onChange={(e) => handleUpload(key, e)} className='hidden' />
                   </label>
                 </div>
               );
