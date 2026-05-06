@@ -1,7 +1,7 @@
 ﻿// src/pages/DetailConcours.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { candidatService, concoursService, inscriptionService } from '../services/api';
+import { candidatService, concoursService, inscriptionService, convocationService } from '../services/api';
 import CandidatLayout from '../components/CandidatLayout';
 
 const CHAMPS_REQUIS = ['telephone', 'dateNaiss', 'lieuNaiss'];
@@ -86,6 +86,16 @@ export default function DetailConcours() {
       showMessage(err.message || 'Erreur lors de l inscription.', 'error');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleTelechargerFiche = async () => {
+    if (!inscription?.id) return;
+    try {
+      await convocationService.telechargerPreinscription(inscription.id);
+      showMessage('Téléchargement démarré !', 'success');
+    } catch (err) {
+      showMessage('Erreur lors du téléchargement.', 'error');
     }
   };
 
@@ -198,7 +208,7 @@ export default function DetailConcours() {
               </div>
 
               <button
-                onClick={() => alert('Téléchargement en cours...')}
+                onClick={handleTelechargerFiche}
                 className='w-full bg-blue-900 text-white py-3 rounded-xl font-semibold hover:bg-blue-800 transition flex items-center justify-center gap-2'
               >
                 <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -207,15 +217,49 @@ export default function DetailConcours() {
                 Télécharger ma fiche de pré-inscription
               </button>
 
-              <div className='bg-orange-50 border border-orange-200 rounded-xl p-4 flex items-center gap-3'>
-                <div className='w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center animate-pulse'>
-                  <svg className='w-5 h-5 text-white' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' />
-                  </svg>
+              <div className={`border rounded-xl p-4 flex items-center gap-3 ${
+                inscription.statut === 'VALIDE' ? 'bg-green-50 border-green-200' :
+                inscription.statut === 'REJETE' ? 'bg-red-50 border-red-200' :
+                'bg-orange-50 border-orange-200'
+              }`}>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                  inscription.statut === 'VALIDE' ? 'bg-green-500' :
+                  inscription.statut === 'REJETE' ? 'bg-red-500' :
+                  'bg-orange-500 animate-pulse'
+                }`}>
+                  {inscription.statut === 'VALIDE' ? (
+                    <svg className='w-5 h-5 text-white' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
+                    </svg>
+                  ) : inscription.statut === 'REJETE' ? (
+                    <svg className='w-5 h-5 text-white' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
+                    </svg>
+                  ) : (
+                    <svg className='w-5 h-5 text-white' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' />
+                    </svg>
+                  )}
                 </div>
                 <div>
-                  <p className='font-bold text-orange-900'>En cours d analyse</p>
-                  <p className='text-sm text-orange-700'>La commission examine votre dossier</p>
+                  <p className={`font-bold ${
+                    inscription.statut === 'VALIDE' ? 'text-green-900' :
+                    inscription.statut === 'REJETE' ? 'text-red-900' :
+                    'text-orange-900'
+                  }`}>
+                    {inscription.statut === 'VALIDE' ? 'Dossier validé' :
+                     inscription.statut === 'REJETE' ? 'Dossier rejeté' :
+                     'En cours d\'analyse'}
+                  </p>
+                  <p className={`text-sm ${
+                    inscription.statut === 'VALIDE' ? 'text-green-700' :
+                    inscription.statut === 'REJETE' ? 'text-red-700' :
+                    'text-orange-700'
+                  }`}>
+                    {inscription.statut === 'VALIDE' ? 'Vous êtes convoqué au concours' :
+                     inscription.statut === 'REJETE' ? 'Votre candidature n\'a pas été retenue' :
+                     'La commission examine votre dossier'}
+                  </p>
                 </div>
               </div>
             </div>
