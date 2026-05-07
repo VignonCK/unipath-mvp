@@ -62,14 +62,14 @@ exports.register = async (req, res) => {
         email,
         nom,
         prenom,
-        anip, // ANIP obligatoire et validé
+        anip,
         serie: serie || null,
         sexe: sexe || null,
         nationalite: nationalite || null,
         telephone,
         dateNaiss: dateNaiss ? new Date(dateNaiss) : null,
         lieuNaiss: lieuNaiss || null,
-        matricule: 'TEMP',
+        matricule: `TEMP-${authData.user.id.slice(0, 8)}`, // ✅ Unique par candidat, remplacé par le trigger PostgreSQL
         emailConfirme: false,
       },
     });
@@ -190,6 +190,7 @@ exports.login = async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
+
 exports.resetPassword = async (req, res) => {
   try {
     const { email } = req.body;
