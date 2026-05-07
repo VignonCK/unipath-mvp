@@ -44,11 +44,10 @@ function profilIncomplet(candidat) {
   return CHAMPS_REQUIS.some(c => !candidat[c]);
 }
 
-// ✅ FIX : dossierCandidat en paramètre
-function getPieceStatut(piece, candidat, inscription, dossierCandidat) {
+function getPieceStatut(piece, candidat, inscription) {
   if (piece === 'quittance') return !!inscription?.quittanceUrl;
   if (PIECES_DOSSIER_BASE[piece]) {
-    return !!(candidat?.dossier?.[piece] || dossierCandidat?.[piece]);
+    return !!candidat?.dossier?.[piece];
   }
   return !!(inscription?.piecesExtras?.[piece]);
 }
@@ -67,7 +66,6 @@ export default function DetailConcours() {
   const [candidat, setCandidат] = useState(null);
   const [concours, setConcours] = useState(null);
   const [inscription, setInscription] = useState(null);
-  const [dossierCandidat, setDossierCandidat] = useState(null); // ✅ FIX
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [uploadingPiece, setUploadingPiece] = useState({});
@@ -81,7 +79,6 @@ export default function DetailConcours() {
       .then(({ candidat: p, concours: c }) => {
         setCandidат(p);
         setConcours(c);
-        if (c.dossierCandidat) setDossierCandidat(c.dossierCandidat); // ✅ FIX
         const saved = localStorage.getItem('photoProfil_' + p.id);
         if (saved) setPhotoUrl(saved);
         const inscriptionExistante = p.inscriptions?.find(i => i.concoursId === c.id);
@@ -134,7 +131,7 @@ export default function DetailConcours() {
     // Si pas encore inscrit, créer l'inscription d'abord (sans vérifier la quittance)
     if (!inscription) {
       const piecesDossier = getPiecesRequisesConcours(concours).filter(p => p !== 'quittance');
-      const manquantes = piecesDossier.filter(p => !getPieceStatut(p, candidat, inscription, dossierCandidat));
+      const manquantes = piecesDossier.filter(p => !getPieceStatut(p, candidat, inscription));
       if (manquantes.length > 0) {
         showMessage(`Pièces manquantes : ${manquantes.map(p => getLabelPiece(p, concours)).join(', ')}`, 'error');
         return;
@@ -148,7 +145,6 @@ export default function DetailConcours() {
         const { candidat: updated, concours: updatedConcours } = await refreshData(id);
         setCandidат(updated);
         setConcours(updatedConcours);
-        if (updatedConcours.dossierCandidat) setDossierCandidat(updatedConcours.dossierCandidat);
         const inscriptionUpdated = updated.inscriptions?.find(i => i.concoursId === updatedConcours.id);
         if (inscriptionUpdated) setInscription(inscriptionUpdated);
       } catch (err) {
@@ -161,7 +157,7 @@ export default function DetailConcours() {
     
     // Si déjà inscrit, vérifier que TOUTES les pièces sont complètes (y compris quittance)
     const toutesLesPiecesRequises = getPiecesRequisesConcours(concours);
-    const manquantes = toutesLesPiecesRequises.filter(p => !getPieceStatut(p, candidat, inscription, dossierCandidat));
+    const manquantes = toutesLesPiecesRequises.filter(p => !getPieceStatut(p, candidat, inscription));
     if (manquantes.length > 0) {
       showMessage(`Pièces manquantes : ${manquantes.map(p => getLabelPiece(p, concours)).join(', ')}`, 'error');
       return;
@@ -175,7 +171,6 @@ export default function DetailConcours() {
       const { candidat: updated, concours: updatedConcours } = await refreshData(id);
       setCandidат(updated);
       setConcours(updatedConcours);
-      if (updatedConcours.dossierCandidat) setDossierCandidat(updatedConcours.dossierCandidat);
       const inscriptionUpdated = updated.inscriptions?.find(i => i.concoursId === updatedConcours.id);
       if (inscriptionUpdated) setInscription(inscriptionUpdated);
     } catch (err) {
@@ -212,9 +207,9 @@ export default function DetailConcours() {
 
   const toutesLesPieces = getPiecesRequisesConcours(concours);
   // ✅ Toutes les pièces y compris la quittance doivent être fournies avant soumission
-  const nbFournies = toutesLesPieces.filter(p => getPieceStatut(p, candidat, inscription, dossierCandidat)).length;
+  const nbFournies = toutesLesPieces.filter(p => getPieceStatut(p, candidat, inscription)).length;
   const pct = toutesLesPieces.length > 0 ? Math.round((nbFournies / toutesLesPieces.length) * 100) : 100;
-  const dossierComplet = !profilIncomplet(candidat) && toutesLesPieces.every(p => getPieceStatut(p, candidat, inscription, dossierCandidat));
+  const dossierComplet = !profilIncomplet(candidat) && toutesLesPieces.every(p => getPieceStatut(p, candidat, inscription));
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
@@ -322,7 +317,7 @@ export default function DetailConcours() {
 
             <div className='space-y-2'>
               {toutesLesPieces.map(piece => {
-                const fournie = getPieceStatut(piece, candidat, inscription, dossierCandidat); // ✅ FIX
+                const fournie = getPieceStatut(piece, candidat, inscription);
                 const label = getLabelPiece(piece, concours);
                 const isUploading = uploadingPiece[piece];
                 const accept = PIECES_FORMATS[piece] || '.pdf,.jpg,.jpeg,.png';
