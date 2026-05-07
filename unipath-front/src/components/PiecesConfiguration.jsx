@@ -27,13 +27,22 @@ function PiecesConfiguration({ piecesRequises, onChange }) {
   };
 
   const ajouterPiecePersonnalisee = () => {
-    if (!nouvellepiece.nom.trim()) return;
+    console.log('=== AJOUT PIÈCE PERSONNALISÉE ===');
+    console.log('Nom saisi:', nouvellepiece.nom);
+    console.log('Formats:', nouvellepiece.formats);
+    
+    if (!nouvellepiece.nom.trim()) {
+      console.log('❌ Nom vide, abandon');
+      return;
+    }
+    
     const id = nouvellepiece.nom
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/\s+/g, '_')
       .replace(/[^a-z0-9_]/g, '');
+    
     const nouvellePiece = {
       id,
       nom: nouvellepiece.nom.trim(),
@@ -41,9 +50,19 @@ function PiecesConfiguration({ piecesRequises, onChange }) {
       obligatoire: nouvellepiece.obligatoire,
       predefined: false,
     };
-    onChange([...piecesRequises, nouvellePiece]);
+    
+    console.log('Nouvelle pièce créée:', nouvellePiece);
+    console.log('Pièces actuelles AVANT ajout:', piecesRequises);
+    
+    const nouvellesPieces = [...piecesRequises, nouvellePiece];
+    console.log('Pièces APRÈS ajout:', nouvellesPieces);
+    
+    onChange(nouvellesPieces);
+    
     setNouvellePiece({ nom: '', formats: ['PDF'], obligatoire: true });
     setAjoutOuvert(false);
+    
+    console.log('✅ Pièce ajoutée, formulaire réinitialisé');
   };
 
   const supprimerPiece = (id) => {
@@ -60,6 +79,13 @@ function PiecesConfiguration({ piecesRequises, onChange }) {
 
   return (
     <div className='space-y-3'>
+      {/* DEBUG: Afficher le nombre de pièces */}
+      {console.log('=== RENDER PiecesConfiguration ===', {
+        totalPieces: piecesRequises.length,
+        piecesPersonnalisees: piecesRequises.filter(p => !p.predefined).length,
+        pieces: piecesRequises
+      })}
+      
       {/* Pièces prédéfinies */}
       <div>
         <p className='text-xs text-gray-500 mb-2'>Pièces standard</p>

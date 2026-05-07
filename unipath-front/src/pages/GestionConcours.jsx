@@ -554,11 +554,19 @@ export default function GestionConcours() {
                 <PiecesConfiguration
                   piecesRequises={formData.piecesRequises}
                   onChange={(pieces) => {
-                    console.log('=== ONCHANGE PIECES - Nouvelles pièces:', pieces.length);
-                    setFormData(prev => ({
-                      ...prev,
-                      piecesRequises: pieces
-                    }));
+                    console.log('=== ONCHANGE PIECES APPELÉ ===');
+                    console.log('Nombre de pièces reçues:', pieces.length);
+                    console.log('Pièces reçues:', pieces);
+                    console.log('formData.piecesRequises AVANT:', formData.piecesRequises);
+                    
+                    setFormData(prev => {
+                      const newFormData = {
+                        ...prev,
+                        piecesRequises: pieces
+                      };
+                      console.log('formData.piecesRequises APRÈS:', newFormData.piecesRequises);
+                      return newFormData;
+                    });
                   }}
                 />
                 {validationErrors.piecesRequises && (
