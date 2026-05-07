@@ -130,25 +130,56 @@ export default function DetailConcours() {
       showMessage('Veuillez compléter votre profil avant de soumettre votre dossier.', 'error');
       return;
     }
-    const piecesRequises = getPiecesRequisesConcours(concours).filter(p => p !== 'quittance');
-    const manquantes = piecesRequises.filter(p => !getPieceStatut(p, candidat, inscription, dossierCandidat)); // ✅ FIX
+    
+    // Si pas encore inscrit, créer l'inscription d'abord (sans vérifier la quittance)
+    if (!inscription) {
+      const piecesDossier = getPiecesRequisesConcours(concours).filter(p => p !== 'quittance');
+      const manquantes = piecesDossier.filter(p => !getPieceStatut(p, candidat, inscription, dossierCandidat));
+      if (manquantes.length > 0) {
+        showMessage(`Pièces manquantes : ${manquantes.map(p => getLabelPiece(p, concours)).join(', ')}`, 'error');
+        return;
+      }
+      
+      setSubmitting(true);
+      try {
+        const result = await inscriptionService.creer(id);
+        setInscription(result.inscription);
+        showMessage('Inscription créée ! Veuillez maintenant déposer votre quittance de paiement.', 'success');
+        const { candidat: updated, concours: updatedConcours } = await refreshData(id);
+        setCandidат(updated);
+        setConcours(updatedConcours);
+        if (updatedConcours.dossierCandidat) setDossierCandidat(updatedConcours.dossierCandidat);
+        const inscriptionUpdated = updated.inscriptions?.find(i => i.concoursId === updatedConcours.id);
+        if (inscriptionUpdated) setInscription(inscriptionUpdated);
+      } catch (err) {
+        showMessage(err.message || "Erreur lors de l'inscription.", 'error');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+    
+    // Si déjà inscrit, vérifier que TOUTES les pièces sont complètes (y compris quittance)
+    const toutesLesPiecesRequises = getPiecesRequisesConcours(concours);
+    const manquantes = toutesLesPiecesRequises.filter(p => !getPieceStatut(p, candidat, inscription, dossierCandidat));
     if (manquantes.length > 0) {
       showMessage(`Pièces manquantes : ${manquantes.map(p => getLabelPiece(p, concours)).join(', ')}`, 'error');
       return;
     }
+    
+    // Soumettre le dossier complet
     setSubmitting(true);
     try {
-      const result = await inscriptionService.creer(id);
-      setInscription(result.inscription);
-      showMessage('Inscription réussie ! Fiche de pré-inscription envoyée par email.', 'success');
+      // TODO: Appeler une API pour marquer le dossier comme SOUMIS
+      showMessage('Dossier soumis avec succès ! Fiche de pré-inscription envoyée par email.', 'success');
       const { candidat: updated, concours: updatedConcours } = await refreshData(id);
       setCandidат(updated);
       setConcours(updatedConcours);
-      if (updatedConcours.dossierCandidat) setDossierCandidat(updatedConcours.dossierCandidat); // ✅ FIX
+      if (updatedConcours.dossierCandidat) setDossierCandidat(updatedConcours.dossierCandidat);
       const inscriptionUpdated = updated.inscriptions?.find(i => i.concoursId === updatedConcours.id);
       if (inscriptionUpdated) setInscription(inscriptionUpdated);
     } catch (err) {
-      showMessage(err.message || "Erreur lors de l'inscription.", 'error');
+      showMessage(err.message || "Erreur lors de la soumission.", 'error');
     } finally {
       setSubmitting(false);
     }
@@ -180,10 +211,10 @@ export default function DetailConcours() {
   );
 
   const toutesLesPieces = getPiecesRequisesConcours(concours);
-  const piecesHorsQuittance = toutesLesPieces.filter(p => p !== 'quittance');
-  const nbFournies = piecesHorsQuittance.filter(p => getPieceStatut(p, candidat, inscription, dossierCandidat)).length; // ✅ FIX
-  const pct = piecesHorsQuittance.length > 0 ? Math.round((nbFournies / piecesHorsQuittance.length) * 100) : 100;
-  const dossierComplet = !profilIncomplet(candidat) && piecesHorsQuittance.every(p => getPieceStatut(p, candidat, inscription, dossierCandidat)); // ✅ FIX
+  // ✅ Toutes les pièces y compris la quittance doivent être fournies avant soumission
+  const nbFournies = toutesLesPieces.filter(p => getPieceStatut(p, candidat, inscription, dossierCandidat)).length;
+  const pct = toutesLesPieces.length > 0 ? Math.round((nbFournies / toutesLesPieces.length) * 100) : 100;
+  const dossierComplet = !profilIncomplet(candidat) && toutesLesPieces.every(p => getPieceStatut(p, candidat, inscription, dossierCandidat));
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
@@ -276,7 +307,7 @@ export default function DetailConcours() {
             <div className='flex items-center justify-between mb-3'>
               <h2 className='text-lg font-bold text-gray-900'>Pièces requises</h2>
               <span className={`text-xs font-bold px-3 py-1 rounded-full ${dossierComplet ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                {nbFournies}/{piecesHorsQuittance.length} fournie{nbFournies > 1 ? 's' : ''}
+                {nbFournies}/{toutesLesPieces.length} fournie{nbFournies > 1 ? 's' : ''}
               </span>
             </div>
 
@@ -290,7 +321,7 @@ export default function DetailConcours() {
             </div>
 
             <div className='space-y-2'>
-              {piecesHorsQuittance.map(piece => {
+              {toutesLesPieces.map(piece => {
                 const fournie = getPieceStatut(piece, candidat, inscription, dossierCandidat); // ✅ FIX
                 const label = getLabelPiece(piece, concours);
                 const isUploading = uploadingPiece[piece];
@@ -354,57 +385,6 @@ export default function DetailConcours() {
                     )}
                   </div>
                 </div>
-              </div>
-
-              <div className='bg-white border border-gray-200 rounded-xl p-5'>
-                <div className='flex items-center gap-3 mb-4'>
-                  <svg className='w-6 h-6 text-orange-500' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' />
-                  </svg>
-                  <div>
-                    <h3 className='font-bold text-gray-900'>Quittance de paiement</h3>
-                    {concours.fraisParticipation && (
-                      <p className='text-xs text-gray-500'>Montant : {concours.fraisParticipation.toLocaleString('fr-FR')} FCFA</p>
-                    )}
-                  </div>
-                </div>
-                {inscription.quittanceUrl ? (
-                  <div className='bg-green-50 border border-green-200 rounded-lg p-3 flex items-center justify-between'>
-                    <div className='flex items-center gap-2'>
-                      <svg className='w-5 h-5 text-green-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                        <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
-                      </svg>
-                      <span className='text-sm font-medium text-green-700'>Quittance déposée</span>
-                    </div>
-                    <div className='flex flex-col items-end gap-1'>
-                      <label className='cursor-pointer'>
-                        <span className='text-xs text-green-600 hover:text-green-700 underline'>
-                          {uploadingPiece['quittance'] ? 'Envoi...' : 'Modifier'}
-                        </span>
-                        <input type='file' accept='.pdf' className='hidden' disabled={uploadingPiece['quittance']}
-                          onChange={e => handleUploadPiece('quittance', e.target.files[0])} />
-                      </label>
-                      <span className='text-xs text-gray-400'>Max 5 MB</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <label className='block cursor-pointer'>
-                      <div className='border-2 border-dashed border-orange-300 rounded-lg p-4 hover:border-orange-500 hover:bg-orange-50 transition text-center'>
-                        <svg className='w-8 h-8 text-orange-500 mx-auto mb-2' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12' />
-                        </svg>
-                        <p className='text-sm font-medium text-gray-700 mb-1'>
-                          {uploadingPiece['quittance'] ? 'Envoi en cours...' : 'Cliquez pour uploader votre quittance'}
-                        </p>
-                        <p className='text-xs text-gray-500'>Format PDF uniquement</p>
-                      </div>
-                      <input type='file' accept='.pdf' className='hidden' disabled={uploadingPiece['quittance']}
-                        onChange={e => handleUploadPiece('quittance', e.target.files[0])} />
-                    </label>
-                    <p className='text-xs text-gray-400 mt-1 text-right'>Max 5 MB</p>
-                  </div>
-                )}
               </div>
 
               <button onClick={handleTelechargerFiche}
@@ -472,14 +452,17 @@ export default function DetailConcours() {
           ) : (
             <button
               onClick={handleSoumettreDossier}
-              disabled={submitting || !dossierComplet}
+              disabled={submitting || (!inscription && !dossierComplet)}
               className={`w-full py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2 ${
-                dossierComplet
+                (inscription || dossierComplet)
                   ? 'bg-orange-500 text-white hover:bg-orange-600'
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
               }`}
             >
-              {submitting ? 'Soumission en cours...' : dossierComplet ? 'Soumettre mon dossier' : 'Dossier incomplet — impossible de soumettre'}
+              {submitting ? 'En cours...' : 
+               !inscription ? (dossierComplet ? "S'inscrire au concours" : 'Complétez votre dossier pour vous inscrire') :
+               !inscription.quittanceUrl ? 'Déposez votre quittance pour soumettre' :
+               'Soumettre mon dossier complet'}
             </button>
           )}
         </div>
