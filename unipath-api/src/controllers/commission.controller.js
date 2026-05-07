@@ -1,5 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../prisma');
 const { envoyerEmailValidation, envoyerEmailRejet, envoyerEmailConvocation, envoyerEmailSousReserve } = require('../services/email.service');
 const { exec } = require('child_process');
 const path = require('path');
@@ -115,6 +114,7 @@ exports.updateStatut = async (req, res) => {
   try {
     const { inscriptionId } = req.params;
     const { statut, commentaireRejet, commentaireSousReserve } = req.body;
+    const membreCommissionId = req.user?.id; // ID du membre qui prend la décision
 
     if (!['VALIDE', 'REJETE', 'SOUS_RESERVE'].includes(statut)) {
       return res.status(400).json({
@@ -136,12 +136,23 @@ exports.updateStatut = async (req, res) => {
       });
     }
 
+    // Mapper les statuts vers les statuts "PAR_COMMISSION"
+    const statutMapping = {
+      'VALIDE': 'VALIDE_PAR_COMMISSION',
+      'REJETE': 'REJETE_PAR_COMMISSION',
+      'SOUS_RESERVE': 'SOUS_RESERVE_PAR_COMMISSION'
+    };
+
+    const nouveauStatut = statutMapping[statut];
+
     const inscription = await prisma.inscription.update({
       where: { id: inscriptionId },
       data: { 
-        statut,
+        statut: nouveauStatut,
         commentaireRejet: statut === 'REJETE' ? commentaireRejet : null,
         commentaireSousReserve: statut === 'SOUS_RESERVE' ? commentaireSousReserve : null,
+        decisionCommissionPar: membreCommissionId,
+        decisionCommissionDate: new Date()
       },
       include: {
         candidat: true,
@@ -149,75 +160,11 @@ exports.updateStatut = async (req, res) => {
       },
     });
 
-    if (statut === 'VALIDE') {
-      // Générer la convocation en PDF
-      const tmpInput = path.join(os.tmpdir(), `convocation_input_${Date.now()}.json`);
-      const tmpOutput = path.join(os.tmpdir(), `convocation_output_${Date.now()}.pdf`);
-
-      const data = JSON.stringify({
-        candidat: inscription.candidat,
-        concours: inscription.concours,
-        inscription: inscription,
-      });
-      fs.writeFileSync(tmpInput, data, 'utf8');
-
-      const phpScript = path.join(__dirname, '../../php/convocation.php');
-      const cmd = `php "${phpScript}" "${tmpInput}" "${tmpOutput}"`;
-
-      exec(cmd, { timeout: 30000 }, async (error, stdout, stderr) => {
-        fs.unlinkSync(tmpInput);
-        
-        if (error) {
-          console.error('Erreur génération convocation:', stderr);
-          // Envoyer quand même un email sans PDF
-          await envoyerEmailConvocation({
-            candidatEmail: inscription.candidat.email,
-            candidatNom: inscription.candidat.nom,
-            candidatPrenom: inscription.candidat.prenom,
-            concours: inscription.concours.libelle,
-            numeroDossier: inscription.id.substring(0, 8).toUpperCase(),
-            dateExamen: inscription.concours.dateDebut ? new Date(inscription.concours.dateDebut).toLocaleDateString('fr-FR') : null,
-            lieuExamen: 'EPAC - Université d\'Abomey-Calavi',
-          }, null).catch(err => console.error('Erreur envoi email:', err));
-        } else {
-          // Envoyer l'email avec la convocation
-          await envoyerEmailConvocation({
-            candidatEmail: inscription.candidat.email,
-            candidatNom: inscription.candidat.nom,
-            candidatPrenom: inscription.candidat.prenom,
-            concours: inscription.concours.libelle,
-            numeroDossier: inscription.id.substring(0, 8).toUpperCase(),
-            dateExamen: inscription.concours.dateDebut ? new Date(inscription.concours.dateDebut).toLocaleDateString('fr-FR') : null,
-            lieuExamen: 'EPAC - Université d\'Abomey-Calavi',
-          }, tmpOutput).catch(err => console.error('Erreur envoi email:', err));
-          
-          // Supprimer le PDF temporaire
-          if (fs.existsSync(tmpOutput)) fs.unlinkSync(tmpOutput);
-        }
-      });
-    } else if (statut === 'REJETE') {
-      // Envoyer email de rejet avec le commentaire
-      envoyerEmailRejet({
-        candidatEmail: inscription.candidat.email,
-        candidatNom: inscription.candidat.nom,
-        candidatPrenom: inscription.candidat.prenom,
-        concours: inscription.concours.libelle,
-        motif: commentaireRejet,
-      }).catch(err => console.error('Erreur envoi email:', err));
-    } else if (statut === 'SOUS_RESERVE') {
-      // Envoyer email de validation sous réserve avec le commentaire
-      envoyerEmailSousReserve({
-        candidatEmail: inscription.candidat.email,
-        candidatNom: inscription.candidat.nom,
-        candidatPrenom: inscription.candidat.prenom,
-        concours: inscription.concours.libelle,
-        numeroDossier: inscription.id.substring(0, 8).toUpperCase(),
-        motif: commentaireSousReserve,
-      }).catch(err => console.error('Erreur envoi email:', err));
-    }
+    // ❌ NE PAS ENVOYER D'EMAIL ICI
+    // L'email sera envoyé uniquement après validation du contrôleur
 
     res.json({
-      message: 'Dossier ' + statut.toLowerCase() + ' avec succes. Email de notification envoye.',
+      message: 'Décision enregistrée. En attente de validation du contrôleur.',
       inscription,
     });
   } catch (error) {

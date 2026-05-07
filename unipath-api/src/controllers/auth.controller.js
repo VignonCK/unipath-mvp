@@ -1,8 +1,7 @@
 // src/controllers/auth.controller.js
 const { supabase } = require('../supabase');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../prisma');
 const emailService = require('../services/email.service');
-const prisma = new PrismaClient();
 
 exports.register = async (req, res) => {
   try {
@@ -162,6 +161,19 @@ exports.login = async (req, res) => {
       if (dges) {
         role = dges.role;
         userData = dges;
+      }
+    }
+
+    // Chercher dans Controleur
+    if (!role) {
+      const controleur = await prisma.controleur.findUnique({
+        where: { id: userId },
+        select: { role: true, nom: true, prenom: true },
+      });
+
+      if (controleur) {
+        role = controleur.role;
+        userData = controleur;
       }
     }
 

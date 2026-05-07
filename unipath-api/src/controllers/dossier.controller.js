@@ -1,6 +1,5 @@
 const { supabaseAdmin } = require('../supabase');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../prisma');
 const multer = require('multer');
 
 const upload = multer({
@@ -36,15 +35,17 @@ const uploadToSupabase = async (file, candidatId, typePiece) => {
   return urlData.publicUrl;
 };
 
+// Pièces de base du dossier candidat
+const PIECES_DOSSIER_BASE = ['acteNaissance', 'carteIdentite', 'photo', 'releve'];
+
 exports.uploadPiece = [
   upload.single('fichier'),
   async (req, res) => {
     try {
       const typePiece = req.body.typePiece;
-      const typesAutorises = ['acteNaissance', 'carteIdentite', 'photo', 'releve', 'quittance'];
 
-      if (!typesAutorises.includes(typePiece)) {
-        return res.status(400).json({ error: 'Type de piece non reconnu' });
+      if (!typePiece) {
+        return res.status(400).json({ error: 'Type de piece manquant' });
       }
 
       if (!req.file) {
@@ -53,20 +54,30 @@ exports.uploadPiece = [
 
       const fileUrl = await uploadToSupabase(req.file, req.user.id, typePiece);
 
-      const dossier = await prisma.dossier.upsert({
-        where: { candidatId: req.user.id },
-        update: { [typePiece]: fileUrl },
-        create: {
-          candidatId: req.user.id,
-          [typePiece]: fileUrl,
-        },
-      });
+      // Si c'est une pièce de base → on met à jour le dossier
+      if (PIECES_DOSSIER_BASE.includes(typePiece)) {
+        const dossier = await prisma.dossier.upsert({
+          where: { candidatId: req.user.id },
+          update: { [typePiece]: fileUrl },
+          create: {
+            candidatId: req.user.id,
+            [typePiece]: fileUrl,
+          },
+        });
+        return res.json({
+          message: typePiece + ' uploade avec succes',
+          url: fileUrl,
+          dossier,
+        });
+      }
 
-      res.json({
+      // Si c'est une pièce personnalisée → on retourne juste l'URL
+      // Elle sera sauvegardée dans Inscription.piecesExtras via une autre route
+      return res.json({
         message: typePiece + ' uploade avec succes',
         url: fileUrl,
-        dossier,
       });
+
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: error.message || 'Erreur lors du upload' });

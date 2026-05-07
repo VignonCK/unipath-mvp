@@ -1,7 +1,6 @@
 // src/controllers/commission.auth.controller.js
 const { supabase } = require('../supabase');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../prisma');
 
 exports.registerCommission = async (req, res) => {
   try {

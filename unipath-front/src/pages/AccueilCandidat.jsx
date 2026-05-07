@@ -44,7 +44,7 @@ export default function AccueilCandidat() {
   );
 
   // Calculs
-  const pieces = ['acteNaissance', 'carteIdentite', 'photo', 'releve', 'quittance'];
+  const pieces = ['acteNaissance', 'carteIdentite', 'photo', 'releve'];
   const nbPieces = pieces.filter(p => candidat?.dossier?.[p]).length;
   const pct = Math.round((nbPieces / pieces.length) * 100);
   const nbInscriptions = candidat?.inscriptions?.length || 0;

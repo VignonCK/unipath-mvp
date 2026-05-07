@@ -1,7 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const emailService = require('./email.service');
 const pdfService = require('./pdf.service');
-const prisma = new PrismaClient();
+const prisma = require('../prisma');
 
 class NotificationService {
   async sendNotification({ event, userId, data, priority = 'NORMAL', sendEmail = true }) {

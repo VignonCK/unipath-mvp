@@ -1,6 +1,5 @@
 // src/controllers/dges.controller.js
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../prisma');
 
 exports.getStatistiques = async (req, res) => {
   try {

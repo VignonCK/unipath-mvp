@@ -62,6 +62,17 @@ model AdministrateurDGES { // Représente un administrateur de la DGES
   updatedAt DateTime @updatedAt
 }
 
+model Controleur { // Représente un contrôleur qui valide les décisions de la commission
+  id String @id @default(uuid())
+  nom String
+  prenom String
+  email String @unique
+  telephone String?
+  role Role @default(CONTROLEUR)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Concours { // Représente un concours d'entrée à l'université.
   id String @id @default(uuid())
   libelle String
@@ -72,6 +83,7 @@ model Concours { // Représente un concours d'entrée à l'université.
   description String? // Champs principaux : nom, dates, description optionnelle.
   fraisParticipation Int? // Frais de participation au concours (en FCFA)
   seriesAcceptees String[] @default([]) // Séries acceptées pour ce concours (ex: ["C", "D"])
+  matieres String[] @default([]) // Matières évaluées lors du concours (ex: ["Mathématiques", "Physique"])
   piecesRequises Json? // Configuration des pièces requises pour le dossier candidat
   dateDebutDepot DateTime? // Date de début de dépôt des dossiers
   dateFinDepot DateTime? // Date de fin de dépôt des dossiers
@@ -91,8 +103,19 @@ model Inscription { // Fait le lien entre un candidat et un concours (table de j
   concoursId String
   statut StatutDossier @default(EN_ATTENTE) // statut: État du dossier (enum, par défaut "EN_ATTENTE")
   quittanceUrl String? // URL de la quittance de paiement spécifique à cette inscription
+  piecesExtras Json? // Pièces personnalisées spécifiques au concours
+  
+  // Décision de la commission
   commentaireRejet String? // Commentaire de la commission en cas de rejet
   commentaireSousReserve String? // Commentaire de la commission en cas de validation sous réserve
+  decisionCommissionPar String? // ID du membre commission qui a pris la décision
+  decisionCommissionDate DateTime? // Date de la décision de la commission
+  
+  // Décision du contrôleur
+  decisionControleurPar String? // ID du contrôleur qui a validé/modifié la décision
+  decisionControleurDate DateTime? // Date de la décision du contrôleur
+  commentaireControleur String? // Commentaire du contrôleur (si modification de décision)
+  
   note Float? // Note obtenue au concours (null = absent)
   createdAt DateTime @default(now())
   candidat Candidat @relation(fields: [candidatId], references: [id])
@@ -114,14 +137,18 @@ model Dossier { // Contient les pièces justificatives d'un candidat (liens vers
 
 enum StatutDossier { // Définit les états possibles d'un dossier d'inscription.
   EN_ATTENTE
-  VALIDE
-  REJETE
-  SOUS_RESERVE
+  VALIDE_PAR_COMMISSION      // Commission a validé, attend contrôleur
+  REJETE_PAR_COMMISSION      // Commission a rejeté, attend contrôleur
+  SOUS_RESERVE_PAR_COMMISSION // Commission a mis sous réserve, attend contrôleur
+  VALIDE                     // Validé définitivement par contrôleur
+  REJETE                     // Rejeté définitivement par contrôleur
+  SOUS_RESERVE               // Sous réserve définitif par contrôleur
 }
 
 enum Role { // Définit les rôles des utilisateurs de la plateforme
   CANDIDAT
   COMMISSION
+  CONTROLEUR
   DGES
 }
 

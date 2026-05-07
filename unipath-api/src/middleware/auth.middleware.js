@@ -29,4 +29,17 @@ const protect = async (req, res, next) => {
   }
 };
 
-module.exports = { protect };
+const protectOptional = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (token) {
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      if (!error && user) {
+        req.user = user;
+      }
+    }
+  } catch (_) {}
+  next();
+};
+
+module.exports = { protect, protectOptional };

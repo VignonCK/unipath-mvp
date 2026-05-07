@@ -19,6 +19,7 @@ export default function GestionConcours() {
     description: '',
     fraisParticipation: '',
     seriesAcceptees: [],
+    matieres: [],
     piecesRequises: [],
     dateDebutDepot: '',
     dateFinDepot: '',
@@ -56,6 +57,7 @@ export default function GestionConcours() {
       description: '',
       fraisParticipation: '',
       seriesAcceptees: [],
+      matieres: [],
       piecesRequises: [
         // Quittance obligatoire par défaut
         {
@@ -551,7 +553,13 @@ export default function GestionConcours() {
                 </h3>
                 <PiecesConfiguration
                   piecesRequises={formData.piecesRequises}
-                  onChange={(pieces) => setFormData({ ...formData, piecesRequises: pieces })}
+                  onChange={(pieces) => {
+                    console.log('=== ONCHANGE PIECES - Nouvelles pièces:', pieces.length);
+                    setFormData(prev => ({
+                      ...prev,
+                      piecesRequises: pieces
+                    }));
+                  }}
                 />
                 {validationErrors.piecesRequises && (
                   <p className='mt-2 text-xs text-red-600'>{validationErrors.piecesRequises}</p>

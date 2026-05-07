@@ -8,22 +8,25 @@ export default function NotificationCenter() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetchUnreadCount();
-    if (isOpen) {
-      fetchNotifications();
-    }
+    // TODO: Réactiver quand les routes API seront implémentées
+    // fetchUnreadCount();
+    // if (isOpen) {
+    //   fetchNotifications();
+    // }
   }, [isOpen]);
 
   const fetchNotifications = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/notifications', {
-        headers: {
-          'x-user-id': localStorage.getItem('userId') // Temporaire
-        }
-      });
-      const data = await response.json();
-      setNotifications(data);
+      // TODO: Implémenter la route /api/notifications
+      // const response = await fetch('/api/notifications', {
+      //   headers: {
+      //     'x-user-id': localStorage.getItem('userId')
+      //   }
+      // });
+      // const data = await response.json();
+      // setNotifications(data);
+      setNotifications([]); // Temporaire
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -33,13 +36,15 @@ export default function NotificationCenter() {
 
   const fetchUnreadCount = async () => {
     try {
-      const response = await fetch('/api/notifications/unread-count', {
-        headers: {
-          'x-user-id': localStorage.getItem('userId')
-        }
-      });
-      const data = await response.json();
-      setUnreadCount(data.count);
+      // TODO: Implémenter la route /api/notifications/unread-count
+      // const response = await fetch('/api/notifications/unread-count', {
+      //   headers: {
+      //     'x-user-id': localStorage.getItem('userId')
+      //   }
+      // });
+      // const data = await response.json();
+      // setUnreadCount(data.count);
+      setUnreadCount(0); // Temporaire
     } catch (error) {
       console.error('Error fetching unread count:', error);
     }
@@ -47,12 +52,13 @@ export default function NotificationCenter() {
 
   const markAsRead = async (id) => {
     try {
-      await fetch(`/api/notifications/${id}/read`, {
-        method: 'PATCH',
-        headers: {
-          'x-user-id': localStorage.getItem('userId')
-        }
-      });
+      // TODO: Implémenter la route /api/notifications/:id/read
+      // await fetch(`/api/notifications/${id}/read`, {
+      //   method: 'PATCH',
+      //   headers: {
+      //     'x-user-id': localStorage.getItem('userId')
+      //   }
+      // });
       setNotifications(notifications.map(n => 
         n.id === id ? { ...n, read: true } : n
       ));
@@ -64,12 +70,13 @@ export default function NotificationCenter() {
 
   const markAllAsRead = async () => {
     try {
-      await fetch('/api/notifications/read-all', {
-        method: 'PATCH',
-        headers: {
-          'x-user-id': localStorage.getItem('userId')
-        }
-      });
+      // TODO: Implémenter la route /api/notifications/read-all
+      // await fetch('/api/notifications/read-all', {
+      //   method: 'PATCH',
+      //   headers: {
+      //     'x-user-id': localStorage.getItem('userId')
+      //   }
+      // });
       setNotifications(notifications.map(n => ({ ...n, read: true })));
       setUnreadCount(0);
     } catch (error) {

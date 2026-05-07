@@ -20,7 +20,7 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre }) 
   useEffect(() => {
     if (!candidatId) return;
     if (dossier !== undefined) {
-      const pieces = ['acteNaissance', 'carteIdentite', 'photo', 'releve', 'quittance'];
+      const pieces = ['acteNaissance', 'carteIdentite', 'photo', 'releve']; // ✅ FIX : retiré quittance
       const deposees = pieces.filter(p => dossier?.[p]).length;
       const pourcentage = Math.round((deposees / pieces.length) * 100);
       const estComplet = pourcentage === 100;
@@ -81,7 +81,6 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre }) 
   return (
     <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4'>
 
-      {/* Notification dossier complet */}
       {notifVisible && (
         <div className='bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-xl flex items-center justify-between gap-3'>
           <div>
@@ -97,7 +96,6 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre }) 
         <span className={`text-2xl font-black ${couleurTexte}`}>{pourcentage}%</span>
       </div>
 
-      {/* Barre de progression */}
       <div>
         <div className='flex justify-between text-xs text-gray-500 mb-1.5'>
           <span>{piecesPresentes} / {piecesRequises} pièces déposées</span>
@@ -114,7 +112,6 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre }) 
         </div>
       </div>
 
-      {/* Liste des pièces */}
       <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
         {Object.entries(PIECES_LABELS).map(([key, label]) => {
           const deposee = !piecesManquantes.includes(key);
@@ -135,12 +132,11 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre }) 
         })}
       </div>
 
-      {/* Bouton de soumission */}
       {estComplet && dossier?.id && (
         <button
           onClick={handleSoumettre}
           disabled={soumission}
-          className='w-full bg-blue-900 text-white py-3 rounded-xl font-semibold hover:bg-blue-800 transition disabled:opacity-50'
+          className='w-full bg-[#0F4C81] text-white py-3 rounded-xl font-semibold hover:bg-[#0F4C81]/90 transition disabled:opacity-50'
         >
           {soumission ? 'Soumission en cours...' : 'Soumettre officiellement mon dossier'}
         </button>

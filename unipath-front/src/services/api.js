@@ -132,6 +132,21 @@ export const inscriptionService = {
     if (!response.ok) throw new Error(data.error);
     return data;
   },
+
+  uploadPieceExtra: async (inscriptionId, typePiece, fichier) => {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('fichier', fichier);
+    formData.append('typePiece', typePiece);
+    const response = await fetch(`${BASE_URL}/inscriptions/${inscriptionId}/pieces-extras`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error);
+    return data;
+  },
 };
 
 // ── Dossier ──────────────────────────────────────────────────────

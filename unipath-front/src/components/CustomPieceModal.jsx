@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * Formats de fichiers disponibles
@@ -71,7 +72,13 @@ const CustomPieceModal = ({ isOpen, onClose, onSubmit }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
 
+    console.log('=== SOUMISSION PIÈCE PERSONNALISÉE ===');
+    console.log('Nom:', nom);
+    console.log('Description:', description);
+    console.log('Formats sélectionnés:', formatsSelectionnes);
+
     if (!validateForm()) {
+      console.log('Validation échouée');
       return;
     }
 
@@ -85,13 +92,15 @@ const CustomPieceModal = ({ isOpen, onClose, onSubmit }) => {
       description: description.trim() || undefined
     };
 
+    console.log('Nouvelle pièce créée:', nouvellePiece);
     onSubmit(nouvellePiece);
     handleClose();
   };
 
   if (!isOpen) return null;
 
-  return (
+  // Utiliser createPortal pour rendre le modal en dehors de la hiérarchie du formulaire
+  return createPortal(
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Overlay */}
       <div
@@ -219,7 +228,8 @@ const CustomPieceModal = ({ isOpen, onClose, onSubmit }) => {
           </form>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body // Rendre le modal directement dans le body
   );
 };
 

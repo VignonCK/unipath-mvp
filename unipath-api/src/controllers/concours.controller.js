@@ -1,6 +1,5 @@
 // src/controllers/concours.controller.js
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../prisma');
 const {
   validateDatesDepot,
   validateDatesComposition,
@@ -11,10 +10,9 @@ const {
 
 exports.getAllConcours = async (req, res) => {
   try {
-    const userId = req.user?.id; // Si authentifié
+    const userId = req.user?.id;
     let candidat = null;
 
-    // Si l'utilisateur est authentifié, récupérer sa série
     if (userId) {
       candidat = await prisma.candidat.findUnique({
         where: { id: userId },
@@ -26,15 +24,10 @@ exports.getAllConcours = async (req, res) => {
       orderBy: { dateDebut: 'asc' },
     });
 
-    // Filtrer par série si le candidat a une série définie
     let concoursFiltres = concours;
     if (candidat?.serie) {
       concoursFiltres = concours.filter(c => {
-        // Si le concours n'a pas de séries définies ou si le tableau est vide, il est ouvert à tous
-        if (!c.seriesAcceptees || c.seriesAcceptees.length === 0) {
-          return true;
-        }
-        // Sinon, vérifier si la série du candidat est acceptée
+        if (!c.seriesAcceptees || c.seriesAcceptees.length === 0) return true;
         return c.seriesAcceptees.includes(candidat.serie);
       });
     }
@@ -49,6 +42,7 @@ exports.getAllConcours = async (req, res) => {
 exports.getConcoursById = async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user?.id;
 
     const concours = await prisma.concours.findUnique({
       where: { id },
@@ -61,7 +55,15 @@ exports.getConcoursById = async (req, res) => {
       return res.status(404).json({ error: 'Concours non trouvé' });
     }
 
-    res.json(concours);
+    // Récupérer le dossier du candidat si authentifié
+    let dossierCandidat = null;
+    if (userId) {
+      dossierCandidat = await prisma.dossier.findUnique({
+        where: { candidatId: userId },
+      });
+    }
+
+    res.json({ ...concours, dossierCandidat });
   } catch (error) {
     res.status(500).json({ error: 'Erreur serveur' });
   }
@@ -71,13 +73,11 @@ exports.getClassement = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Vérifier que le concours existe
     const concours = await prisma.concours.findUnique({ where: { id } });
     if (!concours) {
       return res.status(404).json({ error: 'Concours non trouvé' });
     }
 
-    // Récupérer toutes les inscriptions validées avec leurs notes
     const inscriptions = await prisma.inscription.findMany({
       where: {
         concoursId: id,
@@ -94,12 +94,9 @@ exports.getClassement = async (req, res) => {
           },
         },
       },
-      orderBy: [
-        { note: 'desc' }, // Tri par note décroissante (les meilleurs en premier)
-      ],
+      orderBy: [{ note: 'desc' }],
     });
 
-    // Ajouter le rang
     const classement = inscriptions.map((inscription, index) => ({
       rang: inscription.note !== null ? index + 1 : null,
       candidat: inscription.candidat,
@@ -136,6 +133,7 @@ exports.createConcours = async (req, res) => {
       description,
       fraisParticipation,
       seriesAcceptees,
+      matieres,
       piecesRequises,
       dateDebutDepot,
       dateFinDepot,
@@ -143,7 +141,6 @@ exports.createConcours = async (req, res) => {
       dateFinComposition
     } = req.body;
 
-    // Validation des champs obligatoires
     const missingFields = [];
     if (!libelle) missingFields.push('libelle');
     if (!etablissement) missingFields.push('etablissement');
@@ -163,25 +160,21 @@ exports.createConcours = async (req, res) => {
       });
     }
 
-    // Validation des dates de dépôt
     const validationDepot = validateDatesDepot(dateDebutDepot, dateFinDepot);
     if (!validationDepot.valid) {
       return res.status(400).json({ error: validationDepot.error });
     }
 
-    // Validation des dates de composition
     const validationComposition = validateDatesComposition(dateDebutComposition, dateFinComposition);
     if (!validationComposition.valid) {
       return res.status(400).json({ error: validationComposition.error });
     }
 
-    // Validation de la cohérence entre dépôt et composition
     const validationCoherence = validateDatesCoherence(dateFinDepot, dateDebutComposition);
     if (!validationCoherence.valid) {
       return res.status(400).json({ error: validationCoherence.error });
     }
 
-    // Validation des séries acceptées
     const validationSeries = validateSeries(seriesAcceptees);
     if (!validationSeries.valid) {
       return res.status(400).json({
@@ -190,7 +183,6 @@ exports.createConcours = async (req, res) => {
       });
     }
 
-    // Validation des pièces requises
     if (!piecesRequises) {
       return res.status(400).json({ error: 'La configuration des pièces requises est obligatoire' });
     }
@@ -200,12 +192,10 @@ exports.createConcours = async (req, res) => {
       return res.status(400).json({ error: validationPieces.error });
     }
 
-    // Normaliser la structure des pièces requises
-    const piecesData = Array.isArray(piecesRequises) 
+    const piecesData = Array.isArray(piecesRequises)
       ? { pieces: piecesRequises }
       : piecesRequises;
 
-    // Création du concours avec tous les nouveaux champs
     const concours = await prisma.concours.create({
       data: {
         libelle,
@@ -216,6 +206,7 @@ exports.createConcours = async (req, res) => {
         description: description || null,
         fraisParticipation: parseInt(fraisParticipation),
         seriesAcceptees,
+        matieres: matieres || [],
         piecesRequises: piecesData,
         dateDebutDepot: new Date(dateDebutDepot),
         dateFinDepot: new Date(dateFinDepot),
@@ -243,6 +234,7 @@ exports.updateConcours = async (req, res) => {
       description,
       fraisParticipation,
       seriesAcceptees,
+      matieres,
       piecesRequises,
       dateDebutDepot,
       dateFinDepot,
@@ -250,7 +242,6 @@ exports.updateConcours = async (req, res) => {
       dateFinComposition
     } = req.body;
 
-    // Vérifier que le concours existe et récupérer le nombre d'inscriptions
     const existing = await prisma.concours.findUnique({
       where: { id },
       include: { _count: { select: { inscriptions: true } } }
@@ -260,12 +251,10 @@ exports.updateConcours = async (req, res) => {
       return res.status(404).json({ error: 'Concours non trouvé' });
     }
 
-    // Préparer les données de mise à jour
     const updateData = {};
     let hasInscriptions = existing._count.inscriptions > 0;
     let piecesModified = false;
 
-    // Validation et mise à jour des champs de base
     if (libelle !== undefined) updateData.libelle = libelle;
     if (etablissement !== undefined) updateData.etablissement = etablissement;
     if (description !== undefined) updateData.description = description || null;
@@ -273,7 +262,6 @@ exports.updateConcours = async (req, res) => {
       updateData.fraisParticipation = parseInt(fraisParticipation);
     }
 
-    // Validation et mise à jour des dates de dépôt
     if (dateDebutDepot !== undefined && dateFinDepot !== undefined) {
       const validationDepot = validateDatesDepot(dateDebutDepot, dateFinDepot);
       if (!validationDepot.valid) {
@@ -285,7 +273,6 @@ exports.updateConcours = async (req, res) => {
       updateData.dateFin = new Date(dateFinDepot);
     }
 
-    // Validation et mise à jour des dates de composition
     if (dateDebutComposition !== undefined && dateFinComposition !== undefined) {
       const validationComposition = validateDatesComposition(dateDebutComposition, dateFinComposition);
       if (!validationComposition.valid) {
@@ -296,10 +283,9 @@ exports.updateConcours = async (req, res) => {
       updateData.dateComposition = new Date(dateDebutComposition);
     }
 
-    // Validation de la cohérence des dates
     const finalDateFinDepot = dateFinDepot || existing.dateFinDepot;
     const finalDateDebutComposition = dateDebutComposition || existing.dateDebutComposition;
-    
+
     if (finalDateFinDepot && finalDateDebutComposition) {
       const validationCoherence = validateDatesCoherence(finalDateFinDepot, finalDateDebutComposition);
       if (!validationCoherence.valid) {
@@ -307,7 +293,6 @@ exports.updateConcours = async (req, res) => {
       }
     }
 
-    // Validation et mise à jour des séries acceptées
     if (seriesAcceptees !== undefined) {
       const validationSeries = validateSeries(seriesAcceptees);
       if (!validationSeries.valid) {
@@ -319,15 +304,17 @@ exports.updateConcours = async (req, res) => {
       updateData.seriesAcceptees = seriesAcceptees;
     }
 
-    // Validation et mise à jour des pièces requises
+    if (matieres !== undefined) {
+      updateData.matieres = Array.isArray(matieres) ? matieres : [];
+    }
+
     if (piecesRequises !== undefined) {
       const validationPieces = validatePiecesRequises(piecesRequises);
       if (!validationPieces.valid) {
         return res.status(400).json({ error: validationPieces.error });
       }
 
-      // Normaliser la structure des pièces requises
-      const piecesData = Array.isArray(piecesRequises) 
+      const piecesData = Array.isArray(piecesRequises)
         ? { pieces: piecesRequises }
         : piecesRequises;
 
@@ -335,13 +322,11 @@ exports.updateConcours = async (req, res) => {
       piecesModified = true;
     }
 
-    // Mettre à jour le concours
     const concours = await prisma.concours.update({
       where: { id },
       data: updateData,
     });
 
-    // Ajouter un avertissement si des inscriptions existent et que les pièces ont été modifiées
     const response = { ...concours };
     if (hasInscriptions && piecesModified) {
       response.warning = 'Attention : Ce concours a déjà des inscriptions. La modification des pièces requises peut affecter les candidats existants.';
@@ -358,7 +343,6 @@ exports.deleteConcours = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Vérifier que le concours existe
     const existing = await prisma.concours.findUnique({
       where: { id },
       include: { _count: { select: { inscriptions: true } } },
@@ -368,10 +352,9 @@ exports.deleteConcours = async (req, res) => {
       return res.status(404).json({ error: 'Concours non trouvé' });
     }
 
-    // Empêcher la suppression si des inscriptions existent
     if (existing._count.inscriptions > 0) {
-      return res.status(400).json({ 
-        error: `Impossible de supprimer ce concours car ${existing._count.inscriptions} inscription(s) existe(nt)` 
+      return res.status(400).json({
+        error: `Impossible de supprimer ce concours car ${existing._count.inscriptions} inscription(s) existe(nt)`
       });
     }
 
