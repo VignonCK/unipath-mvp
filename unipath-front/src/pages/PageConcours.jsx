@@ -6,9 +6,23 @@ import CandidatLayout from '../components/CandidatLayout';
 
 const CHAMPS_REQUIS = ['telephone', 'dateNaiss', 'lieuNaiss'];
 
+const PIECES_LABELS = {
+  acteNaissance: 'Acte de naissance',
+  carteIdentite: "Carte d'identité",
+  photo:         "Photo d'identité",
+  releve:        'Relevé de notes Bac',
+  quittance:     "Quittance d'inscription",
+};
+
 function profilIncomplet(candidat) {
   if (!candidat) return false;
   return CHAMPS_REQUIS.some(c => !candidat[c]);
+}
+
+function dossierIncomplet(candidat) {
+  if (!candidat?.dossier) return true;
+  const pieces = Object.keys(PIECES_LABELS);
+  return pieces.some(piece => !candidat.dossier[piece]);
 }
 
 function statutConcours(concours) {
@@ -50,23 +64,8 @@ export default function PageConcours() {
     setTimeout(() => setMessage({ text: '' }), 4000);
   };
 
-  const handleInscription = async (concoursId) => {
-    if (profilIncomplet(candidat)) {
-      showMessage('Veuillez compléter votre profil avant de vous inscrire.', 'warning');
-      navigate('/dashboard');
-      return;
-    }
-    setInscLoading(prev => ({ ...prev, [concoursId]: true }));
-    try {
-      await inscriptionService.creer(concoursId);
-      showMessage('Inscription réussie !', 'success');
-      const updated = await candidatService.getProfil();
-      setCandidат(updated);
-    } catch (err) {
-      showMessage(err.message, 'error');
-    } finally {
-      setInscLoading(prev => ({ ...prev, [concoursId]: false }));
-    }
+  const handleVoirConcours = (concoursId) => {
+    navigate(`/concours/${concoursId}`);
   };
 
   if (loading) return (
@@ -183,7 +182,7 @@ export default function PageConcours() {
                   <div
                     key={c.id}
                     className='bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition p-5 flex flex-col gap-3 cursor-pointer'
-                    onClick={() => !dejaInscrit && !termine && handleInscription(c.id)}
+                    onClick={() => handleVoirConcours(c.id)}
                   >
                     {/* Titre + badge numéro */}
                     <div className='flex items-start gap-3'>
@@ -232,16 +231,15 @@ export default function PageConcours() {
                     {/* Statut / bouton */}
                     <div className='mt-auto pt-2 border-t border-gray-50'>
                       {dejaInscrit ? (
-                        <span className='text-xs text-green-600 font-semibold'>Inscrit</span>
+                        <span className='text-xs text-green-600 font-semibold'>✓ Inscrit</span>
                       ) : termine ? (
                         <span className='text-xs text-gray-400'>Inscriptions closes</span>
                       ) : (
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleInscription(c.id); }}
-                          disabled={inscLoading[c.id]}
-                          className='w-full bg-orange-500 text-white py-2 rounded-lg text-xs font-semibold hover:bg-orange-600 transition disabled:opacity-50'
+                          onClick={(e) => { e.stopPropagation(); handleVoirConcours(c.id); }}
+                          className='w-full bg-orange-500 text-white py-2 rounded-lg text-xs font-semibold hover:bg-orange-600 transition'
                         >
-                          {inscLoading[c.id] ? 'En cours...' : "S'inscrire"}
+                          S'inscrire
                         </button>
                       )}
                     </div>

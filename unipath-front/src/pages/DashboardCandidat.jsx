@@ -26,6 +26,15 @@ const PIECES_LABELS = {
   quittance:     "Quittance d'inscription",
 };
 
+// Formats acceptés par type de pièce
+const PIECES_FORMATS = {
+  photo: 'image/*',  // JPG, JPEG, PNG
+  carteIdentite: '.pdf,.jpg,.jpeg,.png',  // PDF ou images
+  acteNaissance: '.pdf',  // PDF uniquement
+  releve: '.pdf',  // PDF uniquement
+  quittance: '.pdf',  // PDF uniquement
+};
+
 // Champs obligatoires du profil
 const CHAMPS_REQUIS = ['telephone', 'dateNaiss', 'lieuNaiss'];
 
@@ -126,17 +135,50 @@ export default function DashboardCandidat() {
 
   // ── Inscription ───────────────────────────────────────────
   const handleInscription = async (concoursId) => {
+    // Vérifier d'abord si le profil est complet
     if (profilIncomplet(candidat)) {
       showMessage('Veuillez compléter votre profil avant de vous inscrire.', 'warning');
       setEditOpen(true);
       return;
     }
+
+    // Vérifier si le dossier est complet (toutes les pièces déposées)
+    const pieces = Object.keys(PIECES_LABELS);
+    const piecesManquantes = pieces.filter(piece => !candidat?.dossier?.[piece]);
+    
+    if (piecesManquantes.length > 0) {
+      const piecesManquantesLabels = piecesManquantes.map(p => PIECES_LABELS[p]).join(', ');
+      showMessage(
+        `Votre dossier est incomplet. Veuillez déposer les pièces suivantes : ${piecesManquantesLabels}`,
+        'warning'
+      );
+      // Scroll vers la section des pièces justificatives
+      setTimeout(() => {
+        document.querySelector('#pieces-justificatives')?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+      return;
+    }
+    
     try {
-      await inscriptionService.creer(concoursId);
-      showMessage('Inscription réussie !', 'success');
+      const response = await inscriptionService.creer(concoursId);
+      showMessage('Inscription réussie ! Une fiche de pré-inscription vous a été envoyée par email.', 'success');
       const updated = await candidatService.getProfil();
       setCandidат(updated);
-    } catch (err) { showMessage(err.message, 'error'); }
+    } catch (err) {
+      // Si le dossier est incomplet (vérification backend)
+      if (err.message.includes('Dossier incomplet') || err.message.includes('pièces manquantes')) {
+        showMessage(
+          'Votre dossier est incomplet. Veuillez déposer toutes les pièces justificatives requises avant de vous inscrire.',
+          'warning'
+        );
+        // Scroll vers la section des pièces justificatives
+        setTimeout(() => {
+          document.querySelector('#pieces-justificatives')?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      } else {
+        showMessage(err.message, 'error');
+      }
+    }
   };
 
   // ── Upload pièces ─────────────────────────────────────────
@@ -178,6 +220,11 @@ export default function DashboardCandidat() {
 
   const nom = `${candidat?.prenom || ''} ${candidat?.nom || ''}`.trim();
   const incomplet = profilIncomplet(candidat);
+  
+  // Vérifier si le dossier est complet (toutes les pièces déposées)
+  const pieces = Object.keys(PIECES_LABELS);
+  const dossierIncomplet = pieces.some(piece => !candidat?.dossier?.[piece]);
+  const nbPiecesDeposees = pieces.filter(piece => candidat?.dossier?.[piece]).length;
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
@@ -197,6 +244,24 @@ export default function DashboardCandidat() {
               className='flex-shrink-0 text-xs bg-orange-500 text-white px-3 py-1.5 rounded-lg hover:bg-orange-600 transition font-medium'
             >
               Compléter
+            </button>
+          </div>
+        )}
+
+        {/* Alerte dossier incomplet */}
+        {!incomplet && dossierIncomplet && (
+          <div className='bg-red-50 border-l-4 border-red-500 px-5 py-4 rounded-xl flex items-start justify-between gap-4'>
+            <div>
+              <p className='font-semibold text-red-800 text-sm'>Dossier incomplet ({nbPiecesDeposees}/{pieces.length} pièces)</p>
+              <p className='text-red-700 text-xs mt-0.5'>
+                Vous devez déposer toutes les pièces justificatives avant de pouvoir vous inscrire à un concours.
+              </p>
+            </div>
+            <button
+              onClick={() => document.querySelector('#pieces-justificatives')?.scrollIntoView({ behavior: 'smooth' })}
+              className='flex-shrink-0 text-xs bg-red-500 text-white px-3 py-1.5 rounded-lg hover:bg-red-600 transition font-medium'
+            >
+              Voir les pièces
             </button>
           </div>
         )}
@@ -293,7 +358,11 @@ export default function DashboardCandidat() {
               {candidat.inscriptions.map((ins) => {
                 const cfg = STATUT_CONFIG[ins.statut] || STATUT_CONFIG.EN_ATTENTE;
                 return (
-                  <div key={ins.id} className='flex overflow-hidden rounded-xl border border-gray-100 hover:shadow-sm transition'>
+                  <div 
+                    key={ins.id} 
+                    className='flex overflow-hidden rounded-xl border border-gray-100 hover:shadow-sm transition cursor-pointer'
+                    onClick={() => navigate(`/inscription/${ins.id}`)}
+                  >
                     <div className={`w-1.5 flex-shrink-0 ${cfg.bar}`} />
                     <div className='flex-1 flex items-center justify-between gap-3 px-4 py-3 flex-wrap'>
                       <div>
@@ -307,25 +376,13 @@ export default function DashboardCandidat() {
                           </span>
                         </div>
                       </div>
-                    <div className='flex flex-col gap-2 flex-shrink-0 w-full sm:w-auto'>
-                        {/* Fiche de pré-inscription — toujours disponible */}
+                      <div className='flex items-center gap-2'>
                         <button
-                          onClick={() => handlePreinscription(ins.id)}
-                          disabled={telechargement[`preinsc_${ins.id}`]}
-                          className='text-xs border border-blue-200 text-blue-700 px-3 py-2 rounded-lg hover:bg-blue-50 transition disabled:opacity-50 text-center'
+                          onClick={(e) => { e.stopPropagation(); navigate(`/inscription/${ins.id}`); }}
+                          className='text-xs border border-gray-200 text-gray-600 px-3 py-2 rounded-lg hover:bg-gray-50 transition'
                         >
-                          {telechargement[`preinsc_${ins.id}`] ? 'Génération...' : 'Fiche pré-inscription'}
+                          Voir détails
                         </button>
-                        {/* Convocation — uniquement si validé */}
-                        {ins.statut === 'VALIDE' && (
-                          <button
-                            onClick={() => handleConvocation(ins.id)}
-                            disabled={telechargement[`conv_${ins.id}`]}
-                            className='text-xs border border-orange-400 text-orange-600 px-3 py-2 rounded-lg hover:bg-orange-500 hover:text-white transition disabled:opacity-50 text-center'
-                          >
-                            {telechargement[`conv_${ins.id}`] ? 'Génération...' : 'Convocation'}
-                          </button>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -350,6 +407,7 @@ export default function DashboardCandidat() {
             <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
               {concours.map((c) => {
                 const dejaInscrit = candidat?.inscriptions?.some(i => i.concoursId === c.id);
+                const peutInscrire = !incomplet && !dossierIncomplet;
                 return (
                   <div key={c.id} className='border border-gray-100 rounded-xl p-4 hover:shadow-sm transition flex flex-col gap-3'>
                     <div>
@@ -365,9 +423,15 @@ export default function DashboardCandidat() {
                     ) : (
                       <button
                         onClick={() => handleInscription(c.id)}
-                        className='text-xs bg-orange-500 text-white px-3 py-1.5 rounded-lg hover:bg-orange-600 transition font-medium'
+                        disabled={!peutInscrire}
+                        className={`text-xs px-3 py-1.5 rounded-lg transition font-medium ${
+                          peutInscrire
+                            ? 'bg-orange-500 text-white hover:bg-orange-600'
+                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        }`}
+                        title={!peutInscrire ? 'Complétez votre profil et déposez toutes les pièces justificatives' : ''}
                       >
-                        S'inscrire
+                        {peutInscrire ? "S'inscrire" : 'Dossier incomplet'}
                       </button>
                     )}
                   </div>
@@ -378,7 +442,7 @@ export default function DashboardCandidat() {
         </div>
 
         {/* PIÈCES JUSTIFICATIVES */}
-        <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
+        <div id='pieces-justificatives' className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
           <h2 className='text-base font-bold text-gray-800 mb-4'>Pièces justificatives</h2>
           <div className='space-y-2'>
             {Object.entries(PIECES_LABELS).map(([key, label]) => {
@@ -402,7 +466,7 @@ export default function DashboardCandidat() {
                     }`}>
                       {isLoading ? 'Envoi...' : isOk ? 'Modifier' : 'Déposer'}
                     </span>
-                    <input type='file' accept='.pdf,.jpg,.jpeg,.png' onChange={(e) => handleUpload(key, e)} className='hidden' />
+                    <input type='file' accept={PIECES_FORMATS[key]} onChange={(e) => handleUpload(key, e)} className='hidden' />
                   </label>
                 </div>
               );

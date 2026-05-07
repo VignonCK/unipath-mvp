@@ -81,17 +81,17 @@ export default function Home() {
 
   const fonctionnalites = [
     {
-      icon: '🎓',
+      icon: '',
       titre: 'Inscription numérique',
       desc: 'Les bacheliers s\'inscrivent en ligne aux concours universitaires. Fini les déplacements physiques et les formulaires papier.',
     },
     {
-      icon: '📁',
+      icon: '',
       titre: 'Gestion des dossiers',
       desc: 'Upload sécurisé des pièces justificatives. La commission étudie et valide les dossiers depuis son espace dédié.',
     },
     {
-      icon: '📊',
+      icon: '',
       titre: 'Statistiques en temps réel',
       desc: 'La DGES dispose d\'un tableau de bord national avec graphiques et taux de validation calculés automatiquement.',
     },
@@ -102,25 +102,25 @@ export default function Home() {
       numero: '01',
       titre: 'Créez votre compte',
       desc: 'Inscrivez-vous en quelques minutes. Vous recevez immédiatement votre matricule national unique.',
-      icon: '📝',
+      icon: '',
     },
     {
       numero: '02',
       titre: 'Choisissez vos concours',
       desc: 'Consultez les concours disponibles et inscrivez-vous. Le système vérifie automatiquement les conflits de dates.',
-      icon: '🎯',
+      icon: '',
     },
     {
       numero: '03',
       titre: 'Déposez vos pièces',
       desc: 'Uploadez vos documents depuis chez vous : acte de naissance, carte d\'identité, relevé de notes et quittance.',
-      icon: '📎',
+      icon: '',
     },
     {
       numero: '04',
       titre: 'Recevez votre convocation',
       desc: 'Après validation de votre dossier par la commission, recevez votre convocation PDF par email.',
-      icon: '📬',
+      icon: '',
     },
   ];
 

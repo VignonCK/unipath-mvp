@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../services/api';
+import NotificationCenter from './NotificationCenter';
 
 function initiales(prenom, nom) {
   return `${(prenom || '?')[0]}${(nom || '?')[0]}`.toUpperCase();
@@ -58,6 +59,9 @@ export default function CandidatLayout({ children, candidat, photoUrl }) {
         </div>
 
         <div className='flex items-center gap-3'>
+          {/* Notification Center */}
+          <NotificationCenter />
+          
           <div className='flex items-center gap-2'>
             <div className='w-9 h-9 rounded-full overflow-hidden bg-orange-500 flex items-center justify-center text-sm font-bold text-white flex-shrink-0 border-2 border-orange-400'>
               {photoUrl

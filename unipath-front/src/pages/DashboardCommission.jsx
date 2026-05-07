@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { commissionService, authService } from '../services/api';
 import HistoriqueActions from '../components/HistoriqueActions';
+import DocumentViewer from '../components/DocumentViewer';
 
 function initiales(prenom, nom) {
   return `${(prenom || '?')[0]}${(nom || '?')[0]}`.toUpperCase();

@@ -1,145 +1,174 @@
-// src/services/pdf.service.js
-const PDFDocument = require('pdfkit');
+const { exec } = require('child_process');
+const fs = require('fs');
 const path = require('path');
+const { promisify } = require('util');
 
-const DRAPEAU = path.join(__dirname, '../assets/drapeau_du_benin.png');
-const LOGO_MESRS = path.join(__dirname, '../assets/logo_mesrs.png');
+const execAsync = promisify(exec);
+const writeFileAsync = promisify(fs.writeFile);
+const unlinkAsync = promisify(fs.unlink);
 
-const genererConvocation = (candidat, concours) => {
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({
-      size: 'A4',
-      margins: { top: 50, bottom: 50, left: 60, right: 60 },
-    });
-
-    const buffers = [];
-    doc.on('data', (chunk) => buffers.push(chunk));
-    doc.on('end', () => resolve(Buffer.concat(buffers)));
-    doc.on('error', reject);
-
-    // ── BANDEAU VERT (couleur Bénin) ──────────────────────────
-    doc.rect(0, 0, 595, 8).fill('#008751');
-
-    // ── EN-TETE avec images ───────────────────────────────────
-    try {
-      doc.image(DRAPEAU, 60, 20, { width: 70, height: 50 });
-    } catch (e) {
-      console.warn('Drapeau non charge:', e.message);
+class PDFService {
+  constructor() {
+    this.phpPath = 'php'; // Commande PHP (ajuster si nécessaire)
+    this.tempDir = path.join(__dirname, '../../temp');
+    
+    // Créer le dossier temp s'il n'existe pas
+    if (!fs.existsSync(this.tempDir)) {
+      fs.mkdirSync(this.tempDir, { recursive: true });
     }
+  }
 
+  /**
+   * Génère une fiche de pré-inscription en PDF
+   */
+  async genererFichePreInscription(data) {
+    const { candidat, concours, numeroDossier } = data;
+    
+    // Créer un fichier JSON temporaire avec les données
+    const inputFile = path.join(this.tempDir, `input-preinscription-${Date.now()}.json`);
+    const outputFile = path.join(this.tempDir, `fiche-preinscription-${numeroDossier}.pdf`);
+    
     try {
-      doc.image(LOGO_MESRS, 465, 20, { width: 70, height: 50 });
-    } catch (e) {
-      console.warn('Logo MESRS non charge:', e.message);
+      // Écrire les données dans un fichier JSON
+      await writeFileAsync(inputFile, JSON.stringify({
+        candidat,
+        concours,
+        numeroDossier
+      }));
+
+      // Appeler le script PHP
+      const phpScript = path.join(__dirname, '../../php/fiche-preinscription.php');
+      const command = `${this.phpPath} "${phpScript}" "${inputFile}" "${outputFile}"`;
+      
+      console.log('📄 Génération fiche pré-inscription PDF...');
+      const { stdout, stderr } = await execAsync(command);
+      
+      if (stderr && !stderr.includes('Succès')) {
+        console.error('Erreur PHP:', stderr);
+        throw new Error('Erreur lors de la génération du PDF');
+      }
+      
+      console.log('✅ Fiche pré-inscription générée:', outputFile);
+      
+      // Vérifier que le fichier existe
+      if (!fs.existsSync(outputFile)) {
+        throw new Error('Le fichier PDF n\'a pas été créé');
+      }
+      
+      return {
+        success: true,
+        filePath: outputFile,
+        fileName: `fiche-preinscription-${numeroDossier}.pdf`
+      };
+      
+    } catch (error) {
+      console.error('❌ Erreur génération fiche pré-inscription:', error);
+      throw error;
+    } finally {
+      // Nettoyer le fichier JSON temporaire
+      try {
+        if (fs.existsSync(inputFile)) {
+          await unlinkAsync(inputFile);
+        }
+      } catch (err) {
+        console.error('Erreur nettoyage fichier temporaire:', err);
+      }
     }
-
-    // ── TEXTE EN-TETE ─────────────────────────────────────────
-    doc.fontSize(9).font('Helvetica').fillColor('#000000')
-      .text('REPUBLIQUE DU BENIN', 140, 22, { width: 315, align: 'center' })
-      .text('Ministere de l\'Enseignement Superieur', 140, 34, { width: 315, align: 'center' })
-      .text('et de la Recherche Scientifique', 140, 44, { width: 315, align: 'center' })
-      .text('Universite d\'Abomey-Calavi — EPAC', 140, 54, { width: 315, align: 'center' });
-
-    // ── LIGNE SEPARATRICE tricolore ───────────────────────────
-    doc.rect(60, 80, 158, 4).fill('#008751');  // vert
-    doc.rect(218, 80, 159, 4).fill('#FCD116'); // jaune
-    doc.rect(377, 80, 158, 4).fill('#E8112D'); // rouge
-
-    doc.moveDown(4);
-
-    // ── TITRE ─────────────────────────────────────────────────
-    doc.rect(60, 100, 475, 45).fill('#008751');
-    doc.fontSize(20).font('Helvetica-Bold').fillColor('#FFFFFF')
-      .text('CONVOCATION', 60, 110, { width: 475, align: 'center' });
-
-    doc.rect(60, 145, 475, 20).fill('#FCD116');
-    doc.fontSize(11).font('Helvetica').fillColor('#000000')
-      .text('Concours d\'entree a l\'universite — Annee 2025-2026', 60, 149, { width: 475, align: 'center' });
-
-    doc.moveDown(2);
-
-    // ── SECTION CANDIDAT ──────────────────────────────────────
-    doc.rect(60, 178, 475, 22).fill('#008751');
-    doc.fontSize(12).font('Helvetica-Bold').fillColor('#FFFFFF')
-      .text('INFORMATIONS DU CANDIDAT', 70, 183);
-
-    doc.fillColor('#000000');
-    const infos = [
-      ['Matricule', candidat.matricule],
-      ['Nom et Prenom', candidat.nom + ' ' + candidat.prenom],
-      ['Date de naissance', candidat.dateNaiss
-        ? new Date(candidat.dateNaiss).toLocaleDateString('fr-FR')
-        : 'Non renseignee'],
-      ['Lieu de naissance', candidat.lieuNaiss || 'Non renseigne'],
-      ['Email', candidat.email],
-      ['Telephone', candidat.telephone || 'Non renseigne'],
-    ];
-
-   let y = 212;
-infos.forEach(([label, valeur], i) => {
-  if (i % 2 === 0) {
-    doc.rect(60, y, 475, 25).fill('#F0FFF4');
   }
-  doc.fontSize(11).font('Helvetica-Bold').fillColor('#008751')
-    .text(label + ' : ', 70, y + 6, { width: 150 });
-  doc.font('Helvetica').fillColor('#000000')
-    .text(valeur, 230, y + 6, { width: 290 });
-  y += 28;
-});
 
-    // ── SECTION CONCOURS ──────────────────────────────────────
-    y += 10;
-    doc.rect(60, y, 475, 22).fill('#E8112D');
-    doc.fontSize(12).font('Helvetica-Bold').fillColor('#FFFFFF')
-      .text('INFORMATIONS DU CONCOURS', 70, y + 5);
+  /**
+   * Génère une convocation en PDF
+   */
+  async genererConvocation(data) {
+    const { candidat, concours } = data;
+    
+    // Créer un fichier JSON temporaire avec les données
+    const inputFile = path.join(this.tempDir, `input-convocation-${Date.now()}.json`);
+    const outputFile = path.join(this.tempDir, `convocation-${candidat.matricule}.pdf`);
+    
+    try {
+      // Écrire les données dans un fichier JSON
+      await writeFileAsync(inputFile, JSON.stringify({
+        candidat,
+        concours
+      }));
 
-    y += 30;
-    const infoConcours = [
-      ['Concours', concours.libelle],
-      ['Date debut', new Date(concours.dateDebut).toLocaleDateString('fr-FR')],
-      ['Date fin', new Date(concours.dateFin).toLocaleDateString('fr-FR')],
-      ['Description', concours.description || 'Non renseignee'],
-    ];
-
-    infoConcours.forEach(([label, valeur], i) => {
-  if (i % 2 === 0) {
-    doc.rect(60, y, 475, 25).fill('#FFF8E1');
+      // Appeler le script PHP
+      const phpScript = path.join(__dirname, '../../php/convocation.php');
+      const command = `${this.phpPath} "${phpScript}" "${inputFile}" "${outputFile}"`;
+      
+      console.log('📄 Génération convocation PDF...');
+      const { stdout, stderr } = await execAsync(command);
+      
+      if (stderr && !stderr.includes('Succès')) {
+        console.error('Erreur PHP:', stderr);
+        throw new Error('Erreur lors de la génération du PDF');
+      }
+      
+      console.log('✅ Convocation générée:', outputFile);
+      
+      // Vérifier que le fichier existe
+      if (!fs.existsSync(outputFile)) {
+        throw new Error('Le fichier PDF n\'a pas été créé');
+      }
+      
+      return {
+        success: true,
+        filePath: outputFile,
+        fileName: `convocation-${candidat.matricule}.pdf`
+      };
+      
+    } catch (error) {
+      console.error('❌ Erreur génération convocation:', error);
+      throw error;
+    } finally {
+      // Nettoyer le fichier JSON temporaire
+      try {
+        if (fs.existsSync(inputFile)) {
+          await unlinkAsync(inputFile);
+        }
+      } catch (err) {
+        console.error('Erreur nettoyage fichier temporaire:', err);
+      }
+    }
   }
-  doc.fontSize(11).font('Helvetica-Bold').fillColor('#E8112D')
-    .text(label + ' : ', 70, y + 6, { width: 150 });
-  doc.font('Helvetica').fillColor('#000000')
-    .text(valeur, 230, y + 6, { width: 290 });
-  y += 28;
-});
 
-    // ── AVERTISSEMENT ─────────────────────────────────────────
-    y += 20;
-    doc.rect(60, y, 475, 55).fill('#FCD116');
-    doc.rect(63, y + 3, 469, 49).fill('#FFFDE7');
-    doc.fontSize(10).font('Helvetica-Bold').fillColor('#E8112D')
-      .text('IMPORTANT :', 70, y + 8);
-    doc.font('Helvetica').fillColor('#000000')
-      .text('Le candidat est prie de se presenter muni de cette convocation et d\'une piece d\'identite valide.', 70, y + 20, { width: 455 })
-      .text('Tout retard ou absence non justifiee entraine l\'annulation de l\'inscription.', 70, y + 32, { width: 455 });
+  /**
+   * Nettoie un fichier PDF temporaire
+   */
+  async nettoyerPDF(filePath) {
+    try {
+      if (fs.existsSync(filePath)) {
+        await unlinkAsync(filePath);
+        console.log('🗑️ PDF temporaire supprimé:', filePath);
+      }
+    } catch (error) {
+      console.error('Erreur suppression PDF:', error);
+    }
+  }
 
-    // ── SIGNATURE ─────────────────────────────────────────────
-    y += 80;
-    doc.fontSize(11).font('Helvetica').fillColor('#000000')
-      .text('Fait a Abomey-Calavi, le ' + new Date().toLocaleDateString('fr-FR'), 60, y, { align: 'right' });
-    y += 20;
-    doc.text('Le Directeur General de l\'Enseignement Superieur', 60, y, { align: 'right' });
+  /**
+   * Nettoie tous les fichiers temporaires de plus de 1 heure
+   */
+  async nettoyerFichiersTemporaires() {
+    try {
+      const files = fs.readdirSync(this.tempDir);
+      const now = Date.now();
+      const oneHour = 60 * 60 * 1000;
+      
+      for (const file of files) {
+        const filePath = path.join(this.tempDir, file);
+        const stats = fs.statSync(filePath);
+        
+        if (now - stats.mtimeMs > oneHour) {
+          await unlinkAsync(filePath);
+          console.log('🗑️ Fichier temporaire ancien supprimé:', file);
+        }
+      }
+    } catch (error) {
+      console.error('Erreur nettoyage fichiers temporaires:', error);
+    }
+  }
+}
 
-    // ── BANDEAU BAS tricolore ─────────────────────────────────
-    doc.rect(0, 780, 198, 8).fill('#008751');
-    doc.rect(198, 780, 199, 8).fill('#FCD116');
-    doc.rect(397, 780, 198, 8).fill('#E8112D');
-
-    // ── PIED DE PAGE ──────────────────────────────────────────
-    doc.fontSize(8).font('Helvetica').fillColor('#888888')
-      .text('Document genere automatiquement par UniPath — ' + new Date().toISOString(), 60, 770, { align: 'center', width: 475 });
-
-    doc.end();
-  });
-};
-
-module.exports = { genererConvocation };
+module.exports = new PDFService();

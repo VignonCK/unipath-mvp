@@ -120,3 +120,177 @@ model ActionHistory { // Table de traçabilité des actions effectuées sur les 
   @@index([dossierId, timestamp(sort: Desc)])
   @@index([utilisateurId, timestamp(sort: Desc)])
 }
+
+// ============================================
+// Système de Notifications Intégré
+// ============================================
+
+model Notification {
+  id          String   @id @default(uuid())
+  userId      String   // Candidat, Commission, ou DGES
+  type        NotificationType
+  title       String
+  message     String   @db.Text
+  data        Json?    // Données additionnelles
+  read        Boolean  @default(false)
+  readAt      DateTime?
+  priority    PriorityLevel @default(NORMAL)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  expiresAt   DateTime? // Auto-suppression après 2 ans
+  
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, read])
+  @@index([type])
+  @@index([expiresAt])
+}
+
+enum NotificationType {
+  PRE_INSCRIPTION
+  VALIDATION
+  CONVOCATION
+  REJET
+  NOUVEAU_DOSSIER
+  RAPPORT_HEBDO
+  RAPPORT_MENSUEL
+  SYSTEME
+  ALERTE
+}
+
+enum PriorityLevel {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model NotificationTemplate {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  type        NotificationType
+  subject     String
+  htmlBody    String   @db.Text
+  textBody    String?  @db.Text
+  variables   Json     // Liste des variables disponibles
+  isActive    Boolean  @default(true)
+  isDefault   Boolean  @default(false)
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([type])
+  @@index([isActive])
+}
+
+model EmailDelivery {
+  id              String   @id @default(uuid())
+  notificationId  String?  // Peut être null pour emails legacy
+  userId          String
+  recipient       String
+  subject         String
+  status          DeliveryStatus @default(PENDING)
+  messageId       String?  // ID du serveur SMTP
+  attempts        Int      @default(0)
+  lastAttemptAt   DateTime?
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  bouncedAt       DateTime?
+  errorMessage    String?  @db.Text
+  smtpCode        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([notificationId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+}
+
+enum DeliveryStatus {
+  PENDING
+  QUEUED
+  PROCESSING
+  SENT
+  DELIVERED
+  FAILED
+  BOUNCED
+  EXPIRED
+}
+
+model UserPreferences {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  preferences Json     // Structure: { [NotificationType]: { email: bool, inApp: bool } }
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([userId])
+}
+
+model NotificationAuditLog {
+  id          String   @id @default(uuid())
+  eventType   AuditEventType
+  userId      String?  // Utilisateur concerné
+  actorId     String?  // Utilisateur qui a effectué l'action
+  resourceId  String?  // ID de la ressource (notification, template, etc.)
+  resourceType String? // Type de ressource
+  details     Json?    // Détails de l'événement
+  ipAddress   String?
+  userAgent   String?
+  timestamp   DateTime @default(now())
+  
+  @@index([eventType])
+  @@index([userId])
+  @@index([actorId])
+  @@index([timestamp(sort: Desc)])
+  @@index([resourceType, resourceId])
+}
+
+enum AuditEventType {
+  NOTIFICATION_CREATED
+  NOTIFICATION_SENT
+  NOTIFICATION_DELIVERED
+  NOTIFICATION_FAILED
+  NOTIFICATION_READ
+  NOTIFICATION_DELETED
+  TEMPLATE_CREATED
+  TEMPLATE_UPDATED
+  TEMPLATE_DELETED
+  PREFERENCES_UPDATED
+  DATA_ACCESSED
+  RETRY_ATTEMPTED
+  ALERT_CREATED
+}
+
+model SystemAlert {
+  id          String   @id @default(uuid())
+  type        AlertType
+  severity    AlertSeverity
+  title       String
+  message     String   @db.Text
+  data        Json?
+  resolved    Boolean  @default(false)
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([resolved])
+  @@index([severity])
+  @@index([createdAt(sort: Desc)])
+}
+
+enum AlertType {
+  HIGH_FAILURE_RATE
+  QUEUE_OVERLOAD
+  SMTP_ERROR
+  DELIVERY_ISSUE
+  SYSTEM_ERROR
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}

@@ -3,12 +3,15 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import AuthCallback from './pages/AuthCallback';
 import DashboardCandidat from './pages/DashboardCandidat';
 import DashboardCommission from './pages/DashboardCommission';
 import DashboardDGES from './pages/DashboardDGES';
 import PageConcours from './pages/PageConcours';
+import DetailConcours from './pages/DetailConcours';
 import AccueilCandidat from './pages/AccueilCandidat';
 import MonCompte from './pages/MonCompte';
+import DetailInscription from './pages/DetailInscription';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -19,6 +22,7 @@ function App() {
         <Route path='/' element={<Home />} />
         <Route path='/login' element={<Login />} />
         <Route path='/register' element={<Register />} />
+        <Route path='/auth/callback' element={<AuthCallback />} />
 
         {/* Routes protégées - CANDIDAT uniquement */}
         <Route
@@ -44,6 +48,24 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['CANDIDAT']}>
               <PageConcours />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/concours/:id'
+          element={
+            <ProtectedRoute allowedRoles={['CANDIDAT']}>
+              <DetailConcours />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/inscription/:inscriptionId'
+          element={
+            <ProtectedRoute allowedRoles={['CANDIDAT']}>
+              <DetailInscription />
             </ProtectedRoute>
           }
         />

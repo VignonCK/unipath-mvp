@@ -20,17 +20,17 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [email, setEmail]               = useState(location.state?.email || '');
-  const [password, setPassword]         = useState('');
-  const [showPwd, setShowPwd]           = useState(false);
-  const [loading, setLoading]           = useState(false);
-  const [error, setError]               = useState('');
+  const [email, setEmail]           = useState(location.state?.email || '');
+  const [password, setPassword]     = useState('');
+  const [showPwd, setShowPwd]       = useState(false);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState('');
 
-  const [resetMode, setResetMode]       = useState(false);
-  const [resetEmail, setResetEmail]     = useState('');
+  const [resetMode, setResetMode]   = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
-  const [resetSent, setResetSent]       = useState(false);
-  const [resetError, setResetError]     = useState('');
+  const [resetSent, setResetSent]   = useState(false);
+  const [resetError, setResetError] = useState('');
 
   const successMessage = location.state?.message;
   const messageType    = location.state?.type;
@@ -225,30 +225,32 @@ export default function Login() {
           </p>
         </div>
 
-        {/* ── DROITE : Animation + Texte ensemble ── */}
+        {/* ── DROITE : Message + Lottie ── */}
         <div className='hidden md:flex w-5/12 bg-blue-900 flex-col justify-center px-10 py-10 relative overflow-hidden'>
           <div className='absolute top-[-60px] right-[-60px] w-48 h-48 rounded-full bg-orange-500/10' />
           <div className='absolute bottom-[-40px] left-[-30px] w-32 h-32 rounded-full bg-orange-500/8' />
 
-          <div className='relative z-10 flex flex-col items-center text-center'>
+          <div className='relative z-10'>
 
             {/* Animation Lottie */}
-            <DotLottieReact
-              src="https://lottie.host/b2baaa96-a00b-4288-a7c7-26119042edb5/PxuulpDn7B.lottie"
-              loop
-              autoplay
-              style={{ width: '220px', height: '220px' }}
-            />
+            <div className='flex justify-center mb-4'>
+              <DotLottieReact
+                src="https://lottie.host/b2baaa96-a00b-4288-a7c7-26119042edb5/PxuulpDn7B.lottie"
+                loop
+                autoplay
+                style={{ width: '220px', height: '220px' }}
+              />
+            </div>
 
-            <div className='text-orange-400 text-5xl font-black leading-none mb-3 opacity-60'>"</div>
+            <div className='text-orange-400 text-6xl font-black leading-none mb-4 opacity-60'>"</div>
 
-            <h2 className='text-white text-lg font-bold leading-snug mb-3'>
+            <h2 className='text-white text-xl font-bold leading-snug mb-4'>
               {premiereFois
                 ? 'Bienvenue sur la plateforme officielle des concours universitaires du Bénin.'
                 : 'Bon retour ! Vos concours et votre dossier vous attendent.'}
             </h2>
 
-            <p className='text-blue-200 text-sm leading-relaxed mb-6'>
+            <p className='text-blue-200 text-sm leading-relaxed mb-8'>
               {premiereFois
                 ? MSG.texte
                 : "Consultez l'état de vos inscriptions, déposez vos pièces manquantes et téléchargez votre convocation en quelques clics."}
@@ -256,12 +258,11 @@ export default function Login() {
 
             <div className='flex items-center gap-3'>
               <div className='w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0'>U</div>
-              <div className='text-left'>
+              <div>
                 <p className='text-white text-xs font-semibold'>{MSG.auteur}</p>
                 <p className='text-blue-300 text-xs'>{MSG.role}</p>
               </div>
             </div>
-
           </div>
         </div>
 

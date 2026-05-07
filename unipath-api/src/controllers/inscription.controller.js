@@ -6,6 +6,32 @@ const fs = require('fs');
 const os = require('os');
 const { envoyerEmailPreInscription } = require('../services/email.service');
 
+// Fonction pour vérifier si le dossier est complet
+const verifierDossierComplet = async (candidatId) => {
+  const dossier = await prisma.dossier.findUnique({
+    where: { candidatId },
+  });
+
+  if (!dossier) {
+    return {
+      complet: false,
+      piecesManquantes: ['acteNaissance', 'carteIdentite', 'photo', 'releve', 'quittance'],
+      message: 'Aucun dossier trouvé. Veuillez créer votre dossier et télécharger toutes les pièces requises.',
+    };
+  }
+
+  const piecesRequises = ['acteNaissance', 'carteIdentite', 'photo', 'releve', 'quittance'];
+  const piecesManquantes = piecesRequises.filter(piece => !dossier[piece]);
+
+  return {
+    complet: piecesManquantes.length === 0,
+    piecesManquantes,
+    message: piecesManquantes.length > 0
+      ? `Votre dossier est incomplet. Pièces manquantes : ${piecesManquantes.join(', ')}`
+      : 'Votre dossier est complet',
+  };
+};
+
 const genererFichePreInscription = (candidat, concours, inscription) => {
   return new Promise((resolve, reject) => {
     const tmpInput = path.join(os.tmpdir(), `preinscription_input_${Date.now()}.json`);
@@ -14,7 +40,7 @@ const genererFichePreInscription = (candidat, concours, inscription) => {
     const data = JSON.stringify({ candidat, concours, inscription });
     fs.writeFileSync(tmpInput, data);
 
-    const phpScript = path.join(__dirname, '../../php/preinscription.php');
+    const phpScript = path.join(__dirname, '../../php/fiche-preinscription.php');
     const cmd = `php "${phpScript}" "${tmpInput}" "${tmpOutput}"`;
 
     exec(cmd, { timeout: 30000 }, (error, stdout, stderr) => {
@@ -32,6 +58,18 @@ exports.creerInscription = async (req, res) => {
   try {
     const { concoursId } = req.body;
     const candidatId = req.user.id;
+
+    // Vérifier si le dossier est complet avant de permettre l'inscription
+    const verificationDossier = await verifierDossierComplet(candidatId);
+    
+    if (!verificationDossier.complet) {
+      return res.status(400).json({
+        error: 'Dossier incomplet',
+        message: verificationDossier.message,
+        piecesManquantes: verificationDossier.piecesManquantes,
+        dossierComplet: false,
+      });
+    }
 
     const concours = await prisma.concours.findUnique({
       where: { id: concoursId },
@@ -63,8 +101,7 @@ exports.creerInscription = async (req, res) => {
           candidatPrenom: candidat.prenom,
           concours: concours.libelle,
           numeroDossier: inscription.id.substring(0, 8).toUpperCase(),
-          pdfPath,
-        });
+        }, pdfPath);  // Passer le chemin en 2ème paramètre
         // Supprimer le PDF temporaire après envoi
         if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
       })
@@ -73,6 +110,7 @@ exports.creerInscription = async (req, res) => {
     res.status(201).json({
       message: 'Inscription creee avec succes. Une fiche de pre-inscription vous a ete envoyee par email.',
       inscription,
+      dossierComplet: true,
     });
   } catch (error) {
     if (error.code === 'P2010' || error.message?.includes('Conflit de dates')) {
@@ -97,6 +135,22 @@ exports.getMesInscriptions = async (req, res) => {
       orderBy: { createdAt: 'desc' },
     });
     res.json(inscriptions);
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+// Nouvelle route pour vérifier l'état du dossier
+exports.verifierDossier = async (req, res) => {
+  try {
+    const candidatId = req.user.id;
+    const verification = await verifierDossierComplet(candidatId);
+    
+    res.json({
+      dossierComplet: verification.complet,
+      message: verification.message,
+      piecesManquantes: verification.piecesManquantes,
+    });
   } catch (error) {
     res.status(500).json({ error: 'Erreur serveur' });
   }

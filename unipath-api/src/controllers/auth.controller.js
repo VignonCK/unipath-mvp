@@ -1,6 +1,7 @@
 // src/controllers/auth.controller.js
 const { supabase } = require('../supabase');
 const { PrismaClient } = require('@prisma/client');
+const emailService = require('../services/email.service');
 const prisma = new PrismaClient();
 
 exports.register = async (req, res) => {
@@ -26,6 +27,19 @@ exports.register = async (req, res) => {
         matricule: 'TEMP',
       },
     });
+
+    // Envoyer l'email de bienvenue
+    try {
+      await emailService.envoyerEmailBienvenue({
+        email: candidat.email,
+        nom: candidat.nom,
+        prenom: candidat.prenom,
+        matricule: candidat.matricule
+      });
+    } catch (emailError) {
+      console.error('Erreur envoi email de bienvenue:', emailError);
+      // Ne pas bloquer la création du compte si l'email échoue
+    }
 
     res.status(201).json({
       message: 'Compte créé avec succès',
