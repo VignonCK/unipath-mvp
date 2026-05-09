@@ -31,6 +31,9 @@ model Candidat { // Représente un bachelier qui s'inscrit à un concours.
   updatedAt DateTime @updatedAt // createdAt, updatedAt: Dates de création et de mise à jour (gérées automatiquement)
   inscriptions Inscription[] // inscriptions: Liste des inscriptions du candidat (relation 1-n).
   dossier Dossier? // dossier: Dossier du candidat (relation 1-1, optionnelle).
+  inscriptionsAcademiques InscriptionAcademique[]
+  diplomeLicence          DiplomeLicence?
+
 }
 
 model MembreCommission { // Représente un membre de la commission d'évaluation
@@ -100,6 +103,28 @@ enum Role { // Définit les rôles des utilisateurs de la plateforme
   COMMISSION
   DGES
 }
+
+enum NiveauEtude { // Définit les niveaux d'étude pour les inscriptions académiques
+  L1
+  L2
+  L3
+  M1
+  M2
+}
+
+enum TypeEtablissement { // Définit les types d'établissements pour les inscriptions académiques
+  PUBLIC
+  PRIVE
+}
+
+enum Mention { // Définit les mentions possibles pour les diplômes de licence
+  PASSABLE
+  ASSEZ_BIEN
+  BIEN
+  TRES_BIEN
+  EXCELLENT
+}
+
 
 model ActionHistory { // Table de traçabilité des actions effectuées sur les dossiers
   id            String   @id @default(uuid())
@@ -294,3 +319,88 @@ enum AlertSeverity {
   ERROR
   CRITICAL
 }
+
+model Etablissement { // Représente un établissement d'enseignement supérieur (public ou privé).
+  id        String             @id @default(uuid())
+  nom       String
+  type      TypeEtablissement
+  ville     String
+  code      String             @unique
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  filieres                Filiere[]
+  inscriptionsAcademiques InscriptionAcademique[]
+
+  @@index([code])
+  @@index([type])
+}
+
+model Filiere { // Représente une filière d'étude au sein d'un établissement (ex: Informatique, Biologie).
+  id              String   @id @default(uuid())
+  nom             String
+  etablissementId String
+  dureeAnnees     Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  etablissement           Etablissement            @relation(fields: [etablissementId], references: [id])
+  inscriptionsAcademiques InscriptionAcademique[]
+  diplomesLicence         DiplomeLicence[]
+
+  @@index([etablissementId])
+  @@unique([etablissementId, nom])
+}
+
+model InscriptionAcademique { // Représente l'inscription d'un candidat à une filière pour une année académique donnée.
+  id               String      @id @default(uuid())
+  candidatId       String
+  etablissementId  String
+  filiereId        String
+  niveau           NiveauEtude
+  anneeAcademique  String
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  candidat      Candidat      @relation(fields: [candidatId], references: [id])
+  etablissement Etablissement @relation(fields: [etablissementId], references: [id])
+  filiere       Filiere       @relation(fields: [filiereId], references: [id])
+  resultat      Resultat?
+
+  @@unique([candidatId, filiereId, niveau, anneeAcademique])
+  @@index([candidatId])
+  @@index([etablissementId])
+  @@index([filiereId])
+  @@index([niveau])
+  @@index([anneeAcademique])
+}
+
+model Resultat { // Représente le résultat académique d'un candidat pour une inscription à une filière.
+  id                      String   @id @default(uuid())
+  inscriptionAcademiqueId String   @unique
+  moyenne                 Float
+  mention                 Mention
+  valide                  Boolean  @default(false)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  inscriptionAcademique InscriptionAcademique @relation(fields: [inscriptionAcademiqueId], references: [id])
+}
+
+model DiplomeLicence { // Représente le diplôme de licence obtenu par un candidat, avec la mention et l'année d'obtention.
+  id         String   @id @default(uuid())
+  candidatId String   @unique
+  filiereId  String
+  mention    Mention
+  annee      String
+  verifie    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  candidat Candidat @relation(fields: [candidatId], references: [id])
+  filiere  Filiere  @relation(fields: [filiereId], references: [id])
+
+  @@index([filiereId])
+  @@index([verifie])
+}
+
