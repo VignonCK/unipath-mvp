@@ -5,7 +5,6 @@
 
 generator client {
   provider = "prisma-client-js"
-
 }
 
 // Indique à Prisma de générer le client JavaScript pour interagir avec la base de données.
@@ -17,182 +16,183 @@ datasource db {
 
 // Définit la connexion à la base de données PostgreSQL, en utilisant l'URL stockée dans la variable d'environnement DATABASE_URL
 
-model Candidat { // Représente un bachelier qui s'inscrit à un concours.
-  id String @id @default(uuid()) // Identifiant unique (UUID généré automatiquement).
-  matricule String @unique // matricule: Numéro unique généré par la base (trigger PostgreSQL)
-  nom String
-  prenom String
-  anip String? @unique // Identifiant ANIP du candidat (12 chiffres, unique)
-  serie String? // Série du cursus scolaire (A, B, C, D, E, F, G)
-  sexe String? // Sexe du candidat (M/F)
-  nationalite String? // Nationalité du candidat
-  email String @unique // nom, prenom, email: Informations personnelles, email doit être unique
-  emailConfirme Boolean @default(false) // Confirmation de l'email par le candidat
-  telephone String?
-  dateNaiss DateTime?
-  lieuNaiss String? // telephone, dateNaiss, lieuNaiss: Champs optionnels (le ?).
-  role Role @default(CANDIDAT) // Rôle de l'utilisateur (par défaut CANDIDAT)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt // createdAt, updatedAt: Dates de création et de mise à jour (gérées automatiquement)
-  inscriptions Inscription[] // inscriptions: Liste des inscriptions du candidat (relation 1-n).
-  dossier Dossier? // dossier: Dossier du candidat (relation 1-1, optionnelle).
-  inscriptionsAcademiques InscriptionAcademique[]
-  diplomeLicence          DiplomeLicence?
+model Candidat {
+  id            String        @id @default(uuid()) // Identifiant unique (UUID généré automatiquement).
+  matricule     String        @unique // matricule: Numéro unique généré par la base (trigger PostgreSQL)
+  nom           String
+  prenom        String
+  anip          String?       @unique // Identifiant ANIP du candidat (12 chiffres, unique)
+  serie         String? // Série du cursus scolaire (A, B, C, D, E, F, G)
+  sexe          String? // Sexe du candidat (M/F)
+  nationalite   String? // Nationalité du candidat
+  email         String        @unique // nom, prenom, email: Informations personnelles, email doit être unique
+  emailConfirme Boolean       @default(false) // Confirmation de l'email par le candidat
+  telephone     String?
+  dateNaiss     DateTime?
+  lieuNaiss     String? // telephone, dateNaiss, lieuNaiss: Champs optionnels (le ?).
+  role          Role          @default(CANDIDAT) // Rôle de l'utilisateur (par défaut CANDIDAT)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt // createdAt, updatedAt: Dates de création et de mise à jour (gérées automatiquement)
+  inscriptions  Inscription[] // inscriptions: Liste des inscriptions du candidat (relation 1-n).
+  dossier       Dossier? // dossier: Dossier du candidat (relation 1-1, optionnelle).
 
-  @@index([anip])
+  @@index([anip]) // Index pour optimiser les recherches par ANIP
 }
 
-model MembreCommission { // Représente un membre de la commission d'évaluation
-  id String @id @default(uuid())
-  nom String
-  prenom String
-  email String @unique
+model MembreCommission {
+  id        String   @id @default(uuid())
+  nom       String
+  prenom    String
+  email     String   @unique
   telephone String?
-  role Role @default(COMMISSION)
+  role      Role     @default(COMMISSION)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model AdministrateurDGES { // Représente un administrateur de la DGES
-  id String @id @default(uuid())
-  nom String
-  prenom String
-  email String @unique
+model AdministrateurDGES {
+  id        String   @id @default(uuid())
+  nom       String
+  prenom    String
+  email     String   @unique
   telephone String?
-  role Role @default(DGES)
+  role      Role     @default(DGES)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model Controleur { // Représente un contrôleur qui valide les décisions de la commission
-  id String @id @default(uuid())
-  nom String
-  prenom String
-  email String @unique
+model Controleur {
+  id        String   @id @default(uuid())
+  nom       String
+  prenom    String
+  email     String   @unique
   telephone String?
-  role Role @default(CONTROLEUR)
+  role      Role     @default(CONTROLEUR)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model Concours { // Représente un concours d'entrée à l'université.
-  id String @id @default(uuid())
-  libelle String
-  etablissement String? // Établissement organisateur du concours
-  dateDebut DateTime
-  dateFin DateTime
-  dateComposition DateTime? // Date de composition du concours
-  description String? // Champs principaux : nom, dates, description optionnelle.
-  fraisParticipation Int? // Frais de participation au concours (en FCFA)
-  seriesAcceptees String[] @default([]) // Séries acceptées pour ce concours (ex: ["C", "D"])
-  matieres String[] @default([]) // Matières évaluées lors du concours (ex: ["Mathématiques", "Physique"])
-  piecesRequises Json? // Configuration des pièces requises pour le dossier candidat
-  dateDebutDepot DateTime? // Date de début de dépôt des dossiers
-  dateFinDepot DateTime? // Date de fin de dépôt des dossiers
+model Concours {
+  id                   String        @id @default(uuid())
+  libelle              String
+  etablissement        String? // Établissement organisateur du concours
+  dateDebut            DateTime
+  dateFin              DateTime
+  dateComposition      DateTime? // Date de composition du concours
+  description          String? // Champs principaux : nom, dates, description optionnelle.
+  fraisParticipation   Int? // Frais de participation au concours (en FCFA)
+  seriesAcceptees      String[]      @default([]) // Séries acceptées pour ce concours (ex: ["C", "D"])
+  matieres             String[]      @default([]) // Matières évaluées lors du concours (ex: ["Mathématiques", "Physique"])
+  piecesRequises       Json? // Configuration des pièces requises pour le dossier candidat
+  dateDebutDepot       DateTime? // Date de début de dépôt des dossiers
+  dateFinDepot         DateTime? // Date de fin de dépôt des dossiers
   dateDebutComposition DateTime? // Date de début de composition
-  dateFinComposition DateTime? // Date de fin de composition
-  createdAt DateTime @default(now())
-  inscriptions Inscription[] // inscriptions: Liste des inscriptions à ce concours.
-  
+  dateFinComposition   DateTime? // Date de fin de composition
+  createdAt            DateTime      @default(now())
+  inscriptions         Inscription[] // inscriptions: Liste des inscriptions à ce concours.
+
   @@index([dateDebutDepot])
   @@index([dateFinDepot])
 }
 
-model Inscription { // Fait le lien entre un candidat et un concours (table de jointure).
-  id String @id @default(uuid())
-  numeroInscription String? @unique // Numéro d'inscription unique (ex: UAC-2026-MED-00123)
-  candidatId String
-  concoursId String
-  statut StatutDossier @default(EN_ATTENTE) // statut: État du dossier (enum, par défaut "EN_ATTENTE")
-  quittanceUrl String? // URL de la quittance de paiement spécifique à cette inscription
-  piecesExtras Json? // Pièces personnalisées spécifiques au concours
-  
-  // Décision de la commission
-  commentaireRejet String? // Commentaire de la commission en cas de rejet
-  commentaireSousReserve String? // Commentaire de la commission en cas de validation sous réserve
-  decisionCommissionPar String? // ID du membre commission qui a pris la décision
-  decisionCommissionDate DateTime? // Date de la décision de la commission
-  
-  // Décision du contrôleur
-  decisionControleurPar String? // ID du contrôleur qui a validé/modifié la décision
-  decisionControleurDate DateTime? // Date de la décision du contrôleur
-  commentaireControleur String? // Commentaire du contrôleur (si modification de décision)
-  
-  note Float? // Note obtenue au concours (null = absent)
-  createdAt DateTime @default(now())
-  candidat Candidat @relation(fields: [candidatId], references: [id])
-  concours Concours @relation(fields: [concoursId], references: [id]) // Relations : chaque inscription appartient à un candidat et un concours.
+model Inscription {
+  id                 String              @id @default(uuid())
+  numeroInscription  String?             @unique // Numéro d'inscription unique (ex: UAC-2026-MED-00123)
+  candidatId         String
+  concoursId         String
+  note               Float? // Note obtenue au concours (null = absent)
+  createdAt          DateTime            @default(now())
+  candidat           Candidat            @relation(fields: [candidatId], references: [id])
+  concours           Concours            @relation(fields: [concoursId], references: [id]) // Relations : chaque inscription appartient à un candidat et un concours.
+  dossierInscription DossierInscription? // Relation 1-1 avec DossierInscription (dossier concours)
+
   @@unique([candidatId, concoursId]) // Contrainte : un candidat ne peut s'inscrire qu'une seule fois à un même concours.
+  @@index([candidatId])
+  @@index([concoursId])
 }
 
-model Dossier { // Contient les pièces justificatives d'un candidat (liens vers fichiers).
-  id String @id @default(uuid())
-  candidatId String @unique
-  acteNaissance String?
-  carteIdentite String?
-  photo String?
-  releve String?
+model DossierInscription {
+  id            String @id @default(uuid())
+  inscriptionId String @unique // Relation 1-1 avec Inscription
+
+  // Pièces spécifiques au concours
+  quittanceUrl String? // URL de la quittance de paiement (obligatoire pour validation)
+  piecesExtras Json? // Pièces personnalisées configurables par concours { "diplome": "url", "cv": "url" }
+
+  // Statut et workflow
+  statut StatutDossier @default(EN_ATTENTE) // État du dossier d'inscription
+
+  // Décision de la commission
+  commentaireRejet       String? // Commentaire de la commission en cas de rejet
+  commentaireSousReserve String? // Commentaire de la commission en cas de validation sous réserve
+  decisionCommissionPar  String? // ID du membre commission qui a pris la décision
+  decisionCommissionDate DateTime? // Date de la décision de la commission
+
+  // Décision du contrôleur
+  decisionControleurPar  String? // ID du contrôleur qui a validé/modifié la décision
+  decisionControleurDate DateTime? // Date de la décision du contrôleur
+  commentaireControleur  String? // Commentaire du contrôleur (si modification de décision)
+
+  // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  candidat Candidat @relation(fields: [candidatId], references: [id]) // Un dossier est lié à un seul candidat (relation 1-1, candidatId unique).
+
+  // Relations
+  inscription   Inscription     @relation(fields: [inscriptionId], references: [id], onDelete: Cascade)
+  actionHistory ActionHistory[] // Historique des actions sur ce dossier d'inscription
+
+  @@index([inscriptionId])
+  @@index([statut])
+  @@index([createdAt])
 }
 
-enum StatutDossier { // Définit les états possibles d'un dossier d'inscription.
+model Dossier {
+  id            String   @id @default(uuid())
+  candidatId    String   @unique
+  acteNaissance String?
+  carteIdentite String?
+  photo         String?
+  releve        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  candidat      Candidat @relation(fields: [candidatId], references: [id]) // Un dossier est lié à un seul candidat (relation 1-1, candidatId unique).
+}
+
+enum StatutDossier {
   EN_ATTENTE
-  VALIDE_PAR_COMMISSION      // Commission a validé, attend contrôleur
-  REJETE_PAR_COMMISSION      // Commission a rejeté, attend contrôleur
+  VALIDE_PAR_COMMISSION // Commission a validé, attend contrôleur
+  REJETE_PAR_COMMISSION // Commission a rejeté, attend contrôleur
   SOUS_RESERVE_PAR_COMMISSION // Commission a mis sous réserve, attend contrôleur
-  VALIDE                     // Validé définitivement par contrôleur
-  REJETE                     // Rejeté définitivement par contrôleur
-  SOUS_RESERVE               // Sous réserve définitif par contrôleur
+  VALIDE // Validé définitivement par contrôleur
+  REJETE // Rejeté définitivement par contrôleur
+  SOUS_RESERVE // Sous réserve définitif par contrôleur
 }
 
-enum Role { // Définit les rôles des utilisateurs de la plateforme
+enum Role {
   CANDIDAT
   COMMISSION
   CONTROLEUR
   DGES
 }
 
-enum NiveauEtude { // Définit les niveaux d'étude pour les inscriptions académiques
-  L1
-  L2
-  L3
-  M1
-  M2
-}
+model ActionHistory {
+  id                   String             @id @default(uuid())
+  utilisateurId        String // ID de l'utilisateur qui a effectué l'action
+  dossierInscriptionId String // ID du dossier d'inscription concerné par l'action
+  typeAction           String // Type d'action: DOSSIER_CREE, PIECE_AJOUTEE, PIECE_SUPPRIMEE, DOSSIER_VALIDE, DOSSIER_REJETE, DOSSIER_SOUMIS
+  details              Json? // Détails optionnels de l'action au format JSON
+  timestamp            DateTime           @default(now())
+  ipAddress            String? // Adresse IP de l'utilisateur (pour audit)
+  userAgent            String? // User Agent du navigateur (pour audit)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  dossierInscription   DossierInscription @relation(fields: [dossierInscriptionId], references: [id], onDelete: Cascade)
 
-enum TypeEtablissement { // Définit les types d'établissements pour les inscriptions académiques
-  PUBLIC
-  PRIVE
-}
-
-enum Mention { // Définit les mentions possibles pour les diplômes de licence
-  PASSABLE
-  ASSEZ_BIEN
-  BIEN
-  TRES_BIEN
-  EXCELLENT
-}
-
-
-model ActionHistory { // Table de traçabilité des actions effectuées sur les dossiers
-  id            String   @id @default(uuid())
-  utilisateurId String   // ID de l'utilisateur qui a effectué l'action
-  dossierId     String   // ID du dossier concerné par l'action
-  typeAction    String   // Type d'action: DOSSIER_CREE, PIECE_AJOUTEE, PIECE_SUPPRIMEE, DOSSIER_VALIDE, DOSSIER_REJETE, DOSSIER_SOUMIS
-  details       Json?    // Détails optionnels de l'action au format JSON
-  timestamp     DateTime @default(now())
-  ipAddress     String?  // Adresse IP de l'utilisateur (pour audit)
-  userAgent     String?  // User Agent du navigateur (pour audit)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@index([dossierId])
+  @@index([dossierInscriptionId])
   @@index([utilisateurId])
   @@index([timestamp])
   @@index([typeAction])
-  @@index([dossierId, timestamp(sort: Desc)])
+  @@index([dossierInscriptionId, timestamp(sort: Desc)])
   @@index([utilisateurId, timestamp(sort: Desc)])
 }
 
@@ -201,19 +201,19 @@ model ActionHistory { // Table de traçabilité des actions effectuées sur les 
 // ============================================
 
 model Notification {
-  id          String   @id @default(uuid())
-  userId      String   // Candidat, Commission, ou DGES
-  type        NotificationType
-  title       String
-  message     String   @db.Text
-  data        Json?    // Données additionnelles
-  read        Boolean  @default(false)
-  readAt      DateTime?
-  priority    PriorityLevel @default(NORMAL)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  expiresAt   DateTime? // Auto-suppression après 2 ans
-  
+  id        String           @id @default(uuid())
+  userId    String // Candidat, Commission, ou DGES
+  type      NotificationType
+  title     String
+  message   String           @db.Text
+  data      Json? // Données additionnelles
+  read      Boolean          @default(false)
+  readAt    DateTime?
+  priority  PriorityLevel    @default(NORMAL)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  expiresAt DateTime? // Auto-suppression après 2 ans
+
   @@index([userId, createdAt(sort: Desc)])
   @@index([userId, read])
   @@index([type])
@@ -240,41 +240,41 @@ enum PriorityLevel {
 }
 
 model NotificationTemplate {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  type        NotificationType
-  subject     String
-  htmlBody    String   @db.Text
-  textBody    String?  @db.Text
-  variables   Json     // Liste des variables disponibles
-  isActive    Boolean  @default(true)
-  isDefault   Boolean  @default(false)
-  createdBy   String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  id        String           @id @default(uuid())
+  name      String           @unique
+  type      NotificationType
+  subject   String
+  htmlBody  String           @db.Text
+  textBody  String?          @db.Text
+  variables Json // Liste des variables disponibles
+  isActive  Boolean          @default(true)
+  isDefault Boolean          @default(false)
+  createdBy String
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
   @@index([type])
   @@index([isActive])
 }
 
 model EmailDelivery {
-  id              String   @id @default(uuid())
-  notificationId  String?  // Peut être null pour emails legacy
-  userId          String
-  recipient       String
-  subject         String
-  status          DeliveryStatus @default(PENDING)
-  messageId       String?  // ID du serveur SMTP
-  attempts        Int      @default(0)
-  lastAttemptAt   DateTime?
-  sentAt          DateTime?
-  deliveredAt     DateTime?
-  bouncedAt       DateTime?
-  errorMessage    String?  @db.Text
-  smtpCode        String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
+  id             String         @id @default(uuid())
+  notificationId String? // Peut être null pour emails legacy
+  userId         String
+  recipient      String
+  subject        String
+  status         DeliveryStatus @default(PENDING)
+  messageId      String? // ID du serveur SMTP
+  attempts       Int            @default(0)
+  lastAttemptAt  DateTime?
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  bouncedAt      DateTime?
+  errorMessage   String?        @db.Text
+  smtpCode       String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
   @@index([notificationId])
   @@index([userId])
   @@index([status])
@@ -295,25 +295,25 @@ enum DeliveryStatus {
 model UserPreferences {
   id          String   @id @default(uuid())
   userId      String   @unique
-  preferences Json     // Structure: { [NotificationType]: { email: bool, inApp: bool } }
+  preferences Json // Structure: { [NotificationType]: { email: bool, inApp: bool } }
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   @@index([userId])
 }
 
 model NotificationAuditLog {
-  id          String   @id @default(uuid())
-  eventType   AuditEventType
-  userId      String?  // Utilisateur concerné
-  actorId     String?  // Utilisateur qui a effectué l'action
-  resourceId  String?  // ID de la ressource (notification, template, etc.)
+  id           String         @id @default(uuid())
+  eventType    AuditEventType
+  userId       String? // Utilisateur concerné
+  actorId      String? // Utilisateur qui a effectué l'action
+  resourceId   String? // ID de la ressource (notification, template, etc.)
   resourceType String? // Type de ressource
-  details     Json?    // Détails de l'événement
-  ipAddress   String?
-  userAgent   String?
-  timestamp   DateTime @default(now())
-  
+  details      Json? // Détails de l'événement
+  ipAddress    String?
+  userAgent    String?
+  timestamp    DateTime       @default(now())
+
   @@index([eventType])
   @@index([userId])
   @@index([actorId])
@@ -338,18 +338,18 @@ enum AuditEventType {
 }
 
 model SystemAlert {
-  id          String   @id @default(uuid())
-  type        AlertType
-  severity    AlertSeverity
-  title       String
-  message     String   @db.Text
-  data        Json?
-  resolved    Boolean  @default(false)
-  resolvedAt  DateTime?
-  resolvedBy  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  id         String        @id @default(uuid())
+  type       AlertType
+  severity   AlertSeverity
+  title      String
+  message    String        @db.Text
+  data       Json?
+  resolved   Boolean       @default(false)
+  resolvedAt DateTime?
+  resolvedBy String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
   @@index([resolved])
   @@index([severity])
   @@index([createdAt(sort: Desc)])
@@ -369,88 +369,3 @@ enum AlertSeverity {
   ERROR
   CRITICAL
 }
-
-model Etablissement { // Représente un établissement d'enseignement supérieur (public ou privé).
-  id        String             @id @default(uuid())
-  nom       String
-  type      TypeEtablissement
-  ville     String
-  code      String             @unique
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-
-  filieres                Filiere[]
-  inscriptionsAcademiques InscriptionAcademique[]
-
-  @@index([code])
-  @@index([type])
-}
-
-model Filiere { // Représente une filière d'étude au sein d'un établissement (ex: Informatique, Biologie).
-  id              String   @id @default(uuid())
-  nom             String
-  etablissementId String
-  dureeAnnees     Int
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  etablissement           Etablissement            @relation(fields: [etablissementId], references: [id])
-  inscriptionsAcademiques InscriptionAcademique[]
-  diplomesLicence         DiplomeLicence[]
-
-  @@index([etablissementId])
-  @@unique([etablissementId, nom])
-}
-
-model InscriptionAcademique { // Représente l'inscription d'un candidat à une filière pour une année académique donnée.
-  id               String      @id @default(uuid())
-  candidatId       String
-  etablissementId  String
-  filiereId        String
-  niveau           NiveauEtude
-  anneeAcademique  String
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
-
-  candidat      Candidat      @relation(fields: [candidatId], references: [id])
-  etablissement Etablissement @relation(fields: [etablissementId], references: [id])
-  filiere       Filiere       @relation(fields: [filiereId], references: [id])
-  resultat      Resultat?
-
-  @@unique([candidatId, filiereId, niveau, anneeAcademique])
-  @@index([candidatId])
-  @@index([etablissementId])
-  @@index([filiereId])
-  @@index([niveau])
-  @@index([anneeAcademique])
-}
-
-model Resultat { // Représente le résultat académique d'un candidat pour une inscription à une filière.
-  id                      String   @id @default(uuid())
-  inscriptionAcademiqueId String   @unique
-  moyenne                 Float
-  mention                 Mention
-  valide                  Boolean  @default(false)
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
-
-  inscriptionAcademique InscriptionAcademique @relation(fields: [inscriptionAcademiqueId], references: [id])
-}
-
-model DiplomeLicence { // Représente le diplôme de licence obtenu par un candidat, avec la mention et l'année d'obtention.
-  id         String   @id @default(uuid())
-  candidatId String   @unique
-  filiereId  String
-  mention    Mention
-  annee      String
-  verifie    Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  candidat Candidat @relation(fields: [candidatId], references: [id])
-  filiere  Filiere  @relation(fields: [filiereId], references: [id])
-
-  @@index([filiereId])
-  @@index([verifie])
-}
-

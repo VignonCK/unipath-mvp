@@ -72,16 +72,29 @@ exports.getConcoursById = async (req, res) => {
 exports.getClassement = async (req, res) => {
   try {
     const { id } = req.params;
+    const { role } = req.query; // Nouveau paramètre pour savoir qui demande le classement
 
     const concours = await prisma.concours.findUnique({ where: { id } });
     if (!concours) {
       return res.status(404).json({ error: 'Concours non trouvé' });
     }
 
+    // Déterminer les statuts à inclure selon le rôle
+    let statutsValides;
+    if (role === 'COMMISSION') {
+      // La commission voit les candidats qu'elle a validés (avant contrôleur)
+      statutsValides = ['VALIDE_PAR_COMMISSION', 'VALIDE'];
+    } else {
+      // Par défaut (DGES, public), on ne montre que les validés définitivement
+      statutsValides = ['VALIDE'];
+    }
+
     const inscriptions = await prisma.inscription.findMany({
       where: {
         concoursId: id,
-        statut: 'VALIDE',
+        statut: {
+          in: statutsValides
+        },
       },
       include: {
         candidat: {

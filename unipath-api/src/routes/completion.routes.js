@@ -6,7 +6,8 @@ const { checkRole } = require('../middleware/role.middleware');
 const completionController = require('../controllers/completion.controller');
 
 // Route statique AVANT la route dynamique
-router.get('/stats/global', protect, checkRole(['COMMISSION', 'DGES']), completionController.getStatistiquesGlobales);
+// ✅ CONTROLEUR ajouté - Besoin des stats pour prendre des décisions
+router.get('/stats/global', protect, checkRole(['COMMISSION', 'DGES', 'CONTROLEUR']), completionController.getStatistiquesGlobales);
 
 router.get('/:candidatId', protect, completionController.getCompletion);
 router.get('/:candidatId/pieces', protect, completionController.getPiecesManquantes);

@@ -47,6 +47,14 @@ exports.validerDecision = async (req, res) => {
     // action peut être: 'CONFIRMER', 'VALIDER', 'REJETER', 'SOUS_RESERVE'
     const controleurId = req.user?.id;
 
+    // Validation de l'action
+    const actionsValides = ['CONFIRMER', 'VALIDER', 'REJETER', 'SOUS_RESERVE'];
+    if (!actionsValides.includes(action)) {
+      return res.status(400).json({ 
+        error: `Action invalide. Actions acceptées : ${actionsValides.join(', ')}` 
+      });
+    }
+
     const inscription = await prisma.inscription.findUnique({
       where: { id: inscriptionId },
       include: {
@@ -70,10 +78,23 @@ exports.validerDecision = async (req, res) => {
         'SOUS_RESERVE_PAR_COMMISSION': 'SOUS_RESERVE'
       };
       nouveauStatut = mapping[inscription.statut];
+      
+      if (!nouveauStatut) {
+        return res.status(400).json({ 
+          error: `Impossible de confirmer. Statut actuel : ${inscription.statut}` 
+        });
+      }
+      
       typeEmail = nouveauStatut;
     } else {
-      // Le contrôleur modifie la décision
-      nouveauStatut = action; // 'VALIDE', 'REJETE', ou 'SOUS_RESERVE'
+      // Le contrôleur modifie la décision - Mapper l'action vers le statut
+      const actionToStatut = {
+        'VALIDER': 'VALIDE',
+        'REJETER': 'REJETE',
+        'SOUS_RESERVE': 'SOUS_RESERVE'
+      };
+      
+      nouveauStatut = actionToStatut[action];
       typeEmail = nouveauStatut;
     }
 

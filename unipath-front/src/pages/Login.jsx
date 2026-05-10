@@ -31,6 +31,10 @@ export default function Login() {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSent, setResetSent]   = useState(false);
   const [resetError, setResetError] = useState('');
+  
+  const [emailNotConfirmed, setEmailNotConfirmed] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
 
   const successMessage = location.state?.message;
   const messageType    = location.state?.type;
@@ -40,6 +44,7 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setEmailNotConfirmed(false);
     try {
       const data = await authService.login(email, password);
       switch (data.user?.role) {
@@ -49,9 +54,35 @@ export default function Login() {
         default:           navigate('/dashboard');
       }
     } catch (err) {
-      setError(err.message || 'Email ou mot de passe incorrect');
+      // Vérifier si l'erreur est due à un email non confirmé
+      if (err.response?.status === 403 && err.response?.data?.emailConfirmationRequired) {
+        setEmailNotConfirmed(true);
+        setError('Votre email n\'a pas encore été confirmé. Veuillez vérifier votre boîte mail.');
+      } else {
+        setError(err.message || 'Email ou mot de passe incorrect');
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    setResendLoading(true);
+    setResendSuccess(false);
+    try {
+      const res = await fetch(`${BASE_URL}/auth/resend-confirmation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur lors de l\'envoi');
+      setResendSuccess(true);
+      setTimeout(() => setResendSuccess(false), 5000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -159,6 +190,24 @@ export default function Login() {
               {error && (
                 <div className='bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm'>
                   {error}
+                  {emailNotConfirmed && (
+                    <div className='mt-3'>
+                      <button
+                        type='button'
+                        onClick={handleResendConfirmation}
+                        disabled={resendLoading}
+                        className='text-red-700 font-semibold hover:underline text-xs disabled:opacity-50'
+                      >
+                        {resendLoading ? 'Envoi en cours...' : '📧 Renvoyer l\'email de confirmation'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {resendSuccess && (
+                <div className='bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm'>
+                  ✅ Email de confirmation renvoyé avec succès ! Vérifiez votre boîte mail.
                 </div>
               )}
 

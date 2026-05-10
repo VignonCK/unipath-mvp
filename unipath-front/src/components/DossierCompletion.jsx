@@ -1,14 +1,17 @@
 // src/components/DossierCompletion.jsx
 import { useState, useEffect } from 'react';
+import { PIECE_IDS, PIECES_LABELS, convertLegacyId } from '../constants/pieces';
+import { getAuthHeaders } from '../utils/auth';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
-const PIECES_LABELS = {
-  acteNaissance: 'Acte de naissance',
-  carteIdentite: "Carte d'identité",
-  photo:         "Photo d'identité",
-  releve:        'Relevé de notes Bac',
-};
+// ✅ Liste des pièces à vérifier (SANS la quittance - gérée séparément dans l'inscription)
+const PIECES_DOSSIER = [
+  PIECE_IDS.ACTE_NAISSANCE,
+  PIECE_IDS.CARTE_IDENTITE,
+  PIECE_IDS.PHOTO,
+  PIECE_IDS.RELEVE_NOTES,
+];
 
 export default function DossierCompletion({ candidatId, dossier, onSoumettre }) {
   const [data, setData] = useState(null);
@@ -20,9 +23,19 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre }) 
   useEffect(() => {
     if (!candidatId) return;
     if (dossier !== undefined) {
-      const pieces = ['acteNaissance', 'carteIdentite', 'photo', 'releve']; // ✅ FIX : retiré quittance
-      const deposees = pieces.filter(p => dossier?.[p]).length;
-      const pourcentage = Math.round((deposees / pieces.length) * 100);
+      // ✅ Vérifier les pièces du dossier (mapping legacy → nouveau format)
+      const deposees = PIECES_DOSSIER.filter(pieceId => {
+        // Essayer avec l'ID standard (kebab-case)
+        if (dossier?.[pieceId]) return true;
+        
+        // Essayer avec l'ID legacy (camelCase) pour compatibilité
+        const legacyKey = Object.keys(PIECES_LABELS).find(
+          key => convertLegacyId(key) === pieceId
+        );
+        return legacyKey && dossier?.[legacyKey];
+      }).length;
+
+      const pourcentage = Math.round((deposees / PIECES_DOSSIER.length) * 100);
       const estComplet = pourcentage === 100;
 
       if (estComplet && etaitIncomplet) {
@@ -31,24 +44,31 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre }) 
       }
       setEtaitIncomplet(!estComplet);
 
+      const piecesManquantes = PIECES_DOSSIER.filter(pieceId => {
+        if (dossier?.[pieceId]) return false;
+        const legacyKey = Object.keys(PIECES_LABELS).find(
+          key => convertLegacyId(key) === pieceId
+        );
+        return !(legacyKey && dossier?.[legacyKey]);
+      });
+
       setData({
         pourcentage,
         piecesPresentes: deposees,
-        piecesRequises: pieces.length,
-        piecesManquantes: pieces.filter(p => !dossier?.[p]),
+        piecesRequises: PIECES_DOSSIER.length,
+        piecesManquantes,
         estComplet,
       });
       setLoading(false);
     }
-  }, [candidatId, dossier]);
+  }, [candidatId, dossier, etaitIncomplet]);
 
   const handleSoumettre = async () => {
     setSoumission(true);
     try {
-      const token = localStorage.getItem('token');
       await fetch(`${BASE_URL}/history/action`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           dossierId: dossier?.id,
           typeAction: 'DOSSIER_SOUMIS',
@@ -113,11 +133,12 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre }) 
       </div>
 
       <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
-        {Object.entries(PIECES_LABELS).map(([key, label]) => {
-          const deposee = !piecesManquantes.includes(key);
+        {PIECES_DOSSIER.map((pieceId) => {
+          const deposee = !piecesManquantes.includes(pieceId);
+          const label = PIECES_LABELS[pieceId];
           return (
             <div
-              key={key}
+              key={pieceId}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm ${
                 deposee
                   ? 'bg-green-50 border-green-200 text-green-700'

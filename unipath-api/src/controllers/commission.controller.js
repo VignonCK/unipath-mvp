@@ -1,16 +1,63 @@
 const prisma = require('../prisma');
-const { envoyerEmailValidation, envoyerEmailRejet, envoyerEmailConvocation, envoyerEmailSousReserve } = require('../services/email.service');
-const { exec } = require('child_process');
-const path = require('path');
-const fs = require('fs');
-const os = require('os');
+const { envoyerEmailRejet, envoyerEmailSousReserve } = require('../services/email.service');
 
 exports.getDossiers = async (req, res) => {
   try {
     const { statut } = req.query;
+    const userRole = req.user?.role;
+
+    // Validation du statut si fourni
+    const statutsValides = [
+      'EN_ATTENTE',
+      'VALIDE_PAR_COMMISSION',
+      'REJETE_PAR_COMMISSION',
+      'SOUS_RESERVE_PAR_COMMISSION',
+      'VALIDE',
+      'REJETE',
+      'SOUS_RESERVE'
+    ];
+
+    if (statut && !statutsValides.includes(statut)) {
+      return res.status(400).json({ 
+        error: 'Statut invalide',
+        statutsValides 
+      });
+    }
+
+    // La commission ne peut voir que les dossiers EN_ATTENTE et ceux qu'elle a traités
+    let whereClause = {};
+    
+    if (userRole === 'COMMISSION') {
+      const statutsCommission = [
+        'EN_ATTENTE',
+        'VALIDE_PAR_COMMISSION',
+        'REJETE_PAR_COMMISSION',
+        'SOUS_RESERVE_PAR_COMMISSION'
+      ];
+      
+      if (statut) {
+        // Vérifier que le statut demandé est autorisé pour la commission
+        if (!statutsCommission.includes(statut)) {
+          return res.status(403).json({ 
+            error: 'Accès refusé à ce statut',
+            statutsAutorises: statutsCommission
+          });
+        }
+        whereClause = { statut };
+      } else {
+        whereClause = {
+          statut: {
+            in: statutsCommission
+          }
+        };
+      }
+    } else {
+      // Autres rôles (ne devrait pas arriver avec le middleware)
+      whereClause = statut ? { statut } : {};
+    }
 
     const inscriptions = await prisma.inscription.findMany({
-      where: statut ? { statut } : {},
+      where: whereClause,
       include: {
         candidat: {
           include: { dossier: true },
@@ -25,6 +72,7 @@ exports.getDossiers = async (req, res) => {
       inscriptions,
     });
   } catch (error) {
+    console.error('Erreur getDossiers:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
@@ -34,7 +82,11 @@ exports.getCandidatsParConcours = async (req, res) => {
     const concours = await prisma.concours.findMany({
       include: {
         inscriptions: {
-          where: { statut: 'VALIDE' },
+          where: { 
+            statut: {
+              in: ['VALIDE_PAR_COMMISSION', 'VALIDE']
+            }
+          },
           include: {
             candidat: {
               select: {

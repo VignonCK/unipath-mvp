@@ -1,54 +1,19 @@
 const express = require('express');
 const router = express.Router();
-const notificationService = require('../services/notification.service');
 const notificationController = require('../controllers/notification.controller');
 const { protect } = require('../middleware/auth.middleware');
+const { checkRole } = require('../middleware/role.middleware');
 
-router.post('/', notificationController.sendNotification);
-router.post('/pre-inscription', notificationController.sendPreInscriptionNotification);
-router.post('/validation', notificationController.sendValidationNotification);
-router.post('/rejet', notificationController.sendRejetNotification);
+// 🔒 Routes POST protégées - Réservées aux rôles administratifs
+router.post('/', protect, checkRole(['COMMISSION', 'CONTROLEUR', 'DGES']), notificationController.sendNotification);
+router.post('/pre-inscription', protect, checkRole(['COMMISSION', 'CONTROLEUR', 'DGES']), notificationController.sendPreInscriptionNotification);
+router.post('/validation', protect, checkRole(['COMMISSION', 'CONTROLEUR', 'DGES']), notificationController.sendValidationNotification);
+router.post('/rejet', protect, checkRole(['COMMISSION', 'CONTROLEUR', 'DGES']), notificationController.sendRejetNotification);
 
-router.get('/unread-count', protect, async (req, res) => {
-  try {
-    const count = await notificationService.getUnreadCount(req.user.id);
-    res.json({ count });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-router.patch('/read-all', protect, async (req, res) => {
-  try {
-    await notificationService.markAllAsRead(req.user.id);
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-router.get('/', protect, async (req, res) => {
-  try {
-    const { page, limit, type, read } = req.query;
-    const notifications = await notificationService.getNotifications(req.user.id, {
-      page: parseInt(page) || 1,
-      limit: parseInt(limit) || 20,
-      type,
-      read: read === 'true' ? true : read === 'false' ? false : undefined
-    });
-    res.json(notifications);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-router.patch('/:id/read', protect, async (req, res) => {
-  try {
-    const notification = await notificationService.markAsRead(req.params.id);
-    res.json(notification);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+// Routes GET/PATCH - Déléguées au contrôleur pour cohérence
+router.get('/unread-count', protect, notificationController.getUnreadCount);
+router.patch('/read-all', protect, notificationController.markAllAsRead);
+router.get('/', protect, notificationController.getNotifications);
+router.patch('/:id/read', protect, notificationController.markAsRead);
 
 module.exports = router;

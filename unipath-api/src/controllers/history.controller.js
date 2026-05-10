@@ -86,6 +86,15 @@ exports.enregistrerAction = async (req, res) => {
 
 exports.genererRapportAudit = async (req, res) => {
   try {
+    const userRole = req.user?.role;
+
+    // Seuls DGES et CONTROLEUR peuvent générer des rapports d'audit globaux
+    if (!['DGES', 'CONTROLEUR'].includes(userRole)) {
+      return res.status(403).json({ 
+        error: 'Accès refusé. Seuls les administrateurs DGES et contrôleurs peuvent générer des rapports d\'audit.' 
+      });
+    }
+
     const { dateDebut, dateFin, utilisateurs, typesActions } = req.query;
 
     const whereClause = {};
@@ -127,6 +136,15 @@ exports.genererRapportAudit = async (req, res) => {
 
 exports.exporterCSV = async (req, res) => {
   try {
+    const userRole = req.user?.role;
+
+    // Seuls DGES et CONTROLEUR peuvent exporter des données d'audit
+    if (!['DGES', 'CONTROLEUR'].includes(userRole)) {
+      return res.status(403).json({ 
+        error: 'Accès refusé. Seuls les administrateurs DGES et contrôleurs peuvent exporter des données d\'audit.' 
+      });
+    }
+
     const { dossierId } = req.params;
     const { dateDebut, dateFin, utilisateur, typeAction } = req.query;
 

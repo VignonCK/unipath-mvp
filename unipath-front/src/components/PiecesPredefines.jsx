@@ -1,49 +1,9 @@
 import React from 'react';
-
-/**
- * Liste des pièces prédéfinies disponibles
- */
-const PIECES_PREDEFINIES = [
-  {
-    id: 'acte-naissance',
-    nom: 'Acte de naissance',
-    formatsDefaut: ['PDF'],
-    description: 'Acte de naissance original ou copie certifiée'
-  },
-  {
-    id: 'carte-identite',
-    nom: "Carte d'identité",
-    formatsDefaut: ['PDF', 'JPEG', 'PNG'],
-    description: "Carte d'identité nationale valide"
-  },
-  {
-    id: 'photo',
-    nom: "Photo d'identité",
-    formatsDefaut: ['JPEG', 'PNG'],
-    description: 'Photo récente format identité'
-  },
-  {
-    id: 'releve-notes',
-    nom: 'Relevé de notes Bac',
-    formatsDefaut: ['PDF'],
-    description: 'Relevé de notes du baccalauréat'
-  },
-  {
-    id: 'quittance',
-    nom: 'Quittance de paiement',
-    formatsDefaut: ['PDF'],
-    description: 'Reçu de paiement des frais de participation',
-    obligatoire: true
-  }
-];
-
-/**
- * Formats de fichiers disponibles
- */
-const FORMATS_DISPONIBLES = ['PDF', 'JPEG', 'PNG', 'DOC', 'DOCX'];
+import { PIECES_PREDEFINIES, FORMATS_DISPONIBLES } from '../constants/pieces';
 
 /**
  * Composant de sélection des pièces prédéfinies
+ * ✅ Utilise les constantes centralisées
  * @param {Object} props
  * @param {Array} props.piecesSelectionnees - Liste des pièces sélectionnées
  * @param {Function} props.onChange - Callback appelé lors d'un changement

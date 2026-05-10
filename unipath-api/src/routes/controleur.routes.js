@@ -8,6 +8,7 @@ router.use(protect, checkRole(['CONTROLEUR']));
 
 router.get('/dossiers', controleurController.getDossiersEnAttente);
 router.get('/statistiques', controleurController.getStatistiques);
-router.put('/dossiers/:inscriptionId/valider', controleurController.validerDecision);
+// ✅ PATCH au lieu de PUT - Mise à jour partielle (statut uniquement)
+router.patch('/dossiers/:inscriptionId/valider', controleurController.validerDecision);
 
 module.exports = router;

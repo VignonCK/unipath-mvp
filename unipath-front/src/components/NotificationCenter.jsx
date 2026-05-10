@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Bell, X } from 'lucide-react';
+import { getAuthHeaders } from '../utils/auth';
+
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function NotificationCenter() {
   const [notifications, setNotifications] = useState([]);
@@ -8,25 +11,22 @@ export default function NotificationCenter() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // TODO: Réactiver quand les routes API seront implémentées
-    // fetchUnreadCount();
-    // if (isOpen) {
-    //   fetchNotifications();
-    // }
+    fetchUnreadCount();
+    if (isOpen) {
+      fetchNotifications();
+    }
   }, [isOpen]);
 
   const fetchNotifications = async () => {
     setLoading(true);
     try {
-      // TODO: Implémenter la route /api/notifications
-      // const response = await fetch('/api/notifications', {
-      //   headers: {
-      //     'x-user-id': localStorage.getItem('userId')
-      //   }
-      // });
-      // const data = await response.json();
-      // setNotifications(data);
-      setNotifications([]); // Temporaire
+      const response = await fetch(`${BASE_URL}/notifications`, {
+        headers: getAuthHeaders(), // ✅ Utilise Bearer token
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setNotifications(data.notifications || data);
+      }
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -36,15 +36,13 @@ export default function NotificationCenter() {
 
   const fetchUnreadCount = async () => {
     try {
-      // TODO: Implémenter la route /api/notifications/unread-count
-      // const response = await fetch('/api/notifications/unread-count', {
-      //   headers: {
-      //     'x-user-id': localStorage.getItem('userId')
-      //   }
-      // });
-      // const data = await response.json();
-      // setUnreadCount(data.count);
-      setUnreadCount(0); // Temporaire
+      const response = await fetch(`${BASE_URL}/notifications/unread-count`, {
+        headers: getAuthHeaders(), // ✅ Utilise Bearer token
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUnreadCount(data.count);
+      }
     } catch (error) {
       console.error('Error fetching unread count:', error);
     }
@@ -52,17 +50,16 @@ export default function NotificationCenter() {
 
   const markAsRead = async (id) => {
     try {
-      // TODO: Implémenter la route /api/notifications/:id/read
-      // await fetch(`/api/notifications/${id}/read`, {
-      //   method: 'PATCH',
-      //   headers: {
-      //     'x-user-id': localStorage.getItem('userId')
-      //   }
-      // });
-      setNotifications(notifications.map(n => 
-        n.id === id ? { ...n, read: true } : n
-      ));
-      setUnreadCount(Math.max(0, unreadCount - 1));
+      const response = await fetch(`${BASE_URL}/notifications/${id}/read`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(), // ✅ Utilise Bearer token
+      });
+      if (response.ok) {
+        setNotifications(notifications.map(n => 
+          n.id === id ? { ...n, read: true } : n
+        ));
+        setUnreadCount(Math.max(0, unreadCount - 1));
+      }
     } catch (error) {
       console.error('Error marking as read:', error);
     }
@@ -70,15 +67,14 @@ export default function NotificationCenter() {
 
   const markAllAsRead = async () => {
     try {
-      // TODO: Implémenter la route /api/notifications/read-all
-      // await fetch('/api/notifications/read-all', {
-      //   method: 'PATCH',
-      //   headers: {
-      //     'x-user-id': localStorage.getItem('userId')
-      //   }
-      // });
-      setNotifications(notifications.map(n => ({ ...n, read: true })));
-      setUnreadCount(0);
+      const response = await fetch(`${BASE_URL}/notifications/read-all`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(), // ✅ Utilise Bearer token
+      });
+      if (response.ok) {
+        setNotifications(notifications.map(n => ({ ...n, read: true })));
+        setUnreadCount(0);
+      }
     } catch (error) {
       console.error('Error marking all as read:', error);
     }

@@ -39,7 +39,7 @@ exports.getCompletion = async (req, res) => {
       candidat: { id: candidat.id, nom: candidat.nom, prenom: candidat.prenom, email: candidat.email },
       permissions: {
         peutModifier: userRole === 'CANDIDAT' && userId === candidatId,
-        peutVoirDetails: ['COMMISSION', 'DGES'].includes(userRole)
+        peutVoirDetails: ['COMMISSION', 'CONTROLEUR', 'DGES'].includes(userRole)
       }
     });
 

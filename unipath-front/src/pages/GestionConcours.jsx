@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { concoursService } from '../services/api';
 import PiecesConfiguration from '../components/PiecesConfiguration';
 import DGESLayout from '../components/DGESLayout';
+import { getDefaultPiecesRequises, validatePiecesConfiguration } from '../constants/pieces';
 
 export default function GestionConcours() {
   const [concours, setConcours] = useState([]);
@@ -58,17 +59,7 @@ export default function GestionConcours() {
       fraisParticipation: '',
       seriesAcceptees: [],
       matieres: [],
-      piecesRequises: [
-        // Quittance obligatoire par défaut
-        {
-          id: 'quittance',
-          nom: 'Quittance de paiement',
-          obligatoire: true,
-          formats: ['PDF'],
-          predefined: true,
-          description: 'Reçu de paiement des frais de participation'
-        }
-      ],
+      piecesRequises: getDefaultPiecesRequises(), // ✅ Utilise la fonction centralisée
       dateDebutDepot: '',
       dateFinDepot: '',
       dateDebutComposition: '',
@@ -96,16 +87,7 @@ export default function GestionConcours() {
       description: c.description || '',
       fraisParticipation: c.fraisParticipation || '',
       seriesAcceptees: c.seriesAcceptees || [],
-      piecesRequises: piecesRequises.length > 0 ? piecesRequises : [
-        {
-          id: 'quittance',
-          nom: 'Quittance de paiement',
-          obligatoire: true,
-          formats: ['PDF'],
-          predefined: true,
-          description: 'Reçu de paiement des frais de participation'
-        }
-      ],
+      piecesRequises: piecesRequises.length > 0 ? piecesRequises : getDefaultPiecesRequises(), // ✅ Utilise la fonction centralisée
       dateDebutDepot: c.dateDebutDepot ? c.dateDebutDepot.split('T')[0] : '',
       dateFinDepot: c.dateFinDepot ? c.dateFinDepot.split('T')[0] : '',
       dateDebutComposition: c.dateDebutComposition ? c.dateDebutComposition.split('T')[0] : '',
@@ -175,10 +157,10 @@ export default function GestionConcours() {
     if (!formData.piecesRequises || formData.piecesRequises.length === 0) {
       errors.piecesRequises = 'Au moins une pièce doit être sélectionnée';
     } else {
-      // Vérifier que la quittance est présente
-      const hasQuittance = formData.piecesRequises.some(p => p.id === 'quittance');
-      if (!hasQuittance) {
-        errors.piecesRequises = 'La quittance de paiement est obligatoire';
+      // ✅ Utiliser validatePiecesConfiguration pour validation complète
+      const { valid, errors: pieceErrors } = validatePiecesConfiguration(formData.piecesRequises);
+      if (!valid) {
+        errors.piecesRequises = pieceErrors.join(', ');
       }
     }
 

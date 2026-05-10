@@ -5,8 +5,26 @@ exports.getProfil = async (req, res) => {
   try {
     const candidat = await prisma.candidat.findUnique({
       where: { id: req.user.id },
-      include: {
-        inscriptions: { include: { concours: true } },
+      select: {
+        id: true,
+        matricule: true,
+        nom: true,
+        prenom: true,
+        anip: true,
+        serie: true,
+        sexe: true,
+        nationalite: true,
+        email: true,
+        telephone: true,
+        dateNaiss: true,
+        lieuNaiss: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+        // Ne pas exposer emailConfirme
+        inscriptions: {
+          include: { concours: true }
+        },
         dossier: true,
       },
     });
@@ -15,7 +33,7 @@ exports.getProfil = async (req, res) => {
 
     res.json(candidat);
   } catch (error) {
-    console.error(error);
+    console.error('❌ Erreur getProfil:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
