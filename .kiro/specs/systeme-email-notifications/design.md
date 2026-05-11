@@ -306,24 +306,25 @@ class EmailService {
       throw new Error('Invalid email address');
     }
 
-    // 2. Rate limiting
-    await checkRateLimit(userId);
+    // 2. Rate limiting (seulement si userId fourni)
+    if (userId) {
+      await checkRateLimit(userId);
+    }
 
-    // 3. Créer l'entrée dans EmailDelivery
+    // 3. Créer l'entrée dans EmailDelivery avec le contenu
     const email = await prisma.emailDelivery.create({
       data: {
         userId,
         recipient,
         subject,
+        htmlBody,
+        textBody,
+        attachments: attachments.length > 0 ? attachments : null,
         status: 'QUEUED',
         attempts: 0,
         createdAt: new Date(),
       },
     });
-
-    // 4. Stocker le contenu et les pièces jointes (si nécessaire)
-    // Note: Pour simplifier, on peut stocker htmlBody/textBody dans un champ JSON
-    // ou dans une table séparée EmailContent
 
     return { emailId: email.id, status: 'QUEUED' };
   }
@@ -346,10 +347,11 @@ class EmailService {
     `;
 
     return this.createEmail({
-      userId: null,  // Pas encore de candidat créé
+      userId: null,  // Candidat pas encore créé
       recipient: candidatEmail,
       subject,
       htmlBody,
+      textBody: `Bienvenue ${candidatPrenom} ${candidatNom}! Confirmez votre compte: ${confirmationUrl}`,
       emailType: 'CONFIRMATION',
     });
   }
@@ -357,7 +359,7 @@ class EmailService {
   /**
    * Email de bienvenue (après confirmation)
    */
-  async envoyerEmailBienvenue({ candidatEmail, candidatNom, candidatPrenom, matricule, loginUrl }) {
+  async envoyerEmailBienvenue({ candidatEmail, candidatNom, candidatPrenom, matricule, loginUrl, userId }) {
     validateParams({ candidatEmail, candidatNom, candidatPrenom, matricule });
 
     const subject = 'Bienvenue sur UniPath - Votre compte est activé';
@@ -372,10 +374,11 @@ class EmailService {
     `;
 
     return this.createEmail({
-      userId: null,  // À récupérer depuis le candidat
+      userId,  // Candidat existe maintenant
       recipient: candidatEmail,
       subject,
       htmlBody,
+      textBody: `Félicitations ${candidatPrenom} ${candidatNom}! Votre matricule: ${matricule}. Connectez-vous: ${loginUrl || process.env.APP_URL}`,
       emailType: 'BIENVENUE',
     });
   }
@@ -383,7 +386,7 @@ class EmailService {
   /**
    * Email de pré-inscription avec PDF
    */
-  async envoyerEmailPreInscription({ candidatEmail, candidatNom, candidatPrenom, concours, numeroDossier }, pdfPath) {
+  async envoyerEmailPreInscription({ candidatEmail, candidatNom, candidatPrenom, concours, numeroDossier, userId }, pdfPath) {
     validateParams({ candidatEmail, candidatNom, candidatPrenom, concours, numeroDossier });
 
     const subject = `Confirmation d'inscription - ${concours}`;
@@ -402,10 +405,11 @@ class EmailService {
     }] : [];
 
     return this.createEmail({
-      userId: null,  // À récupérer
+      userId,  // Candidat existe
       recipient: candidatEmail,
       subject,
       htmlBody,
+      textBody: `Inscription enregistrée au concours ${concours}. Numéro de dossier: ${numeroDossier}`,
       attachments,
       emailType: 'PRE_INSCRIPTION',
     });
@@ -414,7 +418,7 @@ class EmailService {
   /**
    * Email de convocation avec PDF
    */
-  async envoyerEmailConvocation({ candidatEmail, candidatNom, candidatPrenom, concours, numeroDossier, dateExamen, lieuExamen }, pdfPath) {
+  async envoyerEmailConvocation({ candidatEmail, candidatNom, candidatPrenom, concours, numeroDossier, dateExamen, lieuExamen, userId }, pdfPath) {
     validateParams({ candidatEmail, candidatNom, candidatPrenom, concours, numeroDossier });
 
     const subject = `Convocation - ${concours}`;
@@ -435,10 +439,11 @@ class EmailService {
     }] : [];
 
     return this.createEmail({
-      userId: null,
+      userId,  // Candidat existe
       recipient: candidatEmail,
       subject,
       htmlBody,
+      textBody: `Félicitations! Vous êtes convoqué(e) au concours ${concours}. Numéro: ${numeroDossier}`,
       attachments,
       emailType: 'CONVOCATION',
     });
@@ -447,7 +452,7 @@ class EmailService {
   /**
    * Email de rejet
    */
-  async envoyerEmailRejet({ candidatEmail, candidatNom, candidatPrenom, concours, motif }) {
+  async envoyerEmailRejet({ candidatEmail, candidatNom, candidatPrenom, concours, motif, userId }) {
     validateParams({ candidatEmail, candidatNom, candidatPrenom, concours });
 
     const motifFinal = motif || "Votre dossier ne répond pas aux critères d'admission";
@@ -462,10 +467,11 @@ class EmailService {
     `;
 
     return this.createEmail({
-      userId: null,
+      userId,  // Candidat existe
       recipient: candidatEmail,
       subject,
       htmlBody,
+      textBody: `Décision concernant votre dossier pour ${concours}. Motif: ${motifFinal}`,
       emailType: 'REJET',
     });
   }
@@ -473,7 +479,7 @@ class EmailService {
   /**
    * Email de validation sous réserve
    */
-  async envoyerEmailSousReserve({ candidatEmail, candidatNom, candidatPrenom, concours, numeroDossier, motif }) {
+  async envoyerEmailSousReserve({ candidatEmail, candidatNom, candidatPrenom, concours, numeroDossier, motif, userId }) {
     validateParams({ candidatEmail, candidatNom, candidatPrenom, concours, numeroDossier });
 
     const conditions = motif || "Veuillez compléter votre dossier selon les instructions de la commission";
@@ -491,10 +497,11 @@ class EmailService {
     `;
 
     return this.createEmail({
-      userId: null,
+      userId,  // Candidat existe
       recipient: candidatEmail,
       subject,
       htmlBody,
+      textBody: `Validation sous réserve pour ${concours}. Numéro: ${numeroDossier}. Date limite: ${dateLimite}`,
       emailType: 'SOUS_RESERVE',
     });
   }
@@ -572,13 +579,15 @@ class EmailWorker {
    */
   async processQueue() {
     // 1. Récupérer jusqu'à 5 emails à traiter
+    // Note: Cette requête n'est pas atomique. Pour éviter le double traitement en multi-instance,
+    // utiliser une solution de lock distribué (Redis, PG advisory locks) en production.
     const emails = await prisma.emailDelivery.findMany({
       where: {
         OR: [
           { status: 'QUEUED' },
           {
             status: 'FAILED',
-            lastAttemptAt: { lt: new Date() },  // Retry programmé dans le passé
+            nextRetryAt: { lte: new Date() },  // Retry programmé dans le passé ou maintenant
           },
         ],
       },
@@ -603,26 +612,40 @@ class EmailWorker {
    */
   async processEmail(email) {
     try {
-      // 1. Mettre à jour le statut à PROCESSING
-      await prisma.emailDelivery.update({
-        where: { id: email.id },
+      // 1. Marquer l'email comme PROCESSING de manière atomique
+      // Cela évite le double traitement dans la même instance
+      const updated = await prisma.emailDelivery.updateMany({
+        where: {
+          id: email.id,
+          status: { in: ['QUEUED', 'FAILED'] },  // Seulement si pas déjà en traitement
+        },
         data: { status: 'PROCESSING' },
       });
 
+      // Si aucune ligne mise à jour, l'email est déjà pris par un autre cycle
+      if (updated.count === 0) {
+        console.log(`[EmailWorker] Email ${email.id} already being processed, skipping`);
+        return;
+      }
+
       // 2. Préparer le contenu de l'email
-      // Note: Dans une implémentation complète, récupérer htmlBody/textBody depuis une table séparée
       const mailOptions = {
         from: `${process.env.SMTP_FROM_NAME} <${process.env.SMTP_FROM_EMAIL}>`,
         to: email.recipient,
         subject: email.subject,
         html: email.htmlBody || '<p>Email content</p>',
-        // attachments: email.attachments  // À implémenter
+        text: email.textBody,
       };
 
-      // 3. Envoyer l'email
+      // 3. Ajouter les pièces jointes si présentes
+      if (email.attachments && Array.isArray(email.attachments)) {
+        mailOptions.attachments = email.attachments;
+      }
+
+      // 4. Envoyer l'email
       const info = await this.transporter.sendMail(mailOptions);
 
-      // 4. Mettre à jour le statut à SENT
+      // 5. Mettre à jour le statut à SENT
       await prisma.emailDelivery.update({
         where: { id: email.id },
         data: {
@@ -631,6 +654,7 @@ class EmailWorker {
           sentAt: new Date(),
           attempts: email.attempts + 1,
           lastAttemptAt: new Date(),
+          nextRetryAt: null,  // Plus de retry nécessaire
         },
       });
 
@@ -649,7 +673,8 @@ class EmailWorker {
           data: {
             status: 'FAILED',
             attempts: email.attempts + 1,
-            lastAttemptAt: nextRetry,
+            lastAttemptAt: new Date(),
+            nextRetryAt: nextRetry,
             errorMessage: error.message,
             smtpCode: error.code || null,
           },
@@ -664,6 +689,7 @@ class EmailWorker {
             status: 'FAILED',
             attempts: email.attempts + 1,
             lastAttemptAt: new Date(),
+            nextRetryAt: null,
             errorMessage: error.message,
             smtpCode: error.code || null,
           },
@@ -819,18 +845,22 @@ La table `EmailDelivery` existe déjà dans le schéma Prisma et sera utilisée 
 model EmailDelivery {
   id             String         @id @default(uuid())
   notificationId String?        // Peut être null pour emails legacy
-  userId         String
+  userId         String?        // Peut être null pour emails de confirmation (candidat pas encore créé)
   recipient      String
   subject        String
   status         DeliveryStatus @default(PENDING)
   messageId      String?        // ID du serveur SMTP
   attempts       Int            @default(0)
-  lastAttemptAt  DateTime?
+  lastAttemptAt  DateTime?      // Date de la dernière tentative réelle (traçabilité)
+  nextRetryAt    DateTime?      // Date de la prochaine tentative programmée
   sentAt         DateTime?
   deliveredAt    DateTime?
   bouncedAt      DateTime?
   errorMessage   String?        @db.Text
   smtpCode       String?
+  htmlBody       String?        @db.Text  // Contenu HTML de l'email
+  textBody       String?        @db.Text  // Contenu texte de l'email
+  attachments    Json?          // Array de { filename, path, contentType }
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -838,6 +868,7 @@ model EmailDelivery {
   @@index([userId])
   @@index([status])
   @@index([createdAt(sort: Desc)])
+  @@index([status, nextRetryAt])  // Index pour la requête du worker
 }
 
 enum DeliveryStatus {
@@ -852,39 +883,17 @@ enum DeliveryStatus {
 }
 ```
 
-### 3.2 Champs Additionnels Nécessaires
+### 3.2 Champs Additionnels
 
-Pour stocker le contenu HTML/Text et les pièces jointes, deux approches possibles :
+Les champs suivants ont été ajoutés à la table `EmailDelivery` existante :
 
-#### Approche 1 : Ajouter des champs à EmailDelivery (Simple)
+- `htmlBody` (TEXT) : Contenu HTML de l'email
+- `textBody` (TEXT, nullable) : Contenu texte alternatif
+- `attachments` (JSONB, nullable) : Array de pièces jointes `[{ filename, path, contentType }]`
+- `lastAttemptAt` (TIMESTAMP, nullable) : Date de la dernière tentative réelle (traçabilité)
+- `nextRetryAt` (TIMESTAMP, nullable) : Date de la prochaine tentative programmée
 
-```prisma
-model EmailDelivery {
-  // ... champs existants ...
-  htmlBody       String?        @db.Text
-  textBody       String?        @db.Text
-  attachments    Json?          // Array de { filename, path, contentType }
-}
-```
-
-#### Approche 2 : Table séparée EmailContent (Recommandé)
-
-```prisma
-model EmailContent {
-  id             String         @id @default(uuid())
-  emailId        String         @unique
-  htmlBody       String         @db.Text
-  textBody       String?        @db.Text
-  attachments    Json?
-  createdAt      DateTime       @default(now())
-  
-  email          EmailDelivery  @relation(fields: [emailId], references: [id], onDelete: Cascade)
-  
-  @@index([emailId])
-}
-```
-
-**Recommandation** : Utiliser l'Approche 1 pour simplifier l'implémentation initiale.
+**Note importante** : Le champ `userId` est maintenant nullable pour supporter les emails de confirmation (candidat pas encore créé).
 
 ### 3.3 Migration Prisma
 
@@ -895,6 +904,18 @@ model EmailContent {
 ALTER TABLE "EmailDelivery" ADD COLUMN "htmlBody" TEXT;
 ALTER TABLE "EmailDelivery" ADD COLUMN "textBody" TEXT;
 ALTER TABLE "EmailDelivery" ADD COLUMN "attachments" JSONB;
+
+-- Rename lastAttemptAt to nextRetryAt and add new lastAttemptAt
+ALTER TABLE "EmailDelivery" RENAME COLUMN "lastAttemptAt" TO "nextRetryAt";
+ALTER TABLE "EmailDelivery" ADD COLUMN "lastAttemptAt" TIMESTAMP;
+
+-- Make userId nullable for confirmation emails
+ALTER TABLE "EmailDelivery" ALTER COLUMN "userId" DROP NOT NULL;
+
+-- Add index for worker query optimization
+CREATE INDEX "idx_emaildelivery_status_nextretryat" 
+ON "EmailDelivery" (status, "nextRetryAt") 
+WHERE status IN ('QUEUED', 'FAILED');
 ```
 
 ## 4. API Specifications
@@ -1183,14 +1204,15 @@ async function detectAbuse(userId) {
 
 #### 7.1.1 Index Nécessaires
 ```sql
--- Index pour la requête du worker
-CREATE INDEX idx_emaildelivery_status_createdat 
-ON "EmailDelivery" (status, "createdAt") 
+-- Index pour la requête du worker (déjà créé dans la migration)
+CREATE INDEX idx_emaildelivery_status_nextretryat 
+ON "EmailDelivery" (status, "nextRetryAt") 
 WHERE status IN ('QUEUED', 'FAILED');
 
 -- Index pour le rate limiting
 CREATE INDEX idx_emaildelivery_userid_createdat 
-ON "EmailDelivery" ("userId", "createdAt");
+ON "EmailDelivery" ("userId", "createdAt")
+WHERE "userId" IS NOT NULL;
 
 -- Index pour les statistiques
 CREATE INDEX idx_emaildelivery_createdat_status 
@@ -1220,7 +1242,76 @@ cron.schedule('0 2 * * *', async () => {  // Tous les jours à 2h
 - Traiter 5 emails en parallèle par cycle
 - Utiliser `Promise.allSettled()` pour ne pas bloquer sur une erreur
 
-#### 7.2.2 Connection Pooling
+#### 7.2.2 Protection contre le Double Traitement
+
+**Single Instance** : Le guard `isProcessing` et la requête `updateMany` atomique protègent contre le double traitement dans une même instance.
+
+**Multi-Instance** : La solution actuelle n'est **pas thread-safe** entre plusieurs instances du serveur. Pour un déploiement multi-instance en production, implémenter une des solutions suivantes :
+
+**Option 1 : Redis Lock (Recommandé)**
+```javascript
+const Redis = require('ioredis');
+const redis = new Redis(process.env.REDIS_URL);
+
+async function acquireLock(emailId, ttl = 30000) {
+  const lockKey = `email:lock:${emailId}`;
+  const acquired = await redis.set(lockKey, '1', 'PX', ttl, 'NX');
+  return acquired === 'OK';
+}
+
+async function releaseLock(emailId) {
+  const lockKey = `email:lock:${emailId}`;
+  await redis.del(lockKey);
+}
+
+// Dans processEmail()
+if (await acquireLock(email.id)) {
+  try {
+    // Traiter l'email
+  } finally {
+    await releaseLock(email.id);
+  }
+} else {
+  console.log(`Email ${email.id} locked by another instance`);
+}
+```
+
+**Option 2 : PostgreSQL Advisory Locks**
+```javascript
+async function processEmailWithLock(email) {
+  // Utiliser l'ID de l'email comme clé de lock
+  const lockId = parseInt(email.id.replace(/-/g, '').substring(0, 8), 16);
+  
+  await prisma.$executeRaw`SELECT pg_advisory_lock(${lockId})`;
+  
+  try {
+    await processEmail(email);
+  } finally {
+    await prisma.$executeRaw`SELECT pg_advisory_unlock(${lockId})`;
+  }
+}
+```
+
+**Option 3 : Queue Dédiée (Bull, BullMQ)**
+```javascript
+const Queue = require('bull');
+const emailQueue = new Queue('email', process.env.REDIS_URL);
+
+// Producer (Email Service)
+await emailQueue.add({ emailId: email.id });
+
+// Consumer (Worker)
+emailQueue.process(5, async (job) => {
+  const email = await prisma.emailDelivery.findUnique({
+    where: { id: job.data.emailId }
+  });
+  await processEmail(email);
+});
+```
+
+**Recommandation** : Pour la v1, déployer en single instance. Pour la production multi-instance, utiliser Redis Lock (Option 1) pour sa simplicité et sa fiabilité.
+
+#### 7.2.3 Connection Pooling
 ```javascript
 // Réutiliser la connexion SMTP
 const transporter = nodemailer.createTransport({
@@ -1383,6 +1474,7 @@ describe('EmailWorker', () => {
           status: 'FAILED',
           attempts: 1,
           lastAttemptAt: expect.any(Date),
+          nextRetryAt: expect.any(Date),  // Prochaine tentative programmée
         }),
       });
     });
@@ -1606,12 +1698,18 @@ WHERE "createdAt" >= NOW() - INTERVAL '1 hour';
 ```bash
 # Vérifier que le cron job est actif
 curl http://localhost:3000/api/email/health
+
+# Vérifier les emails en attente
+SELECT COUNT(*) FROM "EmailDelivery" 
+WHERE status = 'QUEUED' 
+OR (status = 'FAILED' AND "nextRetryAt" <= NOW());
 ```
 
 **Solution** :
 1. Redémarrer le serveur
 2. Vérifier les logs pour les erreurs
 3. Vérifier que `EMAIL_QUEUE_ENABLED=true`
+4. Vérifier que `nextRetryAt` est correctement défini pour les emails FAILED
 
 ### 10.4 Maintenance
 
@@ -1625,7 +1723,7 @@ AND "sentAt" < NOW() - INTERVAL '90 days';
 #### Réessayer Manuellement un Email Échoué
 ```sql
 UPDATE "EmailDelivery"
-SET status = 'QUEUED', attempts = 0, "lastAttemptAt" = NULL
+SET status = 'QUEUED', attempts = 0, "nextRetryAt" = NULL, "lastAttemptAt" = NULL
 WHERE id = 'email-id';
 ```
 
@@ -1641,5 +1739,55 @@ WHERE status IN ('QUEUED', 'FAILED');
 ## Conclusion
 
 Ce design document fournit une architecture complète et détaillée pour le système d'email notifications performant. L'implémentation suit les principes de fiabilité, traçabilité, et performance définis dans les requirements, avec une approche pragmatique utilisant un cron job intégré pour simplifier le déploiement.
+
+### Corrections Appliquées (Bug Fixes)
+
+Ce document a été mis à jour pour corriger les bugs potentiels suivants :
+
+**[B1] Renommage `lastAttemptAt` → `nextRetryAt`**
+- ✅ Ajout de deux champs distincts : `lastAttemptAt` (traçabilité) et `nextRetryAt` (scheduling)
+- ✅ Mise à jour du schéma Prisma
+- ✅ Mise à jour de la requête du worker : `WHERE nextRetryAt <= NOW()`
+- ✅ Mise à jour de `calculateNextRetry()` pour retourner `nextRetryAt`
+- ✅ Mise à jour de la migration SQL
+
+**[B2] Persistance du contenu HTML/attachments**
+- ✅ Ajout des champs `htmlBody`, `textBody`, `attachments` au schéma
+- ✅ Mise à jour de `createEmail()` pour persister ces champs dans Prisma
+- ✅ Ajout de `textBody` dans toutes les méthodes d'envoi
+- ✅ Migration SQL pour ajouter les colonnes
+
+**[B3] Passage de `userId` pour rate limiting**
+- ✅ `userId` rendu nullable dans le schéma (pour emails de confirmation)
+- ✅ Ajout du paramètre `userId` à toutes les méthodes post-création :
+  - `envoyerEmailBienvenue({ ..., userId })`
+  - `envoyerEmailPreInscription({ ..., userId }, pdfPath)`
+  - `envoyerEmailConvocation({ ..., userId }, pdfPath)`
+  - `envoyerEmailRejet({ ..., userId })`
+  - `envoyerEmailSousReserve({ ..., userId })`
+- ✅ Rate limiting conditionnel : `if (userId) { await checkRateLimit(userId); }`
+
+**[B4] Chargement des champs dans le worker**
+- ✅ Les champs `htmlBody`, `textBody`, `attachments` sont maintenant dans la table principale
+- ✅ Le `findMany` du worker charge automatiquement tous les champs
+- ✅ Ajout de la gestion des attachments dans `mailOptions`
+
+**[B5] Protection contre le double traitement**
+- ✅ Utilisation de `updateMany` atomique avec condition `WHERE status IN ('QUEUED', 'FAILED')`
+- ✅ Vérification de `updated.count === 0` pour détecter les emails déjà pris
+- ✅ Documentation des limites multi-instance
+- ✅ Proposition de 3 solutions pour le déploiement multi-instance :
+  - Redis Lock (recommandé)
+  - PostgreSQL Advisory Locks
+  - Queue dédiée (Bull/BullMQ)
+
+### Architecture Finale
+
+L'architecture corrigée garantit :
+- ✅ **Fiabilité** : Retry automatique avec exponential backoff, protection contre le double traitement
+- ✅ **Traçabilité** : 100% des emails trackés avec `lastAttemptAt` et `nextRetryAt`
+- ✅ **Performance** : Cron job intégré, traitement parallèle, index optimisés
+- ✅ **Sécurité** : Rate limiting par utilisateur, validation des entrées, TLS
+- ✅ **Scalabilité** : Solution single-instance v1, path vers multi-instance documenté
 
 Les prochaines étapes consistent à créer le document `tasks.md` pour décomposer l'implémentation en tâches concrètes et actionnables.
