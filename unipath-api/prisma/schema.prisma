@@ -259,19 +259,23 @@ model NotificationTemplate {
 
 model EmailDelivery {
   id             String         @id @default(uuid())
-  notificationId String? // Peut être null pour emails legacy
-  userId         String
+  notificationId String?        // Peut être null pour emails legacy
+  userId         String?        // Peut être null pour emails de confirmation (candidat pas encore créé)
   recipient      String
   subject        String
   status         DeliveryStatus @default(PENDING)
-  messageId      String? // ID du serveur SMTP
+  messageId      String?        // ID du serveur SMTP
   attempts       Int            @default(0)
-  lastAttemptAt  DateTime?
+  lastAttemptAt  DateTime?      // Date de la dernière tentative réelle (traçabilité)
+  nextRetryAt    DateTime?      // Date de la prochaine tentative programmée
   sentAt         DateTime?
   deliveredAt    DateTime?
   bouncedAt      DateTime?
   errorMessage   String?        @db.Text
   smtpCode       String?
+  htmlBody       String?        @db.Text  // Contenu HTML de l'email
+  textBody       String?        @db.Text  // Contenu texte de l'email
+  attachments    Json?          // Array de { filename, path, contentType }
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -279,6 +283,7 @@ model EmailDelivery {
   @@index([userId])
   @@index([status])
   @@index([createdAt(sort: Desc)])
+  @@index([status, nextRetryAt])  // Index pour la requête du worker
 }
 
 enum DeliveryStatus {
