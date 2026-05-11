@@ -107,7 +107,7 @@ Le système doit être compatible avec l'infrastructure existante (Nodemailer, S
 4. THE Email_Service SHALL inclure dans l'email le nom et prénom du candidat, et le lien de confirmation avec le token
 5. WHEN le candidat clique sur le lien de confirmation, THE Auth_Controller SHALL valider le token et marquer le champ `emailConfirme` à `true`
 6. WHEN le token est expiré, THE Auth_Controller SHALL retourner une erreur et permettre au candidat de demander un nouveau lien
-7. THE Email_Service SHALL supprimer la méthode `envoyerEmailBienvenue` et fusionner son contenu dans `envoyerEmailConfirmation`
+7. WHEN un candidat confirme son email, THE Email_Service SHALL envoyer un email de bienvenue distinct avec son matricule, ses identifiants de connexion, et un lien vers la plateforme. THE Email_Service SHALL conserver la méthode `envoyerEmailBienvenue` appelée uniquement après confirmation du compte, et non à la création du compte
 
 ### Requirement 6: Email de Pré-Inscription avec PDF
 
@@ -162,7 +162,7 @@ Le système doit être compatible avec l'infrastructure existante (Nodemailer, S
 3. THE Email_Service SHALL utiliser la méthode `envoyerEmailSousReserve` avec la signature standardisée : `envoyerEmailSousReserve({ candidatEmail, candidatNom, candidatPrenom, concours, numeroDossier, motif })`
 4. WHEN l'email est envoyé avec succès, THE Email_Service SHALL enregistrer le type d'email `SOUS_RESERVE` dans la table `EmailDelivery`
 5. THE Email_Service SHALL formater les conditions de manière claire avec une liste à puces dans l'email
-6. THE Email_Service SHALL inclure dans l'email la date limite pour remplir les conditions (14 jours après la décision)
+6. THE Email_Service SHALL inclure dans l'email la date limite pour remplir les conditions (48 heures après la décision)
 7. WHEN les conditions ne sont pas fournies, THE Email_Service SHALL utiliser un message par défaut : "Veuillez compléter votre dossier selon les instructions de la commission"
 
 ### Requirement 10: Standardisation des Signatures de Méthodes
@@ -221,19 +221,19 @@ Le système doit être compatible avec l'infrastructure existante (Nodemailer, S
 6. THE Email_Service SHALL permettre le rollback vers le système synchrone en cas de problème critique en changeant la variable d'environnement
 7. THE Email_Service SHALL fournir un script de migration pour créer les index nécessaires sur la table `EmailDelivery` : index sur `status`, `userId`, `createdAt`
 
-### Requirement 14: Worker de Traitement de la File d'Attente
+### Requirement 14: Traitement de la File d'Attente via Cron Job Intégré
 
-**User Story:** En tant que système, je veux un worker dédié pour traiter la file d'attente d'emails, afin de séparer le traitement asynchrone de l'API principale.
+**User Story:** En tant que système, je veux un cron job intégré à l'API pour traiter la file d'attente d'emails, afin de simplifier le déploiement sans infrastructure supplémentaire.
 
 #### Acceptance Criteria
 
-1. THE Email_Worker SHALL être un processus Node.js séparé qui peut être démarré indépendamment de l'API principale
-2. THE Email_Worker SHALL interroger la table `EmailDelivery` toutes les 10 secondes pour récupérer les emails avec statut `QUEUED` ou `FAILED` (avec retry programmé)
-3. THE Email_Worker SHALL traiter jusqu'à 5 emails en parallèle pour optimiser le débit
+1. THE Email_Worker SHALL être implémenté comme un cron job intégré au processus Express principal en utilisant la librairie `node-cron`
+2. THE Email_Worker SHALL s'exécuter toutes les 10 secondes pour récupérer les emails avec statut `QUEUED` ou `FAILED` dont la prochaine tentative est programmée dans le passé
+3. THE Email_Worker SHALL traiter jusqu'à 5 emails par cycle pour éviter de surcharger le serveur SMTP
 4. THE Email_Worker SHALL mettre à jour le statut à `PROCESSING` avant de commencer l'envoi d'un email
 5. WHEN un email est envoyé avec succès, THE Email_Worker SHALL mettre à jour le statut à `SENT`, enregistrer le `messageId` et la date `sentAt`
 6. WHEN un email échoue à l'envoi, THE Email_Worker SHALL mettre à jour le statut à `FAILED`, enregistrer l'erreur, et programmer la prochaine tentative selon la stratégie de retry
-7. THE Email_Worker SHALL gérer gracieusement les arrêts (SIGTERM, SIGINT) en terminant les emails en cours avant de s'arrêter
+7. THE Email_Worker SHALL démarrer automatiquement au lancement de l'API Express et s'arrêter proprement lors de l'arrêt du serveur (SIGTERM, SIGINT)
 
 ### Requirement 15: Monitoring et Alertes
 
