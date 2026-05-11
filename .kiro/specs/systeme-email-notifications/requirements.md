@@ -271,7 +271,7 @@ Ce système d'email notifications est conçu pour s'intégrer avec le système d
 
 Le système utilise une architecture simple et pragmatique :
 - **Email Service** : Couche métier qui crée les entrées dans `EmailDelivery`
-- **Email Worker** : Processus séparé qui traite la queue et envoie les emails
+- **Email Worker** : Cron job intégré au processus Express principal via `node-cron` qui traite la queue et envoie les emails toutes les 10 secondes
 - **Retry Handler** : Logique de retry intégrée dans le worker
 - **Rate Limiter** : Middleware qui vérifie les limites avant la création d'emails
 
