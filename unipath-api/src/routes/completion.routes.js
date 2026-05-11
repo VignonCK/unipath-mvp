@@ -12,4 +12,7 @@ router.get('/stats/global', protect, checkRole(['COMMISSION', 'DGES', 'CONTROLEU
 router.get('/:candidatId', protect, completionController.getCompletion);
 router.get('/:candidatId/pieces', protect, completionController.getPiecesManquantes);
 
+// 🔒 Route pour Dossier Complet - Accessible par CANDIDAT (owner only), COMMISSION, CONTROLEUR, DGES
+router.get('/inscriptions/:inscriptionId/dossier-complet', protect, checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DGES']), completionController.getDossierComplet);
+
 module.exports = router;

@@ -107,6 +107,7 @@ export const concoursService = {
 };
 
 // ── Inscriptions ─────────────────────────────────────────────────
+// ✅ REFONTE - Documents spécifiques au concours (Dossier Concours)
 export const inscriptionService = {
   creer: (concoursId) =>
     request('/inscriptions', {
@@ -116,13 +117,17 @@ export const inscriptionService = {
 
   getMesInscriptions: () => request('/inscriptions/mes-inscriptions'),
 
+  // ✅ NOUVEAU - Récupérer le dossier complet d'une inscription (base + spécifique)
+  getDossierComplet: (inscriptionId) => request(`/completion/inscriptions/${inscriptionId}/dossier-complet`),
+
+  // ✅ NOUVEAU - Upload quittance (endpoint mis à jour)
   uploadQuittance: async (inscriptionId, fichier) => {
     const token = localStorage.getItem('token');
 
     const formData = new FormData();
-    formData.append('quittance', fichier);
+    formData.append('file', fichier);
 
-    const response = await fetch(`${BASE_URL}/inscriptions/${inscriptionId}/quittance`, {
+    const response = await fetch(`${BASE_URL}/inscriptions/${inscriptionId}/dossier-concours/quittance`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
@@ -133,12 +138,13 @@ export const inscriptionService = {
     return data;
   },
 
+  // ✅ NOUVEAU - Upload pièce extra (endpoint mis à jour)
   uploadPieceExtra: async (inscriptionId, typePiece, fichier) => {
     const token = localStorage.getItem('token');
     const formData = new FormData();
-    formData.append('fichier', fichier);
+    formData.append('file', fichier);
     formData.append('typePiece', typePiece);
-    const response = await fetch(`${BASE_URL}/inscriptions/${inscriptionId}/pieces-extras`, {
+    const response = await fetch(`${BASE_URL}/inscriptions/${inscriptionId}/dossier-concours/pieces-extras`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
@@ -150,16 +156,21 @@ export const inscriptionService = {
 };
 
 // ── Dossier ──────────────────────────────────────────────────────
+// ✅ REFONTE - Documents de base (Dossier Personnel)
 export const dossierService = {
-  uploadPiece: async (typePiece, fichier) => {
+  // ✅ NOUVEAU - Récupérer le dossier personnel d'un candidat
+  getDossierPersonnel: (candidatId) => request(`/dossier/candidats/${candidatId}/dossier-personnel`),
+
+  // ✅ NOUVEAU - Upload document de base (acteNaissance, carteIdentite, photo, releve)
+  uploadPiece: async (candidatId, typePiece, fichier) => {
     const token = localStorage.getItem('token');
 
     const formData = new FormData();
-    formData.append('fichier', fichier);
+    formData.append('file', fichier);
     formData.append('typePiece', typePiece);
 
-    const response = await fetch(`${BASE_URL}/dossier/upload`, {
-      method: 'POST',
+    const response = await fetch(`${BASE_URL}/dossier/candidats/${candidatId}/dossier-personnel/pieces`, {
+      method: 'PUT',
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
     });
@@ -169,6 +180,7 @@ export const dossierService = {
     return data;
   },
 
+  // ⚠️ DEPRECATED - Utiliser getDossierPersonnel à la place
   getDossier: () => request('/dossier'),
 };
 
@@ -228,4 +240,25 @@ export const convocationService = {
 
   telechargerPreinscription: (inscriptionId) =>
     telechargerPDF(`${BASE_URL}/candidats/preinscription/${inscriptionId}`, `preinscription_${inscriptionId}.pdf`),
+};
+
+// ── History ───────────────────────────────────────────────────────
+// ✅ REFONTE - Historique des actions (utilise dossierInscriptionId)
+export const historyService = {
+  // ✅ NOUVEAU - Enregistrer une action (avec dossierInscriptionId)
+  enregistrerAction: (dossierInscriptionId, typeAction, details = null) =>
+    request('/history/action', {
+      method: 'POST',
+      body: JSON.stringify({
+        dossierInscriptionId,
+        typeAction,
+        details,
+      }),
+    }),
+
+  // ✅ NOUVEAU - Récupérer l'historique d'un dossier d'inscription
+  getHistorique: (dossierInscriptionId, params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/history/dossiers-inscription/${dossierInscriptionId}?${query}`);
+  },
 };

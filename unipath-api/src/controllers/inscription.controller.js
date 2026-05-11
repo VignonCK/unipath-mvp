@@ -6,7 +6,7 @@ const { supabaseAdmin } = require('../supabase');
  */
 exports.creerInscription = async (req, res) => {
   try {
-    const { concoursId, piecesExtras } = req.body;
+    const { concoursId } = req.body;
     const candidatId = req.user.id;
 
     // Vérifier que le concours existe
@@ -30,14 +30,64 @@ exports.creerInscription = async (req, res) => {
       return res.status(400).json({ error: 'Vous êtes déjà inscrit à ce concours' });
     }
 
-    // Créer l'inscription
-    const inscription = await prisma.inscription.create({
-      data: {
-        candidatId,
-        concoursId,
-        statut: 'EN_ATTENTE',
-        piecesExtras: piecesExtras || {},
-      },
+    // Vérifier si le candidat a un Dossier, sinon le créer
+    let dossier = await prisma.dossier.findUnique({
+      where: { candidatId }
+    });
+
+    if (!dossier) {
+      dossier = await prisma.dossier.create({
+        data: { candidatId }
+      });
+    }
+
+    // Créer l'inscription + DossierInscription dans une transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Créer l'inscription
+      const inscription = await tx.inscription.create({
+        data: {
+          candidatId,
+          concoursId,
+        },
+      });
+
+      // Créer le DossierInscription automatiquement
+      const dossierInscription = await tx.dossierInscription.create({
+        data: {
+          inscriptionId: inscription.id,
+          statut: 'EN_ATTENTE',
+          piecesExtras: {},
+        },
+      });
+
+      // Créer une entrée dans l'historique
+      await tx.actionHistory.create({
+        data: {
+          utilisateurId: candidatId,
+          dossierInscriptionId: dossierInscription.id,
+          typeAction: 'DOSSIER_CONCOURS_CREE',
+          details: { concoursId, inscriptionId: inscription.id },
+          ipAddress: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
+          userAgent: req.headers['user-agent']
+        }
+      });
+
+      return { inscription, dossierInscription };
+    });
+
+    // Calculer la complétude initiale
+    const piecesBase = ['acteNaissance', 'carteIdentite', 'photo', 'releve'];
+    const piecesBasesPresentes = piecesBase.filter(p => dossier[p]).length;
+    
+    // Quittance + piecesExtras configurées par le concours
+    const piecesExtrasConfig = concours.piecesRequises?.extras || [];
+    const total = 4 + 1 + piecesExtrasConfig.length; // 4 base + 1 quittance + extras
+    const presentes = piecesBasesPresentes; // Initialement, seules les pièces de base peuvent être présentes
+    const completude = Math.round((presentes / total) * 100);
+
+    // Récupérer l'inscription complète avec relations
+    const inscriptionComplete = await prisma.inscription.findUnique({
+      where: { id: result.inscription.id },
       include: {
         concours: true,
         candidat: {
@@ -49,12 +99,18 @@ exports.creerInscription = async (req, res) => {
             email: true,
           },
         },
+        dossierInscription: true,
       },
     });
 
     res.status(201).json({
       message: 'Inscription créée avec succès',
-      inscription,
+      inscription: inscriptionComplete,
+      completude: {
+        pourcentage: completude,
+        piecesPresentes: presentes,
+        piecesRequises: total
+      }
     });
   } catch (error) {
     console.error('Erreur création inscription:', error);
@@ -226,18 +282,23 @@ exports.annulerInscription = async (req, res) => {
         id: inscriptionId,
         candidatId,
       },
+      include: {
+        dossierInscription: true
+      }
     });
 
     if (!inscription) {
       return res.status(404).json({ error: 'Inscription non trouvée ou non autorisée' });
     }
 
-    if (inscription.statut !== 'EN_ATTENTE') {
+    // Vérifier que le statut est EN_ATTENTE
+    if (inscription.dossierInscription && inscription.dossierInscription.statut !== 'EN_ATTENTE') {
       return res.status(400).json({
         error: 'Impossible d\'annuler une inscription déjà traitée',
       });
     }
 
+    // Supprimer l'inscription (cascade supprimera DossierInscription et ActionHistory)
     await prisma.inscription.delete({
       where: { id: inscriptionId },
     });

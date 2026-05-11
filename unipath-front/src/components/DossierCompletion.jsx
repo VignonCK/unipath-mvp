@@ -13,7 +13,7 @@ const PIECES_DOSSIER = [
   PIECE_IDS.RELEVE_NOTES,
 ];
 
-export default function DossierCompletion({ candidatId, dossier, onSoumettre }) {
+export default function DossierCompletion({ candidatId, dossier, onSoumettre, dossierInscriptionId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [soumission, setSoumission] = useState(false);
@@ -22,55 +22,87 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre }) 
 
   useEffect(() => {
     if (!candidatId) return;
-    if (dossier !== undefined) {
-      // ✅ Vérifier les pièces du dossier (mapping legacy → nouveau format)
-      const deposees = PIECES_DOSSIER.filter(pieceId => {
-        // Essayer avec l'ID standard (kebab-case)
-        if (dossier?.[pieceId]) return true;
-        
-        // Essayer avec l'ID legacy (camelCase) pour compatibilité
-        const legacyKey = Object.keys(PIECES_LABELS).find(
-          key => convertLegacyId(key) === pieceId
-        );
-        return legacyKey && dossier?.[legacyKey];
-      }).length;
+    
+    // ✅ REFONTE - Utiliser l'API getDossierPersonnel au lieu du calcul manuel
+    fetch(`${BASE_URL}/dossier/candidats/${candidatId}/dossier-personnel`, {
+      headers: getAuthHeaders()
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('Erreur API');
+        return res.json();
+      })
+      .then(apiData => {
+        const pourcentage = apiData.completude.pourcentage;
+        const estComplet = pourcentage === 100;
 
-      const pourcentage = Math.round((deposees / PIECES_DOSSIER.length) * 100);
-      const estComplet = pourcentage === 100;
+        if (estComplet && etaitIncomplet) {
+          setNotifVisible(true);
+          setTimeout(() => setNotifVisible(false), 5000);
+        }
+        setEtaitIncomplet(!estComplet);
 
-      if (estComplet && etaitIncomplet) {
-        setNotifVisible(true);
-        setTimeout(() => setNotifVisible(false), 5000);
-      }
-      setEtaitIncomplet(!estComplet);
+        const piecesManquantes = apiData.piecesBase
+          .filter(p => p.statut === 'manquante')
+          .map(p => p.type);
 
-      const piecesManquantes = PIECES_DOSSIER.filter(pieceId => {
-        if (dossier?.[pieceId]) return false;
-        const legacyKey = Object.keys(PIECES_LABELS).find(
-          key => convertLegacyId(key) === pieceId
-        );
-        return !(legacyKey && dossier?.[legacyKey]);
+        setData({
+          pourcentage,
+          piecesPresentes: apiData.completude.piecesPresentes,
+          piecesRequises: apiData.completude.piecesRequises,
+          piecesManquantes,
+          estComplet,
+        });
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Erreur getDossierPersonnel:', err);
+        // Fallback sur l'ancien calcul si l'API échoue
+        if (dossier !== undefined) {
+          const deposees = PIECES_DOSSIER.filter(pieceId => {
+            if (dossier?.[pieceId]) return true;
+            const legacyKey = Object.keys(PIECES_LABELS).find(
+              key => convertLegacyId(key) === pieceId
+            );
+            return legacyKey && dossier?.[legacyKey];
+          }).length;
+
+          const pourcentage = Math.round((deposees / PIECES_DOSSIER.length) * 100);
+          const estComplet = pourcentage === 100;
+
+          const piecesManquantes = PIECES_DOSSIER.filter(pieceId => {
+            if (dossier?.[pieceId]) return false;
+            const legacyKey = Object.keys(PIECES_LABELS).find(
+              key => convertLegacyId(key) === pieceId
+            );
+            return !(legacyKey && dossier?.[legacyKey]);
+          });
+
+          setData({
+            pourcentage,
+            piecesPresentes: deposees,
+            piecesRequises: PIECES_DOSSIER.length,
+            piecesManquantes,
+            estComplet,
+          });
+        }
+        setLoading(false);
       });
-
-      setData({
-        pourcentage,
-        piecesPresentes: deposees,
-        piecesRequises: PIECES_DOSSIER.length,
-        piecesManquantes,
-        estComplet,
-      });
-      setLoading(false);
-    }
   }, [candidatId, dossier, etaitIncomplet]);
 
   const handleSoumettre = async () => {
+    if (!dossierInscriptionId) {
+      console.error('dossierInscriptionId manquant');
+      return;
+    }
+    
     setSoumission(true);
     try {
+      // ✅ REFONTE - Utiliser dossierInscriptionId au lieu de dossierId
       await fetch(`${BASE_URL}/history/action`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
-          dossierId: dossier?.id,
+          dossierInscriptionId: dossierInscriptionId,
           typeAction: 'DOSSIER_SOUMIS',
           details: { message: 'Dossier soumis officiellement par le candidat' },
         }),
@@ -153,7 +185,7 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre }) 
         })}
       </div>
 
-      {estComplet && dossier?.id && (
+      {estComplet && dossierInscriptionId && (
         <button
           onClick={handleSoumettre}
           disabled={soumission}

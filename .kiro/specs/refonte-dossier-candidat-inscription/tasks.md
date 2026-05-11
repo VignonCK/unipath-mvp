@@ -17,7 +17,7 @@ This implementation plan refactors the database architecture to implement the **
 
 ### Phase 1: Database Schema Changes
 
-- [x] 1. Update Prisma schema to create DossierInscription table
+- [-] 1. Update Prisma schema to create DossierInscription table
   - Add new `DossierInscription` model with fields: id, inscriptionId (unique), quittanceUrl, piecesExtras (Json), statut (StatutDossier enum)
   - Add decision fields: commentaireRejet, commentaireSousReserve, decisionCommissionPar, decisionCommissionDate, decisionControleurPar, decisionControleurDate, commentaireControleur
   - Add timestamps: createdAt, updatedAt
@@ -43,7 +43,7 @@ This implementation plan refactors the database architecture to implement the **
   - Add relation to DossierInscription model
   - _Requirements: 4.1, 4.2, 4.3, 4.5_
 
-- [-] 4. Generate Prisma migration files
+- [x] 4. Generate Prisma migration files
   - Run `npx prisma migrate dev --name refonte-dossier-inscription --create-only` to generate migration SQL
   - Review generated SQL to ensure it matches the schema changes
   - Verify that indexes are created correctly
@@ -52,8 +52,8 @@ This implementation plan refactors the database architecture to implement the **
 
 ### Phase 2: Data Migration
 
-- [~] 5. Create data migration script for existing inscriptions
-  - [~] 5.1 Write migration script to create DossierInscription records
+- [x] 5. Create data migration script for existing inscriptions
+  - [x] 5.1 Write migration script to create DossierInscription records
     - For each existing Inscription, create a corresponding DossierInscription
     - Copy statut, quittanceUrl, piecesExtras from Inscription to DossierInscription
     - Copy decision fields (commentaireRejet, commentaireSousReserve, decisionCommissionPar, decisionCommissionDate, decisionControleurPar, decisionControleurDate, commentaireControleur)
@@ -61,14 +61,14 @@ This implementation plan refactors the database architecture to implement the **
     - Use Prisma transactions to ensure atomicity
     - _Requirements: 5.1, 5.2, 5.3_
 
-  - [~] 5.2 Write migration script to update ActionHistory references
+  - [x] 5.2 Write migration script to update ActionHistory references
     - Map old dossierId references to new dossierInscriptionId
     - For each ActionHistory record, find the corresponding DossierInscription via Inscription
     - Update the dossierInscriptionId field
     - Handle cases where dossierId doesn't map to a valid DossierInscription (log errors)
     - _Requirements: 4.4, 5.4, 14.4_
 
-  - [~] 5.3 Add migration validation and rollback logic
+  - [x] 5.3 Add migration validation and rollback logic
     - Verify that number of DossierInscription records equals number of Inscription records
     - Verify that all ActionHistory records have valid dossierInscriptionId references
     - Create database backup before migration using `pg_dump` or Prisma snapshot
@@ -76,7 +76,7 @@ This implementation plan refactors the database architecture to implement the **
     - Generate migration report with counts and any errors
     - _Requirements: 5.5, 5.6, 17.1, 17.2, 17.3, 17.4, 17.5, 17.6_
 
-- [~] 6. Execute migration with safety checks
+- [x] 6. Execute migration with safety checks
   - Create pre-migration database backup
   - Run migration script in transaction with savepoint
   - Validate data integrity after migration
@@ -86,8 +86,8 @@ This implementation plan refactors the database architecture to implement the **
 
 ### Phase 3: Controller Updates
 
-- [~] 7. Update dossier.controller.js with smart routing
-  - [~] 7.1 Implement uploadPiece with intelligent routing logic
+- [x] 7. Update dossier.controller.js with smart routing
+  - [x] 7.1 Implement uploadPiece with intelligent routing logic
     - Define PIECES_DOSSIER_BASE constant: ['acteNaissance', 'carteIdentite', 'photo', 'releve']
     - Route base documents (acteNaissance, carteIdentite, photo, releve) to Dossier table
     - Route quittance to DossierInscription.quittanceUrl
@@ -96,14 +96,14 @@ This implementation plan refactors the database architecture to implement the **
     - Validate that inscription belongs to the authenticated candidat
     - _Requirements: 11.1, 11.2, 11.3, 11.5_
 
-  - [~] 7.2 Implement multi-inscription impact for base document updates
+  - [x] 7.2 Implement multi-inscription impact for base document updates
     - When a base document is updated, retrieve all inscriptions for the candidat
     - Create ActionHistory entry for each DossierInscription with typeAction='PIECE_BASE_MISE_A_JOUR'
     - Return list of affected inscriptions in response
     - Include ipAddress and userAgent in ActionHistory entries
     - _Requirements: 11.4, 23.1, 23.2, 23.3_
 
-  - [~] 7.3 Implement getDossierPersonnel endpoint
+  - [x] 7.3 Implement getDossierPersonnel endpoint
     - Retrieve Dossier by candidatId with candidat relation
     - Check permissions: CANDIDAT (self only), COMMISSION, CONTROLEUR, DGES
     - Return 403 if candidat tries to access another candidat's dossier
@@ -121,8 +121,8 @@ This implementation plan refactors the database architecture to implement the **
     - Test permission checks for getDossierPersonnel
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
 
-- [~] 8. Update inscription.controller.js to auto-create DossierInscription
-  - [~] 8.1 Modify creerInscription to create DossierInscription automatically
+- [ ] 8. Update inscription.controller.js to auto-create DossierInscription
+  - [x] 8.1 Modify creerInscription to create DossierInscription automatically
     - Check if candidat has a Dossier, create empty one if not
     - Use Prisma transaction to create Inscription + DossierInscription atomically
     - Initialize DossierInscription with statut='EN_ATTENTE', piecesExtras={}
@@ -131,7 +131,7 @@ This implementation plan refactors the database architecture to implement the **
     - Return inscription with dossierInscription and completude in response
     - _Requirements: 10.1, 10.2, 10.3, 14.1, 14.5_
 
-  - [~] 8.2 Update annulerInscription to handle cascade deletion
+  - [x] 8.2 Update annulerInscription to handle cascade deletion
     - Verify inscription belongs to authenticated candidat
     - Check that DossierInscription.statut is 'EN_ATTENTE' (cannot cancel processed inscriptions)
     - Delete Inscription (cascade will delete DossierInscription and ActionHistory)
@@ -147,8 +147,8 @@ This implementation plan refactors the database architecture to implement the **
     - Test annulerInscription rejects deletion if statut is not EN_ATTENTE
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
 
-- [~] 9. Update completion.controller.js with implicit reference logic
-  - [~] 9.1 Implement getCompletionInscription with implicit reference
+- [x] 9. Update completion.controller.js with implicit reference logic
+  - [x] 9.1 Implement getCompletionInscription with implicit reference
     - Retrieve Inscription with include: { candidat: { include: { dossier: true } }, concours, dossierInscription }
     - Check permissions: CANDIDAT (self only), COMMISSION, CONTROLEUR, DGES
     - Extract 4 base documents from inscription.candidat.dossier (implicit reference)
@@ -157,7 +157,7 @@ This implementation plan refactors the database architecture to implement the **
     - Calculate global percentage: (piecesBasesPresentes + quittancePresente + piecesExtrasPresentes) / (4 + 1 + nombrePiecesExtras) * 100
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 8.1, 8.2, 8.3, 8.4, 8.5_
 
-  - [~] 9.2 Structure response with source indicators
+  - [x] 9.2 Structure response with source indicators
     - Return piecesBase array with source='dossier_personnel', statut, url, uploadedAt
     - Return piecesSpecifiques array with source='dossier_concours', statut, url, uploadedAt, obligatoire
     - Include completudeGlobale with pourcentage, piecesPresentes, piecesRequises, estComplet
@@ -165,7 +165,7 @@ This implementation plan refactors the database architecture to implement the **
     - Include permissions object indicating peutModifier and peutVoirDetails
     - _Requirements: 6.5, 7.3, 8.4_
 
-  - [~] 9.3 Implement getDossierComplet endpoint
+  - [x] 9.3 Implement getDossierComplet endpoint
     - Use same logic as getCompletionInscription
     - Add decision information: decisionCommission (par, date, commentaires), decisionControleur (par, date, commentaire)
     - Return complete aggregated view with base documents + specific documents + status + decisions
@@ -180,8 +180,8 @@ This implementation plan refactors the database architecture to implement the **
     - Test permission checks for both endpoints
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 8.1, 8.2, 8.3, 8.4, 8.5_
 
-- [~] 10. Update history.controller.js to use dossierInscriptionId
-  - [~] 10.1 Update getHistorique to use dossierInscriptionId
+- [x] 10. Update history.controller.js to use dossierInscriptionId
+  - [x] 10.1 Update getHistorique to use dossierInscriptionId
     - Accept dossierInscriptionId as route parameter
     - Retrieve DossierInscription with include: { inscription: { include: { candidat, concours } } }
     - Check permissions: COMMISSION, CONTROLEUR, DGES only
@@ -190,7 +190,7 @@ This implementation plan refactors the database architecture to implement the **
     - Include inscription details (numeroInscription, candidat, concours) in response
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
 
-  - [~] 10.2 Update enregistrerAction to use dossierInscriptionId
+  - [x] 10.2 Update enregistrerAction to use dossierInscriptionId
     - Accept dossierInscriptionId in request body
     - Verify DossierInscription exists
     - Check role-based permissions for typeAction (CANDIDAT, COMMISSION, CONTROLEUR, DGES)
@@ -209,14 +209,14 @@ This implementation plan refactors the database architecture to implement the **
 
 ### Phase 4: API Endpoint Updates
 
-- [~] 11. Create new API routes for Dossier Personnel
+- [x] 11. Create new API routes for Dossier Personnel
   - Add GET /api/candidats/:candidatId/dossier-personnel route (getDossierPersonnel)
   - Add PUT /api/candidats/:candidatId/dossier-personnel/pieces route (uploadPiece with base document routing)
   - Apply authentication middleware to both routes
   - Apply permission checks: CANDIDAT (self only), COMMISSION, CONTROLEUR, DGES
   - _Requirements: 7.1, 7.4_
 
-- [~] 12. Create new API routes for Dossier Concours
+- [x] 12. Create new API routes for Dossier Concours
   - Add GET /api/inscriptions/:inscriptionId/dossier-complet route (getDossierComplet)
   - Add POST /api/inscriptions/:inscriptionId/dossier-concours/quittance route (uploadPiece with quittance routing)
   - Add POST /api/inscriptions/:inscriptionId/dossier-concours/pieces-extras route (uploadPiece with piecesExtras routing)
@@ -224,20 +224,20 @@ This implementation plan refactors the database architecture to implement the **
   - Apply permission checks: CANDIDAT (owner only), COMMISSION, CONTROLEUR, DGES
   - _Requirements: 7.2, 7.5, 7.6_
 
-- [~] 13. Update existing API routes for ActionHistory
+- [x] 13. Update existing API routes for ActionHistory
   - Update GET /api/dossiers-inscription/:dossierInscriptionId/historique route (getHistorique)
   - Update POST /api/action-history route (enregistrerAction) to use dossierInscriptionId
   - Apply authentication middleware
   - Apply permission checks: COMMISSION, CONTROLEUR, DGES only
   - _Requirements: 9.1, 9.2_
 
-- [~] 14. Checkpoint - Verify API routes and test endpoints
+- [x] 14. Checkpoint - Verify API routes and test endpoints
   - Ensure all tests pass, ask the user if questions arise.
 
 ### Phase 5: Testing and Validation
 
-- [~] 15. Create integration tests for complete workflows
-  - [~] 15.1 Test first inscription workflow (upload base documents + specific documents)
+- [ ] 15. Create integration tests for complete workflows
+  - [ ] 15.1 Test first inscription workflow (upload base documents + specific documents)
     - Create candidat and authenticate
     - Create inscription (should auto-create DossierInscription)
     - Upload 4 base documents to Dossier Personnel
@@ -246,7 +246,7 @@ This implementation plan refactors the database architecture to implement the **
     - Verify ActionHistory entries are created
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 10.1, 10.2, 10.3_
 
-  - [~] 15.2 Test subsequent inscription workflow (reuse base documents)
+  - [ ] 15.2 Test subsequent inscription workflow (reuse base documents)
     - Create second inscription for same candidat
     - Verify base documents are automatically referenced (no re-upload needed)
     - Upload only quittance for second inscription
@@ -254,14 +254,14 @@ This implementation plan refactors the database architecture to implement the **
     - Verify both inscriptions share the same Dossier
     - _Requirements: 1.3, 1.4, 6.1, 6.2_
 
-  - [~] 15.3 Test base document update impact on multiple inscriptions
+  - [ ] 15.3 Test base document update impact on multiple inscriptions
     - Update a base document (e.g., carteIdentite) in Dossier Personnel
     - Verify ActionHistory entries created for all DossierInscription records
     - Verify completude updated for all inscriptions
     - Verify notification sent to candidat about multi-inscription impact
     - _Requirements: 1.5, 11.4, 23.1, 23.2, 23.3_
 
-  - [~] 15.4 Test aggregated view for commission
+  - [ ] 15.4 Test aggregated view for commission
     - Authenticate as COMMISSION member
     - Retrieve dossier-complet for an inscription
     - Verify response includes base documents (from Dossier) and specific documents (from DossierInscription)
@@ -269,65 +269,65 @@ This implementation plan refactors the database architecture to implement the **
     - Verify decision fields are included
     - _Requirements: 7.2, 7.3, 22.1, 22.2, 22.3, 22.4, 22.5_
 
-- [~] 16. Create non-regression tests
-  - [~] 16.1 Test that each Inscription has a DossierInscription
+- [ ] 16. Create non-regression tests
+  - [ ] 16.1 Test that each Inscription has a DossierInscription
     - Query all Inscriptions with include: { dossierInscription: true }
     - Verify every Inscription has a non-null dossierInscription
     - _Requirements: 12.1_
 
-  - [~] 16.2 Test that ActionHistory references valid DossierInscription
+  - [ ] 16.2 Test that ActionHistory references valid DossierInscription
     - Query all ActionHistory records with include: { dossierInscription: true }
     - Verify every ActionHistory has a valid dossierInscription reference
     - _Requirements: 12.2_
 
-  - [~] 16.3 Test completude calculation consistency
+  - [ ] 16.3 Test completude calculation consistency
     - For a sample of inscriptions, calculate completude manually and compare with API result
     - Verify percentage matches expected value
     - Verify piecesPresentes and piecesRequises counts are correct
     - _Requirements: 12.3_
 
-  - [~] 16.4 Test API endpoints return correct data structure
+  - [ ] 16.4 Test API endpoints return correct data structure
     - Test GET /api/candidats/:candidatId/dossier-personnel returns expected structure
     - Test GET /api/inscriptions/:inscriptionId/dossier-complet returns expected structure
     - Test GET /api/dossiers-inscription/:dossierInscriptionId/historique returns expected structure
     - _Requirements: 12.4_
 
-- [~] 17. Test error handling and edge cases
-  - [~] 17.1 Test inscription creation without Dossier
+- [ ] 17. Test error handling and edge cases
+  - [ ] 17.1 Test inscription creation without Dossier
     - Create inscription for candidat without Dossier
     - Verify empty Dossier is created automatically
     - Verify completude shows 0% for base documents
     - _Requirements: 14.1_
 
-  - [~] 17.2 Test base document deletion impact
+  - [ ] 17.2 Test base document deletion impact
     - Delete a base document from Dossier Personnel
     - Verify completude updated for all inscriptions
     - Verify ActionHistory entries created
     - _Requirements: 14.2_
 
-  - [~] 17.3 Test concours without piecesExtras
+  - [ ] 17.3 Test concours without piecesExtras
     - Create inscription for concours with no piecesExtras configured
     - Verify completude calculation uses only 4 base + 1 quittance = 5 total
     - _Requirements: 14.3_
 
-  - [~] 17.4 Test permission checks
+  - [ ] 17.4 Test permission checks
     - Test candidat cannot access another candidat's dossier (should return 403)
     - Test candidat cannot modify DossierInscription status (should return 403)
     - Test COMMISSION can access all dossiers
     - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5_
 
-  - [~] 17.5 Test file validation
+  - [ ] 17.5 Test file validation
     - Test upload with invalid file type (should return 400)
     - Test upload with file too large (should return 400)
     - Test upload without file (should return 400)
     - _Requirements: 19.1, 19.2, 19.3, 19.4, 19.5_
 
-- [~] 18. Checkpoint - Ensure all tests pass
+- [ ] 18. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ### Phase 6: Documentation and Deployment
 
-- [~] 19. Create migration documentation
+- [ ] 19. Create migration documentation
   - Document the "Upload Once, Use Everywhere" principle with diagrams
   - Explain the difference between Dossier_Personnel (base documents) and Dossier_Concours (specific documents)
   - Document the implicit reference mechanism: Inscription → Candidat → Dossier
@@ -335,7 +335,7 @@ This implementation plan refactors the database architecture to implement the **
   - Include code examples for common use cases (first inscription, subsequent inscription, base document update)
   - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5_
 
-- [~] 20. Update API documentation
+- [ ] 20. Update API documentation
   - Document GET /api/candidats/:candidatId/dossier-personnel endpoint
   - Document PUT /api/candidats/:candidatId/dossier-personnel/pieces endpoint
   - Document GET /api/inscriptions/:inscriptionId/dossier-complet endpoint
@@ -345,7 +345,7 @@ This implementation plan refactors the database architecture to implement the **
   - Include authentication requirements, permission checks, request/response schemas
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 9.1, 9.2_
 
-- [~] 21. Create deployment checklist
+- [ ] 21. Create deployment checklist
   - Verify database backup is created before migration
   - Verify migration script is tested on staging environment
   - Verify rollback script is ready and tested
@@ -354,7 +354,7 @@ This implementation plan refactors the database architecture to implement the **
   - Create deployment runbook with step-by-step instructions
   - _Requirements: 17.1, 17.2, 20.1, 20.2, 20.3, 20.4, 20.5_
 
-- [~] 22. Configure monitoring and alerts
+- [ ] 22. Configure monitoring and alerts
   - Set up logging for migration script execution
   - Set up alerts for migration failures
   - Set up alerts if DossierInscription count doesn't match Inscription count
@@ -362,7 +362,7 @@ This implementation plan refactors the database architecture to implement the **
   - Configure email notifications for DGES administrators on critical errors
   - _Requirements: 20.1, 20.2, 20.3, 20.4, 20.5_
 
-- [~] 23. Final checkpoint - Review and deploy
+- [ ] 23. Final checkpoint - Review and deploy
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

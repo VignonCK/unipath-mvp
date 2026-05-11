@@ -104,7 +104,8 @@ export default function DetailConcours() {
       if (piece === 'quittance') {
         await inscriptionService.uploadQuittance(inscription.id, fichier);
       } else if (PIECES_DOSSIER_BASE[piece]) {
-        await dossierService.uploadPiece(piece, fichier);
+        // ✅ REFONTE - Passer candidatId pour les documents de base
+        await dossierService.uploadPiece(candidat.id, piece, fichier);
       } else {
         await inscriptionService.uploadPieceExtra(inscription.id, piece, fichier);
       }

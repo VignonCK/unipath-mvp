@@ -3,23 +3,43 @@ const prisma = require('../prisma');
 
 exports.getHistorique = async (req, res) => {
   try {
-    const { dossierId } = req.params;
+    const { dossierInscriptionId } = req.params;
     const { dateDebut, dateFin, utilisateur, typeAction, limite = 50, offset = 0 } = req.query;
+    const userRole = req.user?.role;
 
-    const dossier = await prisma.dossier.findUnique({
-      where: { id: dossierId },
-      include: { candidat: { select: { nom: true, prenom: true, email: true } } }
+    // Check permissions: COMMISSION, CONTROLEUR, DGES only
+    if (!['COMMISSION', 'CONTROLEUR', 'DGES'].includes(userRole)) {
+      return res.status(403).json({ 
+        error: 'Accès refusé. Seuls les membres de la commission, contrôleurs et DGES peuvent consulter l\'historique.' 
+      });
+    }
+
+    // Retrieve DossierInscription with inscription details
+    const dossierInscription = await prisma.dossierInscription.findUnique({
+      where: { id: dossierInscriptionId },
+      include: { 
+        inscription: { 
+          include: { 
+            candidat: { select: { nom: true, prenom: true, email: true } },
+            concours: { select: { nom: true, annee: true } }
+          } 
+        } 
+      }
     });
 
-    if (!dossier) return res.status(404).json({ error: 'Dossier non trouvé' });
+    if (!dossierInscription) {
+      return res.status(404).json({ error: 'Dossier d\'inscription non trouvé' });
+    }
 
-    const whereClause = { dossierId };
+    // Build WHERE clause with dossierInscriptionId and optional filters
+    const whereClause = { dossierInscriptionId };
     if (dateDebut && dateFin) {
       whereClause.timestamp = { gte: new Date(dateDebut), lte: new Date(dateFin) };
     }
     if (utilisateur) whereClause.utilisateurId = utilisateur;
     if (typeAction) whereClause.typeAction = typeAction;
 
+    // Retrieve actions with pagination
     const [actions, total] = await Promise.all([
       prisma.actionHistory.findMany({
         where: whereClause,
@@ -30,16 +50,22 @@ exports.getHistorique = async (req, res) => {
       prisma.actionHistory.count({ where: whereClause })
     ]);
 
+    // Return actions with inscription details
     res.json({
-      dossierId,
+      dossierInscriptionId,
+      inscription: {
+        id: dossierInscription.inscription.id,
+        numeroInscription: dossierInscription.inscription.numeroInscription,
+        candidat: dossierInscription.inscription.candidat,
+        concours: dossierInscription.inscription.concours
+      },
       actions,
       pagination: {
         total,
         limite: parseInt(limite),
         offset: parseInt(offset),
         pages: Math.ceil(total / parseInt(limite))
-      },
-      dossier: { id: dossier.id, candidat: dossier.candidat }
+      }
     });
 
   } catch (error) {
@@ -50,19 +76,29 @@ exports.getHistorique = async (req, res) => {
 
 exports.enregistrerAction = async (req, res) => {
   try {
-    const { dossierId, typeAction, details } = req.body;
+    const { dossierInscriptionId, typeAction, details } = req.body;
     const utilisateurId = req.user.id;
-    const userRole = req.user.role; // ✅ fix
+    const userRole = req.user.role;
 
-    if (!dossierId || !typeAction) {
-      return res.status(400).json({ error: 'dossierId et typeAction sont obligatoires' });
+    if (!dossierInscriptionId || !typeAction) {
+      return res.status(400).json({ error: 'dossierInscriptionId et typeAction sont obligatoires' });
     }
 
+    // Verify DossierInscription exists
+    const dossierInscription = await prisma.dossierInscription.findUnique({
+      where: { id: dossierInscriptionId }
+    });
+
+    if (!dossierInscription) {
+      return res.status(404).json({ error: 'Dossier d\'inscription non trouvé' });
+    }
+
+    // Check role-based permissions for typeAction
     const actionsAutorisees = {
-      'CANDIDAT':   ['DOSSIER_CREE', 'PIECE_AJOUTEE', 'PIECE_SUPPRIMEE', 'DOSSIER_SOUMIS', 'DOSSIER_MODIFIE'],
-      'COMMISSION': ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE'],
-      'DGES':       ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE'],
-      'CONTROLEUR': ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE'], // ✅ ajouté
+      'CANDIDAT':   ['DOSSIER_CONCOURS_CREE', 'PIECE_AJOUTEE', 'PIECE_SUPPRIMEE', 'DOSSIER_SOUMIS', 'DOSSIER_MODIFIE', 'PIECE_BASE_MISE_A_JOUR'],
+      'COMMISSION': ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_COMMISSION'],
+      'DGES':       ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_COMMISSION', 'DECISION_CONTROLEUR'],
+      'CONTROLEUR': ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_CONTROLEUR'],
     };
 
     if (!actionsAutorisees[userRole]?.includes(typeAction)) {
@@ -72,11 +108,24 @@ exports.enregistrerAction = async (req, res) => {
     const ipAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'unknown';
     const userAgent = req.headers['user-agent'] || 'unknown';
 
+    // Create ActionHistory with dossierInscriptionId
     const action = await prisma.actionHistory.create({
-      data: { utilisateurId, dossierId, typeAction, details: details || null, ipAddress, userAgent, timestamp: new Date() }
+      data: { 
+        utilisateurId, 
+        dossierInscriptionId, 
+        typeAction, 
+        details: details || null, 
+        ipAddress, 
+        userAgent, 
+        timestamp: new Date() 
+      }
     });
 
-    res.status(201).json({ message: 'Action enregistrée avec succès', actionId: action.id, timestamp: action.timestamp });
+    res.status(201).json({ 
+      message: 'Action enregistrée avec succès', 
+      actionId: action.id, 
+      timestamp: action.timestamp 
+    });
 
   } catch (error) {
     console.error('Erreur enregistrerAction:', error);
@@ -145,11 +194,11 @@ exports.exporterCSV = async (req, res) => {
       });
     }
 
-    const { dossierId } = req.params;
+    const { dossierInscriptionId } = req.params;
     const { dateDebut, dateFin, utilisateur, typeAction } = req.query;
 
     const whereClause = {};
-    if (dossierId) whereClause.dossierId = dossierId;
+    if (dossierInscriptionId) whereClause.dossierInscriptionId = dossierInscriptionId;
     if (dateDebut && dateFin) {
       whereClause.timestamp = { gte: new Date(dateDebut), lte: new Date(dateFin) };
     }
@@ -161,7 +210,7 @@ exports.exporterCSV = async (req, res) => {
       orderBy: { timestamp: 'desc' }
     });
 
-    const headers = ['ID', 'Date/Heure', 'Utilisateur', 'Dossier', 'Action', 'Détails', 'IP'];
+    const headers = ['ID', 'Date/Heure', 'Utilisateur', 'DossierInscription', 'Action', 'Détails', 'IP'];
     const csvLines = [headers.join(',')];
 
     actions.forEach(action => {
@@ -169,7 +218,7 @@ exports.exporterCSV = async (req, res) => {
         action.id,
         action.timestamp.toISOString(),
         action.utilisateurId,
-        action.dossierId,
+        action.dossierInscriptionId,
         action.typeAction,
         action.details ? JSON.stringify(action.details).replace(/"/g, '""') : '',
         action.ipAddress || ''
@@ -179,8 +228,8 @@ exports.exporterCSV = async (req, res) => {
 
     const csvContent = csvLines.join('\n');
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = dossierId
-      ? `historique_dossier_${dossierId}_${timestamp}.csv`
+    const filename = dossierInscriptionId
+      ? `historique_dossier_inscription_${dossierInscriptionId}_${timestamp}.csv`
       : `historique_global_${timestamp}.csv`;
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
