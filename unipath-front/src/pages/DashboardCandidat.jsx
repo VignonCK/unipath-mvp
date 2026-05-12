@@ -7,6 +7,7 @@ import {
 } from '../services/api';
 import DossierCompletion from '../components/DossierCompletion';
 import CandidatLayout from '../components/CandidatLayout';
+import { BentoCard, GlassBadge, ProgressBar } from '../components/AcademicLayout';
 
 function initiales(prenom, nom) {
   return `${(prenom || '?')[0]}${(nom || '?')[0]}`.toUpperCase();
@@ -281,7 +282,7 @@ export default function DashboardCandidat() {
         )}
 
         {/* CARTE PROFIL */}
-        <div id='profil' className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
+        <BentoCard className='p-0 overflow-hidden animate-slide-in'>
           <div className='h-12 sm:h-16 bg-gradient-to-r from-blue-900 to-blue-800' />
           <div className='px-4 sm:px-6 pb-4 sm:pb-6'>
             <div className='flex items-end justify-between gap-2 -mt-6 sm:-mt-8 mb-4 flex-wrap'>
@@ -325,14 +326,14 @@ export default function DashboardCandidat() {
                 { label: 'Naissance', value: candidat?.dateNaiss ? new Date(candidat.dateNaiss).toLocaleDateString('fr-FR') : <span className='text-orange-500 text-xs'>Non renseigné</span> },
                 { label: 'Lieu',      value: candidat?.lieuNaiss || <span className='text-orange-500 text-xs'>Non renseigné</span> },
               ].map(({ label, value }) => (
-                <div key={label} className='bg-gray-50 rounded-xl px-4 py-3'>
+                <div key={label} className='glass-card-subtle px-4 py-3'>
                   <p className='text-xs text-gray-400 mb-0.5'>{label}</p>
                   <p className='text-sm font-medium text-gray-800'>{value}</p>
                 </div>
               ))}
             </div>
           </div>
-        </div>
+        </BentoCard>
 
         {/* COMPLÉTUDE DU DOSSIER */}
         <DossierCompletion
@@ -346,12 +347,12 @@ export default function DashboardCandidat() {
         />
 
         {/* MES INSCRIPTIONS */}
-        <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
+        <BentoCard className='p-6 animate-slide-in'>
           <div className='flex items-center justify-between mb-4'>
             <h2 className='text-base font-bold text-gray-800'>Mes inscriptions</h2>
-            <span className='text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium'>
+            <GlassBadge variant='default' className='font-medium'>
               {candidat?.inscriptions?.length || 0}
-            </span>
+            </GlassBadge>
           </div>
 
           {!candidat?.inscriptions?.length ? (
@@ -363,7 +364,7 @@ export default function DashboardCandidat() {
                 return (
                   <div 
                     key={ins.id} 
-                    className='flex overflow-hidden rounded-xl border border-gray-100 hover:shadow-sm transition cursor-pointer'
+                    className='flex overflow-hidden glass-card-subtle hover:shadow-lg transition cursor-pointer'
                     onClick={() => navigate(`/inscription/${ins.id}`)}
                   >
                     <div className={`w-1.5 flex-shrink-0 ${cfg.bar}`} />
@@ -371,13 +372,13 @@ export default function DashboardCandidat() {
                       <div>
                         <p className='font-semibold text-gray-800 text-sm'>{ins.concours?.libelle}</p>
                         <div className='flex items-center gap-2 mt-1 flex-wrap'>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cfg.badge}`}>
+                          <GlassBadge variant={ins.statut === 'VALIDE' ? 'success' : ins.statut === 'REJETE' ? 'error' : 'warning'}>
                             {cfg.label}
-                          </span>
+                          </GlassBadge>
                           {ins.numeroInscription && (
-                            <span className='text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-mono font-medium'>
+                            <GlassBadge variant='info' className='font-mono'>
                               {ins.numeroInscription}
-                            </span>
+                            </GlassBadge>
                           )}
                           <span className='text-xs text-gray-400'>
                             {new Date(ins.createdAt).toLocaleDateString('fr-FR')}
@@ -387,7 +388,7 @@ export default function DashboardCandidat() {
                       <div className='flex items-center gap-2'>
                         <button
                           onClick={(e) => { e.stopPropagation(); navigate(`/inscription/${ins.id}`); }}
-                          className='text-xs border border-gray-200 text-gray-600 px-3 py-2 rounded-lg hover:bg-gray-50 transition'
+                          className='btn-glass text-xs px-3 py-2'
                         >
                           Voir détails
                         </button>
@@ -398,26 +399,26 @@ export default function DashboardCandidat() {
               })}
             </div>
           )}
-        </div>
+        </BentoCard>
 
         {/* CONCOURS DISPONIBLES */}
-        <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
+        <BentoCard className='p-6 animate-slide-in'>
           <div className='flex items-center justify-between mb-4'>
             <h2 className='text-base font-bold text-gray-800'>Concours disponibles</h2>
-            <span className='text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium'>
+            <GlassBadge variant='warning' className='font-medium'>
               {concours.length}
-            </span>
+            </GlassBadge>
           </div>
 
           {!concours.length ? (
             <p className='text-center text-gray-400 text-sm py-6'>Aucun concours disponible.</p>
           ) : (
-            <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
+            <BentoGrid columns='auto-fit'>
               {concours.map((c) => {
                 const dejaInscrit = candidat?.inscriptions?.some(i => i.concoursId === c.id);
                 const peutInscrire = !incomplet && !dossierIncomplet;
                 return (
-                  <div key={c.id} className='border border-gray-100 rounded-xl p-4 hover:shadow-sm transition flex flex-col gap-3'>
+                  <div key={c.id} className='glass-card-subtle p-4 hover:shadow-lg transition flex flex-col gap-3'>
                     <div>
                       <p className='font-semibold text-gray-800 text-sm'>{c.libelle}</p>
                       <p className='text-xs text-gray-400 mt-1'>
@@ -425,9 +426,9 @@ export default function DashboardCandidat() {
                       </p>
                     </div>
                     {dejaInscrit ? (
-                      <span className='text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg text-center font-medium'>
+                      <GlassBadge variant='success' className='text-center w-full justify-center'>
                         Inscrit
-                      </span>
+                      </GlassBadge>
                     ) : (
                       <button
                         onClick={() => handleInscription(c.id)}
@@ -445,12 +446,12 @@ export default function DashboardCandidat() {
                   </div>
                 );
               })}
-            </div>
+            </BentoGrid>
           )}
-        </div>
+        </BentoCard>
 
         {/* PIÈCES JUSTIFICATIVES */}
-        <div id='pieces-justificatives' className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
+        <BentoCard id='pieces-justificatives' className='p-6 animate-slide-in'>
           <h2 className='text-base font-bold text-gray-800 mb-4'>Pièces justificatives</h2>
           <div className='space-y-2'>
             {Object.entries(PIECES_LABELS).map(([key, label]) => {
@@ -459,8 +460,8 @@ export default function DashboardCandidat() {
               const isLoading = status === 'loading';
               const isOk = estDepose || status === 'ok';
               return (
-                <div key={key} className={`flex items-center justify-between px-4 py-3 rounded-xl border transition ${
-                  isOk ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
+                <div key={key} className={`flex items-center justify-between px-4 py-3 glass-card-subtle transition ${
+                  isOk ? 'border-l-4 border-green-500' : 'border-l-4 border-gray-300'
                 }`}>
                   <div className='flex items-center gap-3'>
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isOk ? 'bg-green-500' : 'bg-gray-300'}`} />
@@ -480,14 +481,14 @@ export default function DashboardCandidat() {
               );
             })}
           </div>
-        </div>
+        </BentoCard>
 
       </div>
 
       {/* MODALE ÉDITION PROFIL */}
       {editOpen && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40'>
-          <div className='bg-white rounded-2xl shadow-2xl w-full max-w-md'>
+        <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm'>
+          <div className='glass-card-intense w-full max-w-md animate-slide-in'>
             <div className='px-6 py-4 border-b border-gray-100 flex items-center justify-between'>
               <h3 className='font-bold text-gray-900'>Modifier le profil</h3>
               <button onClick={() => setEditOpen(false)} className='text-gray-400 hover:text-gray-600 text-xl leading-none'>&times;</button>
@@ -510,7 +511,7 @@ export default function DashboardCandidat() {
                     <select
                       value={editForm[key] || ''}
                       onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
-                      className='w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500'
+                      className='input-glass w-full px-4 py-2.5 text-sm'
                     >
                       {options.map(opt => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -521,17 +522,17 @@ export default function DashboardCandidat() {
                       type={type}
                       value={editForm[key] || ''}
                       onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
-                      className='w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500'
+                      className='input-glass w-full px-4 py-2.5 text-sm'
                     />
                   )}
                 </div>
               ))}
             </div>
             <div className='px-6 py-4 border-t border-gray-100 flex gap-3 justify-end'>
-              <button onClick={() => setEditOpen(false)} className='text-sm border border-gray-200 text-gray-600 px-4 py-2 rounded-xl hover:bg-gray-50 transition'>
+              <button onClick={() => setEditOpen(false)} className='btn-glass text-sm px-4 py-2'>
                 Annuler
               </button>
-              <button onClick={handleSaveProfil} disabled={editLoading} className='text-sm bg-blue-900 text-white px-5 py-2 rounded-xl hover:bg-blue-800 transition disabled:opacity-50 font-medium'>
+              <button onClick={handleSaveProfil} disabled={editLoading} className='btn-academic text-sm px-5 py-2 disabled:opacity-50'>
                 {editLoading ? 'Enregistrement...' : 'Enregistrer'}
               </button>
             </div>

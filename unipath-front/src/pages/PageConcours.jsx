@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { candidatService, concoursService, inscriptionService } from '../services/api';
 import CandidatLayout from '../components/CandidatLayout';
 import PiecesRequisesCandidats from '../components/PiecesRequisesCandidats';
+import { BentoCard, BentoGrid, GlassBadge } from '../components/AcademicLayout';
 
 const CHAMPS_REQUIS = ['telephone', 'dateNaiss', 'lieuNaiss'];
 
@@ -76,7 +77,7 @@ export default function PageConcours() {
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
-      <div className='max-w-5xl mx-auto space-y-4 sm:space-y-6 px-3 sm:px-0'>
+      <div className='max-w-5xl mx-auto space-y-4 sm:space-y-6 px-3 sm:px-0 animate-slide-in'>
 
         {/* Toast */}
         {message.text && (
@@ -92,54 +93,56 @@ export default function PageConcours() {
         )}
 
         {/* En-tête */}
-        <div>
-          <h1 className='text-xl sm:text-2xl font-black text-gray-900'>Concours disponibles</h1>
+        <BentoCard>
+          <h1 className='text-xl sm:text-2xl font-black gradient-text'>Concours disponibles</h1>
           <p className='text-gray-500 text-xs sm:text-sm mt-1'>
             {concours.length} concours — Inscrivez-vous avant la date limite de dépôt
           </p>
-        </div>
+        </BentoCard>
 
         {/* Barre de recherche + tri */}
-        <div className='flex flex-col sm:flex-row gap-3'>
-          <div className='flex-1 relative'>
-            <svg className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
-            </svg>
-            <input
-              type='text'
-              placeholder='Rechercher un concours...'
-              value={recherche}
-              onChange={e => setRecherche(e.target.value)}
-              className='w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-orange-500 bg-white'
-            />
-            {recherche && (
+        <BentoCard className='p-4'>
+          <div className='flex flex-col sm:flex-row gap-3'>
+            <div className='flex-1 relative'>
+              <svg className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
+              </svg>
+              <input
+                type='text'
+                placeholder='Rechercher un concours...'
+                value={recherche}
+                onChange={e => setRecherche(e.target.value)}
+                className='input-glass w-full pl-10 pr-4 py-2.5 text-sm'
+              />
+              {recherche && (
+                <button
+                  onClick={() => setRecherche('')}
+                  className='absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none'
+                >
+                  &times;
+                </button>
+              )}
+            </div>
+            <div className='flex gap-2'>
               <button
-                onClick={() => setRecherche('')}
-                className='absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none'
+                onClick={() => setTri('recent')}
+                className={`px-4 py-2.5 rounded-xl text-xs font-semibold transition ${
+                  tri === 'recent' ? 'btn-academic' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
               >
-                &times;
+                Plus récents
               </button>
-            )}
+              <button
+                onClick={() => setTri('ancien')}
+                className={`px-4 py-2.5 rounded-xl text-xs font-semibold transition ${
+                  tri === 'ancien' ? 'btn-academic' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                Plus anciens
+              </button>
+            </div>
           </div>
-          <div className='flex gap-2'>
-            <button
-              onClick={() => setTri('recent')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-semibold transition ${
-                tri === 'recent' ? 'bg-blue-900 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              Plus récents
-            </button>
-            <button
-              onClick={() => setTri('ancien')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-semibold transition ${
-                tri === 'ancien' ? 'bg-blue-900 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              Plus anciens
-            </button>
-          </div>
-        </div>
+        </BentoCard>
 
         {/* Liste des concours */}
         {(() => {
@@ -154,15 +157,15 @@ export default function PageConcours() {
           });
 
           if (liste.length === 0) return (
-            <div className='bg-white rounded-2xl border border-gray-100 p-12 text-center'>
+            <BentoCard className='p-12 text-center'>
               <p className='text-gray-400 text-sm'>
                 {recherche ? `Aucun concours trouvé pour "${recherche}"` : 'Aucun concours disponible pour le moment.'}
               </p>
-            </div>
+            </BentoCard>
           );
 
           return (
-            <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>
+            <BentoGrid columns='auto-fit'>
               {liste.map((c, index) => {
                 const statut      = statutConcours(c);
                 const dejaInscrit = candidat?.inscriptions?.some(i => i.concoursId === c.id);
@@ -179,9 +182,9 @@ export default function PageConcours() {
                   : 'bg-blue-900';
 
                 return (
-                  <div
+                  <BentoCard
                     key={c.id}
-                    className='bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition p-5 flex flex-col gap-3 cursor-pointer'
+                    className='p-5 flex flex-col gap-3 cursor-pointer'
                     onClick={() => handleVoirConcours(c.id)}
                   >
                     {/* Titre + badge numéro */}
@@ -252,12 +255,12 @@ export default function PageConcours() {
                     {/* Statut / bouton */}
                     <div className='mt-auto pt-2 border-t border-gray-50'>
                       {dejaInscrit ? (
-                        <span className='text-xs text-green-600 font-semibold flex items-center gap-1'>
+                        <GlassBadge variant='success' className='w-full justify-center'>
                           <svg className='w-3 h-3' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                             <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
                           </svg>
                           Inscrit
-                        </span>
+                        </GlassBadge>
                       ) : termine ? (
                         <span className='text-xs text-gray-400'>Inscriptions closes</span>
                       ) : (
@@ -269,10 +272,10 @@ export default function PageConcours() {
                         </button>
                       )}
                     </div>
-                  </div>
+                  </BentoCard>
                 );
               })}
-            </div>
+            </BentoGrid>
           );
         })()}
       </div>

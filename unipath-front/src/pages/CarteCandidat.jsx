@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { candidatService, authService } from '../services/api';
+import { BentoCard, GlassBadge, AcademicButton } from '../components/AcademicLayout';
 
 export default function CarteCandidat() {
   const navigate = useNavigate();
@@ -62,7 +63,7 @@ export default function CarteCandidat() {
   };
 
   return (
-    <div className='min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4'>
+    <div className='min-h-screen academic-bg custom-scrollbar py-8 px-4 animate-slide-in'>
       <div className='max-w-2xl mx-auto'>
         {/* Bouton Retour */}
         <button
@@ -76,7 +77,7 @@ export default function CarteCandidat() {
         </button>
 
         {/* Carte Principale */}
-        <div className='bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-200'>
+        <BentoCard className='p-0 overflow-hidden'>
           {/* Header avec logo */}
           <div className='bg-gradient-to-r from-blue-900 to-blue-800 px-8 py-6 text-white'>
             <div className='flex items-center justify-between'>
@@ -119,7 +120,7 @@ export default function CarteCandidat() {
 
                 <div className='space-y-3'>
                   {/* Informations académiques */}
-                  <div className='bg-amber-50 border-l-4 border-amber-500 px-4 py-3 rounded-r-lg'>
+                  <div className='glass-card-subtle border-l-4 border-amber-500 px-4 py-3'>
                     <p className='text-xs text-amber-700 font-semibold uppercase tracking-wide mb-1'>
                       Données Académiques (BAC)
                     </p>
@@ -136,7 +137,7 @@ export default function CarteCandidat() {
                   </div>
 
                   {/* Informations civiles */}
-                  <div className='bg-blue-50 border-l-4 border-blue-500 px-4 py-3 rounded-r-lg'>
+                  <div className='glass-card-subtle border-l-4 border-blue-500 px-4 py-3'>
                     <p className='text-xs text-blue-700 font-semibold uppercase tracking-wide mb-1'>
                       Informations Civiles
                     </p>
@@ -179,7 +180,7 @@ export default function CarteCandidat() {
                 Informations de Contact
               </h3>
               <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                <div className='flex items-center gap-3 bg-gray-50 px-4 py-3 rounded-xl'>
+                <div className='flex items-center gap-3 glass-card-subtle px-4 py-3'>
                   <svg className='w-5 h-5 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                     <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' />
                   </svg>
@@ -189,7 +190,7 @@ export default function CarteCandidat() {
                   </div>
                 </div>
                 {candidat?.telephone && (
-                  <div className='flex items-center gap-3 bg-gray-50 px-4 py-3 rounded-xl'>
+                  <div className='flex items-center gap-3 glass-card-subtle px-4 py-3'>
                     <svg className='w-5 h-5 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                       <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z' />
                     </svg>
@@ -209,7 +210,7 @@ export default function CarteCandidat() {
               </h3>
               <div className='space-y-3'>
                 {/* Photo d'identité */}
-                <div className='flex items-center justify-between bg-gray-50 px-4 py-3 rounded-xl hover:bg-gray-100 transition'>
+                <div className='flex items-center justify-between glass-card-subtle px-4 py-3 hover:shadow-md transition'>
                   <div className='flex items-center gap-3'>
                     {pieceIcon('photo')}
                     <div>
@@ -227,7 +228,7 @@ export default function CarteCandidat() {
                 </div>
 
                 {/* Carte d'identité */}
-                <div className='flex items-center justify-between bg-gray-50 px-4 py-3 rounded-xl hover:bg-gray-100 transition'>
+                <div className='flex items-center justify-between glass-card-subtle px-4 py-3 hover:shadow-md transition'>
                   <div className='flex items-center gap-3'>
                     {pieceIcon('carteIdentite')}
                     <div>
@@ -245,7 +246,7 @@ export default function CarteCandidat() {
                 </div>
 
                 {/* Acte de naissance */}
-                <div className='flex items-center justify-between bg-gray-50 px-4 py-3 rounded-xl hover:bg-gray-100 transition'>
+                <div className='flex items-center justify-between glass-card-subtle px-4 py-3 hover:shadow-md transition'>
                   <div className='flex items-center gap-3'>
                     {pieceIcon('acteNaissance')}
                     <div>
@@ -263,7 +264,7 @@ export default function CarteCandidat() {
                 </div>
 
                 {/* Relevé de notes */}
-                <div className='flex items-center justify-between bg-gray-50 px-4 py-3 rounded-xl hover:bg-gray-100 transition'>
+                <div className='flex items-center justify-between glass-card-subtle px-4 py-3 hover:shadow-md transition'>
                   <div className='flex items-center gap-3'>
                     {pieceIcon('releve')}
                     <div>
@@ -295,19 +296,19 @@ export default function CarteCandidat() {
               </div>
             </div>
           </div>
-        </div>
+        </BentoCard>
 
         {/* Boutons d'action */}
         <div className='mt-6 flex gap-4'>
           <button
             onClick={() => navigate('/mon-compte')}
-            className='flex-1 bg-blue-900 text-white py-3 px-6 rounded-xl font-semibold hover:bg-blue-800 transition shadow-lg'
+            className='btn-academic flex-1 py-3 px-6'
           >
             Modifier mes informations
           </button>
           <button
             onClick={() => window.print()}
-            className='flex-1 bg-white text-blue-900 py-3 px-6 rounded-xl font-semibold hover:bg-gray-50 transition shadow-lg border-2 border-blue-900'
+            className='btn-glass flex-1 py-3 px-6'
           >
             Imprimer la carte
           </button>

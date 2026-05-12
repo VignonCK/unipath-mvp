@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { candidatService, convocationService } from '../services/api';
 import CandidatLayout from '../components/CandidatLayout';
+import { BentoCard, GlassBadge, AcademicButton } from '../components/AcademicLayout';
 
 const STATUT_CONFIG = {
   VALIDE:     { 
@@ -110,7 +111,7 @@ export default function DetailInscription() {
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
-      <div className='max-w-3xl mx-auto space-y-6'>
+      <div className='max-w-3xl mx-auto space-y-6 animate-slide-in'>
 
         {/* Bouton retour */}
         <button
@@ -137,7 +138,7 @@ export default function DetailInscription() {
         )}
 
         {/* En-tête avec statut */}
-        <div className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
+        <BentoCard className='p-0 overflow-hidden'>
           <div className={`h-2 ${cfg.color}`} />
           <div className='p-6'>
             <div className='flex items-start justify-between gap-4 mb-4'>
@@ -161,25 +162,25 @@ export default function DetailInscription() {
 
             {/* Informations du concours */}
             <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6'>
-              <div className='bg-gray-50 rounded-xl px-4 py-3'>
+              <div className='glass-card-subtle px-4 py-3'>
                 <p className='text-xs text-gray-400 mb-0.5'>Date de début</p>
                 <p className='text-sm font-medium text-gray-800'>
                   {new Date(inscription.concours.dateDebut).toLocaleDateString('fr-FR')}
                 </p>
               </div>
-              <div className='bg-gray-50 rounded-xl px-4 py-3'>
+              <div className='glass-card-subtle px-4 py-3'>
                 <p className='text-xs text-gray-400 mb-0.5'>Date de fin</p>
                 <p className='text-sm font-medium text-gray-800'>
                   {new Date(inscription.concours.dateFin).toLocaleDateString('fr-FR')}
                 </p>
               </div>
-              <div className='bg-gray-50 rounded-xl px-4 py-3'>
+              <div className='glass-card-subtle px-4 py-3'>
                 <p className='text-xs text-gray-400 mb-0.5'>Numéro de dossier</p>
                 <p className='text-sm font-mono font-bold text-blue-900'>
                   {inscription.id.substring(0, 8).toUpperCase()}
                 </p>
               </div>
-              <div className='bg-gray-50 rounded-xl px-4 py-3'>
+              <div className='glass-card-subtle px-4 py-3'>
                 <p className='text-xs text-gray-400 mb-0.5'>Institution</p>
                 <p className='text-sm font-medium text-gray-800'>
                   EPAC - UAC
@@ -187,7 +188,7 @@ export default function DetailInscription() {
               </div>
             </div>
           </div>
-        </div>
+        </BentoCard>
 
         {/* Message selon le statut */}
         {inscription.statut === 'EN_ATTENTE' && (
@@ -239,12 +240,12 @@ export default function DetailInscription() {
         )}
 
         {/* Documents disponibles */}
-        <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
+        <BentoCard className='p-6'>
           <h2 className='text-base font-bold text-gray-800 mb-4'>Documents disponibles</h2>
           <div className='space-y-3'>
             
             {/* Fiche de pré-inscription */}
-            <div className='flex items-center justify-between p-4 bg-blue-50 rounded-xl border border-blue-100'>
+            <div className='flex items-center justify-between p-4 glass-card-subtle border-l-4 border-blue-500'>
               <div className='flex items-center gap-3'>
                 <div className='w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0'>
                   <svg className='w-5 h-5 text-white' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -259,7 +260,7 @@ export default function DetailInscription() {
               <button
                 onClick={handlePreinscription}
                 disabled={telechargement.preinscription}
-                className='px-4 py-2 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition disabled:opacity-50 flex items-center gap-2'
+                className='btn-academic px-4 py-2 text-xs disabled:opacity-50 flex items-center gap-2'
               >
                 {telechargement.preinscription ? (
                   <>
@@ -279,7 +280,7 @@ export default function DetailInscription() {
 
             {/* Convocation (uniquement si validé) */}
             {inscription.statut === 'VALIDE' && (
-              <div className='flex items-center justify-between p-4 bg-orange-50 rounded-xl border border-orange-200'>
+              <div className='flex items-center justify-between p-4 glass-card-subtle border-l-4 border-orange-500'>
                 <div className='flex items-center gap-3'>
                   <div className='w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center flex-shrink-0'>
                     <svg className='w-5 h-5 text-white' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -315,7 +316,7 @@ export default function DetailInscription() {
 
             {/* Message si pas encore validé */}
             {inscription.statut !== 'VALIDE' && (
-              <div className='p-4 bg-gray-50 rounded-xl border border-gray-200'>
+              <div className='p-4 glass-card-subtle'>
                 <div className='flex items-center gap-3'>
                   <svg className='w-5 h-5 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                     <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' />
@@ -327,10 +328,10 @@ export default function DetailInscription() {
               </div>
             )}
           </div>
-        </div>
+        </BentoCard>
 
         {/* Informations importantes */}
-        <div className='bg-blue-50 rounded-2xl border border-blue-200 p-6'>
+        <BentoCard className='p-6 bg-blue-50/50 border-l-4 border-blue-500'>
           <h3 className='font-bold text-blue-900 text-sm mb-3 flex items-center gap-2'>
             <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
               <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' />
@@ -355,7 +356,7 @@ export default function DetailInscription() {
               <span>Pour toute question, contactez le service des concours de l'EPAC</span>
             </li>
           </ul>
-        </div>
+        </BentoCard>
 
       </div>
     </CandidatLayout>

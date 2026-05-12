@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { concoursService, authService } from '../services/api';
+import { BentoCard, BentoGrid, GlassBadge } from '../components/AcademicLayout';
 
 export default function ClassementConcours() {
   const { id } = useParams();
@@ -55,53 +56,53 @@ export default function ClassementConcours() {
   };
 
   return (
-    <div className='min-h-screen bg-gray-50'>
+    <div className='min-h-screen academic-bg custom-scrollbar animate-slide-in'>
       {/* HEADER */}
-      <header className='bg-blue-900 text-white px-6 py-4 shadow-lg'>
+      <header className='glass-card-intense sticky top-0 z-50 px-6 py-4 mb-6'>
         <div className='max-w-6xl mx-auto'>
           <button
             onClick={() => navigate(-1)}
-            className='flex items-center gap-2 text-blue-300 hover:text-white transition mb-3'
+            className='flex items-center gap-2 text-gray-600 hover:text-gray-900 transition mb-3'
           >
             <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
               <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M10 19l-7-7m0 0l7-7m-7 7h18' />
             </svg>
-            <span className='text-sm'>Retour</span>
+            <span className='text-sm font-medium'>Retour</span>
           </button>
           <div className='flex items-center gap-3'>
             <svg className='w-8 h-8 text-orange-500' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
               <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z' />
             </svg>
             <div>
-              <h1 className='text-2xl font-black'>{data?.concours?.libelle}</h1>
+              <h1 className='text-2xl font-black gradient-text'>{data?.concours?.libelle}</h1>
               {data?.concours?.etablissement && (
-                <p className='text-blue-300 text-sm'>{data.concours.etablissement}</p>
+                <p className='text-gray-600 text-sm'>{data.concours.etablissement}</p>
               )}
             </div>
           </div>
         </div>
       </header>
 
-      <main className='max-w-6xl mx-auto px-4 py-6 space-y-6'>
+      <main className='max-w-6xl mx-auto px-4 py-6 space-y-6 animate-slide-in'>
         {/* STATISTIQUES */}
-        <div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
-          <div className='bg-white rounded-2xl p-5 shadow-sm border border-gray-100'>
+        <BentoGrid columns='auto-fit'>
+          <BentoCard className='p-5'>
             <p className='text-3xl font-black text-blue-900'>{data?.totalCandidats || 0}</p>
             <p className='text-xs font-medium text-gray-500 mt-1'>Candidats validés</p>
-          </div>
-          <div className='bg-white rounded-2xl p-5 shadow-sm border border-gray-100'>
+          </BentoCard>
+          <BentoCard className='p-5'>
             <p className='text-3xl font-black text-green-600'>{data?.candidatsPresents || 0}</p>
             <p className='text-xs font-medium text-gray-500 mt-1'>Ont composé</p>
-          </div>
-          <div className='bg-white rounded-2xl p-5 shadow-sm border border-gray-100'>
+          </BentoCard>
+          <BentoCard className='p-5'>
             <p className='text-3xl font-black text-red-600'>{data?.candidatsAbsents || 0}</p>
             <p className='text-xs font-medium text-gray-500 mt-1'>Absents</p>
-          </div>
-        </div>
+          </BentoCard>
+        </BentoGrid>
 
         {/* PODIUM (Top 3) */}
         {data?.classement && data.classement.filter(c => c.note !== null).length > 0 && (
-          <div className='bg-gradient-to-br from-orange-50 to-blue-50 rounded-2xl p-6 shadow-sm border border-orange-100'>
+          <BentoCard className='p-6 bg-gradient-to-br from-orange-50 to-blue-50 border-l-4 border-orange-500'>
             <h2 className='text-lg font-bold text-gray-800 mb-4 flex items-center gap-2'>
               <svg className='w-5 h-5 text-orange-500' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                 <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z' />
@@ -112,7 +113,7 @@ export default function ClassementConcours() {
               {data.classement.filter(c => c.note !== null).slice(0, 3).map((candidat) => (
                 <div
                   key={candidat.candidat.id}
-                  className='bg-white rounded-xl p-4 shadow-sm border-2 border-orange-200'
+                  className='glass-card-intense p-4 border-2 border-orange-200'
                 >
                   <div className='flex items-center justify-between mb-2'>
                     <span className={`text-4xl font-black ${getMedalColor(candidat.rang)}`}>
@@ -127,11 +128,11 @@ export default function ClassementConcours() {
                 </div>
               ))}
             </div>
-          </div>
+          </BentoCard>
         )}
 
         {/* CLASSEMENT COMPLET */}
-        <div className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
+        <BentoCard className='p-0 overflow-hidden'>
           <div className='px-6 py-4 border-b border-gray-100'>
             <h2 className='text-base font-bold text-gray-800'>Classement complet</h2>
           </div>
@@ -197,7 +198,7 @@ export default function ClassementConcours() {
               </tbody>
             </table>
           </div>
-        </div>
+        </BentoCard>
       </main>
     </div>
   );

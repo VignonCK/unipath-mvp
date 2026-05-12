@@ -1,5 +1,6 @@
 // src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import './styles/academicBento.css';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -17,6 +18,7 @@ import CarteCandidat from './pages/CarteCandidat';
 import AccueilCandidat from './pages/AccueilCandidat';
 import MonCompte from './pages/MonCompte';
 import DetailInscription from './pages/DetailInscription';
+import DesignSystemDemo from './pages/DesignSystemDemo';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -29,6 +31,7 @@ function App() {
         <Route path='/register' element={<Register />} />
         <Route path='/auth/callback' element={<AuthCallback />} />
         <Route path='/auth/confirm' element={<EmailConfirmation />} />
+        <Route path='/design-demo' element={<DesignSystemDemo />} />
 
         {/* Routes protégées - CANDIDAT uniquement */}
         <Route

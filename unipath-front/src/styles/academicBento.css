@@ -1,0 +1,296 @@
+/* Academic Bento-Glass Ultra-Premium Styles */
+
+/* Variables globales */
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.18);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  --glass-backdrop: blur(20px);
+  
+  --primary-blue: #1e3a8a;
+  --primary-orange: #f97316;
+  --accent-slate: #334155;
+  
+  --gradient-academic: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --gradient-premium: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --gradient-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
+}
+
+/* Background patterns académiques */
+.academic-bg {
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.academic-bg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(249, 115, 22, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 40% 20%, rgba(30, 58, 138, 0.03) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+/* Glass Cards - Effet verre premium */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-backdrop);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: 24px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 48px 0 rgba(31, 38, 135, 0.25);
+}
+
+.glass-card-intense {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 12px 48px 0 rgba(31, 38, 135, 0.2);
+}
+
+/* Bento Grid Layout */
+.bento-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.bento-item {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-backdrop);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.bento-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.2);
+}
+
+/* Academic Headers */
+.academic-header {
+  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.academic-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -10%;
+  width: 40%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(249, 115, 22, 0.15) 0%, transparent 70%);
+  animation: float 20s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(5deg); }
+}
+
+/* Premium Buttons */
+.btn-academic {
+  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(30, 58, 138, 0.3);
+}
+
+.btn-academic:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(30, 58, 138, 0.4);
+}
+
+.btn-glass {
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-glass:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+/* Status Badges - Style académique */
+.badge-glass {
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.5rem 1rem;
+  border-radius: 100px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Progress Bars - Style premium */
+.progress-glass {
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  border-radius: 100px;
+  height: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.progress-fill {
+  background: linear-gradient(90deg, #f97316 0%, #fb923c 100%);
+  height: 100%;
+  border-radius: 100px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.5);
+}
+
+/* Cards avec effet de profondeur */
+.depth-card {
+  background: white;
+  border-radius: 24px;
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.08),
+    0 16px 48px rgba(0, 0, 0, 0.12);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.depth-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 
+    0 4px 16px rgba(0, 0, 0, 0.06),
+    0 16px 48px rgba(0, 0, 0, 0.12),
+    0 32px 96px rgba(0, 0, 0, 0.16);
+}
+
+/* Animations fluides */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slideInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-in;
+}
+
+/* Gradient Text */
+.gradient-text {
+  background: linear-gradient(135deg, #1e3a8a 0%, #f97316 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Dividers académiques */
+.academic-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(30, 58, 138, 0.2) 50%, transparent 100%);
+  margin: 2rem 0;
+}
+
+/* Tooltips premium */
+.tooltip-glass {
+  background: rgba(30, 58, 138, 0.95);
+  backdrop-filter: blur(10px);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Input fields - Style académique */
+.input-glass {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  transition: all 0.3s ease;
+}
+
+.input-glass:focus {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: #f97316;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+}
+
+/* Scrollbar personnalisée */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #1e3a8a 0%, #f97316 100%);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #3b82f6 0%, #fb923c 100%);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .glass-card {
+    border-radius: 16px;
+  }
+  
+  .bento-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .depth-card:hover {
+    transform: translateY(-4px);
+  }
+}

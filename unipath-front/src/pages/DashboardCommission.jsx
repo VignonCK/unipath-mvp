@@ -5,6 +5,7 @@ import { commissionService, authService } from '../services/api';
 import HistoriqueActions from '../components/HistoriqueActions';
 import DocumentViewer from '../components/DocumentViewer';
 import CommissionLayout from '../components/CommissionLayout';
+import { BentoCard, GlassBadge } from '../components/AcademicLayout';
 
 function initiales(prenom, nom) {
   return `${(prenom || '?')[0]}${(nom || '?')[0]}`.toUpperCase();
@@ -139,8 +140,8 @@ export default function DashboardCommission() {
 
   return (
     <CommissionLayout>
-      <div className='min-h-screen bg-gray-50'>
-        <main className='max-w-5xl mx-auto px-4 py-4 sm:p-6 space-y-4 sm:space-y-6'>
+      <div className='min-h-screen academic-bg custom-scrollbar'>
+        <main className='max-w-5xl mx-auto px-4 py-4 sm:p-6 space-y-4 sm:space-y-6 animate-slide-in'>
 
           {/* Toast */}
           {message.text && (
@@ -156,30 +157,30 @@ export default function DashboardCommission() {
 
         {/* STATS GLOBALES */}
         <div className='grid grid-cols-2 md:grid-cols-5 gap-4'>
-          <div className='bg-white rounded-lg border border-gray-200 shadow-sm p-5'>
+          <BentoCard className='p-5'>
             <p className='text-xs text-gray-500 font-medium mb-1'>Total dossiers</p>
             <p className='text-3xl font-semibold text-slate-800'>{total}</p>
-          </div>
-          <div className='bg-slate-50 rounded-lg border border-slate-200 p-5'>
+          </BentoCard>
+          <BentoCard className='p-5 bg-slate-50/50'>
             <p className='text-xs text-slate-600 font-medium mb-1'>En attente</p>
             <p className='text-3xl font-semibold text-slate-700'>{counts.EN_ATTENTE}</p>
-          </div>
-          <div className='bg-slate-50 rounded-lg border border-slate-200 p-5'>
+          </BentoCard>
+          <BentoCard className='p-5 bg-slate-50/50'>
             <p className='text-xs text-slate-600 font-medium mb-1'>Validés</p>
             <p className='text-3xl font-semibold text-slate-700'>{counts.VALIDE}</p>
-          </div>
-          <div className='bg-slate-50 rounded-lg border border-slate-200 p-5'>
+          </BentoCard>
+          <BentoCard className='p-5 bg-slate-50/50'>
             <p className='text-xs text-slate-600 font-medium mb-1'>Sous réserve</p>
             <p className='text-3xl font-semibold text-slate-700'>{counts.SOUS_RESERVE}</p>
-          </div>
-          <div className='bg-slate-50 rounded-lg border border-slate-200 p-5'>
+          </BentoCard>
+          <BentoCard className='p-5 bg-slate-50/50'>
             <p className='text-xs text-slate-600 font-medium mb-1'>Rejetés</p>
             <p className='text-3xl font-semibold text-slate-700'>{counts.REJETE}</p>
-          </div>
+          </BentoCard>
         </div>
 
         {/* FILTRES + RECHERCHE */}
-        <div className='bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex flex-col sm:flex-row gap-3 items-center'>
+        <BentoCard className='p-4 flex flex-col sm:flex-row gap-3 items-center'>
           <div className='flex gap-2 flex-wrap'>
             {['EN_ATTENTE', 'VALIDE', 'SOUS_RESERVE', 'REJETE'].map(s => {
               const cfg = STATUT_CONFIG[s];
@@ -207,19 +208,19 @@ export default function DashboardCommission() {
               placeholder='Rechercher par nom, matricule ou concours...'
               value={recherche}
               onChange={e => setRecherche(e.target.value)}
-              className='w-full pl-4 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-slate-500'
+              className='input-glass w-full pl-4 pr-4 py-2 text-sm'
             />
           </div>
           {recherche && (
             <span className='text-xs text-gray-400 whitespace-nowrap'>{dossiersFiltres.length} résultat(s)</span>
           )}
-        </div>
+        </BentoCard>
 
         {/* LISTE DES DOSSIERS */}
         {loading ? (
           <div className='space-y-4'>
             {[1, 2, 3].map(i => (
-              <div key={i} className='bg-white rounded-lg p-6 animate-pulse'>
+              <BentoCard key={i} className='p-6 animate-pulse'>
                 <div className='flex gap-4'>
                   <div className='w-11 h-11 bg-gray-200 rounded-lg' />
                   <div className='flex-1 space-y-2'>
@@ -227,7 +228,7 @@ export default function DashboardCommission() {
                     <div className='h-3 bg-gray-200 rounded w-1/4' />
                   </div>
                 </div>
-              </div>
+              </BentoCard>
             ))}
           </div>
         ) : dossiersFiltres.length === 0 ? (
@@ -244,7 +245,7 @@ export default function DashboardCommission() {
               const dossierId = ins.candidat.dossier?.id;
 
               return (
-                <div key={ins.id} className='bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden'>
+                <BentoCard key={ins.id} className='p-0 overflow-hidden'>
                   <div className={`h-1 ${cfg.bar}`} />
                   <div className='p-5'>
 
@@ -366,7 +367,7 @@ export default function DashboardCommission() {
                       </div>
                     )}
                   </div>
-                </div>
+                </BentoCard>
               );
             })}
           </div>
@@ -374,8 +375,8 @@ export default function DashboardCommission() {
 
         {/* Modale de rejet */}
         {rejetModal.open && (
-          <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50'>
-            <div className='bg-white rounded-lg shadow-2xl w-full max-w-md'>
+          <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm'>
+            <div className='glass-card-intense w-full max-w-md animate-slide-in'>
               <div className='px-6 py-4 border-b border-gray-200'>
                 <h3 className='font-semibold text-gray-900'>Rejeter le dossier</h3>
             </div>
@@ -388,7 +389,7 @@ export default function DashboardCommission() {
                 onChange={(e) => setRejetModal(m => ({ ...m, commentaire: e.target.value }))}
                 placeholder='Expliquez pourquoi le dossier est rejeté (ex: pièces manquantes, documents non conformes, etc.)'
                 rows={5}
-                className='w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-slate-500 resize-none'
+                className='input-glass w-full px-4 py-3 text-sm resize-none'
               />
               <p className='text-xs text-gray-500 mt-2'>
                 Ce message sera envoyé au candidat par email.
@@ -414,8 +415,8 @@ export default function DashboardCommission() {
 
       {/* Modale sous réserve */}
       {sousReserveModal.open && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50'>
-          <div className='bg-white rounded-lg shadow-2xl w-full max-w-md'>
+        <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm'>
+          <div className='glass-card-intense w-full max-w-md animate-slide-in'>
             <div className='px-6 py-4 border-b border-gray-200'>
               <h3 className='font-semibold text-gray-900'>Accepter sous réserve</h3>
             </div>
@@ -428,7 +429,7 @@ export default function DashboardCommission() {
                 onChange={(e) => setSousReserveModal(m => ({ ...m, commentaire: e.target.value }))}
                 placeholder='Indiquez les conditions que le candidat doit remplir (ex: fournir une pièce manquante, corriger un document, etc.)'
                 rows={5}
-                className='w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-slate-500 resize-none'
+                className='input-glass w-full px-4 py-3 text-sm resize-none'
               />
               <p className='text-xs text-gray-500 mt-2'>
                 Ce message sera envoyé au candidat par email avec les conditions à remplir.

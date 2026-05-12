@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { candidatService, dossierService } from '../services/api';
 import CandidatLayout from '../components/CandidatLayout';
 import DossierCompletion from '../components/DossierCompletion';
+import { BentoCard, GlassBadge, AcademicButton } from '../components/AcademicLayout';
 
 function initiales(prenom, nom) {
   return `${(prenom || '?')[0]}${(nom || '?')[0]}`.toUpperCase();
@@ -113,7 +114,7 @@ export default function MonCompte() {
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
-      <div className='max-w-3xl mx-auto space-y-6'>
+      <div className='max-w-3xl mx-auto space-y-6 animate-slide-in'>
 
         {/* Toast */}
         {message.text && (
@@ -128,7 +129,7 @@ export default function MonCompte() {
         )}
 
         {/* CARTE PROFIL */}
-        <div className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
+        <BentoCard className='p-0 overflow-hidden'>
           <div className='h-16 bg-gradient-to-r from-blue-900 to-blue-800' />
           <div className='px-6 pb-6'>
             <div className='flex items-end justify-between gap-2 -mt-8 mb-4 flex-wrap'>
@@ -168,14 +169,14 @@ export default function MonCompte() {
                 { label: 'Naissance', value: candidat?.dateNaiss ? new Date(candidat.dateNaiss).toLocaleDateString('fr-FR') : <span className='text-orange-500 text-xs'>Non renseigné</span> },
                 { label: 'Lieu',      value: candidat?.lieuNaiss || <span className='text-orange-500 text-xs'>Non renseigné</span> },
               ].map(({ label, value }) => (
-                <div key={label} className='bg-gray-50 rounded-xl px-4 py-3'>
+                <div key={label} className='glass-card-subtle px-4 py-3'>
                   <p className='text-xs text-gray-400 mb-0.5'>{label}</p>
                   <p className='text-sm font-medium text-gray-800'>{value}</p>
                 </div>
               ))}
             </div>
           </div>
-        </div>
+        </BentoCard>
 
         {/* COMPLÉTUDE */}
         <DossierCompletion
@@ -189,7 +190,7 @@ export default function MonCompte() {
         />
 
         {/* PIÈCES */}
-        <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
+        <BentoCard className='p-6'>
           <h2 className='text-base font-bold text-gray-800 mb-4'>Pièces justificatives</h2>
           <div className='space-y-2'>
             {Object.entries(PIECES_LABELS).map(([key, label]) => {
@@ -198,8 +199,8 @@ export default function MonCompte() {
               const isLoading = status === 'loading';
               const isOk      = estDepose || status === 'ok';
               return (
-                <div key={key} className={`flex items-center justify-between px-4 py-3 rounded-xl border transition ${
-                  isOk ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
+                <div key={key} className={`flex items-center justify-between px-4 py-3 glass-card-subtle transition ${
+                  isOk ? 'border-l-4 border-green-500' : 'border-l-4 border-gray-300'
                 }`}>
                   <div className='flex items-center gap-3'>
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isOk ? 'bg-green-500' : 'bg-gray-300'}`} />
@@ -219,14 +220,14 @@ export default function MonCompte() {
               );
             })}
           </div>
-        </div>
+        </BentoCard>
 
       </div>
 
       {/* MODALE ÉDITION */}
       {editOpen && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40'>
-          <div className='bg-white rounded-2xl shadow-2xl w-full max-w-md'>
+        <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm'>
+          <div className='glass-card-intense w-full max-w-md animate-slide-in'>
             <div className='px-6 py-4 border-b border-gray-100 flex items-center justify-between'>
               <h3 className='font-bold text-gray-900'>Modifier le profil</h3>
               <button onClick={() => setEditOpen(false)} className='text-gray-400 hover:text-gray-600 text-xl leading-none'>&times;</button>
@@ -249,7 +250,7 @@ export default function MonCompte() {
                     <select
                       value={editForm[key] || ''}
                       onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
-                      className='w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500'
+                      className='input-glass w-full px-4 py-2.5 text-sm'
                     >
                       {options.map(opt => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -260,17 +261,17 @@ export default function MonCompte() {
                       type={type}
                       value={editForm[key] || ''}
                       onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
-                      className='w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500'
+                      className='input-glass w-full px-4 py-2.5 text-sm'
                     />
                   )}
                 </div>
               ))}
             </div>
             <div className='px-6 py-4 border-t border-gray-100 flex gap-3 justify-end'>
-              <button onClick={() => setEditOpen(false)} className='text-sm border border-gray-200 text-gray-600 px-4 py-2 rounded-xl hover:bg-gray-50 transition'>
+              <button onClick={() => setEditOpen(false)} className='btn-glass text-sm px-4 py-2'>
                 Annuler
               </button>
-              <button onClick={handleSaveProfil} disabled={editLoading} className='text-sm bg-blue-900 text-white px-5 py-2 rounded-xl hover:bg-blue-800 transition disabled:opacity-50 font-medium'>
+              <button onClick={handleSaveProfil} disabled={editLoading} className='btn-academic text-sm px-5 py-2 disabled:opacity-50'>
                 {editLoading ? 'Enregistrement...' : 'Enregistrer'}
               </button>
             </div>

@@ -1,6 +1,7 @@
 // src/pages/Home.jsx
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { BentoCard, BentoGrid, GlassBadge, AcademicButton } from '../components/AcademicLayout';
 
 // Import de toutes les images pour le carrousel
 import examEleves from '../assets/examen-eleves.jpg';
@@ -177,19 +178,25 @@ export default function Home() {
   };
 
   return (
-    <div className='min-h-screen bg-white'>
+    <div className='min-h-screen academic-bg custom-scrollbar'>
 
       {/* NAVBAR */}
-      <nav className='bg-blue-900 text-white px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center sticky top-0 z-50'>
+      <nav className='bg-blue-900 sticky top-0 z-50 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center shadow-md'>
         <div className='flex items-center gap-2 sm:gap-3'>
-          <span className='text-xl sm:text-2xl font-black tracking-tight'>UniPath</span>
-          <span className='hidden md:block text-orange-300 text-xs sm:text-sm'>Plateforme universitaire numérique</span>
+          <span className='text-xl sm:text-2xl font-black text-white tracking-tight'>UniPath</span>
+          <span className='hidden md:block text-orange-400 text-xs sm:text-sm font-semibold'>Plateforme universitaire numérique</span>
         </div>
         <div className='flex gap-2 sm:gap-3'>
-          <button onClick={() => navigate('/login')} className='text-xs sm:text-sm border-2 border-orange-400 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg hover:bg-orange-400 hover:text-blue-900 transition'>
+          <button 
+            onClick={() => navigate('/login')} 
+            className='bg-white text-blue-900 font-bold text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg hover:bg-gray-100 transition'
+          >
             Connexion
           </button>
-          <button onClick={() => navigate('/register')} className='text-xs sm:text-sm bg-orange-500 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-bold hover:bg-orange-600 transition'>
+          <button 
+            onClick={() => navigate('/register')} 
+            className='bg-orange-500 text-white font-bold text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg hover:bg-orange-600 transition'
+          >
             Créer un compte
           </button>
         </div>
@@ -255,10 +262,10 @@ export default function Home() {
             De la candidature à la convocation, tout se fait en ligne.
           </p>
           <div className='flex flex-col sm:flex-row gap-3 justify-center px-4'>
-            <button onClick={() => navigate('/register')} className='bg-orange-500 text-white px-6 py-3 rounded-xl font-bold text-sm sm:text-base hover:bg-orange-600 transition w-full sm:w-auto'>
+            <AcademicButton onClick={() => navigate('/register')} className='px-6 py-3 text-sm sm:text-base w-full sm:w-auto'>
               Créer mon compte →
-            </button>
-            <button onClick={() => navigate('/login')} className='border-2 border-orange-400 text-white px-6 py-3 rounded-xl font-bold text-sm sm:text-base hover:bg-orange-400 hover:text-blue-900 transition w-full sm:w-auto'>
+            </AcademicButton>
+            <button onClick={() => navigate('/login')} className='btn-glass px-6 py-3 text-sm sm:text-base w-full sm:w-auto'>
               Se connecter
             </button>
           </div>
@@ -266,32 +273,32 @@ export default function Home() {
       </section>
 
       {/* FONCTIONNALITÉS */}
-      <section className='py-12 sm:py-16 px-4 sm:px-6 bg-gray-50'>
-        <div className='max-w-5xl mx-auto'>
+      <section className='py-12 sm:py-16 px-4 sm:px-6'>
+        <div className='max-w-5xl mx-auto animate-slide-in'>
           <h2 className='text-2xl sm:text-3xl font-black text-center text-blue-900 mb-3 sm:mb-4'>Ce que fait UniPath</h2>
           <p className='text-center text-gray-500 text-sm sm:text-base mb-8 sm:mb-12'>Trois fonctionnalités au cœur du Module 1</p>
 
           {/* Desktop : grille */}
-          <div className='hidden md:grid grid-cols-3 gap-8'>
+          <BentoGrid columns='auto-fit' className='hidden md:grid'>
             {fonctionnalites.map((f) => (
-              <div key={f.titre} className='bg-white p-8 border-l-4 border-orange-500 hover:border-orange-600 transition'>
+              <BentoCard key={f.titre} className='p-8 border-l-4 border-orange-500 hover:border-orange-600 transition'>
                 <div className='mb-4'>{f.icon}</div>
                 <h3 className='text-xl font-bold text-blue-900 mb-3'>{f.titre}</h3>
                 <p className='text-gray-600 leading-relaxed'>{f.desc}</p>
-              </div>
+              </BentoCard>
             ))}
-          </div>
+          </BentoGrid>
 
           {/* Mobile : carousel */}
           <div className='md:hidden'>
             <MobileCarousel
               items={fonctionnalites}
               renderItem={(f) => (
-                <div className='bg-white p-8 border-l-4 border-orange-500 mx-1'>
+                <BentoCard className='p-8 border-l-4 border-orange-500 mx-1'>
                   <div className='mb-4'>{f.icon}</div>
                   <h3 className='text-xl font-bold text-blue-900 mb-3'>{f.titre}</h3>
                   <p className='text-gray-600 leading-relaxed'>{f.desc}</p>
-                </div>
+                </BentoCard>
               )}
             />
           </div>
@@ -299,8 +306,8 @@ export default function Home() {
       </section>
 
       {/* COMMENT ÇA MARCHE */}
-      <section className='py-12 sm:py-16 px-4 sm:px-6 bg-white'>
-        <div className='max-w-5xl mx-auto'>
+      <section className='py-12 sm:py-16 px-4 sm:px-6'>
+        <div className='max-w-5xl mx-auto animate-slide-in'>
           <h2 className='text-2xl sm:text-3xl font-black text-center text-blue-900 mb-3 sm:mb-4'>Comment ça marche ?</h2>
           <p className='text-center text-gray-500 text-sm sm:text-base mb-8 sm:mb-12'>4 étapes simples pour compléter votre inscription</p>
           <div className='grid grid-cols-1 md:grid-cols-4 gap-6'>
@@ -318,16 +325,16 @@ export default function Home() {
             ))}
           </div>
           <div className='text-center mt-10'>
-            <button onClick={() => navigate('/register')} className='bg-orange-500 text-white px-6 py-3 sm:px-8 sm:py-4 rounded-xl font-bold text-sm sm:text-base hover:bg-orange-600 transition'>
+            <AcademicButton onClick={() => navigate('/register')} className='px-6 py-3 sm:px-8 sm:py-4 text-sm sm:text-base'>
               Commencer maintenant →
-            </button>
+            </AcademicButton>
           </div>
         </div>
       </section>
 
       {/* FAQ - QUESTIONS FRÉQUENTES */}
-      <section className='py-12 sm:py-16 px-4 sm:px-6 bg-gray-50'>
-        <div className='max-w-4xl mx-auto'>
+      <section className='py-12 sm:py-16 px-4 sm:px-6'>
+        <div className='max-w-4xl mx-auto animate-slide-in'>
           <h2 className='text-2xl sm:text-3xl font-black text-center text-blue-900 mb-3 sm:mb-4'>Questions fréquentes</h2>
           <p className='text-center text-gray-500 text-sm sm:text-base mb-8 sm:mb-12'>Tout ce que vous devez savoir sur UniPath</p>
           <div className='space-y-4'>
@@ -357,7 +364,7 @@ export default function Home() {
                 reponse: 'Cliquez sur "Mot de passe oublié" sur la page de connexion. Vous recevrez un email avec un lien pour réinitialiser votre mot de passe en toute sécurité.',
               },
             ].map((faq, index) => (
-              <details key={index} className='bg-white border-l-4 border-gray-200 rounded-lg p-6 cursor-pointer hover:border-orange-500 transition group'>
+              <details key={index} className='glass-card-subtle p-6 cursor-pointer hover:shadow-lg transition group border-l-4 border-gray-200 hover:border-orange-500'>
                 <summary className='font-bold text-blue-900 flex justify-between items-center'>
                   <span>{faq.question}</span>
                   <span className='text-orange-500 text-xl group-open:rotate-180 transition-transform'>▼</span>
@@ -376,15 +383,15 @@ export default function Home() {
       </section>
 
       {/* POURQUOI UNIPATH */}
-      <section className='py-12 sm:py-16 px-4 sm:px-6 bg-blue-900 text-white'>
-        <div className='max-w-5xl mx-auto'>
+      <section className='py-12 sm:py-16 px-4 sm:px-6 bg-gradient-to-br from-blue-900 to-blue-800 text-white'>
+        <div className='max-w-5xl mx-auto animate-slide-in'>
           <h2 className='text-2xl sm:text-3xl font-black text-center mb-3 sm:mb-4'>Pourquoi UniPath ?</h2>
           <p className='text-center text-orange-300 text-sm sm:text-base mb-8 sm:mb-12'>Une plateforme pensée pour simplifier la vie des étudiants béninois</p>
 
           {/* Desktop : grille */}
           <div className='hidden md:grid grid-cols-2 gap-8'>
             {avantages.map((a) => (
-              <div key={a.titre} className='bg-blue-800 p-8 flex gap-5 items-start hover:bg-blue-700 transition'>
+              <div key={a.titre} className='bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-8 flex gap-5 items-start hover:bg-white/15 transition-all duration-300'>
                 <div className='text-4xl flex-shrink-0'>{a.icon}</div>
                 <div>
                   <h3 className='text-lg font-bold text-orange-400 mb-2'>{a.titre}</h3>
@@ -399,7 +406,7 @@ export default function Home() {
             <MobileCarousel
               items={avantages}
               renderItem={(a) => (
-                <div className='bg-blue-800 p-8 flex gap-5 items-start mx-1'>
+                <div className='bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-8 flex gap-5 items-start mx-1'>
                   <div className='text-4xl flex-shrink-0'>{a.icon}</div>
                   <div>
                     <h3 className='text-lg font-bold text-orange-400 mb-2'>{a.titre}</h3>
@@ -413,13 +420,13 @@ export default function Home() {
       </section>
 
       {/* ÉQUIPE */}
-      <section className='py-12 sm:py-16 px-4 sm:px-6 bg-white'>
-        <div className='max-w-4xl mx-auto'>
+      <section className='py-12 sm:py-16 px-4 sm:px-6'>
+        <div className='max-w-4xl mx-auto animate-slide-in'>
           <h2 className='text-2xl sm:text-3xl font-black text-center text-blue-900 mb-3 sm:mb-4'>Notre équipe</h2>
           <p className='text-center text-gray-500 text-sm sm:text-base mb-8 sm:mb-12'>Groupe 2 — Département Génie Informatique et Télécommunications</p>
-          <div className='grid grid-cols-2 md:grid-cols-3 gap-8'>
+          <BentoGrid columns='auto-fit'>
             {equipe.map((m) => (
-              <div key={m.nom} className='text-center bg-gray-50 p-8 border-b-4 border-blue-900'>
+              <BentoCard key={m.nom} className='text-center p-8 border-b-4 border-blue-900'>
                 {m.photo ? (
                   <img src={m.photo} alt={m.nom} className='w-24 h-24 object-cover mx-auto mb-4 border-4 border-blue-100' />
                 ) : (
@@ -430,9 +437,9 @@ export default function Home() {
                   </div>
                 )}
                 <h3 className='font-bold text-blue-900 text-sm'>{m.nom}</h3>
-              </div>
+              </BentoCard>
             ))}
-          </div>
+          </BentoGrid>
           <div className='text-center mt-10 text-gray-500 text-sm'>
             <p>Sous la supervision du <strong>Professeur DJARA Tahirou</strong></p>
             <p>Sous l'encadrement du <strong>Dr ASSOUMA Abdoul Kamal</strong></p>
@@ -445,7 +452,7 @@ export default function Home() {
         <div className='max-w-2xl mx-auto'>
           <h2 className='text-2xl sm:text-3xl font-black text-center text-blue-900 mb-3 sm:mb-4'>Contacter le support</h2>
           <p className='text-center text-gray-500 text-sm sm:text-base mb-8 sm:mb-10'>Une question ou un problème technique ? Notre équipe vous répond dans les plus brefs délais.</p>
-          <div className='bg-white border-l-4 border-orange-500 p-8 rounded-lg'>
+          <BentoCard className='p-8 border-l-4 border-orange-500'>
             <form onSubmit={handleContactSubmit} className='space-y-5'>
               <div>
                 <label className='block text-sm font-medium text-gray-700 mb-1'>Nom complet</label>
@@ -454,7 +461,7 @@ export default function Home() {
                   type='text'
                   required
                   placeholder='Ex: AGOSSOU Kofi'
-                  className='w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:border-orange-500 text-sm'
+                  className='input-glass w-full px-4 py-3 text-sm'
                 />
               </div>
               <div>
@@ -464,7 +471,7 @@ export default function Home() {
                   type='email'
                   required
                   placeholder='votre@email.com'
-                  className='w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:border-orange-500 text-sm'
+                  className='input-glass w-full px-4 py-3 text-sm'
                 />
               </div>
               <div>
@@ -474,15 +481,15 @@ export default function Home() {
                   required
                   rows={5}
                   placeholder='Décrivez votre problème ou votre question...'
-                  className='w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:border-orange-500 text-sm resize-none'
+                  className='input-glass w-full px-4 py-3 text-sm resize-none'
                 />
               </div>
-              <button
+              <AcademicButton
                 type='submit'
-                className='w-full bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600 transition'
+                className='w-full py-3'
               >
                 Envoyer le message →
-              </button>
+              </AcademicButton>
             </form>
             <div className='mt-6 pt-6 border-t border-gray-100 text-center'>
               <p className='text-gray-500 text-sm'>Ou contactez-nous directement par email :</p>
@@ -490,17 +497,17 @@ export default function Home() {
                 support.unipath@gmail.com
               </a>
             </div>
-          </div>
+          </BentoCard>
         </div>
       </section>
 
       {/* FOOTER */}
-      <footer className='bg-blue-900 text-white py-10 px-6'>
+      <footer className='glass-card-intense py-10 px-6'>
         <div className='max-w-4xl mx-auto text-center'>
-          <p className='text-2xl font-black mb-2 text-orange-400'>UniPath</p>
-          <p className='text-blue-200 text-sm mb-4'>Plateforme numérique de gestion du parcours universitaire</p>
-          <div className='border-t border-blue-700 pt-6 mt-6'>
-            <p className='text-blue-300 text-xs'>
+          <p className='text-2xl font-black mb-2 gradient-text'>UniPath</p>
+          <p className='text-gray-600 text-sm mb-4'>Plateforme numérique de gestion du parcours universitaire</p>
+          <div className='border-t border-gray-200 pt-6 mt-6'>
+            <p className='text-gray-500 text-xs'>
               EPAC — École Polytechnique d'Abomey-Calavi · Université d'Abomey-Calavi<br />
               Groupe 2 · Année académique 2025–2026 · Tous droits réservés
             </p>

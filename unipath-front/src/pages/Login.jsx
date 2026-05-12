@@ -107,11 +107,11 @@ export default function Login() {
   };
 
   return (
-    <div className='min-h-screen bg-gray-50 flex items-center justify-center p-3 sm:p-4'>
-      <div className='w-full max-w-4xl flex flex-col md:flex-row rounded-2xl overflow-hidden shadow-2xl' style={{ minHeight: 560 }}>
+    <div className='min-h-screen academic-bg custom-scrollbar flex items-center justify-center p-3 sm:p-4 animate-slide-in'>
+      <div className='w-full max-w-4xl flex flex-col md:flex-row glass-card-intense overflow-hidden' style={{ minHeight: 560 }}>
 
         {/* ── GAUCHE : Formulaire ── */}
-        <div className='flex-1 bg-white flex flex-col justify-center px-6 py-8 sm:px-8 sm:py-10 md:px-12'>
+        <div className='flex-1 bg-white/95 backdrop-blur-sm flex flex-col justify-center px-6 py-8 sm:px-8 sm:py-10 md:px-12'>
 
           <div className='flex items-center gap-2 mb-6 sm:mb-8'>
             <div className='w-8 h-8 bg-blue-900 rounded-lg flex items-center justify-center text-white text-xs font-black'>U</div>
@@ -164,7 +164,7 @@ export default function Login() {
                     type='email'
                     value={resetEmail}
                     onChange={e => setResetEmail(e.target.value)}
-                    className='w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500'
+                    className='input-glass w-full px-4 py-2.5 text-sm'
                     placeholder='votre@email.com'
                     required
                   />
@@ -172,7 +172,7 @@ export default function Login() {
                 <button
                   type='submit'
                   disabled={resetLoading}
-                  className='w-full bg-orange-500 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-orange-600 transition disabled:opacity-50'
+                  className='btn-academic w-full py-2.5 text-sm disabled:opacity-50'
                 >
                   {resetLoading ? 'Envoi...' : 'Envoyer le lien de réinitialisation'}
                 </button>
@@ -217,7 +217,7 @@ export default function Login() {
                   type='email'
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  className='w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500'
+                  className='input-glass w-full px-4 py-2.5 text-sm'
                   placeholder='votre@email.com'
                   required
                 />
@@ -239,7 +239,7 @@ export default function Login() {
                     type={showPwd ? 'text' : 'password'}
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    className='w-full border border-gray-200 rounded-xl px-4 py-2.5 pr-10 text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500'
+                    className='input-glass w-full px-4 py-2.5 pr-10 text-sm'
                     placeholder='••••••••'
                     required
                   />
@@ -261,7 +261,7 @@ export default function Login() {
               <button
                 type='submit'
                 disabled={loading}
-                className='w-full bg-orange-500 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-orange-600 transition disabled:opacity-50'
+                className='btn-academic w-full py-2.5 text-sm disabled:opacity-50'
               >
                 {loading ? 'Connexion...' : 'Se connecter'}
               </button>
@@ -275,7 +275,7 @@ export default function Login() {
         </div>
 
         {/* ── DROITE : Message + Lottie ── */}
-        <div className='hidden lg:flex w-5/12 bg-blue-900 flex-col justify-center px-8 py-8 md:px-10 md:py-10 relative overflow-hidden'>
+        <div className='hidden lg:flex w-5/12 bg-gradient-to-br from-blue-900 to-blue-800 flex-col justify-center px-8 py-8 md:px-10 md:py-10 relative overflow-hidden'>
           <div className='absolute top-[-60px] right-[-60px] w-48 h-48 rounded-full bg-orange-500/10' />
           <div className='absolute bottom-[-40px] left-[-30px] w-32 h-32 rounded-full bg-orange-500/8' />
 

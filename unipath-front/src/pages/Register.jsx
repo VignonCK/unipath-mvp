@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/api';
 import etudiantsImage from '../assets/etudiants.jpg';
+import { BentoCard, AcademicButton } from '../components/AcademicLayout';
 
 // Hook responsive
 function useIsMobile() {
@@ -131,27 +132,34 @@ const S = {
 function Logo() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 28 }}>
-      <div style={{
-        background: "rgb(30, 58, 138)", borderRadius: 6, width: 30, height: 30, // blue-900
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 13, fontWeight: 600, color: "#fff",
-      }}>
+      <div className='w-8 h-8 bg-gradient-to-br from-blue-900 to-orange-500 rounded-lg flex items-center justify-center text-white text-sm font-black shadow-lg'>
         U
       </div>
-      <span style={{ fontSize: 15, fontWeight: 600, color: "rgb(30, 58, 138)" }}>UniPath</span>
+      <span className='text-base font-black gradient-text'>UniPath</span>
     </div>
   );
 }
 
 function ProgressBar({ step }) {
   return (
-    <div style={{ display: "flex", gap: 6, marginBottom: 24 }}>
+    <div style={{ 
+      display: "flex", 
+      gap: 6, 
+      marginBottom: 24 
+    }}>
       {[1, 2].map((s) => (
-        <div key={s} style={{
-          flex: 1, height: 4, borderRadius: 2,
-          background: s <= step ? "rgb(249, 115, 22)" : "#e5e7eb", // orange-500
-          transition: "background 0.4s",
-        }} />
+        <div key={s} className='progress-glass' style={{
+          flex: 1, 
+          height: 4,
+        }}>
+          <div 
+            className='progress-fill'
+            style={{
+              width: s <= step ? '100%' : '0%',
+              transition: "width 0.4s",
+            }}
+          />
+        </div>
       ))}
     </div>
   );
@@ -169,15 +177,17 @@ function Field({ label, required, children }) {
 }
 
 const inputStyle = {
-  border: "1px solid #d1d5db",
+  border: "1px solid rgba(209, 213, 219, 0.3)",
   borderRadius: 8,
   padding: "9px 12px",
   fontSize: 14,
   color: "#111827",
   fontFamily: "inherit",
   outline: "none",
-  transition: "border-color 0.2s",
+  transition: "all 0.2s",
   width: "100%",
+  background: "rgba(255, 255, 255, 0.9)",
+  backdropFilter: "blur(10px)",
 };
 
 function Input({ style, ...props }) {
@@ -185,7 +195,12 @@ function Input({ style, ...props }) {
   return (
     <input
       {...props}
-      style={{ ...inputStyle, borderColor: focused ? "rgb(249, 115, 22)" : "#d1d5db", ...style }} // orange-500
+      className='input-glass'
+      style={{ 
+        ...inputStyle, 
+        borderColor: focused ? "rgb(249, 115, 22)" : "rgba(209, 213, 219, 0.3)", 
+        ...style 
+      }}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
     />
@@ -198,7 +213,12 @@ function Select({ value, onChange, children }) {
     <select
       value={value}
       onChange={onChange}
-      style={{ ...inputStyle, borderColor: focused ? "rgb(249, 115, 22)" : "#d1d5db", background: "#fff", cursor: "pointer" }} // orange-500
+      className='input-glass'
+      style={{ 
+        ...inputStyle, 
+        borderColor: focused ? "rgb(249, 115, 22)" : "rgba(209, 213, 219, 0.3)", 
+        cursor: "pointer" 
+      }}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
     >
@@ -208,29 +228,15 @@ function Select({ value, onChange, children }) {
 }
 
 function BtnPrimary({ children, onClick, style, disabled }) {
-  const [hovered, setHovered] = useState(false);
   return (
-    <button
+    <AcademicButton
       onClick={onClick}
       disabled={disabled}
-      style={{
-        padding: "12px 16px",
-        background: disabled ? "#9ca3af" : (hovered ? "rgb(234, 88, 12)" : "rgb(249, 115, 22)"), // orange-600 : orange-500
-        color: "#fff",
-        border: "none",
-        borderRadius: 8,
-        fontSize: 14,
-        fontWeight: 600,
-        cursor: disabled ? "not-allowed" : "pointer",
-        fontFamily: "inherit",
-        transition: "background 0.2s",
-        ...style,
-      }}
-      onMouseEnter={() => !disabled && setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      className='w-full'
+      style={style}
     >
       {children}
-    </button>
+    </AcademicButton>
   );
 }
 
@@ -239,19 +245,12 @@ function BtnSecondary({ children, onClick }) {
   return (
     <button
       onClick={onClick}
+      className='btn-glass'
       style={{
         padding: "12px 20px",
-        background: "transparent",
-        color: "rgb(249, 115, 22)", // orange-500
-        border: "1px solid rgb(249, 115, 22)", // orange-500
-        borderRadius: 8,
         fontSize: 14,
         fontWeight: 600,
-        cursor: "pointer",
-        fontFamily: "inherit",
-        transition: "background 0.2s",
         flexShrink: 0,
-        backgroundColor: hovered ? "rgba(249, 115, 22, 0.06)" : "transparent", // orange-500 avec transparence
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -374,7 +373,12 @@ function FormLeft({ onSuccess, isMobile }) {
   };
 
   return (
-    <div style={{ ...S.left, padding: isMobile ? "32px 24px" : "44px 48px" }}>
+    <div style={{ 
+      ...S.left, 
+      padding: isMobile ? "32px 24px" : "44px 48px",
+      background: "rgba(255, 255, 255, 0.95)",
+      backdropFilter: "blur(10px)",
+    }}>
       <Logo />
       <h1 style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 4 }}>
         Créer un compte
@@ -386,7 +390,7 @@ function FormLeft({ onSuccess, isMobile }) {
       <ProgressBar step={step} />
 
       {error && (
-        <div style={{
+        <div className='glass-card-subtle' style={{
           background: "#fef2f2",
           border: "1px solid #fecaca",
           color: "#dc2626",
@@ -554,7 +558,7 @@ function FormLeft({ onSuccess, isMobile }) {
             </Field>
           </div>
           
-          <div style={{
+          <div className='glass-card-subtle' style={{
             background: "#eff6ff",
             border: "1px solid #bfdbfe",
             borderRadius: 8,
@@ -814,15 +818,17 @@ export default function Register() {
   const isMobile = useIsMobile();
 
   return (
-    <div style={S.page}>
+    <div className='min-h-screen academic-bg custom-scrollbar flex items-center justify-center p-4 sm:p-6 animate-slide-in' style={{ position: 'relative' }}>
       <div style={S.backgroundImage} />
       <div style={S.backgroundOverlay} />
       
-      <div style={{
-        ...S.wrap,
-        flexDirection: isMobile ? "column" : "row",
+      <div className='glass-card-intense w-full overflow-hidden' style={{
         maxWidth: isMobile ? 480 : 940,
         minHeight: "auto",
+        display: 'flex',
+        flexDirection: isMobile ? "column" : "row",
+        position: 'relative',
+        zIndex: 2,
       }}>
         <FormLeft isMobile={isMobile} onSuccess={() => {}} />
         <RightPanelContent isMobile={isMobile} />

@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import { dgesService } from '../services/api';
 import DGESLayout from '../components/DGESLayout';
+import { BentoCard, ProgressBar } from '../components/AcademicLayout';
 
 export default function DashboardDGES() {
   const [data, setData] = useState(null);
@@ -56,7 +57,7 @@ export default function DashboardDGES() {
 
   return (
     <DGESLayout>
-      <div className='max-w-6xl mx-auto px-4 py-4 sm:p-6 space-y-4 sm:space-y-6'>
+      <div className='max-w-6xl mx-auto px-4 py-4 sm:p-6 space-y-4 sm:space-y-6 animate-slide-in'>
 
         {/* KPI CARDS */}
         <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
@@ -66,16 +67,16 @@ export default function DashboardDGES() {
             { label: 'Dossiers validés',value: data?.totaux?.total_valides ?? 0,    color: 'bg-green-600',  text: 'text-white', sub: 'text-green-100' },
             { label: 'En attente',      value: data?.totaux?.total_attente ?? 0,    color: 'bg-yellow-500', text: 'text-white', sub: 'text-yellow-100' },
           ].map(card => (
-            <div key={card.label} className={`rounded-2xl ${card.color} p-5 shadow-sm`}>
+            <BentoCard key={card.label} className={`${card.color} p-5`}>
               <p className={`text-3xl font-black ${card.text}`}>{card.value}</p>
               <p className={`text-xs font-medium mt-1 ${card.sub}`}>{card.label}</p>
-            </div>
+            </BentoCard>
           ))}
         </div>
 
         {/* TAUX GLOBAL */}
         {data?.totaux?.total_inscrits > 0 && (
-          <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
+          <BentoCard className='p-6'>
             <div className='flex items-center justify-between mb-3'>
               <h2 className='text-base font-bold text-gray-800'>Taux de validation global</h2>
               <span className='text-2xl font-black text-green-600'>{tauxGlobal}%</span>
@@ -90,11 +91,11 @@ export default function DashboardDGES() {
               <span>{data.totaux.total_valides} validés</span>
               <span>{data.totaux.total_inscrits} inscrits au total</span>
             </div>
-          </div>
+          </BentoCard>
         )}
 
         {/* GRAPHIQUE */}
-        <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
+        <BentoCard className='p-6'>
           <h2 className='text-base font-bold text-gray-800 mb-6'>Inscriptions par concours</h2>
           {chartData.length === 0 ? (
             <p className='text-center text-gray-400 text-sm py-10'>Aucune donnée disponible.</p>
@@ -112,10 +113,10 @@ export default function DashboardDGES() {
               </BarChart>
             </ResponsiveContainer>
           )}
-        </div>
+        </BentoCard>
 
         {/* TABLEAU DÉTAILLÉ */}
-        <div className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
+        <BentoCard className='p-0 overflow-hidden'>
           <div className='px-6 py-4 border-b border-gray-100 flex items-center justify-between'>
             <h2 className='text-base font-bold text-gray-800'>Détail par concours</h2>
             <span className='text-xs text-gray-400'>{data?.statistiques?.length || 0} concours</span>
@@ -163,7 +164,7 @@ export default function DashboardDGES() {
               </tbody>
             </table>
           </div>
-        </div>
+        </BentoCard>
 
       </div>
     </DGESLayout>

@@ -9,6 +9,7 @@ async function main() {
   await prisma.inscription.deleteMany();
   await prisma.concours.deleteMany();
   await prisma.candidat.deleteMany();
+  await prisma.membreCommission.deleteMany();
   console.log('Données existantes supprimées');
 
   // ── Créer 3 concours de test
@@ -37,6 +38,59 @@ async function main() {
     },
   });
   console.log('3 concours créés');
+
+  // ── Créer des membres de commission (Examinateurs et Contrôleurs)
+  const examinateur1 = await prisma.membreCommission.create({
+    data: {
+      email: 'examinateur1@uac.bj',
+      nom: 'AGBODJAN',
+      prenom: 'Serge',
+      telephone: '+22997111001',
+      role: 'COMMISSION',
+      sousRole: 'EXAMINATEUR',
+    },
+  });
+  const examinateur2 = await prisma.membreCommission.create({
+    data: {
+      email: 'examinateur2@uac.bj',
+      nom: 'HOUNKPE',
+      prenom: 'Marie',
+      telephone: '+22997111002',
+      role: 'COMMISSION',
+      sousRole: 'EXAMINATEUR',
+    },
+  });
+  const examinateur3 = await prisma.membreCommission.create({
+    data: {
+      email: 'examinateur3@uac.bj',
+      nom: 'DOSSOU',
+      prenom: 'Jean-Claude',
+      telephone: '+22997111003',
+      role: 'COMMISSION',
+      sousRole: 'EXAMINATEUR',
+    },
+  });
+  const controleur1 = await prisma.membreCommission.create({
+    data: {
+      email: 'controleur1@uac.bj',
+      nom: 'KPOHINTO',
+      prenom: 'Sylvie',
+      telephone: '+22997222001',
+      role: 'COMMISSION',
+      sousRole: 'CONTROLEUR',
+    },
+  });
+  const controleur2 = await prisma.membreCommission.create({
+    data: {
+      email: 'controleur2@uac.bj',
+      nom: 'AZONHIHO',
+      prenom: 'Rodrigue',
+      telephone: '+22997222002',
+      role: 'COMMISSION',
+      sousRole: 'CONTROLEUR',
+    },
+  });
+  console.log('5 membres de commission créés (3 examinateurs, 2 contrôleurs)');
 
   // ── Créer 5 candidats
   // Chaque matricule temporaire est unique grâce au timestamp + index
