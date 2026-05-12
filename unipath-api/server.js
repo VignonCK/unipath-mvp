@@ -3,12 +3,18 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '.env') });
 const config = require('./src/config');
 const logger = require('./src/utils/logger');
 const app = require('./src/app');
+const emailWorker = require('./src/services/email.worker');
+
 const PORT = config.port;
 const server = app.listen(PORT, () => {
   logger.success(`Serveur UniPath démarré sur le port ${PORT}`);
   logger.info(`Health check: ${config.appUrl}/health`);
   logger.info(`API Base URL: ${config.appUrl}/api`);
   logger.info(`Environnement: ${config.env}`);
+  
+  // Start email worker
+  emailWorker.start();
+  logger.info('Email worker started');
 });
 
 // Force le process à rester actif
@@ -16,6 +22,11 @@ setInterval(() => {}, 1 << 30);
 
 const gracefulShutdown = (signal) => {
   logger.warn(`Signal ${signal} reçu, arrêt du serveur...`);
+  
+  // Stop email worker first
+  emailWorker.stop();
+  logger.info('Email worker stopped');
+  
   server.close(() => {
     logger.success('Serveur arrêté proprement');
     process.exit(0);
