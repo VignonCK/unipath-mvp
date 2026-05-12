@@ -34,6 +34,6 @@
     "supertest": "^7.0.0"
   },
   "prisma": {
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed.js && node prisma/seed_m2.js"
   }
 }
