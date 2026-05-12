@@ -26,6 +26,7 @@ const pdfRoutes = require('./routes/pdf.routes');
 const completionRoutes = require('./routes/completion.routes');
 const historyRoutes = require('./routes/history.routes');
 const notificationRoutes = require('./routes/notifications.routes');
+const emailRoutes = require('./routes/email.routes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/candidats', candidatRoutes);
@@ -39,6 +40,7 @@ app.use('/api/pdf', pdfRoutes);
 app.use('/api/completion', completionRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/email', emailRoutes);
 
 // ── Servir les fichiers PHP ────────────────────────────────────
 const { exec } = require('child_process');

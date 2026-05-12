@@ -310,7 +310,7 @@ Intégrer le worker dans le serveur Express avec démarrage automatique et arrê
 ### 2.4 Monitoring
 
 #### Task 2.4.1 : Créer l'endpoint /api/email/health
-**Status** : ⬜ TODO  
+**Status** : ✅ DONE  
 **Assigné** : Backend Dev  
 **Estimation** : 2h  
 **Priorité** : MEDIUM
@@ -319,10 +319,10 @@ Intégrer le worker dans le serveur Express avec démarrage automatique et arrê
 Créer l'endpoint de monitoring pour vérifier l'état du système.
 
 **Critères d'acceptation** :
-- [ ] Route GET `/api/email/health` créée
-- [ ] Permissions : DGES, CONTROLEUR
-- [ ] Retourne : queue size, stats 24h, worker status, alerts
-- [ ] Tests d'intégration
+- [x] Route GET `/api/email/health` créée
+- [x] Permissions : DGES, CONTROLEUR
+- [x] Retourne : queue size, stats 24h, worker status, alerts
+- [x] Tests d'intégration
 
 **Fichiers** :
 - `unipath-api/src/routes/email.routes.js`
@@ -332,7 +332,7 @@ Créer l'endpoint de monitoring pour vérifier l'état du système.
 ---
 
 #### Task 2.4.2 : Créer l'endpoint /api/email/stats
-**Status** : ⬜ TODO  
+**Status** : ✅ DONE  
 **Assigné** : Backend Dev  
 **Estimation** : 2h  
 **Priorité** : LOW
@@ -341,11 +341,11 @@ Créer l'endpoint de monitoring pour vérifier l'état du système.
 Créer l'endpoint de statistiques détaillées.
 
 **Critères d'acceptation** :
-- [ ] Route GET `/api/email/stats` créée
-- [ ] Query parameter `period` : hour, day, week, month
-- [ ] Permissions : DGES, CONTROLEUR
-- [ ] Retourne : total, byStatus, byType, failureRate, avgDeliveryTime
-- [ ] Tests d'intégration
+- [x] Route GET `/api/email/stats` créée
+- [x] Query parameter `period` : hour, day, week, month
+- [x] Permissions : DGES, CONTROLEUR
+- [x] Retourne : total, byStatus, byType, failureRate, avgDeliveryTime
+- [x] Tests d'intégration
 
 **Fichiers** :
 - `unipath-api/src/routes/email.routes.js`
@@ -382,7 +382,7 @@ Configurer Winston pour les logs structurés.
 ---
 
 #### Task 2.5.2 : Intégrer les logs dans le worker
-**Status** : ⬜ TODO  
+**Status** : ✅ DONE  
 **Assigné** : Backend Dev  
 **Estimation** : 1h  
 **Priorité** : MEDIUM
@@ -391,10 +391,10 @@ Configurer Winston pour les logs structurés.
 Remplacer les `console.log` par des logs Winston structurés.
 
 **Critères d'acceptation** :
-- [ ] Logs info pour emails envoyés avec succès
-- [ ] Logs error pour emails échoués
-- [ ] Logs warning pour retry programmés
-- [ ] Emails masqués dans les logs
+- [x] Logs info pour emails envoyés avec succès
+- [x] Logs error pour emails échoués
+- [x] Logs warning pour retry programmés
+- [x] Emails masqués dans les logs
 
 **Fichiers** :
 - `unipath-api/src/services/email.worker.js`
@@ -773,12 +773,12 @@ En cas de problème critique :
 - [x] Variables d'environnement configurées
 
 ### Phase 2 ✅
-- [ ] Email Service refactoré
-- [ ] Rate Limiter implémenté
-- [ ] Email Worker créé
-- [ ] Worker intégré dans server.js
-- [ ] Endpoints de monitoring créés
-- [ ] Logging Winston configuré
+- [x] Email Service refactoré
+- [x] Rate Limiter implémenté
+- [x] Email Worker créé
+- [x] Worker intégré dans server.js
+- [x] Endpoints de monitoring créés
+- [x] Logging Winston configuré
 
 ### Phase 3 ✅
 - [ ] Tests unitaires > 80% couverture
