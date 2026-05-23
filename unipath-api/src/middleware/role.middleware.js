@@ -1,5 +1,5 @@
 // src/middleware/role.middleware.js
-const prisma = require('../prisma');
+const { resolveUserContext, attachUserContext } = require('../utils/user-context');
 
 /**
  * Middleware pour vérifier le rôle de l'utilisateur
@@ -8,73 +8,28 @@ const prisma = require('../prisma');
 const checkRole = (rolesAutorises) => {
   return async (req, res, next) => {
     try {
-      // req.user est défini par le middleware auth.middleware.js
       if (!req.user || !req.user.id) {
         return res.status(401).json({
           error: 'Utilisateur non authentifié',
         });
       }
 
-      const userId = req.user.id;
+      const ctx = await resolveUserContext(req.user.id);
 
-      // Chercher l'utilisateur dans les 3 tables possibles
-      let utilisateur = null;
-      let role = null;
-
-      // 1. Vérifier dans Candidat
-      const candidat = await prisma.candidat.findUnique({
-        where: { id: userId },
-        select: { role: true },
-      });
-
-      if (candidat) {
-        utilisateur = candidat;
-        role = candidat.role;
-      }
-
-      // 2. Vérifier dans MembreCommission
-      if (!utilisateur) {
-        const commission = await prisma.membreCommission.findUnique({
-          where: { id: userId },
-          select: { role: true },
-        });
-
-        if (commission) {
-          utilisateur = commission;
-          role = commission.role;
-        }
-      }
-
-      // 3. Vérifier dans AdministrateurDGES
-      if (!utilisateur) {
-        const dges = await prisma.administrateurDGES.findUnique({
-          where: { id: userId },
-          select: { role: true },
-        });
-
-        if (dges) {
-          utilisateur = dges;
-          role = dges.role;
-        }
-      }
-
-      // Si l'utilisateur n'existe dans aucune table
-      if (!utilisateur || !role) {
+      if (!ctx.role) {
         return res.status(403).json({
           error: 'Utilisateur non trouvé ou rôle non défini',
         });
       }
 
-      // Vérifier si le rôle est autorisé
-      if (!rolesAutorises.includes(role)) {
+      if (!rolesAutorises.includes(ctx.role)) {
         return res.status(403).json({
           error: `Accès refusé. Rôle requis: ${rolesAutorises.join(' ou ')}`,
-          roleActuel: role,
+          roleActuel: ctx.role,
         });
       }
 
-      // Ajouter le rôle à la requête pour utilisation ultérieure
-      req.userRole = role;
+      attachUserContext(req, ctx);
       next();
     } catch (error) {
       console.error('Erreur vérification rôle:', error);

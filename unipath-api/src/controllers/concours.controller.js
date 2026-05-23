@@ -92,8 +92,8 @@ exports.getClassement = async (req, res) => {
     const inscriptions = await prisma.inscription.findMany({
       where: {
         concoursId: id,
-        statut: {
-          in: statutsValides
+        dossierInscription: {
+          statut: { in: statutsValides },
         },
       },
       include: {
@@ -379,3 +379,5 @@ exports.deleteConcours = async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
+
+module.exports = exports;

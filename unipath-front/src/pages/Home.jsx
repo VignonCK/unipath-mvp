@@ -181,15 +181,15 @@ export default function Home() {
     <div className='min-h-screen academic-bg custom-scrollbar'>
 
       {/* NAVBAR */}
-      <nav className='bg-blue-900 sticky top-0 z-50 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center shadow-md'>
+      <nav className='bg-white/80 backdrop-blur-md border-b border-white/20 shadow-sm sticky top-0 z-50 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center'>
         <div className='flex items-center gap-2 sm:gap-3'>
-          <span className='text-xl sm:text-2xl font-black text-white tracking-tight'>UniPath</span>
-          <span className='hidden md:block text-orange-400 text-xs sm:text-sm font-semibold'>Plateforme universitaire numérique</span>
+          <span className='text-xl sm:text-2xl font-black text-blue-900 tracking-tight'>UniPath</span>
+          <span className='hidden md:block text-orange-500 text-xs sm:text-sm font-semibold'>Plateforme universitaire numérique</span>
         </div>
         <div className='flex gap-2 sm:gap-3'>
           <button 
             onClick={() => navigate('/login')} 
-            className='bg-white text-blue-900 font-bold text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg hover:bg-gray-100 transition'
+            className='bg-blue-900 text-white font-bold text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg hover:bg-blue-800 transition'
           >
             Connexion
           </button>

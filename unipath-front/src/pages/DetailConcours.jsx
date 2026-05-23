@@ -1,4 +1,4 @@
-﻿// src/pages/DetailConcours.jsx
+// src/pages/DetailConcours.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { candidatService, concoursService, inscriptionService, dossierService, convocationService } from '../services/api';
@@ -63,7 +63,7 @@ async function refreshData(id) {
 export default function DetailConcours() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [candidat, setCandidат] = useState(null);
+  const [candidat, setCandidat] = useState(null);
   const [concours, setConcours] = useState(null);
   const [inscription, setInscription] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -77,7 +77,7 @@ export default function DetailConcours() {
     if (!token) { navigate('/login'); return; }
     refreshData(id)
       .then(({ candidat: p, concours: c }) => {
-        setCandidат(p);
+        setCandidat(p);
         setConcours(c);
         const saved = localStorage.getItem('photoProfil_' + p.id);
         if (saved) setPhotoUrl(saved);
@@ -111,7 +111,7 @@ export default function DetailConcours() {
       }
       showMessage('Pièce déposée avec succès !', 'success');
       const { candidat: updated, concours: updatedConcours } = await refreshData(id);
-      setCandidат(updated);
+      setCandidat(updated);
       setConcours(updatedConcours);
       if (updatedConcours.dossierCandidat) setDossierCandidat(updatedConcours.dossierCandidat); // ✅ FIX
       const inscriptionUpdated = updated.inscriptions?.find(i => i.concoursId === updatedConcours.id);
@@ -144,7 +144,7 @@ export default function DetailConcours() {
         setInscription(result.inscription);
         showMessage('Inscription créée ! Veuillez maintenant déposer votre quittance de paiement.', 'success');
         const { candidat: updated, concours: updatedConcours } = await refreshData(id);
-        setCandidат(updated);
+        setCandidat(updated);
         setConcours(updatedConcours);
         const inscriptionUpdated = updated.inscriptions?.find(i => i.concoursId === updatedConcours.id);
         if (inscriptionUpdated) setInscription(inscriptionUpdated);
@@ -170,7 +170,7 @@ export default function DetailConcours() {
       // TODO: Appeler une API pour marquer le dossier comme SOUMIS
       showMessage('Dossier soumis avec succès ! Fiche de pré-inscription envoyée par email.', 'success');
       const { candidat: updated, concours: updatedConcours } = await refreshData(id);
-      setCandidат(updated);
+      setCandidat(updated);
       setConcours(updatedConcours);
       const inscriptionUpdated = updated.inscriptions?.find(i => i.concoursId === updatedConcours.id);
       if (inscriptionUpdated) setInscription(inscriptionUpdated);

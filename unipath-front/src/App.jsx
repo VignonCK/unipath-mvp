@@ -20,6 +20,12 @@ import MonCompte from './pages/MonCompte';
 import DetailInscription from './pages/DetailInscription';
 import DesignSystemDemo from './pages/DesignSystemDemo';
 import ProtectedRoute from './components/ProtectedRoute';
+import ListeDossiersExaminateur from './pages/ListeDossiersExaminateur';
+import DetailDossierExaminateur from './pages/DetailDossierExaminateur';
+import TableauDeBordControleur from './pages/TableauDeBordControleur';
+import ListeDossiersControleur from './pages/ListeDossiersControleur';
+import DetailDossierControleur from './pages/DetailDossierControleur';
+import DossiersSansVerdictControleur from './pages/DossiersSansVerdictControleur';
 
 function App() {
   return (
@@ -121,6 +127,62 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['COMMISSION']}>
               <DetailCandidatCommission />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Routes protégées - EXAMINATEUR (sous-rôle de COMMISSION) */}
+        <Route
+          path='/examinateur/dossiers'
+          element={
+            <ProtectedRoute allowedRoles={['COMMISSION']} allowedSousRoles={['EXAMINATEUR']}>
+              <ListeDossiersExaminateur />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/examinateur/dossiers/:dossierInscriptionId'
+          element={
+            <ProtectedRoute allowedRoles={['COMMISSION']} allowedSousRoles={['EXAMINATEUR']}>
+              <DetailDossierExaminateur />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Routes protégées - CONTROLEUR (sous-rôle de COMMISSION) */}
+        <Route
+          path='/controleur-commission/tableau-de-bord'
+          element={
+            <ProtectedRoute allowedRoles={['COMMISSION']} allowedSousRoles={['CONTROLEUR']}>
+              <TableauDeBordControleur />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/controleur-commission/dossiers'
+          element={
+            <ProtectedRoute allowedRoles={['COMMISSION']} allowedSousRoles={['CONTROLEUR']}>
+              <ListeDossiersControleur />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/controleur-commission/dossiers/:dossierInscriptionId'
+          element={
+            <ProtectedRoute allowedRoles={['COMMISSION']} allowedSousRoles={['CONTROLEUR']}>
+              <DetailDossierControleur />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/controleur-commission/dossiers-sans-verdict'
+          element={
+            <ProtectedRoute allowedRoles={['COMMISSION']} allowedSousRoles={['CONTROLEUR']}>
+              <DossiersSansVerdictControleur />
             </ProtectedRoute>
           }
         />

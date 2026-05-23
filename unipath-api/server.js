@@ -4,6 +4,7 @@ const config = require('./src/config');
 const logger = require('./src/utils/logger');
 const app = require('./src/app');
 const emailWorker = require('./src/services/email.worker');
+const dossiersSansVerdictJob = require('./src/jobs/dossiers-sans-verdict.job');
 
 const PORT = config.port;
 const server = app.listen(PORT, () => {
@@ -15,6 +16,10 @@ const server = app.listen(PORT, () => {
   // Start email worker
   emailWorker.start();
   logger.info('Email worker started');
+  
+  // Start dossiers sans verdict job
+  dossiersSansVerdictJob.start();
+  logger.info('Dossiers sans verdict job started');
 });
 
 // Force le process à rester actif
@@ -26,6 +31,10 @@ const gracefulShutdown = (signal) => {
   // Stop email worker first
   emailWorker.stop();
   logger.info('Email worker stopped');
+  
+  // Stop dossiers sans verdict job
+  dossiersSansVerdictJob.stop();
+  logger.info('Dossiers sans verdict job stopped');
   
   server.close(() => {
     logger.success('Serveur arrêté proprement');

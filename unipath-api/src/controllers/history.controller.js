@@ -78,7 +78,7 @@ exports.enregistrerAction = async (req, res) => {
   try {
     const { dossierInscriptionId, typeAction, details } = req.body;
     const utilisateurId = req.user.id;
-    const userRole = req.user.role;
+    const userRole = req.userRole || req.user?.role;
 
     if (!dossierInscriptionId || !typeAction) {
       return res.status(400).json({ error: 'dossierInscriptionId et typeAction sont obligatoires' });
@@ -241,3 +241,87 @@ exports.exporterCSV = async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur lors de l\'export CSV' });
   }
 };
+
+
+/**
+ * Récupérer uniquement les actions liées aux verdicts et décisions
+ */
+exports.getHistoriqueVerdicts = async (req, res) => {
+  try {
+    const { dossierInscriptionId } = req.params;
+    const userRole = req.user?.role;
+
+    // Check permissions: COMMISSION, CONTROLEUR, DGES only
+    if (!['COMMISSION', 'CONTROLEUR', 'DGES'].includes(userRole)) {
+      return res.status(403).json({ 
+        error: 'Accès refusé. Seuls les membres de la commission, contrôleurs et DGES peuvent consulter l\'historique.' 
+      });
+    }
+
+    // Retrieve DossierInscription with inscription details
+    const dossierInscription = await prisma.dossierInscription.findUnique({
+      where: { id: dossierInscriptionId },
+      include: { 
+        inscription: { 
+          include: { 
+            candidat: { select: { nom: true, prenom: true, email: true } },
+            concours: { select: { libelle: true, etablissement: true } }
+          } 
+        } 
+      }
+    });
+
+    if (!dossierInscription) {
+      return res.status(404).json({ error: 'Dossier d\'inscription non trouvé' });
+    }
+
+    // Récupérer uniquement les actions liées aux verdicts et décisions
+    const actions = await prisma.actionHistory.findMany({
+      where: {
+        dossierInscriptionId,
+        typeAction: {
+          in: [
+            'VERDICT_EXAMINATEUR_RENDU',
+            'VERDICT_EXAMINATEUR_MODIFIE',
+            'DECISION_CONTROLEUR_RENDUE',
+            'DECISION_CONTROLEUR_MODIFIEE'
+          ]
+        }
+      },
+      orderBy: { timestamp: 'desc' }
+    });
+
+    // Récupérer les informations des utilisateurs (examinateurs et contrôleurs)
+    const utilisateurIds = [...new Set(actions.map(a => a.utilisateurId))];
+    const utilisateurs = await prisma.membreCommission.findMany({
+      where: { id: { in: utilisateurIds } },
+      select: { id: true, nom: true, prenom: true, sousRole: true }
+    });
+    const utilisateursMap = Object.fromEntries(
+      utilisateurs.map(u => [u.id, { nom: u.nom, prenom: u.prenom, sousRole: u.sousRole }])
+    );
+
+    // Enrichir les actions avec les informations des utilisateurs
+    const actionsEnrichies = actions.map(action => ({
+      ...action,
+      utilisateur: utilisateursMap[action.utilisateurId] || null
+    }));
+
+    res.json({
+      dossierInscriptionId,
+      inscription: {
+        numeroInscription: dossierInscription.inscription.numeroInscription,
+        candidat: dossierInscription.inscription.candidat,
+        concours: dossierInscription.inscription.concours
+      },
+      actions: actionsEnrichies,
+      total: actionsEnrichies.length
+    });
+
+  } catch (error) {
+    console.error('Erreur getHistoriqueVerdicts:', error);
+    res.status(500).json({ error: 'Erreur serveur lors de la récupération de l\'historique des verdicts' });
+  }
+};
+
+module.exports = exports;

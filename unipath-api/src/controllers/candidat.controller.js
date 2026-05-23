@@ -23,7 +23,10 @@ exports.getProfil = async (req, res) => {
         updatedAt: true,
         // Ne pas exposer emailConfirme
         inscriptions: {
-          include: { concours: true }
+          include: {
+            concours: true,
+            dossierInscription: true,
+          },
         },
         dossier: true,
       },
@@ -31,7 +34,14 @@ exports.getProfil = async (req, res) => {
 
     if (!candidat) return res.status(404).json({ error: 'Candidat non trouvé' });
 
-    res.json(candidat);
+    const inscriptions = candidat.inscriptions.map((ins) => ({
+      ...ins,
+      statut: ins.dossierInscription?.statut ?? 'EN_ATTENTE',
+      commentaireRejet: ins.dossierInscription?.commentaireRejet,
+      commentaireSousReserve: ins.dossierInscription?.commentaireSousReserve,
+    }));
+
+    res.json({ ...candidat, inscriptions });
   } catch (error) {
     console.error('❌ Erreur getProfil:', error);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -52,3 +62,5 @@ exports.updateProfil = async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
+
+module.exports = exports;

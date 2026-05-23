@@ -1,5 +1,7 @@
 const prisma = require('../prisma');
 const { supabaseAdmin } = require('../supabase');
+const { genererNumeroInscriptionUnique } = require('../utils/numero-inscription.helper');
+const { envoyerPreInscriptionApresCreation } = require('../utils/inscription-email.helper');
 
 /**
  * Créer une nouvelle inscription à un concours
@@ -41,13 +43,15 @@ exports.creerInscription = async (req, res) => {
       });
     }
 
+    const numeroInscription = await genererNumeroInscriptionUnique();
+
     // Créer l'inscription + DossierInscription dans une transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Créer l'inscription
       const inscription = await tx.inscription.create({
         data: {
           candidatId,
           concoursId,
+          numeroInscription,
         },
       });
 
@@ -97,11 +101,21 @@ exports.creerInscription = async (req, res) => {
             nom: true,
             prenom: true,
             email: true,
+            telephone: true,
+            dateNaiss: true,
+            lieuNaiss: true,
           },
         },
         dossierInscription: true,
       },
     });
+
+    // Email + PDF pré-inscription (asynchrone, ne bloque pas la réponse)
+    envoyerPreInscriptionApresCreation({
+      candidat: inscriptionComplete.candidat,
+      concours: inscriptionComplete.concours,
+      inscription: inscriptionComplete,
+    }).catch((err) => console.error('Erreur envoi email pré-inscription:', err));
 
     res.status(201).json({
       message: 'Inscription créée avec succès',
@@ -129,11 +143,19 @@ exports.getMesInscriptions = async (req, res) => {
       where: { candidatId },
       include: {
         concours: true,
+        dossierInscription: true,
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    res.json(inscriptions);
+    const mapped = inscriptions.map((ins) => ({
+      ...ins,
+      statut: ins.dossierInscription?.statut ?? 'EN_ATTENTE',
+      commentaireRejet: ins.dossierInscription?.commentaireRejet,
+      commentaireSousReserve: ins.dossierInscription?.commentaireSousReserve,
+    }));
+
+    res.json(mapped);
   } catch (error) {
     console.error('Erreur récupération inscriptions:', error);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -155,6 +177,7 @@ exports.getInscriptionById = async (req, res) => {
       },
       include: {
         concours: true,
+        dossierInscription: true,
         candidat: {
           include: {
             dossier: true,
@@ -167,7 +190,12 @@ exports.getInscriptionById = async (req, res) => {
       return res.status(404).json({ error: 'Inscription non trouvée' });
     }
 
-    res.json(inscription);
+    res.json({
+      ...inscription,
+      statut: inscription.dossierInscription?.statut ?? 'EN_ATTENTE',
+      commentaireRejet: inscription.dossierInscription?.commentaireRejet,
+      commentaireSousReserve: inscription.dossierInscription?.commentaireSousReserve,
+    });
   } catch (error) {
     console.error('Erreur récupération inscription:', error);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -194,17 +222,29 @@ exports.updatePiecesExtras = async (req, res) => {
       return res.status(404).json({ error: 'Inscription non trouvée ou non autorisée' });
     }
 
-    const updated = await prisma.inscription.update({
-      where: { id: inscriptionId },
+    const dossier = await prisma.dossierInscription.findUnique({
+      where: { inscriptionId },
+    });
+
+    if (!dossier) {
+      return res.status(404).json({ error: 'Dossier d\'inscription non trouvé' });
+    }
+
+    const updated = await prisma.dossierInscription.update({
+      where: { id: dossier.id },
       data: { piecesExtras },
       include: {
-        concours: true,
+        inscription: { include: { concours: true } },
       },
     });
 
     res.json({
       message: 'Pièces extras mises à jour avec succès',
-      inscription: updated,
+      inscription: {
+        ...updated.inscription,
+        dossierInscription: updated,
+        piecesExtras: updated.piecesExtras,
+      },
     });
   } catch (error) {
     console.error('Erreur mise à jour pièces extras:', error);
@@ -309,3 +349,5 @@ exports.annulerInscription = async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
+
+module.exports = exports;

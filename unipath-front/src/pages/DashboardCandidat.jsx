@@ -45,7 +45,7 @@ function profilIncomplet(candidat) {
 
 export default function DashboardCandidat() {
   const navigate = useNavigate();
-  const [candidat, setCandidат]       = useState(null);
+  const [candidat, setCandidat]       = useState(null);
   const [concours, setConcours]       = useState([]);
   const [loading, setLoading]         = useState(true);
   const [uploadStatus, setUploadStatus] = useState({});
@@ -66,7 +66,7 @@ export default function DashboardCandidat() {
     if (!token) { navigate('/login'); return; }
     Promise.all([candidatService.getProfil(), concoursService.getAll()])
       .then(([p, c]) => {
-        setCandidат(p);
+        setCandidat(p);
         setConcours(c);
         setEditForm({
           nom:       p.nom       || '',
@@ -96,7 +96,7 @@ export default function DashboardCandidat() {
     try {
       await candidatService.updateProfil(editForm);
       const updated = await candidatService.getProfil();
-      setCandidат(updated);
+      setCandidat(updated);
       setEditOpen(false);
       showMessage('Profil mis à jour avec succès.', 'success');
     } catch (err) {
@@ -165,7 +165,7 @@ export default function DashboardCandidat() {
       const response = await inscriptionService.creer(concoursId);
       showMessage('Inscription réussie ! Une fiche de pré-inscription vous a été envoyée par email.', 'success');
       const updated = await candidatService.getProfil();
-      setCandidат(updated);
+      setCandidat(updated);
     } catch (err) {
       // Si le dossier est incomplet (vérification backend)
       if (err.message.includes('Dossier incomplet') || err.message.includes('pièces manquantes')) {
@@ -192,7 +192,7 @@ export default function DashboardCandidat() {
       await dossierService.uploadPiece(typePiece, fichier);
       setUploadStatus(prev => ({ ...prev, [typePiece]: 'ok' }));
       const updated = await candidatService.getProfil();
-      setCandidат(updated);
+      setCandidat(updated);
     } catch { setUploadStatus(prev => ({ ...prev, [typePiece]: 'error' })); }
   };
 
@@ -342,7 +342,7 @@ export default function DashboardCandidat() {
           onSoumettre={async () => {
             showMessage('Dossier soumis. La commission va étudier votre candidature.', 'success');
             const updated = await candidatService.getProfil();
-            setCandidат(updated);
+            setCandidat(updated);
           }}
         />
 

@@ -8,7 +8,7 @@ const { PrismaClient } = require('@prisma/client');
 const rateLimiter = require('../services/rate-limiter');
 const emailWorker = require('../services/email.worker');
 
-const prisma = new PrismaClient();
+const prisma = require('../prisma');
 
 /**
  * GET /api/email/health

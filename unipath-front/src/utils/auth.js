@@ -31,7 +31,12 @@ const DEFAULT_ROUTES = {
   [ROLES.CANDIDAT]: '/dashboard',
   [ROLES.COMMISSION]: '/commission',
   [ROLES.DGES]: '/dashboard-dges',
-  [ROLES.CONTROLEUR]: '/controleur',
+  [ROLES.CONTROLEUR]: '/controleur-commission/tableau-de-bord',
+};
+
+export const SOUS_ROLES_COMMISSION = {
+  EXAMINATEUR: 'EXAMINATEUR',
+  CONTROLEUR: 'CONTROLEUR',
 };
 
 /**
@@ -72,6 +77,20 @@ export function getUserId() {
 export function getUserRole() {
   const user = getUser();
   return user?.role || null;
+}
+
+export function getUserSousRole() {
+  const user = getUser();
+  return user?.sousRole || null;
+}
+
+export function hasSousRole(allowedSousRoles) {
+  const sousRole = getUserSousRole();
+  if (!sousRole) return false;
+  if (Array.isArray(allowedSousRoles)) {
+    return allowedSousRoles.includes(sousRole);
+  }
+  return sousRole === allowedSousRoles;
 }
 
 /**
@@ -133,7 +152,12 @@ export function logout() {
  * @param {string} role - Rôle de l'utilisateur
  * @returns {string} Route par défaut
  */
-export function getDefaultRoute(role) {
+export function getDefaultRoute(role, sousRole) {
+  if (role === ROLES.COMMISSION) {
+    if (sousRole === SOUS_ROLES_COMMISSION.EXAMINATEUR) return '/examinateur/dossiers';
+    if (sousRole === SOUS_ROLES_COMMISSION.CONTROLEUR) return '/controleur-commission/tableau-de-bord';
+    return '/commission';
+  }
   return DEFAULT_ROUTES[role] || '/login';
 }
 
@@ -141,8 +165,8 @@ export function getDefaultRoute(role) {
  * Redirige vers la route par défaut selon le rôle
  */
 export function redirectToDefaultRoute() {
-  const role = getUserRole();
-  const route = getDefaultRoute(role);
+  const user = getUser();
+  const route = getDefaultRoute(user?.role, user?.sousRole);
   window.location.href = route;
 }
 

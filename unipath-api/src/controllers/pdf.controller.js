@@ -14,6 +14,7 @@ exports.telechargerConvocation = async (req, res) => {
       include: {
         candidat: true,
         concours: true,
+        dossierInscription: true,
       },
     });
 
@@ -25,7 +26,8 @@ exports.telechargerConvocation = async (req, res) => {
       return res.status(403).json({ error: 'Acces refuse' });
     }
 
-    if (inscription.statut !== 'VALIDE') {
+    const statutDossier = inscription.dossierInscription?.statut;
+    if (statutDossier !== 'VALIDE') {
       return res.status(400).json({ error: 'La convocation n\'est disponible que pour les dossiers valides' });
     }
 
@@ -149,3 +151,5 @@ exports.telechargerPreinscription = async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
+
+module.exports = exports;

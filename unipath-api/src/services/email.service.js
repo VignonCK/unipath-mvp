@@ -12,7 +12,7 @@ const emailConfig = require('../config/email.config');
 const logger = require('../config/logger');
 const { getFrontendUrl } = require('../utils/url.helper');
 
-const prisma = new PrismaClient();
+const prisma = require('../prisma');
 
 class EmailService {
   /**

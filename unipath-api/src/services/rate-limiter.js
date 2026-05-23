@@ -4,8 +4,7 @@
  * Prevents email abuse by limiting the number of emails per user and globally
  */
 
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../prisma');
 
 class RateLimiter {
   constructor() {

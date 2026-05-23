@@ -47,12 +47,15 @@ export default function Login() {
     setEmailNotConfirmed(false);
     try {
       const data = await authService.login(email, password);
-      switch (data.user?.role) {
-        case 'CANDIDAT':   navigate('/dashboard');  break;
-        case 'COMMISSION': navigate('/commission'); break;
-        case 'DGES':       navigate('/dashboard-dges'); break;
-        default:           navigate('/dashboard');
-      }
+      const { role, sousRole } = data.user || {};
+      if (role === 'COMMISSION') {
+        if (sousRole === 'EXAMINATEUR') navigate('/examinateur/dossiers');
+        else if (sousRole === 'CONTROLEUR') navigate('/controleur-commission/tableau-de-bord');
+        else navigate('/commission');
+      } else if (role === 'CANDIDAT') navigate('/dashboard');
+      else if (role === 'DGES') navigate('/dashboard-dges');
+      else if (role === 'CONTROLEUR') navigate('/controleur-commission/tableau-de-bord');
+      else navigate('/dashboard');
     } catch (err) {
       // Vérifier si l'erreur est due à un email non confirmé
       if (err.response?.status === 403 && err.response?.data?.emailConfirmationRequired) {

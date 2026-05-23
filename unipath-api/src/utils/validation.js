@@ -1,128 +1,126 @@
-/**
- * Validation Utilities for Email System
- * 
- * Provides validation functions for emails, parameters, and input sanitization
- */
+// src/utils/validation.js
 
 /**
- * Validate email address format
- * @param {string} email - Email address to validate
- * @returns {boolean} True if valid, false otherwise
+ * Valide qu'un verdict est une valeur valide de l'enum Verdict
+ * @param {string} verdict - Le verdict à valider
+ * @returns {boolean} True si le verdict est valide
  */
-function validateEmail(email) {
-  if (!email || typeof email !== 'string') {
-    return false;
-  }
-
-  // RFC 5322 compliant email regex (simplified)
-  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-  
-  return emailRegex.test(email) && email.length <= 254;
-}
+const validateVerdict = (verdict) => {
+  const verdictsValides = ['VALIDE', 'REJETE', 'SOUS_RESERVE'];
+  return verdictsValides.includes(verdict);
+};
 
 /**
- * Validate required parameters are present and non-empty
- * @param {Object} params - Object containing parameters to validate
- * @param {string[]} requiredFields - Array of required field names (optional, validates all if not provided)
- * @throws {Error} If validation fails
+ * Valide qu'un motif est fourni et valide pour les verdicts REJETE et SOUS_RESERVE
+ * @param {string} verdict - Le verdict
+ * @param {string} motif - Le motif à valider
+ * @returns {{valid: boolean, error: string|null}} Résultat de la validation
  */
-function validateParams(params, requiredFields = null) {
-  if (!params || typeof params !== 'object') {
-    throw new Error('Parameters must be an object');
-  }
-
-  const fieldsToCheck = requiredFields || Object.keys(params);
-
-  for (const field of fieldsToCheck) {
-    const value = params[field];
-    
-    if (value === undefined || value === null || value === '') {
-      throw new Error(`Missing required parameter: ${field}`);
+const validateMotif = (verdict, motif) => {
+  // Le motif est obligatoire pour REJETE et SOUS_RESERVE
+  if (verdict === 'REJETE' || verdict === 'SOUS_RESERVE') {
+    if (!motif || typeof motif !== 'string') {
+      return {
+        valid: false,
+        error: `Le motif est obligatoire pour un ${verdict === 'REJETE' ? 'rejet' : 'validation sous réserve'}`,
+      };
     }
 
-    // Additional type checks
-    if (typeof value === 'string' && value.trim() === '') {
-      throw new Error(`Parameter cannot be empty: ${field}`);
+    // Le motif doit contenir au moins 10 caractères
+    const motifTrimmed = motif.trim();
+    if (motifTrimmed.length < 10) {
+      return {
+        valid: false,
+        error: `Le motif doit contenir au moins 10 caractères (actuellement: ${motifTrimmed.length})`,
+      };
+    }
+
+    // Le motif ne doit pas dépasser 1000 caractères
+    if (motifTrimmed.length > 1000) {
+      return {
+        valid: false,
+        error: `Le motif ne peut pas dépasser 1000 caractères (actuellement: ${motifTrimmed.length})`,
+      };
     }
   }
-}
+
+  return { valid: true, error: null };
+};
 
 /**
- * Sanitize input to prevent XSS attacks
- * @param {string} input - Input string to sanitize
- * @returns {string} Sanitized string
+ * Sanitise un motif pour éviter les injections XSS
+ * Échappe les caractères HTML dangereux
+ * @param {string} motif - Le motif à sanitiser
+ * @returns {string} Le motif sanitisé
  */
-function sanitizeInput(input) {
-  if (!input || typeof input !== 'string') {
-    return input;
+const sanitizeMotif = (motif) => {
+  if (!motif || typeof motif !== 'string') {
+    return '';
   }
 
-  // Replace dangerous HTML characters
-  return input
+  return motif
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#x27;')
     .replace(/\//g, '&#x2F;');
-}
+};
 
 /**
- * Validate attachment object structure
- * @param {Object} attachment - Attachment object to validate
- * @returns {boolean} True if valid, false otherwise
+ * Valide qu'un identifiant est un UUID valide
+ * @param {string} id - L'identifiant à valider
+ * @returns {boolean} True si l'identifiant est un UUID valide
  */
-function validateAttachment(attachment) {
-  if (!attachment || typeof attachment !== 'object') {
+const validateUUID = (id) => {
+  if (!id || typeof id !== 'string') {
     return false;
   }
 
-  // Required fields for attachment
-  const requiredFields = ['filename', 'path'];
-  
-  for (const field of requiredFields) {
-    if (!attachment[field] || typeof attachment[field] !== 'string') {
-      return false;
-    }
-  }
-
-  return true;
-}
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(id);
+};
 
 /**
- * Validate array of attachments
- * @param {Array} attachments - Array of attachment objects
- * @returns {boolean} True if all valid, false otherwise
+ * Valide et sanitise un verdict et son motif
+ * @param {string} verdict - Le verdict à valider
+ * @param {string} motif - Le motif à valider et sanitiser
+ * @returns {{valid: boolean, error: string|null, sanitizedMotif: string}} Résultat de la validation
  */
-function validateAttachments(attachments) {
-  if (!Array.isArray(attachments)) {
-    return false;
+const validateAndSanitizeVerdict = (verdict, motif) => {
+  // Valider le verdict
+  if (!validateVerdict(verdict)) {
+    return {
+      valid: false,
+      error: 'Verdict invalide. Valeurs autorisées: VALIDE, REJETE, SOUS_RESERVE',
+      sanitizedMotif: null,
+    };
   }
 
-  return attachments.every(validateAttachment);
-}
-
-/**
- * Validate userId format (UUID)
- * @param {string} userId - User ID to validate
- * @returns {boolean} True if valid UUID, false otherwise
- */
-function validateUserId(userId) {
-  if (!userId || typeof userId !== 'string') {
-    return false;
+  // Valider le motif
+  const motifValidation = validateMotif(verdict, motif);
+  if (!motifValidation.valid) {
+    return {
+      valid: false,
+      error: motifValidation.error,
+      sanitizedMotif: null,
+    };
   }
 
-  // UUID v4 regex
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  
-  return uuidRegex.test(userId);
-}
+  // Sanitiser le motif
+  const sanitizedMotif = motif ? sanitizeMotif(motif) : null;
+
+  return {
+    valid: true,
+    error: null,
+    sanitizedMotif,
+  };
+};
 
 module.exports = {
-  validateEmail,
-  validateParams,
-  sanitizeInput,
-  validateAttachment,
-  validateAttachments,
-  validateUserId,
+  validateVerdict,
+  validateMotif,
+  sanitizeMotif,
+  validateUUID,
+  validateAndSanitizeVerdict,
 };

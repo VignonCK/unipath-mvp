@@ -7,7 +7,7 @@ exports.getCompletion = async (req, res) => {
   try {
     const { candidatId } = req.params;
     const userId = req.user.id;
-    const userRole = req.user.role; // ✅ fix
+    const userRole = req.userRole || req.user?.role;
 
     if (userRole === 'CANDIDAT' && userId !== candidatId) {
       return res.status(403).json({ error: 'Accès refusé. Vous ne pouvez consulter que votre propre dossier.' });
@@ -53,7 +53,7 @@ exports.getPiecesManquantes = async (req, res) => {
   try {
     const { candidatId } = req.params;
     const userId = req.user.id;
-    const userRole = req.user.role; // ✅ fix
+    const userRole = req.userRole || req.user?.role;
 
     if (userRole === 'CANDIDAT' && userId !== candidatId) {
       return res.status(403).json({ error: 'Accès refusé. Vous ne pouvez consulter que votre propre dossier.' });
@@ -141,7 +141,7 @@ exports.getCompletionInscription = async (req, res) => {
   try {
     const { inscriptionId } = req.params;
     const userId = req.user.id;
-    const userRole = req.user.role;
+    const userRole = req.userRole || req.user?.role;
 
     // Récupérer l'inscription avec référence implicite
     const inscription = await prisma.inscription.findUnique({
@@ -260,7 +260,7 @@ exports.getDossierComplet = async (req, res) => {
   try {
     const { inscriptionId } = req.params;
     const userId = req.user.id;
-    const userRole = req.user.role;
+    const userRole = req.userRole || req.user?.role;
 
     // Vérifier les permissions (COMMISSION, CONTROLEUR, DGES uniquement)
     if (!['COMMISSION', 'CONTROLEUR', 'DGES'].includes(userRole)) {
@@ -388,3 +388,5 @@ exports.getDossierComplet = async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
+
+module.exports = exports;

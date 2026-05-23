@@ -220,7 +220,7 @@ exports.getDossierPersonnel = async (req, res) => {
   try {
     const { candidatId } = req.params;
     const userId = req.user.id;
-    const userRole = req.user.role;
+    const userRole = req.userRole || req.user?.role;
 
     // Vérification des permissions
     if (userRole === 'CANDIDAT' && userId !== candidatId) {
@@ -310,3 +310,5 @@ exports.getDossierPersonnel = async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
+
+module.exports = exports;

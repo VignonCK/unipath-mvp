@@ -21,7 +21,7 @@ function joursRestants(dateFin) {
 
 export default function AccueilCandidat() {
   const navigate = useNavigate();
-  const [candidat, setCandidат] = useState(null);
+  const [candidat, setCandidat] = useState(null);
   const [concours, setConcours] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [photoUrl, setPhotoUrl] = useState(null);
@@ -31,7 +31,7 @@ export default function AccueilCandidat() {
     if (!token) { navigate('/login'); return; }
     Promise.all([candidatService.getProfil(), concoursService.getAll()])
       .then(([p, c]) => {
-        setCandidат(p);
+        setCandidat(p);
         setConcours(c);
         const saved = localStorage.getItem('photoProfil_' + p.id);
         if (saved) setPhotoUrl(saved);

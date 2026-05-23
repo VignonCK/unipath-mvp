@@ -28,7 +28,7 @@ const PIECES_FORMATS = {
 
 export default function MonCompte() {
   const navigate = useNavigate();
-  const [candidat, setCandidат]   = useState(null);
+  const [candidat, setCandidat]   = useState(null);
   const [loading, setLoading]     = useState(true);
   const [uploadStatus, setUploadStatus] = useState({});
   const [message, setMessage]     = useState({ text: '', type: 'info' });
@@ -42,7 +42,7 @@ export default function MonCompte() {
     if (!token) { navigate('/login'); return; }
     candidatService.getProfil()
       .then(p => {
-        setCandidат(p);
+        setCandidat(p);
         setEditForm({
           nom:       p.nom       || '',
           prenom:    p.prenom    || '',
@@ -69,7 +69,7 @@ export default function MonCompte() {
     try {
       await candidatService.updateProfil(editForm);
       const updated = await candidatService.getProfil();
-      setCandidат(updated);
+      setCandidat(updated);
       setEditOpen(false);
       showMessage('Profil mis à jour avec succès.', 'success');
     } catch (err) {
@@ -98,7 +98,7 @@ export default function MonCompte() {
       await dossierService.uploadPiece(typePiece, fichier);
       setUploadStatus(prev => ({ ...prev, [typePiece]: 'ok' }));
       const updated = await candidatService.getProfil();
-      setCandidат(updated);
+      setCandidat(updated);
     } catch {
       setUploadStatus(prev => ({ ...prev, [typePiece]: 'error' }));
     }
@@ -185,7 +185,7 @@ export default function MonCompte() {
           onSoumettre={async () => {
             showMessage('Dossier soumis. La commission va étudier votre candidature.', 'success');
             const updated = await candidatService.getProfil();
-            setCandidат(updated);
+            setCandidat(updated);
           }}
         />
 

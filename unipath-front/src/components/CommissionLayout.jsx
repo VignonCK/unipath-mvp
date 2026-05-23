@@ -13,30 +13,60 @@ export default function CommissionLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const user = authService.getCurrentUser();
 
-  const menuItems = [
-    {
-      id: 'dashboard',
-      label: 'Dossiers',
+  const sousRole = user?.sousRole;
+
+  const menuItems = [];
+
+  if (sousRole === 'EXAMINATEUR') {
+    menuItems.push({
+      id: 'examinateur',
+      label: 'Dossiers à évaluer',
       icon: (
         <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z' />
+          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' />
         </svg>
       ),
-      path: '/commission',
-      active: location.pathname === '/commission' || location.pathname.startsWith('/commission/candidat'),
-    },
-    {
-      id: 'notes',
-      label: 'Notes',
+      path: '/examinateur/dossiers',
+      active: location.pathname.startsWith('/examinateur'),
+    });
+  } else if (sousRole === 'CONTROLEUR') {
+    menuItems.push({
+      id: 'controleur-tdb',
+      label: 'Tableau de bord',
       icon: (
         <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' />
+          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6z' />
         </svg>
       ),
-      path: '/commission/notes',
-      active: location.pathname === '/commission/notes',
-    },
-  ];
+      path: '/controleur-commission/tableau-de-bord',
+      active: location.pathname.startsWith('/controleur-commission'),
+    });
+  } else {
+    menuItems.push(
+      {
+        id: 'dashboard',
+        label: 'Dossiers',
+        icon: (
+          <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z' />
+          </svg>
+        ),
+        path: '/commission',
+        active: location.pathname === '/commission' || location.pathname.startsWith('/commission/candidat'),
+      },
+      {
+        id: 'notes',
+        label: 'Notes',
+        icon: (
+          <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' />
+          </svg>
+        ),
+        path: '/commission/notes',
+        active: location.pathname === '/commission/notes',
+      }
+    );
+  }
 
   const handleLogout = () => {
     authService.logout();

@@ -38,6 +38,12 @@ export default function DashboardCommission() {
   const [rejetModal, setRejetModal] = useState({ open: false, inscriptionId: null, commentaire: '' });
   const [sousReserveModal, setSousReserveModal] = useState({ open: false, inscriptionId: null, commentaire: '' });
   const user = authService.getCurrentUser();
+  const sousRole = user?.sousRole;
+
+  useEffect(() => {
+    if (sousRole === 'EXAMINATEUR') navigate('/examinateur/dossiers', { replace: true });
+    if (sousRole === 'CONTROLEUR') navigate('/controleur-commission/tableau-de-bord', { replace: true });
+  }, [sousRole, navigate]);
 
   const showMessage = (text, type = 'info') => {
     setMessage({ text, type });
@@ -155,6 +161,14 @@ export default function DashboardCommission() {
           </div>
         )}
 
+        <BentoCard className='p-4 bg-blue-50 border border-blue-100'>
+          <p className='text-sm text-blue-900'>
+            <strong>Workflow double verdict :</strong> les dossiers en attente sont évalués par deux examinateurs,
+            puis arbitrés par le contrôleur. Ce tableau est une vue de suivi ; les décisions se prennent dans les
+            espaces Examinateur / Contrôleur.
+          </p>
+        </BentoCard>
+
         {/* STATS GLOBALES */}
         <div className='grid grid-cols-2 md:grid-cols-5 gap-4'>
           <BentoCard className='p-5'>
@@ -242,7 +256,8 @@ export default function DashboardCommission() {
               const pieces = ['acteNaissance', 'carteIdentite', 'photo', 'releve', 'quittance'];
               const nbPieces = pieces.filter(p => ins.candidat.dossier?.[p]).length;
               const pct = Math.round((nbPieces / pieces.length) * 100);
-              const dossierId = ins.candidat.dossier?.id;
+              const dossierId = ins.dossierInscriptionId;
+              const dv = ins.doubleVerdict;
 
               return (
                 <BentoCard key={ins.id} className='p-0 overflow-hidden'>
@@ -324,29 +339,19 @@ export default function DashboardCommission() {
                         Voir le profil complet
                       </button>
                       
-                      {ins.statut === 'EN_ATTENTE' && (
-                        <div className='flex flex-col gap-2'>
-                          <button
-                            onClick={() => handleDecision(ins.id, 'VALIDE')}
-                            className='w-full bg-slate-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-slate-700 transition'
-                          >
-                            Valider le dossier
-                          </button>
-                          <div className='flex gap-2'>
-                            <button
-                              onClick={() => ouvrirModalSousReserve(ins.id)}
-                              className='flex-1 bg-slate-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-slate-600 transition'
-                            >
-                              Sous réserve
-                            </button>
-                            <button
-                              onClick={() => ouvrirModalRejet(ins.id)}
-                              className='flex-1 bg-slate-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-slate-600 transition'
-                            >
-                              Rejeter
-                            </button>
-                          </div>
+                      {ins.statut === 'EN_ATTENTE' && dv && (
+                        <div className='text-xs text-gray-600 bg-gray-50 rounded-lg p-2'>
+                          <p>Verdicts examinateurs : <strong>{dv.nombreVerdicts}/2</strong></p>
+                          {dv.verdictsDivergents && (
+                            <p className='text-orange-700 mt-1'>Verdicts divergents — arbitrage contrôleur requis</p>
+                          )}
+                          {dv.decisionControleur && (
+                            <p className='mt-1'>Décision finale : {dv.decisionControleur}</p>
+                          )}
                         </div>
+                      )}
+                      {['VALIDE_PAR_COMMISSION', 'REJETE_PAR_COMMISSION', 'SOUS_RESERVE_PAR_COMMISSION'].includes(ins.statut) && (
+                        <p className='text-xs text-gray-500'>En attente de confirmation par le contrôleur institutionnel</p>
                       )}
                       {dossierId && (
                         <button

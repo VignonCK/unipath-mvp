@@ -1,37 +1,37 @@
 const prisma = require('../prisma');
-const { envoyerEmailValidation, envoyerEmailRejet, envoyerEmailConvocation, envoyerEmailSousReserve } = require('../services/email.service');
-const { exec } = require('child_process');
-const path = require('path');
-const fs = require('fs');
-const os = require('os');
+const { mapDossierInscriptionToInscription } = require('../utils/dossier-inscription-mapper');
+const { envoyerEmailDecisionFinale } = require('../utils/email-decision.helper');
 
-// Récupérer tous les dossiers en attente de validation contrôleur
+const STATUTS_EN_ATTENTE = [
+  'VALIDE_PAR_COMMISSION',
+  'REJETE_PAR_COMMISSION',
+  'SOUS_RESERVE_PAR_COMMISSION',
+];
+
 exports.getDossiersEnAttente = async (req, res) => {
   try {
     const { statut } = req.query;
 
-    const whereClause = statut 
+    const whereClause = statut
       ? { statut }
-      : {
-          statut: {
-            in: ['VALIDE_PAR_COMMISSION', 'REJETE_PAR_COMMISSION', 'SOUS_RESERVE_PAR_COMMISSION']
-          }
-        };
+      : { statut: { in: STATUTS_EN_ATTENTE } };
 
-    const inscriptions = await prisma.inscription.findMany({
+    const dossiers = await prisma.dossierInscription.findMany({
       where: whereClause,
       include: {
-        candidat: {
-          include: { dossier: true }
+        inscription: {
+          include: {
+            candidat: { include: { dossier: true } },
+            concours: true,
+          },
         },
-        concours: true
       },
-      orderBy: { decisionCommissionDate: 'desc' }
+      orderBy: { decisionCommissionDate: 'desc' },
     });
 
-    res.json({ 
-      total: inscriptions.length,
-      inscriptions 
+    res.json({
+      total: dossiers.length,
+      inscriptions: dossiers.map(mapDossierInscriptionToInscription),
     });
   } catch (error) {
     console.error('Erreur getDossiersEnAttente:', error);
@@ -39,156 +39,92 @@ exports.getDossiersEnAttente = async (req, res) => {
   }
 };
 
-// Valider ou modifier la décision de la commission
 exports.validerDecision = async (req, res) => {
   try {
     const { inscriptionId } = req.params;
     const { action, commentaireControleur } = req.body;
-    // action peut être: 'CONFIRMER', 'VALIDER', 'REJETER', 'SOUS_RESERVE'
     const controleurId = req.user?.id;
 
-    // Validation de l'action
     const actionsValides = ['CONFIRMER', 'VALIDER', 'REJETER', 'SOUS_RESERVE'];
     if (!actionsValides.includes(action)) {
-      return res.status(400).json({ 
-        error: `Action invalide. Actions acceptées : ${actionsValides.join(', ')}` 
+      return res.status(400).json({
+        error: `Action invalide. Actions acceptées : ${actionsValides.join(', ')}`,
       });
     }
 
-    const inscription = await prisma.inscription.findUnique({
-      where: { id: inscriptionId },
+    const dossier = await prisma.dossierInscription.findUnique({
+      where: { inscriptionId },
       include: {
-        candidat: true,
-        concours: true
-      }
+        inscription: {
+          include: { candidat: true, concours: true },
+        },
+      },
     });
 
-    if (!inscription) {
-      return res.status(404).json({ error: 'Inscription non trouvée' });
+    if (!dossier) {
+      return res.status(404).json({ error: 'Dossier non trouvé' });
     }
 
     let nouveauStatut;
     let typeEmail;
 
     if (action === 'CONFIRMER') {
-      // Confirmer la décision de la commission
       const mapping = {
-        'VALIDE_PAR_COMMISSION': 'VALIDE',
-        'REJETE_PAR_COMMISSION': 'REJETE',
-        'SOUS_RESERVE_PAR_COMMISSION': 'SOUS_RESERVE'
+        VALIDE_PAR_COMMISSION: 'VALIDE',
+        REJETE_PAR_COMMISSION: 'REJETE',
+        SOUS_RESERVE_PAR_COMMISSION: 'SOUS_RESERVE',
       };
-      nouveauStatut = mapping[inscription.statut];
-      
+      nouveauStatut = mapping[dossier.statut];
+
       if (!nouveauStatut) {
-        return res.status(400).json({ 
-          error: `Impossible de confirmer. Statut actuel : ${inscription.statut}` 
+        return res.status(400).json({
+          error: `Impossible de confirmer. Statut actuel : ${dossier.statut}`,
         });
       }
-      
+
       typeEmail = nouveauStatut;
     } else {
-      // Le contrôleur modifie la décision - Mapper l'action vers le statut
       const actionToStatut = {
-        'VALIDER': 'VALIDE',
-        'REJETER': 'REJETE',
-        'SOUS_RESERVE': 'SOUS_RESERVE'
+        VALIDER: 'VALIDE',
+        REJETER: 'REJETE',
+        SOUS_RESERVE: 'SOUS_RESERVE',
       };
-      
       nouveauStatut = actionToStatut[action];
       typeEmail = nouveauStatut;
     }
 
-    // Mettre à jour l'inscription
-    const inscriptionUpdated = await prisma.inscription.update({
-      where: { id: inscriptionId },
+    const dossierUpdated = await prisma.dossierInscription.update({
+      where: { id: dossier.id },
       data: {
         statut: nouveauStatut,
         decisionControleurPar: controleurId,
         decisionControleurDate: new Date(),
-        commentaireControleur: action !== 'CONFIRMER' ? commentaireControleur : null
+        commentaireControleur: action !== 'CONFIRMER' ? commentaireControleur : null,
       },
       include: {
-        candidat: true,
-        concours: true
-      }
+        inscription: {
+          include: { candidat: true, concours: true },
+        },
+      },
     });
 
-    // ✅ MAINTENANT on envoie l'email au candidat
+    const inscriptionUpdated = mapDossierInscriptionToInscription(dossierUpdated);
+
     try {
-      if (typeEmail === 'VALIDE') {
-        // Générer la convocation en PDF
-        const tmpInput = path.join(os.tmpdir(), `convocation_input_${Date.now()}.json`);
-        const tmpOutput = path.join(os.tmpdir(), `convocation_output_${Date.now()}.pdf`);
-
-        const data = JSON.stringify({
-          candidat: inscriptionUpdated.candidat,
-          concours: inscriptionUpdated.concours,
-          inscription: inscriptionUpdated,
-        });
-        fs.writeFileSync(tmpInput, data, 'utf8');
-
-        const phpScript = path.join(__dirname, '../../php/convocation.php');
-        const cmd = `php "${phpScript}" "${tmpInput}" "${tmpOutput}"`;
-
-        exec(cmd, { timeout: 30000 }, async (error, stdout, stderr) => {
-          fs.unlinkSync(tmpInput);
-          
-          if (error) {
-            console.error('Erreur génération convocation:', stderr);
-            // Envoyer quand même un email sans PDF
-            await envoyerEmailConvocation({
-              candidatEmail: inscriptionUpdated.candidat.email,
-              candidatNom: inscriptionUpdated.candidat.nom,
-              candidatPrenom: inscriptionUpdated.candidat.prenom,
-              concours: inscriptionUpdated.concours.libelle,
-              numeroDossier: inscriptionUpdated.id.substring(0, 8).toUpperCase(),
-              dateExamen: inscriptionUpdated.concours.dateDebut ? new Date(inscriptionUpdated.concours.dateDebut).toLocaleDateString('fr-FR') : null,
-              lieuExamen: 'EPAC - Université d\'Abomey-Calavi',
-            }, null).catch(err => console.error('Erreur envoi email:', err));
-          } else {
-            // Envoyer l'email avec la convocation
-            await envoyerEmailConvocation({
-              candidatEmail: inscriptionUpdated.candidat.email,
-              candidatNom: inscriptionUpdated.candidat.nom,
-              candidatPrenom: inscriptionUpdated.candidat.prenom,
-              concours: inscriptionUpdated.concours.libelle,
-              numeroDossier: inscriptionUpdated.id.substring(0, 8).toUpperCase(),
-              dateExamen: inscriptionUpdated.concours.dateDebut ? new Date(inscriptionUpdated.concours.dateDebut).toLocaleDateString('fr-FR') : null,
-              lieuExamen: 'EPAC - Université d\'Abomey-Calavi',
-            }, tmpOutput).catch(err => console.error('Erreur envoi email:', err));
-            
-            // Supprimer le PDF temporaire
-            if (fs.existsSync(tmpOutput)) fs.unlinkSync(tmpOutput);
-          }
-        });
-      } else if (typeEmail === 'REJETE') {
-        const motif = inscriptionUpdated.commentaireControleur || inscriptionUpdated.commentaireRejet;
-        await envoyerEmailRejet({
-          candidatEmail: inscriptionUpdated.candidat.email,
-          candidatNom: inscriptionUpdated.candidat.nom,
-          candidatPrenom: inscriptionUpdated.candidat.prenom,
-          concours: inscriptionUpdated.concours.libelle,
-          motif: motif,
-        });
-      } else if (typeEmail === 'SOUS_RESERVE') {
-        const motif = inscriptionUpdated.commentaireControleur || inscriptionUpdated.commentaireSousReserve;
-        await envoyerEmailSousReserve({
-          candidatEmail: inscriptionUpdated.candidat.email,
-          candidatNom: inscriptionUpdated.candidat.nom,
-          candidatPrenom: inscriptionUpdated.candidat.prenom,
-          concours: inscriptionUpdated.concours.libelle,
-          numeroDossier: inscriptionUpdated.id.substring(0, 8).toUpperCase(),
-          motif: motif,
-        });
-      }
+      await envoyerEmailDecisionFinale({
+        candidat: inscriptionUpdated.candidat,
+        concours: inscriptionUpdated.concours,
+        inscription: inscriptionUpdated,
+        decision: typeEmail,
+        motif: inscriptionUpdated.commentaireControleur || inscriptionUpdated.commentaireRejet || inscriptionUpdated.commentaireSousReserve,
+      });
     } catch (emailError) {
       console.error('Erreur envoi email:', emailError);
-      // On continue même si l'email échoue
     }
 
     res.json({
       message: 'Décision validée et email envoyé au candidat',
-      inscription: inscriptionUpdated
+      inscription: inscriptionUpdated,
     });
   } catch (error) {
     console.error('Erreur validerDecision:', error);
@@ -196,20 +132,15 @@ exports.validerDecision = async (req, res) => {
   }
 };
 
-// Récupérer les statistiques pour le contrôleur
 exports.getStatistiques = async (req, res) => {
   try {
     const [enAttente, valides, rejetes, sousReserve] = await Promise.all([
-      prisma.inscription.count({
-        where: {
-          statut: {
-            in: ['VALIDE_PAR_COMMISSION', 'REJETE_PAR_COMMISSION', 'SOUS_RESERVE_PAR_COMMISSION']
-          }
-        }
+      prisma.dossierInscription.count({
+        where: { statut: { in: STATUTS_EN_ATTENTE } },
       }),
-      prisma.inscription.count({ where: { statut: 'VALIDE' } }),
-      prisma.inscription.count({ where: { statut: 'REJETE' } }),
-      prisma.inscription.count({ where: { statut: 'SOUS_RESERVE' } })
+      prisma.dossierInscription.count({ where: { statut: 'VALIDE' } }),
+      prisma.dossierInscription.count({ where: { statut: 'REJETE' } }),
+      prisma.dossierInscription.count({ where: { statut: 'SOUS_RESERVE' } }),
     ]);
 
     res.json({
@@ -217,10 +148,12 @@ exports.getStatistiques = async (req, res) => {
       valides,
       rejetes,
       sousReserve,
-      total: valides + rejetes + sousReserve
+      total: valides + rejetes + sousReserve,
     });
   } catch (error) {
     console.error('Erreur getStatistiques:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
+
+module.exports = exports;

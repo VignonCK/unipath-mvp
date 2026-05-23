@@ -37,7 +37,7 @@ function statutConcours(concours) {
 
 export default function PageConcours() {
   const navigate = useNavigate();
-  const [candidat, setCandidат]   = useState(null);
+  const [candidat, setCandidat]   = useState(null);
   const [concours, setConcours]   = useState([]);
   const [loading, setLoading]     = useState(true);
   const [message, setMessage]     = useState({ text: '', type: 'info' });
@@ -51,7 +51,7 @@ export default function PageConcours() {
     if (!token) { navigate('/login'); return; }
     Promise.all([candidatService.getProfil(), concoursService.getAll()])
       .then(([p, c]) => {
-        setCandidат(p);
+        setCandidat(p);
         setConcours(c);
         const saved = localStorage.getItem('photoProfil_' + p.id);
         if (saved) setPhotoUrl(saved);

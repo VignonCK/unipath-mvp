@@ -5,7 +5,8 @@ const emailService = require('../services/email.service');
 
 exports.registerCommission = async (req, res) => {
   try {
-    const { email, password, nom, prenom, telephone } = req.body;
+    const { email, password, nom, prenom, telephone, sousRole } = req.body;
+    const sousRoleValide = sousRole === 'CONTROLEUR' ? 'CONTROLEUR' : 'EXAMINATEUR';
 
     const { data: authData, error: authError } =
       await supabase.auth.signUp({ 
@@ -27,6 +28,7 @@ exports.registerCommission = async (req, res) => {
         nom,
         prenom,
         telephone,
+        sousRole: sousRoleValide,
       },
     });
 
@@ -85,6 +87,7 @@ exports.registerCommission = async (req, res) => {
         prenom: membre.prenom,
         email: membre.email,
         role: membre.role,
+        sousRole: membre.sousRole,
       },
     });
   } catch (error) {
@@ -182,3 +185,5 @@ exports.registerDGES = async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
+
+module.exports = exports;

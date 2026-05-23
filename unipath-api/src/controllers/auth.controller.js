@@ -104,19 +104,16 @@ exports.register = async (req, res) => {
 
     // Envoyer l'email de confirmation avec gestion d'erreur améliorée
     try {
-      const confirmationUrl = buildFrontendUrl('/auth/confirm', {
-        token: authData.user.id,
-        type: 'signup'
-      });
+      const confirmationToken = authData.user.id;
 
       console.log(`📧 Envoi email de confirmation à ${candidat.email}`);
-      console.log(`🔗 URL de confirmation: ${confirmationUrl}`);
+      console.log(`🔗 Token de confirmation: ${confirmationToken}`);
 
       const emailResult = await emailService.envoyerEmailConfirmation({
         email: candidat.email,
         nom: candidat.nom,
         prenom: candidat.prenom,
-        confirmationUrl
+        confirmationToken
       });
 
       // Enregistrer la tentative d'envoi
@@ -211,14 +208,16 @@ exports.login = async (req, res) => {
     }
 
     // Chercher dans MembreCommission
+    let sousRole = null;
     if (!role) {
       const commission = await prisma.membreCommission.findUnique({
         where: { id: userId },
-        select: { role: true, nom: true, prenom: true },
+        select: { role: true, sousRole: true, nom: true, prenom: true },
       });
 
       if (commission) {
         role = commission.role;
+        sousRole = commission.sousRole;
         userData = commission;
       }
     }
@@ -254,6 +253,7 @@ exports.login = async (req, res) => {
       user: {
         email: data.user.email,
         role: role || 'CANDIDAT',
+        ...(sousRole && { sousRole }),
         ...userData,
       },
     });
@@ -327,16 +327,39 @@ exports.confirmEmail = async (req, res) => {
   try {
     const { token, type } = req.query;
 
+    console.log('🔍 Tentative de confirmation email avec token:', token);
+
     if (!token) {
       return res.status(400).json({ error: 'Token manquant' });
     }
 
-    // Vérifier le token avec Supabase Admin
-    const { data: userData, error: verifyError } = await supabaseAdmin.auth.admin.getUserById(token);
+    // Vérifier si le candidat existe dans la base de données
+    const candidatExistant = await prisma.candidat.findUnique({
+      where: { id: token }
+    });
 
-    if (verifyError || !userData) {
+    console.log('🔍 Candidat trouvé:', candidatExistant ? `${candidatExistant.prenom} ${candidatExistant.nom}` : 'NULL');
+
+    if (!candidatExistant) {
+      console.log('❌ Aucun candidat trouvé avec l\'ID:', token);
       return res.status(400).json({ error: 'Token invalide ou expiré' });
     }
+
+    // Vérifier si l'email est déjà confirmé
+    if (candidatExistant.emailConfirme) {
+      console.log('⚠️ Email déjà confirmé pour:', candidatExistant.email);
+      return res.status(400).json({ 
+        error: 'Email déjà confirmé',
+        candidat: {
+          nom: candidatExistant.nom,
+          prenom: candidatExistant.prenom,
+          email: candidatExistant.email,
+          matricule: candidatExistant.matricule
+        }
+      });
+    }
+
+    console.log('✅ Confirmation de l\'email pour:', candidatExistant.email);
 
     // Mettre à jour le statut de confirmation dans la base de données
     const candidat = await prisma.candidat.update({
@@ -361,7 +384,8 @@ exports.confirmEmail = async (req, res) => {
         email: candidat.email,
         nom: candidat.nom,
         prenom: candidat.prenom,
-        matricule: candidat.matricule
+        matricule: candidat.matricule,
+        userId: candidat.id
       });
 
       await prisma.emailDelivery.create({
@@ -418,19 +442,16 @@ exports.resendConfirmationEmail = async (req, res) => {
 
     // Renvoyer l'email de confirmation
     try {
-      const confirmationUrl = buildFrontendUrl('/auth/confirm', {
-        token: candidat.id,
-        type: 'signup'
-      });
+      const confirmationToken = candidat.id;
 
       console.log(`📧 Renvoi email de confirmation à ${candidat.email}`);
-      console.log(`🔗 URL de confirmation: ${confirmationUrl}`);
+      console.log(`🔗 Token de confirmation: ${confirmationToken}`);
 
       await emailService.envoyerEmailConfirmation({
         email: candidat.email,
         nom: candidat.nom,
         prenom: candidat.prenom,
-        confirmationUrl
+        confirmationToken
       });
 
       await prisma.emailDelivery.create({
@@ -471,3 +492,5 @@ exports.resendConfirmationEmail = async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
+
+module.exports = exports;

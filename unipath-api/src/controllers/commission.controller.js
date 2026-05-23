@@ -1,71 +1,67 @@
 const prisma = require('../prisma');
-const { envoyerEmailRejet, envoyerEmailSousReserve } = require('../services/email.service');
+const { mapDossierInscriptionToInscription } = require('../utils/dossier-inscription-mapper');
+
+const STATUTS_VALIDES = [
+  'EN_ATTENTE',
+  'VALIDE_PAR_COMMISSION',
+  'REJETE_PAR_COMMISSION',
+  'SOUS_RESERVE_PAR_COMMISSION',
+  'VALIDE',
+  'REJETE',
+  'SOUS_RESERVE',
+];
+
+const STATUTS_COMMISSION = [
+  'EN_ATTENTE',
+  'VALIDE_PAR_COMMISSION',
+  'REJETE_PAR_COMMISSION',
+  'SOUS_RESERVE_PAR_COMMISSION',
+];
 
 exports.getDossiers = async (req, res) => {
   try {
     const { statut } = req.query;
-    const userRole = req.user?.role;
+    const userRole = req.userRole || req.user?.role;
 
-    // Validation du statut si fourni
-    const statutsValides = [
-      'EN_ATTENTE',
-      'VALIDE_PAR_COMMISSION',
-      'REJETE_PAR_COMMISSION',
-      'SOUS_RESERVE_PAR_COMMISSION',
-      'VALIDE',
-      'REJETE',
-      'SOUS_RESERVE'
-    ];
-
-    if (statut && !statutsValides.includes(statut)) {
-      return res.status(400).json({ 
+    if (statut && !STATUTS_VALIDES.includes(statut)) {
+      return res.status(400).json({
         error: 'Statut invalide',
-        statutsValides 
+        statutsValides: STATUTS_VALIDES,
       });
     }
 
-    // La commission ne peut voir que les dossiers EN_ATTENTE et ceux qu'elle a traités
     let whereClause = {};
-    
+
     if (userRole === 'COMMISSION') {
-      const statutsCommission = [
-        'EN_ATTENTE',
-        'VALIDE_PAR_COMMISSION',
-        'REJETE_PAR_COMMISSION',
-        'SOUS_RESERVE_PAR_COMMISSION'
-      ];
-      
       if (statut) {
-        // Vérifier que le statut demandé est autorisé pour la commission
-        if (!statutsCommission.includes(statut)) {
-          return res.status(403).json({ 
+        if (!STATUTS_COMMISSION.includes(statut)) {
+          return res.status(403).json({
             error: 'Accès refusé à ce statut',
-            statutsAutorises: statutsCommission
+            statutsAutorises: STATUTS_COMMISSION,
           });
         }
         whereClause = { statut };
       } else {
-        whereClause = {
-          statut: {
-            in: statutsCommission
-          }
-        };
+        whereClause = { statut: { in: STATUTS_COMMISSION } };
       }
-    } else {
-      // Autres rôles (ne devrait pas arriver avec le middleware)
-      whereClause = statut ? { statut } : {};
+    } else if (statut) {
+      whereClause = { statut };
     }
 
-    const inscriptions = await prisma.inscription.findMany({
+    const dossiers = await prisma.dossierInscription.findMany({
       where: whereClause,
       include: {
-        candidat: {
-          include: { dossier: true },
+        inscription: {
+          include: {
+            candidat: { include: { dossier: true } },
+            concours: true,
+          },
         },
-        concours: true,
       },
       orderBy: { createdAt: 'asc' },
     });
+
+    const inscriptions = dossiers.map(mapDossierInscriptionToInscription);
 
     res.json({
       total: inscriptions.length,
@@ -82,10 +78,10 @@ exports.getCandidatsParConcours = async (req, res) => {
     const concours = await prisma.concours.findMany({
       include: {
         inscriptions: {
-          where: { 
-            statut: {
-              in: ['VALIDE_PAR_COMMISSION', 'VALIDE']
-            }
+          where: {
+            dossierInscription: {
+              statut: { in: ['VALIDE_PAR_COMMISSION', 'VALIDE'] },
+            },
           },
           include: {
             candidat: {
@@ -98,24 +94,23 @@ exports.getCandidatsParConcours = async (req, res) => {
                 telephone: true,
               },
             },
+            dossierInscription: true,
           },
-          orderBy: [
-            { note: 'desc' },
-          ],
+          orderBy: [{ note: 'desc' }],
         },
       },
       orderBy: { dateDebut: 'asc' },
     });
 
-    const result = concours.map(c => ({
+    const result = concours.map((c) => ({
       id: c.id,
       libelle: c.libelle,
       etablissement: c.etablissement,
       dateComposition: c.dateComposition,
       totalValides: c.inscriptions.length,
-      candidatsAvecNote: c.inscriptions.filter(i => i.note !== null).length,
-      candidatsSansNote: c.inscriptions.filter(i => i.note === null).length,
-      inscriptions: c.inscriptions.map(i => ({
+      candidatsAvecNote: c.inscriptions.filter((i) => i.note !== null).length,
+      candidatsSansNote: c.inscriptions.filter((i) => i.note === null).length,
+      inscriptions: c.inscriptions.map((i) => ({
         id: i.id,
         candidat: i.candidat,
         note: i.note,
@@ -135,7 +130,6 @@ exports.updateNote = async (req, res) => {
     const { inscriptionId } = req.params;
     const { note } = req.body;
 
-    // Validation
     if (note !== null && note !== undefined) {
       const noteNum = parseFloat(note);
       if (isNaN(noteNum) || noteNum < 0 || noteNum > 20) {
@@ -149,12 +143,16 @@ exports.updateNote = async (req, res) => {
       include: {
         candidat: true,
         concours: true,
+        dossierInscription: true,
       },
     });
 
     res.json({
       message: 'Note mise à jour avec succès',
-      inscription,
+      inscription: {
+        ...inscription,
+        statut: inscription.dossierInscription?.statut,
+      },
     });
   } catch (error) {
     console.error('Erreur mise à jour note:', error);
@@ -166,7 +164,7 @@ exports.updateStatut = async (req, res) => {
   try {
     const { inscriptionId } = req.params;
     const { statut, commentaireRejet, commentaireSousReserve } = req.body;
-    const membreCommissionId = req.user?.id; // ID du membre qui prend la décision
+    const membreCommissionId = req.user?.id;
 
     if (!['VALIDE', 'REJETE', 'SOUS_RESERVE'].includes(statut)) {
       return res.status(400).json({
@@ -174,53 +172,58 @@ exports.updateStatut = async (req, res) => {
       });
     }
 
-    // Si rejet, le commentaire est obligatoire
     if (statut === 'REJETE' && !commentaireRejet) {
       return res.status(400).json({
         error: 'Le commentaire de rejet est obligatoire',
       });
     }
 
-    // Si sous réserve, le commentaire est obligatoire
     if (statut === 'SOUS_RESERVE' && !commentaireSousReserve) {
       return res.status(400).json({
         error: 'Le commentaire de validation sous réserve est obligatoire',
       });
     }
 
-    // Mapper les statuts vers les statuts "PAR_COMMISSION"
     const statutMapping = {
-      'VALIDE': 'VALIDE_PAR_COMMISSION',
-      'REJETE': 'REJETE_PAR_COMMISSION',
-      'SOUS_RESERVE': 'SOUS_RESERVE_PAR_COMMISSION'
+      VALIDE: 'VALIDE_PAR_COMMISSION',
+      REJETE: 'REJETE_PAR_COMMISSION',
+      SOUS_RESERVE: 'SOUS_RESERVE_PAR_COMMISSION',
     };
 
     const nouveauStatut = statutMapping[statut];
 
-    const inscription = await prisma.inscription.update({
-      where: { id: inscriptionId },
-      data: { 
+    const dossier = await prisma.dossierInscription.findUnique({
+      where: { inscriptionId },
+    });
+
+    if (!dossier) {
+      return res.status(404).json({ error: 'Dossier d\'inscription non trouvé' });
+    }
+
+    const dossierUpdated = await prisma.dossierInscription.update({
+      where: { id: dossier.id },
+      data: {
         statut: nouveauStatut,
         commentaireRejet: statut === 'REJETE' ? commentaireRejet : null,
         commentaireSousReserve: statut === 'SOUS_RESERVE' ? commentaireSousReserve : null,
         decisionCommissionPar: membreCommissionId,
-        decisionCommissionDate: new Date()
+        decisionCommissionDate: new Date(),
       },
       include: {
-        candidat: true,
-        concours: true,
+        inscription: {
+          include: { candidat: true, concours: true },
+        },
       },
     });
 
-    // ❌ NE PAS ENVOYER D'EMAIL ICI
-    // L'email sera envoyé uniquement après validation du contrôleur
-
     res.json({
       message: 'Décision enregistrée. En attente de validation du contrôleur.',
-      inscription,
+      inscription: mapDossierInscriptionToInscription(dossierUpdated),
     });
   } catch (error) {
     console.error('Erreur updateStatut:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
+
+module.exports = exports;

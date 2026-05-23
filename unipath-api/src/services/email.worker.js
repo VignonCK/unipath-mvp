@@ -11,7 +11,7 @@ const { PrismaClient } = require('@prisma/client');
 const emailConfig = require('../config/email.config');
 const logger = require('../config/logger');
 
-const prisma = new PrismaClient();
+const prisma = require('../prisma');
 
 class EmailWorker {
   constructor() {

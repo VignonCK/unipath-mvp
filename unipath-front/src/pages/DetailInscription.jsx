@@ -41,7 +41,7 @@ const STATUT_CONFIG = {
 export default function DetailInscription() {
   const { inscriptionId } = useParams();
   const navigate = useNavigate();
-  const [candidat, setCandidат] = useState(null);
+  const [candidat, setCandidat] = useState(null);
   const [inscription, setInscription] = useState(null);
   const [loading, setLoading] = useState(true);
   const [photoUrl, setPhotoUrl] = useState(null);
@@ -54,7 +54,7 @@ export default function DetailInscription() {
     
     candidatService.getProfil()
       .then((p) => {
-        setCandidат(p);
+        setCandidat(p);
         const saved = localStorage.getItem('photoProfil_' + p.id);
         if (saved) setPhotoUrl(saved);
         
