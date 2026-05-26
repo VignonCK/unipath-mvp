@@ -130,7 +130,6 @@ const PiecesPredefines = ({ piecesSelectionnees = [], onChange }) => {
                       <div className="flex flex-wrap gap-2">
                         {FORMATS_DISPONIBLES.map((format) => {
                           const isFormatSelected = formatsSelectionnes.includes(format);
-                          const isFormatInDefaults = piece.formatsDefaut.includes(format);
 
                           return (
                             <button

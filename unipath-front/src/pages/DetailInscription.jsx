@@ -68,7 +68,7 @@ export default function DetailInscription() {
       })
       .catch(() => navigate('/login'))
       .finally(() => setLoading(false));
-  }, [inscriptionId]);
+  }, [inscriptionId, navigate]);
 
   const showMessage = (text, type = 'info') => {
     setMessage({ text, type });

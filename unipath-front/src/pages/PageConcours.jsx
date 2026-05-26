@@ -1,30 +1,10 @@
 // src/pages/PageConcours.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { candidatService, concoursService, inscriptionService } from '../services/api';
+import { candidatService, concoursService } from '../services/api';
 import CandidatLayout from '../components/CandidatLayout';
 import PiecesRequisesCandidats from '../components/PiecesRequisesCandidats';
 import { BentoCard, BentoGrid, GlassBadge } from '../components/AcademicLayout';
-
-const CHAMPS_REQUIS = ['telephone', 'dateNaiss', 'lieuNaiss'];
-
-const PIECES_LABELS = {
-  acteNaissance: 'Acte de naissance',
-  carteIdentite: "Carte d'identité",
-  photo:         "Photo d'identité",
-  releve:        'Relevé de notes Bac',
-};
-
-function profilIncomplet(candidat) {
-  if (!candidat) return false;
-  return CHAMPS_REQUIS.some(c => !candidat[c]);
-}
-
-function dossierIncomplet(candidat) {
-  if (!candidat?.dossier) return true;
-  const pieces = Object.keys(PIECES_LABELS);
-  return pieces.some(piece => !candidat.dossier[piece]);
-}
 
 function statutConcours(concours) {
   const now = new Date();
@@ -40,9 +20,7 @@ export default function PageConcours() {
   const [candidat, setCandidat]   = useState(null);
   const [concours, setConcours]   = useState([]);
   const [loading, setLoading]     = useState(true);
-  const [message, setMessage]     = useState({ text: '', type: 'info' });
   const [photoUrl, setPhotoUrl]   = useState(null);
-  const [inscLoading, setInscLoading] = useState({});
   const [recherche, setRecherche] = useState('');
   const [tri, setTri]             = useState('recent'); // 'recent' | 'ancien'
 
@@ -58,12 +36,7 @@ export default function PageConcours() {
       })
       .catch(() => navigate('/login'))
       .finally(() => setLoading(false));
-  }, []);
-
-  const showMessage = (text, type = 'info') => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage({ text: '' }), 4000);
-  };
+  }, [navigate]);
 
   const handleVoirConcours = (concoursId) => {
     navigate(`/concours/${concoursId}`);
@@ -78,19 +51,6 @@ export default function PageConcours() {
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
       <div className='max-w-5xl mx-auto space-y-4 sm:space-y-6 px-3 sm:px-0 animate-slide-in'>
-
-        {/* Toast */}
-        {message.text && (
-          <div className={`px-4 py-3 rounded-lg text-sm flex items-center justify-between ${
-            message.type === 'success' ? 'bg-green-50 border border-green-200 text-green-700' :
-            message.type === 'error'   ? 'bg-red-50 border border-red-200 text-red-700' :
-            message.type === 'warning' ? 'bg-orange-50 border border-orange-200 text-orange-700' :
-                                         'bg-blue-50 border border-blue-200 text-blue-700'
-          }`}>
-            <span>{message.text}</span>
-            <button onClick={() => setMessage({ text: '' })} className='ml-4 opacity-60 hover:opacity-100 text-lg leading-none'>&times;</button>
-          </div>
-        )}
 
         {/* En-tête */}
         <BentoCard>

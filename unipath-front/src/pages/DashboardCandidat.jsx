@@ -2,8 +2,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  authService, candidatService, concoursService,
-  inscriptionService, dossierService, convocationService
+  candidatService, concoursService,
+  inscriptionService, dossierService
 } from '../services/api';
 import DossierCompletion from '../components/DossierCompletion';
 import CandidatLayout from '../components/CandidatLayout';
@@ -50,7 +50,6 @@ export default function DashboardCandidat() {
   const [loading, setLoading]         = useState(true);
   const [uploadStatus, setUploadStatus] = useState({});
   const [message, setMessage]         = useState({ text: '', type: 'info' });
-  const [telechargement, setTelechargement] = useState({});
 
   // Modale édition profil
   const [editOpen, setEditOpen]       = useState(false);
@@ -59,7 +58,7 @@ export default function DashboardCandidat() {
 
   // Photo de profil
   const [photoUrl, setPhotoUrl]       = useState(null);
-  const [photoLoading, setPhotoLoading] = useState(false);
+  const [, setPhotoLoading] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -83,7 +82,7 @@ export default function DashboardCandidat() {
       })
       .catch(() => navigate('/login'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [navigate]);
 
   const showMessage = (text, type = 'info') => {
     setMessage({ text, type });
@@ -120,7 +119,7 @@ export default function DashboardCandidat() {
         localStorage.setItem('photoProfil_' + candidat?.id, ev.target.result);
       };
       reader.readAsDataURL(fichier);
-    } catch (err) {
+    } catch {
       showMessage('Erreur upload photo.', 'error');
     } finally {
       setPhotoLoading(false);
@@ -162,7 +161,7 @@ export default function DashboardCandidat() {
     }
     
     try {
-      const response = await inscriptionService.creer(concoursId);
+      await inscriptionService.creer(concoursId);
       showMessage('Inscription réussie ! Une fiche de pré-inscription vous a été envoyée par email.', 'success');
       const updated = await candidatService.getProfil();
       setCandidat(updated);
@@ -194,21 +193,6 @@ export default function DashboardCandidat() {
       const updated = await candidatService.getProfil();
       setCandidat(updated);
     } catch { setUploadStatus(prev => ({ ...prev, [typePiece]: 'error' })); }
-  };
-
-  // ── Téléchargements PDF ───────────────────────────────────
-  const handleConvocation = async (inscriptionId) => {
-    setTelechargement(prev => ({ ...prev, [`conv_${inscriptionId}`]: true }));
-    try { await convocationService.telecharger(inscriptionId); }
-    catch (err) { showMessage('Erreur : ' + err.message, 'error'); }
-    finally { setTelechargement(prev => ({ ...prev, [`conv_${inscriptionId}`]: false })); }
-  };
-
-  const handlePreinscription = async (inscriptionId) => {
-    setTelechargement(prev => ({ ...prev, [`preinsc_${inscriptionId}`]: true }));
-    try { await convocationService.telechargerPreinscription(inscriptionId); }
-    catch (err) { showMessage('Erreur : ' + err.message, 'error'); }
-    finally { setTelechargement(prev => ({ ...prev, [`preinsc_${inscriptionId}`]: false })); }
   };
 
   if (loading) return (

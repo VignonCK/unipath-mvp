@@ -82,6 +82,38 @@ const validateUUID = (id) => {
 };
 
 /**
+ * Valide une adresse email
+ * @param {string} email - Email à valider
+ * @returns {boolean}
+ */
+const validateEmail = (email) => {
+  if (!email || typeof email !== 'string') {
+    return false;
+  }
+
+  // Validation simple et robuste pour les besoins applicatifs
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+};
+
+/**
+ * Vérifie la présence de paramètres obligatoires
+ * @param {Object} data - Objet à valider
+ * @param {Array<string>} requiredParams - Liste des champs obligatoires
+ */
+const validateParams = (data, requiredParams = []) => {
+  if (!data || typeof data !== 'object') {
+    throw new Error('Data is required');
+  }
+
+  for (const param of requiredParams) {
+    const value = data[param];
+    if (value === undefined || value === null || value === '') {
+      throw new Error(`${param} is required`);
+    }
+  }
+};
+
+/**
  * Valide et sanitise un verdict et son motif
  * @param {string} verdict - Le verdict à valider
  * @param {string} motif - Le motif à valider et sanitiser
@@ -122,5 +154,7 @@ module.exports = {
   validateMotif,
   sanitizeMotif,
   validateUUID,
+  validateEmail,
+  validateParams,
   validateAndSanitizeVerdict,
 };

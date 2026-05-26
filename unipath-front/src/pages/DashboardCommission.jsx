@@ -1,11 +1,10 @@
 // src/pages/DashboardCommission.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { commissionService, authService } from '../services/api';
 import HistoriqueActions from '../components/HistoriqueActions';
-import DocumentViewer from '../components/DocumentViewer';
 import CommissionLayout from '../components/CommissionLayout';
-import { BentoCard, GlassBadge } from '../components/AcademicLayout';
+import { BentoCard } from '../components/AcademicLayout';
 
 function initiales(prenom, nom) {
   return `${(prenom || '?')[0]}${(nom || '?')[0]}`.toUpperCase();
@@ -67,7 +66,7 @@ export default function DashboardCommission() {
     } catch (err) { console.error(err); }
   };
 
-  const chargerDossiers = async () => {
+  const chargerDossiers = useCallback(async () => {
     setLoading(true);
     try {
       const data = await commissionService.getDossiers(filtre);
@@ -77,10 +76,10 @@ export default function DashboardCommission() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filtre]);
 
   useEffect(() => { chargerCounts(); }, []);
-  useEffect(() => { chargerDossiers(); }, [filtre]);
+  useEffect(() => { chargerDossiers(); }, [chargerDossiers]);
 
   const handleDecision = async (inscriptionId, statut, commentaireRejet = null, commentaireSousReserve = null) => {
     try {
@@ -107,14 +106,6 @@ export default function DashboardCommission() {
         setSousReserveModal({ open: false, inscriptionId: null, commentaire: '' });
       }
     } catch (err) { showMessage(err.message, 'error'); }
-  };
-
-  const ouvrirModalRejet = (inscriptionId) => {
-    setRejetModal({ open: true, inscriptionId, commentaire: '' });
-  };
-
-  const ouvrirModalSousReserve = (inscriptionId) => {
-    setSousReserveModal({ open: true, inscriptionId, commentaire: '' });
   };
 
   const confirmerRejet = () => {

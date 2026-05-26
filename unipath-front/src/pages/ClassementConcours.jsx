@@ -1,8 +1,8 @@
 // src/pages/ClassementConcours.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { concoursService, authService } from '../services/api';
-import { BentoCard, BentoGrid, GlassBadge } from '../components/AcademicLayout';
+import { concoursService } from '../services/api';
+import { BentoCard, BentoGrid } from '../components/AcademicLayout';
 
 export default function ClassementConcours() {
   const { id } = useParams();
@@ -11,11 +11,7 @@ export default function ClassementConcours() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    loadClassement();
-  }, [id]);
-
-  const loadClassement = async () => {
+  const loadClassement = useCallback(async () => {
     try {
       setLoading(true);
       const result = await concoursService.getClassement(id);
@@ -26,7 +22,11 @@ export default function ClassementConcours() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    loadClassement();
+  }, [loadClassement]);
 
   if (loading) return (
     <div className='min-h-screen bg-gray-50 flex items-center justify-center'>

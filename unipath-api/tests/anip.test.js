@@ -2,9 +2,73 @@
 // Tests pour la validation de l'identifiant ANIP
 
 const request = require('supertest');
-const app = require('../server'); // Assurez-vous que server.js exporte l'app Express
+
+const mockState = {
+  anips: new Set(),
+  userCounter: 0,
+  matriculeCounter: 0,
+};
+
+jest.mock('../src/supabase', () => ({
+  supabase: {
+    auth: {
+      signUp: jest.fn(async () => {
+        mockState.userCounter += 1;
+        return {
+          data: { user: { id: `mock-user-${mockState.userCounter}` } },
+          error: null,
+        };
+      }),
+      signInWithPassword: jest.fn(),
+      resetPasswordForEmail: jest.fn(),
+    },
+  },
+  supabaseAdmin: {},
+}));
+
+jest.mock('../src/utils/matricule.helper', () => ({
+  genererMatriculeUnique: jest.fn(async () => {
+    mockState.matriculeCounter += 1;
+    return `UAC-2026-${String(mockState.matriculeCounter).padStart(5, '0')}`;
+  }),
+}));
+
+jest.mock('../src/services/email.service', () => ({
+  envoyerEmailConfirmation: jest.fn(async () => ({ success: true })),
+  envoyerEmailBienvenue: jest.fn(async () => ({ success: true })),
+}));
+
+jest.mock('../src/prisma', () => ({
+  candidat: {
+    findFirst: jest.fn(async ({ where }) => {
+      const anip = where?.anip;
+      return mockState.anips.has(anip) ? { id: `existing-${anip}`, anip } : null;
+    }),
+    create: jest.fn(async ({ data }) => {
+      mockState.anips.add(data.anip);
+      return {
+        ...data,
+      };
+    }),
+    findUnique: jest.fn(async () => null),
+    update: jest.fn(async ({ data, where }) => ({ ...data, id: where?.id })),
+  },
+  notification: {
+    create: jest.fn(async ({ data }) => data),
+  },
+  emailDelivery: {
+    create: jest.fn(async ({ data }) => data),
+  },
+}));
+
+const app = require('../src/app');
 
 describe('Tests ANIP - Validation et Unicité', () => {
+  beforeEach(() => {
+    mockState.anips.clear();
+    mockState.userCounter = 0;
+    mockState.matriculeCounter = 0;
+  });
   
   describe('POST /api/auth/register - Validation ANIP', () => {
     
@@ -138,8 +202,8 @@ describe('Tests ANIP - Validation et Unicité', () => {
     });
 
     test('Devrait accepter des ANIP différents pour des candidats différents', async () => {
-      const anip1 = `${Date.now()}`.padStart(12, '0').slice(0, 12);
-      const anip2 = `${Date.now() + 1}`.padStart(12, '0').slice(0, 12);
+      const anip1 = '100000000001';
+      const anip2 = '100000000002';
 
       const response1 = await request(app)
         .post('/api/auth/register')

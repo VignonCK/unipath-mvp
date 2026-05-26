@@ -201,7 +201,7 @@ export function validatePiecesConfiguration(pieces) {
   }
 
   // Vérifier que chaque pièce a au moins un format
-  pieces.forEach((piece, index) => {
+  pieces.forEach((piece) => {
     if (!piece.formats || piece.formats.length === 0) {
       errors.push(`La pièce "${piece.nom}" doit avoir au moins un format accepté`);
     }

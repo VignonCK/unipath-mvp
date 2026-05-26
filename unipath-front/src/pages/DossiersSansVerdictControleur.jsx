@@ -1,5 +1,5 @@
 // src/pages/DossiersSansVerdictControleur.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../utils/apiConfig';
 import CommissionLayout from '../components/CommissionLayout';
@@ -12,11 +12,7 @@ const DossiersSansVerdictControleur = () => {
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState({ total: 0, limite: 50, offset: 0, pages: 0 });
 
-  useEffect(() => {
-    chargerDossiers();
-  }, [pagination.offset]);
-
-  const chargerDossiers = async () => {
+  const chargerDossiers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -41,7 +37,11 @@ const DossiersSansVerdictControleur = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [pagination.limite, pagination.offset]);
+
+  useEffect(() => {
+    chargerDossiers();
+  }, [chargerDossiers]);
 
   const handlePageChange = (newOffset) => {
     setPagination(prev => ({ ...prev, offset: newOffset }));

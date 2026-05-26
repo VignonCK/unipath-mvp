@@ -215,6 +215,47 @@ export const dgesService = {
   getStatistiquesConcours: (id) => request(`/dges/statistiques/${id}`),
 };
 
+// ── Module 2 - Parcours Academique ───────────────────────────────
+export const etablissementService = {
+  getAll: () => request('/etablissements'),
+  getById: (id) => request(`/etablissements/${id}`),
+  getEtudiants: (id, params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.filiere) searchParams.set('filiere', params.filiere);
+    if (params.annee) searchParams.set('annee', params.annee);
+    const query = searchParams.toString();
+    return request(`/etablissements/${id}/etudiants${query ? `?${query}` : ''}`);
+  },
+};
+
+export const filiereService = {
+  getAll: () => request('/filieres'),
+  getByEtablissement: (etablissementId) => request(`/filieres?etablissementId=${etablissementId}`),
+};
+
+export const inscriptionAcadService = {
+  creer: (data) =>
+    request('/inscriptions-academiques', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getMesInscriptions: () => request('/inscriptions-academiques/mes-inscriptions'),
+};
+
+export const notesService = {
+  ajouter: (data) =>
+    request('/notes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getByInscription: (id) => request(`/notes/inscription/${id}`),
+};
+
+export const parcoursService = {
+  getMonParcours: () => request('/parcours/mon-parcours'),
+  getMonReleve: () => request('/parcours/mon-releve'),
+};
+
 // ── Convocation PDF ───────────────────────────────────────────────
 const telechargerPDF = async (url, filename) => {
   const token = localStorage.getItem('token');

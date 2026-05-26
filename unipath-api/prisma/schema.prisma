@@ -24,7 +24,7 @@ model Candidat {
   role                  Role                    @default(CANDIDAT)
   createdAt             DateTime                @default(now())
   updatedAt             DateTime                @updatedAt
-  DiplomeLicence        DiplomeLicence?
+  diplome               Diplome?
   dossier               Dossier?
   inscriptions          Inscription[]
   InscriptionAcademique InscriptionAcademique[]
@@ -308,88 +308,91 @@ model SystemAlert {
   @@index([createdAt(sort: Desc)])
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model DiplomeLicence {
-  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  candidatId String   @unique
-  filiereId  String
-  mention    Mention
-  annee      String
-  verifie    Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now())
-  Candidat   Candidat @relation(fields: [candidatId], references: [id])
-  Filiere    Filiere  @relation(fields: [filiereId], references: [id])
-
-  @@index([filiereId])
-  @@index([verifie])
-}
-
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model Etablissement {
-  id                    String                  @id @default(dbgenerated("(gen_random_uuid())::text"))
-  nom                   String
-  type                  TypeEtablissement
-  ville                 String
-  code                  String                  @unique
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @default(now())
-  Filiere               Filiere[]
-  InscriptionAcademique InscriptionAcademique[]
+  id           String                  @id @default(uuid())
+  nom          String
+  type         TypeEtablissement
+  ville        String
+  adresse      String?
+  email        String?                 @unique
+  createdAt    DateTime                @default(now())
+  filieres     Filiere[]
+  inscriptions InscriptionAcademique[]
 
-  @@index([code])
   @@index([type])
+  @@index([ville])
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model Filiere {
-  id                    String                  @id @default(dbgenerated("(gen_random_uuid())::text"))
-  nom                   String
-  etablissementId       String
-  dureeAnnees           Int
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @default(now())
-  DiplomeLicence        DiplomeLicence[]
-  Etablissement         Etablissement           @relation(fields: [etablissementId], references: [id])
-  InscriptionAcademique InscriptionAcademique[]
-
-  @@unique([etablissementId, nom])
-  @@index([etablissementId])
-}
-
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model InscriptionAcademique {
-  id              String        @id @default(dbgenerated("(gen_random_uuid())::text"))
-  candidatId      String
+  id              String                  @id @default(uuid())
+  nom             String
+  code            String                  @unique
+  niveau          NiveauFiliere
+  dureeAnnees     Int
   etablissementId String
-  filiereId       String
-  niveau          NiveauEtude
-  anneeAcademique String
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @default(now())
-  Candidat        Candidat      @relation(fields: [candidatId], references: [id])
-  Etablissement   Etablissement @relation(fields: [etablissementId], references: [id])
-  Filiere         Filiere       @relation(fields: [filiereId], references: [id])
-  Resultat        Resultat?
+  createdAt       DateTime                @default(now())
+  etablissement   Etablissement           @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  inscriptions    InscriptionAcademique[]
+  diplomes        Diplome[]
 
-  @@unique([candidatId, filiereId, niveau, anneeAcademique], map: "InscriptionAcademique_candidatId_filiereId_niveau_anneeAcademiq")
-  @@index([anneeAcademique])
-  @@index([candidatId])
   @@index([etablissementId])
-  @@index([filiereId])
   @@index([niveau])
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model Resultat {
-  id                      String                @id @default(dbgenerated("(gen_random_uuid())::text"))
-  inscriptionAcademiqueId String                @unique
-  moyenne                 Float
-  mention                 Mention
-  valide                  Boolean               @default(false)
-  createdAt               DateTime              @default(now())
-  updatedAt               DateTime              @default(now())
-  InscriptionAcademique   InscriptionAcademique @relation(fields: [inscriptionAcademiqueId], references: [id])
+model InscriptionAcademique {
+  id              String               @id @default(uuid())
+  candidatId      String
+  filiereId       String
+  etablissementId String
+  anneeAcademique String
+  niveau          Int
+  statut          StatutInscriptionAcad @default(EN_COURS)
+  createdAt       DateTime             @default(now())
+  candidat        Candidat             @relation(fields: [candidatId], references: [id], onDelete: Cascade)
+  filiere         Filiere              @relation(fields: [filiereId], references: [id], onDelete: Cascade)
+  etablissement   Etablissement        @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  notes           Note[]
+
+  @@unique([candidatId, filiereId, anneeAcademique])
+  @@index([candidatId])
+  @@index([filiereId])
+  @@index([etablissementId])
+  @@index([anneeAcademique])
+}
+
+model Note {
+  id               String               @id @default(uuid())
+  inscriptionAcadId String
+  matiere          String
+  noteCC           Float?
+  noteExamen       Float?
+  noteMoyenne      Float?
+  credits          Int
+  semestre         Int
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  inscriptionAcad  InscriptionAcademique @relation(fields: [inscriptionAcadId], references: [id], onDelete: Cascade)
+
+  @@index([inscriptionAcadId])
+  @@index([semestre])
+}
+
+model Diplome {
+  id              String      @id @default(uuid())
+  candidatId      String      @unique
+  type            TypeDiplome
+  filiere         String
+  filiereId       String?
+  etablissement   String
+  annee           String
+  mention         Mention?
+  createdAt       DateTime    @default(now())
+  candidat        Candidat    @relation(fields: [candidatId], references: [id], onDelete: Cascade)
+  filiereRelation Filiere?    @relation(fields: [filiereId], references: [id], onDelete: SetNull)
+
+  @@index([filiereId])
+  @@index([type])
+  @@index([annee])
 }
 
 enum StatutDossier {
@@ -489,15 +492,24 @@ enum Mention {
   EXCELLENT
 }
 
-enum NiveauEtude {
-  L1
-  L2
-  L3
-  M1
-  M2
-}
-
 enum TypeEtablissement {
   PUBLIC
   PRIVE
+}
+
+enum NiveauFiliere {
+  LICENCE
+  MASTER
+}
+
+enum StatutInscriptionAcad {
+  EN_COURS
+  VALIDE
+  REDOUBLANT
+  ABANDONNE
+}
+
+enum TypeDiplome {
+  LICENCE
+  MASTER
 }

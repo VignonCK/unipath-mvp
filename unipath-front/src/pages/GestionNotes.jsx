@@ -1,20 +1,9 @@
 // src/pages/GestionNotes.jsx
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { commissionService, authService } from '../services/api';
+import { commissionService } from '../services/api';
 import CommissionLayout from '../components/CommissionLayout';
 
-function initiales(str) {
-  if (!str) return 'C';
-  const parts = str.trim().split(' ');
-  return parts.length >= 2
-    ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
-    : str.slice(0, 2).toUpperCase();
-}
-
 export default function GestionNotes() {
-  const navigate = useNavigate();
-  const user = authService.getCurrentUser();
   const [concours, setConcours] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -69,8 +58,6 @@ export default function GestionNotes() {
       setSubmitting(false);
     }
   };
-
-  const nomUser = user?.prenom ? `${user.prenom} ${user.nom || ''}`.trim() : user?.email || 'Commission';
 
   if (loading) return (
     <CommissionLayout>

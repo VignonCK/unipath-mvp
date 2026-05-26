@@ -1,5 +1,5 @@
 // src/pages/DetailDossierControleur.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../utils/apiConfig';
 import CommissionLayout from '../components/CommissionLayout';
@@ -24,11 +24,7 @@ const DetailDossierControleur = () => {
   const [correctionError, setCorrectionError] = useState('');
   const [correctionSubmitting, setCorrectionSubmitting] = useState(false);
 
-  useEffect(() => {
-    chargerDossier();
-  }, [dossierInscriptionId]);
-
-  const chargerDossier = async () => {
+  const chargerDossier = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -53,7 +49,11 @@ const DetailDossierControleur = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dossierInscriptionId]);
+
+  useEffect(() => {
+    chargerDossier();
+  }, [chargerDossier]);
 
   const validerFormulaire = () => {
     if (!decision) {

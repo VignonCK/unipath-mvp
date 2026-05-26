@@ -1,182 +1,194 @@
 // prisma/seed.js
 const { PrismaClient } = require('@prisma/client');
+
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Début de l insertion des données de test...');
+  console.log('Seeding Module 2 - Parcours Academique...');
 
-  await prisma.dossier.deleteMany();
-  await prisma.inscription.deleteMany();
-  await prisma.concours.deleteMany();
-  await prisma.candidat.deleteMany();
-  await prisma.membreCommission.deleteMany();
-  console.log('Données existantes supprimées');
+  await prisma.note.deleteMany();
+  await prisma.inscriptionAcademique.deleteMany();
+  await prisma.diplome.deleteMany();
+  await prisma.filiere.deleteMany();
+  await prisma.etablissement.deleteMany();
 
-  // ── Créer 3 concours de test
-  const concours1 = await prisma.concours.create({
-    data: {
-      libelle: 'Concours EPAC 2026 Génie Informatique',
-      dateDebut: new Date('2026-09-01'),
-      dateFin: new Date('2026-09-03'),
-      description: 'Concours d\'entrée au département GIT',
+  const candidatsData = [
+    {
+      email: 'module2.etudiant1@unipath.test',
+      nom: 'ADANDE',
+      prenom: 'Mireille',
+      matricule: 'UAC-M2-2026-0001',
+      anip: '100000000001',
     },
-  });
-  const concours2 = await prisma.concours.create({
-    data: {
-      libelle: 'Concours EPAC 2026 - Génie Civil',
-      dateDebut: new Date('2026-09-05'),
-      dateFin: new Date('2026-09-07'),
-      description: 'Concours d\'entrée au département GC',
+    {
+      email: 'module2.etudiant2@unipath.test',
+      nom: 'HOUNGBO',
+      prenom: 'Armel',
+      matricule: 'UAC-M2-2026-0002',
+      anip: '100000000002',
     },
-  });
-  const concours3 = await prisma.concours.create({
-    data: {
-      libelle: 'Concours UAC 2026 - Médecine',
-      dateDebut: new Date('2026-09-02'),
-      dateFin: new Date('2026-09-04'),
-      description: 'Concours médecine - dates en conflit avec GIT pour test',
+    {
+      email: 'module2.etudiant3@unipath.test',
+      nom: 'KIKI',
+      prenom: 'Nadia',
+      matricule: 'UAC-M2-2026-0003',
+      anip: '100000000003',
     },
-  });
-  console.log('3 concours créés');
+  ];
 
-  // ── Créer des membres de commission (Examinateurs et Contrôleurs)
-  const examinateur1 = await prisma.membreCommission.create({
-    data: {
-      email: 'examinateur1@uac.bj',
-      nom: 'AGBODJAN',
-      prenom: 'Serge',
-      telephone: '+22997111001',
-      role: 'COMMISSION',
-      sousRole: 'EXAMINATEUR',
-    },
-  });
-  const examinateur2 = await prisma.membreCommission.create({
-    data: {
-      email: 'examinateur2@uac.bj',
-      nom: 'HOUNKPE',
-      prenom: 'Marie',
-      telephone: '+22997111002',
-      role: 'COMMISSION',
-      sousRole: 'EXAMINATEUR',
-    },
-  });
-  const examinateur3 = await prisma.membreCommission.create({
-    data: {
-      email: 'examinateur3@uac.bj',
-      nom: 'DOSSOU',
-      prenom: 'Jean-Claude',
-      telephone: '+22997111003',
-      role: 'COMMISSION',
-      sousRole: 'EXAMINATEUR',
-    },
-  });
-  const controleur1 = await prisma.membreCommission.create({
-    data: {
-      email: 'controleur1@uac.bj',
-      nom: 'KPOHINTO',
-      prenom: 'Sylvie',
-      telephone: '+22997222001',
-      role: 'COMMISSION',
-      sousRole: 'CONTROLEUR',
-    },
-  });
-  const controleur2 = await prisma.membreCommission.create({
-    data: {
-      email: 'controleur2@uac.bj',
-      nom: 'AZONHIHO',
-      prenom: 'Rodrigue',
-      telephone: '+22997222002',
-      role: 'COMMISSION',
-      sousRole: 'CONTROLEUR',
-    },
-  });
-  console.log('5 membres de commission créés (3 examinateurs, 2 contrôleurs)');
+  const candidats = [];
+  for (const candidat of candidatsData) {
+    const existing = await prisma.candidat.findUnique({ where: { email: candidat.email } });
+    if (existing) {
+      candidats.push(existing);
+    } else {
+      candidats.push(await prisma.candidat.create({ data: candidat }));
+    }
+  }
 
-  // ── Créer 5 candidats
-  // Chaque matricule temporaire est unique grâce au timestamp + index
-  // Le trigger PostgreSQL trg_matricule remplacera ces valeurs automatiquement
-  const now = Date.now();
+  const [uac, up, esgt] = await Promise.all([
+    prisma.etablissement.create({
+      data: {
+        nom: 'Universite d Abomey-Calavi',
+        type: 'PUBLIC',
+        ville: 'Abomey-Calavi',
+        adresse: 'Abomey-Calavi, Benin',
+        email: 'contact@uac.bj',
+      },
+    }),
+    prisma.etablissement.create({
+      data: {
+        nom: 'Universite de Parakou',
+        type: 'PUBLIC',
+        ville: 'Parakou',
+        adresse: 'Parakou, Benin',
+        email: 'contact@up.bj',
+      },
+    }),
+    prisma.etablissement.create({
+      data: {
+        nom: 'ESGT Benin',
+        type: 'PRIVE',
+        ville: 'Cotonou',
+        adresse: 'Cotonou, Benin',
+        email: 'contact@esgt.bj',
+      },
+    }),
+  ]);
 
-  const candidat1 = await prisma.candidat.create({
-    data: {
-      email: 'kofi.mensah@test.bj',
-      nom: 'MENSAH',
-      prenom: 'Kofi',
-      telephone: '+22961000001',
-      dateNaiss: new Date('2008-03-15'),
-      lieuNaiss: 'Cotonou',
-      matricule: `TEMP-${now}-1`,
-    },
-  });
-  const candidat2 = await prisma.candidat.create({
-    data: {
-      email: 'ama.kone@test.bj',
-      nom: 'KONE',
-      prenom: 'Ama',
-      telephone: '+22961000002',
-      dateNaiss: new Date('2007-07-22'),
-      lieuNaiss: 'Porto-Novo',
-      matricule: `TEMP-${now}-2`,
-    },
-  });
-  const candidat3 = await prisma.candidat.create({
-    data: {
-      email: 'seun.adeyemi@test.bj',
-      nom: 'ADEYEMI',
-      prenom: 'Seun',
-      telephone: '+22961000003',
-      dateNaiss: new Date('2008-11-08'),
-      lieuNaiss: 'Parakou',
-      matricule: `TEMP-${now}-3`,
-    },
-  });
-  const candidat4 = await prisma.candidat.create({
-    data: {
-      email: 'fatou.diallo@test.bj',
-      nom: 'DIALLO',
-      prenom: 'Fatou',
-      telephone: '+22961000004',
-      dateNaiss: new Date('2008-06-10'),
-      lieuNaiss: 'Abomey-Calavi',
-      matricule: `TEMP-${now}-4`,
-    },
-  });
-  const candidat5 = await prisma.candidat.create({
-    data: {
-      email: 'joel.ahouansou@test.bj',
-      nom: 'AHOUANSOU',
-      prenom: 'Joël',
-      telephone: '+22961000005',
-      dateNaiss: new Date('2004-12-03'),
-      lieuNaiss: 'Natitingou',
-      matricule: `TEMP-${now}-5`,
-    },
-  });
-  console.log('5 candidats créés');
+  const [genieInfoL, medecineL, droitL, genieInfoM, medecineM] = await Promise.all([
+    prisma.filiere.create({
+      data: {
+        nom: 'Genie Info',
+        code: 'GI-L',
+        niveau: 'LICENCE',
+        dureeAnnees: 3,
+        etablissementId: uac.id,
+      },
+    }),
+    prisma.filiere.create({
+      data: {
+        nom: 'Medecine',
+        code: 'MED-L',
+        niveau: 'LICENCE',
+        dureeAnnees: 6,
+        etablissementId: uac.id,
+      },
+    }),
+    prisma.filiere.create({
+      data: {
+        nom: 'Droit',
+        code: 'DR-L',
+        niveau: 'LICENCE',
+        dureeAnnees: 3,
+        etablissementId: up.id,
+      },
+    }),
+    prisma.filiere.create({
+      data: {
+        nom: 'Genie Info',
+        code: 'GI-M',
+        niveau: 'MASTER',
+        dureeAnnees: 2,
+        etablissementId: esgt.id,
+      },
+    }),
+    prisma.filiere.create({
+      data: {
+        nom: 'Medecine',
+        code: 'MED-M',
+        niveau: 'MASTER',
+        dureeAnnees: 2,
+        etablissementId: up.id,
+      },
+    }),
+  ]);
 
-  // ── Créer des inscriptions de test
-  await prisma.inscription.create({
-    data: { candidatId: candidat1.id, concoursId: concours1.id, statut: 'EN_ATTENTE' },
+  const inscriptions = await Promise.all([
+    prisma.inscriptionAcademique.create({
+      data: {
+        candidatId: candidats[0].id,
+        filiereId: genieInfoL.id,
+        etablissementId: uac.id,
+        anneeAcademique: '2025-2026',
+        niveau: 1,
+        statut: 'EN_COURS',
+      },
+    }),
+    prisma.inscriptionAcademique.create({
+      data: {
+        candidatId: candidats[1].id,
+        filiereId: medecineL.id,
+        etablissementId: uac.id,
+        anneeAcademique: '2024-2025',
+        niveau: 2,
+        statut: 'VALIDE',
+      },
+    }),
+    prisma.inscriptionAcademique.create({
+      data: {
+        candidatId: candidats[2].id,
+        filiereId: droitL.id,
+        etablissementId: up.id,
+        anneeAcademique: '2025-2026',
+        niveau: 1,
+        statut: 'REDOUBLANT',
+      },
+    }),
+  ]);
+
+  const notesData = [
+    ['Algorithmique', 14, 16, 4, 1, inscriptions[0].id],
+    ['Base de donnees', 13, 15, 5, 1, inscriptions[0].id],
+    ['Reseaux', 12, 14, 4, 2, inscriptions[0].id],
+    ['Programmation Web', 15, 17, 5, 2, inscriptions[0].id],
+    ['Anatomie', 11, 13, 6, 1, inscriptions[1].id],
+    ['Physiologie', 12, 14, 6, 1, inscriptions[1].id],
+    ['Pharmacologie', 13, 12, 5, 2, inscriptions[1].id],
+    ['Droit Civil', 9, 11, 5, 1, inscriptions[2].id],
+    ['Droit Constitutionnel', 8, 10, 5, 1, inscriptions[2].id],
+    ['Procedure Penale', 10, 9, 4, 2, inscriptions[2].id],
+  ];
+
+  await prisma.note.createMany({
+    data: notesData.map(([matiere, noteCC, noteExamen, credits, semestre, inscriptionAcadId]) => ({
+      matiere,
+      noteCC,
+      noteExamen,
+      noteMoyenne: Number((noteCC * 0.4 + noteExamen * 0.6).toFixed(2)),
+      credits,
+      semestre,
+      inscriptionAcadId,
+    })),
   });
-  await prisma.inscription.create({
-    data: { candidatId: candidat2.id, concoursId: concours1.id, statut: 'VALIDE' },
-  });
-  await prisma.inscription.create({
-    data: { candidatId: candidat3.id, concoursId: concours2.id, statut: 'REJETE' },
-  });
-  await prisma.inscription.create({
-    data: { candidatId: candidat4.id, concoursId: concours2.id, statut: 'EN_ATTENTE' },
-  });
-  await prisma.inscription.create({
-    data: { candidatId: candidat5.id, concoursId: concours1.id, statut: 'VALIDE' },
-  });
-  console.log('Inscriptions créées');
-  console.log('Seed terminé avec succès !');
+
+  console.log('Seed Module 2 termine avec succes.');
+  console.log('Etablissements: 3 | Filieres: 5 | Inscriptions: 3 | Notes: 10');
 }
 
 main()
-  .catch((e) => {
-    console.error('Erreur lors du seed :', e);
+  .catch((error) => {
+    console.error('Erreur seed Module 2:', error);
     process.exit(1);
   })
   .finally(async () => {

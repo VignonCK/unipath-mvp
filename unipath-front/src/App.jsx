@@ -26,6 +26,9 @@ import TableauDeBordControleur from './pages/TableauDeBordControleur';
 import ListeDossiersControleur from './pages/ListeDossiersControleur';
 import DetailDossierControleur from './pages/DetailDossierControleur';
 import DossiersSansVerdictControleur from './pages/DossiersSansVerdictControleur';
+import DashboardEtudiant from './pages/DashboardEtudiant';
+import InscriptionAcademique from './pages/InscriptionAcademique';
+import EspaceEtablissement from './pages/EspaceEtablissement';
 
 function App() {
   return (
@@ -99,6 +102,33 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['CANDIDAT']}>
               <DetailInscription />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/etudiant'
+          element={
+            <ProtectedRoute>
+              <DashboardEtudiant />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/inscription-academique'
+          element={
+            <ProtectedRoute>
+              <InscriptionAcademique />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/etablissement'
+          element={
+            <ProtectedRoute>
+              <EspaceEtablissement />
             </ProtectedRoute>
           }
         />

@@ -1,5 +1,5 @@
 // src/pages/ListeDossiersExaminateur.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { concoursService } from '../services/api';
 import { apiFetch } from '../utils/apiConfig';
@@ -18,10 +18,6 @@ const ListeDossiersExaminateur = () => {
     chargerConcours();
   }, []);
 
-  useEffect(() => {
-    chargerDossiers();
-  }, [filtreConcoursId, pagination.offset]);
-
   const chargerConcours = async () => {
     try {
       const data = await concoursService.getAll();
@@ -31,7 +27,7 @@ const ListeDossiersExaminateur = () => {
     }
   };
 
-  const chargerDossiers = async () => {
+  const chargerDossiers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -54,7 +50,7 @@ const ListeDossiersExaminateur = () => {
 
       const data = await response.json();
       setDossiers(data.dossiers || []);
-      setPagination(data.pagination || pagination);
+      setPagination((prev) => data.pagination || prev);
     } catch (err) {
       if (err.message !== 'Session expirée') {
         setError(err.message);
@@ -62,7 +58,11 @@ const ListeDossiersExaminateur = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filtreConcoursId, pagination.limite, pagination.offset]);
+
+  useEffect(() => {
+    chargerDossiers();
+  }, [chargerDossiers]);
 
   const handlePageChange = (newOffset) => {
     setPagination((prev) => ({ ...prev, offset: newOffset }));

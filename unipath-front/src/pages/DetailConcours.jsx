@@ -86,7 +86,7 @@ export default function DetailConcours() {
       })
       .catch(() => navigate('/login'))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, navigate]);
 
   const showMessage = (text, type = 'info') => {
     setMessage({ text, type });
@@ -113,7 +113,6 @@ export default function DetailConcours() {
       const { candidat: updated, concours: updatedConcours } = await refreshData(id);
       setCandidat(updated);
       setConcours(updatedConcours);
-      if (updatedConcours.dossierCandidat) setDossierCandidat(updatedConcours.dossierCandidat); // ✅ FIX
       const inscriptionUpdated = updated.inscriptions?.find(i => i.concoursId === updatedConcours.id);
       if (inscriptionUpdated) setInscription(inscriptionUpdated);
     } catch (err) {

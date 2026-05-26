@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/api';
 import etudiantsImage from '../assets/etudiants.jpg';
-import { BentoCard, AcademicButton } from '../components/AcademicLayout';
+import { AcademicButton } from '../components/AcademicLayout';
 
 // Hook responsive
 function useIsMobile() {
@@ -241,7 +241,6 @@ function BtnPrimary({ children, onClick, style, disabled }) {
 }
 
 function BtnSecondary({ children, onClick }) {
-  const [hovered, setHovered] = useState(false);
   return (
     <button
       onClick={onClick}
@@ -252,8 +251,6 @@ function BtnSecondary({ children, onClick }) {
         fontWeight: 600,
         flexShrink: 0,
       }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
       {children}
     </button>
@@ -261,7 +258,7 @@ function BtnSecondary({ children, onClick }) {
 }
 
 // ── FORM ──────────────────────────────────────────────────────────────────────
-function FormLeft({ onSuccess, isMobile }) {
+function FormLeft({ isMobile }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -329,7 +326,7 @@ function FormLeft({ onSuccess, isMobile }) {
     setLoading(true);
     try {
       // Inscription uniquement en tant que CANDIDAT
-      let userData = {
+      const userData = {
         nom: form.nom,
         prenom: form.prenom,
         anip: form.anip,
@@ -830,7 +827,7 @@ export default function Register() {
         position: 'relative',
         zIndex: 2,
       }}>
-        <FormLeft isMobile={isMobile} onSuccess={() => {}} />
+        <FormLeft isMobile={isMobile} />
         <RightPanelContent isMobile={isMobile} />
       </div>
     </div>

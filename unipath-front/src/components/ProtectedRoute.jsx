@@ -1,6 +1,6 @@
 // src/components/ProtectedRoute.jsx
 import { Navigate } from 'react-router-dom';
-import { isAuthenticated, getUserRole, getDefaultRoute, hasRole, hasSousRole, getUser } from '../utils/auth';
+import { isAuthenticated, getDefaultRoute, hasRole, hasSousRole, getUser } from '../utils/auth';
 
 /**
  * @param {Array<string>} [allowedRoles]

@@ -1,7 +1,7 @@
 // src/pages/DetailCandidatCommission.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { commissionService, authService } from '../services/api';
+import { commissionService } from '../services/api';
 import DocumentViewer from '../components/DocumentViewer';
 import HistoriqueActions from '../components/HistoriqueActions';
 import CommissionLayout from '../components/CommissionLayout';
@@ -37,14 +37,13 @@ export default function DetailCandidatCommission() {
   const [sousReserveModal, setSousReserveModal] = useState({ open: false, commentaire: '' });
   const [documentViewer, setDocumentViewer] = useState({ open: false, url: '', name: '', type: '' });
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
-  const user = authService.getCurrentUser();
 
-  const showMessage = (text, type = 'info') => {
+  const showMessage = useCallback((text, type = 'info') => {
     setMessage({ text, type });
     setTimeout(() => setMessage({ text: '' }), 4000);
-  };
+  }, []);
 
-  const chargerInscription = async () => {
+  const chargerInscription = useCallback(async () => {
     setLoading(true);
     try {
       // Récupérer toutes les inscriptions et trouver celle qui correspond
@@ -64,11 +63,11 @@ export default function DetailCandidatCommission() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [inscriptionId, navigate, showMessage]);
 
   useEffect(() => {
     chargerInscription();
-  }, [inscriptionId]);
+  }, [chargerInscription]);
 
   const handleDecision = async (statut, commentaireRejet = null, commentaireSousReserve = null) => {
     try {

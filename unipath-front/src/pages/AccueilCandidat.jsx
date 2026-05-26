@@ -38,7 +38,7 @@ export default function AccueilCandidat() {
       })
       .catch(() => navigate('/login'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [navigate]);
 
   if (loading) return (
     <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
@@ -78,13 +78,6 @@ export default function AccueilCandidat() {
   if (pct > 0 && pct < 100) {
     notifications.push({ type: 'info', msg: `Votre dossier est complété à ${pct}%. Déposez les pièces manquantes.` });
   }
-
-  const notifColors = {
-    success: 'bg-green-50 border-green-200 text-green-700',
-    error:   'bg-red-50 border-red-200 text-red-700',
-    warning: 'bg-orange-50 border-orange-200 text-orange-700',
-    info:    'bg-blue-50 border-blue-200 text-blue-700',
-  };
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>

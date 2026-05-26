@@ -2,16 +2,9 @@
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/api';
 
-export default function AcademicLayout({ children, title, subtitle, showBackButton = false, headerGradient = 'blue' }) {
+export default function AcademicLayout({ children, title, subtitle, showBackButton = false }) {
   const navigate = useNavigate();
   const user = authService.getCurrentUser();
-
-  const gradients = {
-    blue: 'from-blue-900 to-blue-700',
-    slate: 'from-slate-700 to-slate-600',
-    orange: 'from-orange-600 to-orange-500',
-    purple: 'from-purple-700 to-purple-600',
-  };
 
   const handleLogout = () => {
     authService.logout();

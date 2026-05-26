@@ -1,5 +1,5 @@
 // src/components/HistoriqueActions.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -33,7 +33,7 @@ export default function HistoriqueActions({ dossierId, nomCandidat }) {
   const [filtres, setFiltres] = useState({ dateDebut: '', dateFin: '', typeAction: '' });
   const [filtresOuverts, setFiltresOuverts] = useState(false);
 
-  const charger = async () => {
+  const charger = useCallback(async () => {
     if (!dossierId) return;
     setLoading(true);
     setErreur('');
@@ -45,9 +45,9 @@ export default function HistoriqueActions({ dossierId, nomCandidat }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dossierId, filtres]);
 
-  useEffect(() => { charger(); }, [dossierId]);
+  useEffect(() => { charger(); }, [charger]);
 
   const handleExportCSV = async () => {
     const token = localStorage.getItem('token');

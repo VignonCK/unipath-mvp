@@ -1,5 +1,5 @@
 // src/pages/ListeDossiersControleur.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../utils/apiConfig';
 import CommissionLayout from '../components/CommissionLayout';
@@ -13,11 +13,7 @@ const ListeDossiersControleur = () => {
   const [filtreActif, setFiltreActif] = useState(searchParams.get('filtre') || '');
   const [pagination, setPagination] = useState({ total: 0, limite: 50, offset: 0, pages: 0 });
 
-  useEffect(() => {
-    chargerDossiers();
-  }, [filtreActif, pagination.offset]);
-
-  const chargerDossiers = async () => {
+  const chargerDossiers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -45,7 +41,11 @@ const ListeDossiersControleur = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filtreActif, pagination.limite, pagination.offset]);
+
+  useEffect(() => {
+    chargerDossiers();
+  }, [chargerDossiers]);
 
   const changerFiltre = (nouveauFiltre) => {
     setFiltreActif(nouveauFiltre);

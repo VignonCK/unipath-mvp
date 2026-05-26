@@ -57,7 +57,7 @@ export default function MonCompte() {
       })
       .catch(() => navigate('/login'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [navigate]);
 
   const showMessage = (text, type = 'info') => {
     setMessage({ text, type });

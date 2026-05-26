@@ -29,6 +29,11 @@ const notificationRoutes = require('./routes/notifications.routes');
 const emailRoutes = require('./routes/email.routes');
 const examinateurRoutes = require('./routes/examinateur.routes');
 const controleurCommissionRoutes = require('./routes/controleur-commission.routes');
+const etablissementRoutes = require('./routes/etablissement.routes');
+const filiereRoutes = require('./routes/filiere.routes');
+const inscriptionAcadRoutes = require('./routes/inscriptionAcad.routes');
+const notesRoutes = require('./routes/notes.routes');
+const parcoursRoutes = require('./routes/parcours.routes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/candidats', candidatRoutes);
@@ -45,6 +50,11 @@ app.use('/api/email', emailRoutes);
 // Routes pour le système de double verdict
 app.use('/api/examinateur', examinateurRoutes);
 app.use('/api/controleur-commission', controleurCommissionRoutes);
+app.use('/api/etablissements', etablissementRoutes);
+app.use('/api/filieres', filiereRoutes);
+app.use('/api/inscriptions-academiques', inscriptionAcadRoutes);
+app.use('/api/notes', notesRoutes);
+app.use('/api/parcours', parcoursRoutes);
 
 // ── Health check ────────────────────────────────────────────────
 app.get('/health', (req, res) => {

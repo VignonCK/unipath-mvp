@@ -1,8 +1,8 @@
 // src/pages/CarteCandidat.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { candidatService, authService } from '../services/api';
-import { BentoCard, GlassBadge, AcademicButton } from '../components/AcademicLayout';
+import { candidatService } from '../services/api';
+import { BentoCard } from '../components/AcademicLayout';
 
 export default function CarteCandidat() {
   const navigate = useNavigate();
@@ -10,11 +10,7 @@ export default function CarteCandidat() {
   const [loading, setLoading] = useState(true);
   const [photoUrl, setPhotoUrl] = useState(null);
 
-  useEffect(() => {
-    loadCandidat();
-  }, []);
-
-  const loadCandidat = async () => {
+  const loadCandidat = useCallback(async () => {
     try {
       const data = await candidatService.getProfil();
       setCandidat(data);
@@ -30,7 +26,11 @@ export default function CarteCandidat() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
+
+  useEffect(() => {
+    loadCandidat();
+  }, [loadCandidat]);
 
   if (loading) {
     return (
