@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { etablissementService, filiereService, preinscriptionEtablissementService } from '../services/api';
+import { applicationService, etablissementService, filiereService, preinscriptionEtablissementService } from '../services/api';
 
 function EspaceEtablissement() {
   const [loading, setLoading] = useState(true);
@@ -9,6 +9,15 @@ function EspaceEtablissement() {
   const [filieres, setFilieres] = useState([]);
   const [etudiants, setEtudiants] = useState([]);
   const [demandesPreinscription, setDemandesPreinscription] = useState([]);
+  const [demandesApplication, setDemandesApplication] = useState([]);
+  const [requirements, setRequirements] = useState([]);
+  const [requirementForm, setRequirementForm] = useState({
+    code: '',
+    label: '',
+    requirementType: 'DOCUMENT_UPLOAD',
+    profileFieldKey: '',
+    isRequired: true,
+  });
   const [selectedEtablissement, setSelectedEtablissement] = useState('');
   const [monProfil, setMonProfil] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
@@ -72,10 +81,16 @@ function EspaceEtablissement() {
   useEffect(() => {
     const chargerDemandes = async () => {
       try {
-        const data = await preinscriptionEtablissementService.getDemandesEtablissement('EN_ATTENTE');
-        setDemandesPreinscription(data.demandes || []);
+        const [dataPreinscriptions, dataApplications, dataRequirements] = await Promise.all([
+          preinscriptionEtablissementService.getDemandesEtablissement('EN_ATTENTE'),
+          applicationService.getDemandesEtablissement(),
+          applicationService.getMyRequirementsEtablissement(),
+        ]);
+        setDemandesPreinscription(dataPreinscriptions.demandes || []);
+        setDemandesApplication(dataApplications.applications || []);
+        setRequirements(dataRequirements.requirements || []);
       } catch (err) {
-        setError(err.message || 'Erreur lors du chargement des demandes de pre-inscription');
+        setError(err.message || 'Erreur lors du chargement des demandes');
       }
     };
 
@@ -118,6 +133,50 @@ function EspaceEtablissement() {
       setDemandesPreinscription(data.demandes || []);
     } catch (err) {
       setError(err.message || 'Erreur lors de la decision');
+    }
+  };
+
+  const handleRequirementField = (event) => {
+    const { name, value, type, checked } = event.target;
+    setRequirementForm((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
+  };
+
+  const handleSaveRequirement = async (event) => {
+    event.preventDefault();
+    try {
+      setError('');
+      await applicationService.upsertRequirementEtablissement({
+        code: requirementForm.code.trim(),
+        label: requirementForm.label.trim(),
+        requirementType: requirementForm.requirementType,
+        profileFieldKey:
+          requirementForm.requirementType === 'PROFILE_FIELD' ? requirementForm.profileFieldKey.trim() : undefined,
+        isRequired: Boolean(requirementForm.isRequired),
+      });
+      const data = await applicationService.getMyRequirementsEtablissement();
+      setRequirements(data.requirements || []);
+      setRequirementForm({
+        code: '',
+        label: '',
+        requirementType: 'DOCUMENT_UPLOAD',
+        profileFieldKey: '',
+        isRequired: true,
+      });
+    } catch (err) {
+      setError(err.message || 'Erreur enregistrement exigence');
+    }
+  };
+
+  const handleDeleteRequirement = async (id) => {
+    try {
+      setError('');
+      await applicationService.deleteRequirementEtablissement(id);
+      setRequirements((prev) => prev.filter((r) => r.id !== id));
+    } catch (err) {
+      setError(err.message || 'Erreur suppression exigence');
     }
   };
 
@@ -173,6 +232,129 @@ function EspaceEtablissement() {
             </div>
           </div>
         )}
+
+        <div className='rounded-xl border border-slate-200 bg-white p-4 shadow-sm'>
+          <div className='mb-3 flex items-center justify-between'>
+            <h2 className='text-lg font-semibold text-slate-900'>Demandes de dossier (nouveau flow)</h2>
+            <span className='text-sm text-slate-500'>{demandesApplication.length} demande(s)</span>
+          </div>
+          {demandesApplication.length === 0 && (
+            <p className='text-sm text-slate-500'>Aucune demande de dossier pour le moment.</p>
+          )}
+          {demandesApplication.length > 0 && (
+            <div className='overflow-x-auto'>
+              <table className='min-w-full divide-y divide-slate-200 text-sm'>
+                <thead className='bg-slate-50'>
+                  <tr>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Numero</th>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Etudiant</th>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Filiere</th>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Statut</th>
+                  </tr>
+                </thead>
+                <tbody className='divide-y divide-slate-100'>
+                  {demandesApplication.map((d) => (
+                    <tr key={d.id}>
+                      <td className='px-3 py-2 text-slate-700'>{d.numeroApplication}</td>
+                      <td className='px-3 py-2 text-slate-700'>{`${d.candidat?.nom || ''} ${d.candidat?.prenom || ''}`.trim()}</td>
+                      <td className='px-3 py-2 text-slate-700'>{d.filiere?.nom || '-'}</td>
+                      <td className='px-3 py-2 text-slate-700'>{d.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className='rounded-xl border border-slate-200 bg-white p-4 shadow-sm'>
+          <h2 className='mb-3 text-lg font-semibold text-slate-900'>Configuration des pieces requises</h2>
+          <form className='grid gap-3 md:grid-cols-5' onSubmit={handleSaveRequirement}>
+            <input
+              name='code'
+              value={requirementForm.code}
+              onChange={handleRequirementField}
+              placeholder='code_piece'
+              className='rounded border border-slate-300 px-3 py-2 text-sm'
+              required
+            />
+            <input
+              name='label'
+              value={requirementForm.label}
+              onChange={handleRequirementField}
+              placeholder='Libelle'
+              className='rounded border border-slate-300 px-3 py-2 text-sm'
+              required
+            />
+            <select
+              name='requirementType'
+              value={requirementForm.requirementType}
+              onChange={handleRequirementField}
+              className='rounded border border-slate-300 px-3 py-2 text-sm'
+            >
+              <option value='DOCUMENT_UPLOAD'>DOCUMENT_UPLOAD</option>
+              <option value='PROFILE_FIELD'>PROFILE_FIELD</option>
+            </select>
+            <input
+              name='profileFieldKey'
+              value={requirementForm.profileFieldKey}
+              onChange={handleRequirementField}
+              placeholder='profileFieldKey (si PROFILE_FIELD)'
+              className='rounded border border-slate-300 px-3 py-2 text-sm'
+              disabled={requirementForm.requirementType !== 'PROFILE_FIELD'}
+            />
+            <button
+              type='submit'
+              className='rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white'
+            >
+              Enregistrer
+            </button>
+          </form>
+          <label className='mt-3 flex items-center gap-2 text-sm text-slate-700'>
+            <input
+              type='checkbox'
+              name='isRequired'
+              checked={requirementForm.isRequired}
+              onChange={handleRequirementField}
+            />
+            Exigence obligatoire
+          </label>
+
+          {requirements.length > 0 && (
+            <div className='mt-4 overflow-x-auto'>
+              <table className='min-w-full divide-y divide-slate-200 text-sm'>
+                <thead className='bg-slate-50'>
+                  <tr>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Code</th>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Libelle</th>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Type</th>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Profil</th>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Action</th>
+                  </tr>
+                </thead>
+                <tbody className='divide-y divide-slate-100'>
+                  {requirements.map((r) => (
+                    <tr key={r.id}>
+                      <td className='px-3 py-2'>{r.code}</td>
+                      <td className='px-3 py-2'>{r.label}</td>
+                      <td className='px-3 py-2'>{r.requirementType}</td>
+                      <td className='px-3 py-2'>{r.profileFieldKey || '-'}</td>
+                      <td className='px-3 py-2'>
+                        <button
+                          type='button'
+                          onClick={() => handleDeleteRequirement(r.id)}
+                          className='rounded bg-red-700 px-2 py-1 text-xs font-medium text-white'
+                        >
+                          Supprimer
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
         <div className='rounded-xl border border-slate-200 bg-white p-4 shadow-sm'>
           <div className='mb-3 flex items-center justify-between'>

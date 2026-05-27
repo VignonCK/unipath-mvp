@@ -29,6 +29,7 @@ model Candidat {
   inscriptions          Inscription[]
   InscriptionAcademique InscriptionAcademique[]
   preinscriptionsEtablissement PreinscriptionEtablissement[]
+  applications          Application[]
 
   @@index([anip])
 }
@@ -320,6 +321,8 @@ model Etablissement {
   filieres     Filiere[]
   inscriptions InscriptionAcademique[]
   preinscriptions PreinscriptionEtablissement[]
+  applications  Application[]
+  schoolRequirements SchoolRequirement[]
 
   @@index([type])
   @@index([ville])
@@ -337,6 +340,7 @@ model Filiere {
   inscriptions    InscriptionAcademique[]
   diplomes        Diplome[]
   preinscriptions PreinscriptionEtablissement[]
+  applications    Application[]
 
   @@index([etablissementId])
   @@index([niveau])
@@ -383,11 +387,111 @@ model PreinscriptionEtablissement {
   filiere              Filiere                      @relation(fields: [filiereId], references: [id], onDelete: Cascade)
   etablissement        Etablissement                @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
   inscriptionAcademique InscriptionAcademique?      @relation(fields: [inscriptionAcadId], references: [id], onDelete: SetNull)
+  application          Application?
 
   @@unique([candidatId, filiereId, anneeAcademique])
   @@index([candidatId])
   @@index([etablissementId, statut])
   @@index([createdAt])
+}
+
+model Application {
+  id                    String                  @id @default(uuid())
+  numeroApplication     String                  @unique
+  candidatId            String
+  etablissementId       String
+  filiereId             String
+  anneeAcademique       String
+  niveau                Int
+  status                ApplicationStatus       @default(DRAFT)
+  preinscriptionId      String?                 @unique
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  candidat              Candidat                @relation(fields: [candidatId], references: [id], onDelete: Cascade)
+  etablissement         Etablissement           @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  filiere               Filiere                 @relation(fields: [filiereId], references: [id], onDelete: Cascade)
+  preinscription        PreinscriptionEtablissement? @relation(fields: [preinscriptionId], references: [id], onDelete: SetNull)
+  documents             ApplicationDocument[]
+  payments              Payment[]
+  receipts              Receipt[]
+
+  @@unique([candidatId, filiereId, anneeAcademique])
+  @@index([candidatId])
+  @@index([etablissementId, status])
+  @@index([createdAt])
+}
+
+model SchoolRequirement {
+  id               String               @id @default(uuid())
+  etablissementId  String
+  code             String
+  label            String
+  requirementType  RequirementType
+  profileFieldKey  String?
+  isRequired       Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  etablissement    Etablissement        @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  applicationDocuments ApplicationDocument[]
+
+  @@unique([etablissementId, code])
+  @@index([etablissementId])
+}
+
+model ApplicationDocument {
+  id                String                 @id @default(uuid())
+  applicationId     String
+  schoolRequirementId String?
+  code              String
+  label             String
+  source            ApplicationDocSource
+  documentUrl       String?
+  status            ApplicationDocStatus   @default(PENDING)
+  metadata          Json?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  application       Application            @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  schoolRequirement SchoolRequirement?     @relation(fields: [schoolRequirementId], references: [id], onDelete: SetNull)
+
+  @@unique([applicationId, code])
+  @@index([applicationId])
+}
+
+model Payment {
+  id                String              @id @default(uuid())
+  applicationId     String
+  paymentType       PaymentType
+  amount            Int
+  currency          String              @default("XOF")
+  paymentProvider   String?
+  paymentMethod     PaymentMethod
+  status            PaymentStatus       @default(PENDING)
+  externalRef       String?
+  providerPayload   Json?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  application       Application         @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  receipt           Receipt?
+
+  @@index([applicationId, paymentType])
+  @@index([status])
+}
+
+model Receipt {
+  id                String              @id @default(uuid())
+  paymentId         String?             @unique
+  applicationId     String
+  receiptNumber     String              @unique
+  receiptType       ReceiptType
+  receiptUrl        String?
+  issuedAt          DateTime            @default(now())
+  metadata          Json?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  payment           Payment?            @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  application       Application         @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, receiptType])
 }
 
 model Note {
@@ -544,6 +648,52 @@ enum StatutPreinscriptionEtablissement {
   VALIDE
   SOUS_RESERVE
   REJETE
+}
+
+enum ApplicationStatus {
+  DRAFT
+  DOSSIER_FEES_PAID
+  PENDING_DOCUMENTS
+  READY_FOR_PREINSCRIPTION
+  FICHE_GENERATED
+}
+
+enum RequirementType {
+  PROFILE_FIELD
+  DOCUMENT_UPLOAD
+}
+
+enum ApplicationDocSource {
+  PROFILE_AUTO
+  STUDENT_UPLOAD
+  SYSTEM_GENERATED
+}
+
+enum ApplicationDocStatus {
+  PENDING
+  PROVIDED
+}
+
+enum PaymentType {
+  DOSSIER_FEES
+  DROITS_INSCRIPTION
+}
+
+enum PaymentMethod {
+  PLATFORM_GATEWAY
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+enum ReceiptType {
+  DOSSIER_FEES_RECEIPT
+  BANK_RECEIPT
+  PREINSCRIPTION_FICHE
 }
 
 enum TypeDiplome {

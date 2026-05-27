@@ -289,6 +289,67 @@ export const preinscriptionEtablissementService = {
     }),
 };
 
+export const applicationService = {
+  creer: (data) =>
+    request('/applications', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getMesDemandes: () => request('/applications/mine'),
+  getById: (id) => request(`/applications/${id}`),
+  getRequirements: (id) => request(`/applications/${id}/requirements`),
+  payerFraisDossierMock: (id) =>
+    request(`/applications/${id}/payments/dossier-fees/mock-confirm`, {
+      method: 'POST',
+    }),
+  uploadQuittanceBancaire: async (id, fichier) => {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('fichier', fichier);
+    const response = await fetch(`${BASE_URL}/applications/${id}/payments/droits-inscription/receipt`, {
+      method: 'POST',
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Erreur upload quittance bancaire');
+    return data;
+  },
+  uploadDocument: async (id, code, fichier) => {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('code', code);
+    formData.append('fichier', fichier);
+    const response = await fetch(`${BASE_URL}/applications/${id}/documents`, {
+      method: 'POST',
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Erreur upload document');
+    return data;
+  },
+  finaliser: (id) =>
+    request(`/applications/${id}/finalize`, {
+      method: 'POST',
+    }),
+  telechargerFiche: (id) =>
+    telechargerPDF(`${BASE_URL}/applications/${id}/fiche-preinscription`, `fiche_preinscription_${id}.pdf`),
+  getDemandesEtablissement: () => request('/applications/etablissement/applications'),
+  getMyRequirementsEtablissement: () => request('/applications/etablissement/requirements'),
+  upsertRequirementEtablissement: (payload) =>
+    request('/applications/etablissement/requirements', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  deleteRequirementEtablissement: (id) =>
+    request(`/applications/etablissement/requirements/${id}`, {
+      method: 'DELETE',
+    }),
+  getRequirementsByEtablissement: (etablissementId) =>
+    request(`/applications/requirements/etablissement/${etablissementId}`),
+};
+
 export const notesService = {
   ajouter: (data) =>
     request('/notes', {

@@ -6,6 +6,12 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Seeding Module 2 - Parcours Academique...');
 
+  await prisma.receipt.deleteMany();
+  await prisma.payment.deleteMany();
+  await prisma.applicationDocument.deleteMany();
+  await prisma.application.deleteMany();
+  await prisma.schoolRequirement.deleteMany();
+  await prisma.preinscriptionEtablissement.deleteMany();
   await prisma.note.deleteMany();
   await prisma.inscriptionAcademique.deleteMany();
   await prisma.diplome.deleteMany();
@@ -75,6 +81,51 @@ async function main() {
       },
     }),
   ]);
+
+  await prisma.schoolRequirement.createMany({
+    data: [
+      {
+        etablissementId: esgt.id,
+        code: 'acte_naissance',
+        label: 'Acte de naissance',
+        requirementType: 'PROFILE_FIELD',
+        profileFieldKey: 'acteNaissance',
+        isRequired: true,
+      },
+      {
+        etablissementId: esgt.id,
+        code: 'carte_identite',
+        label: 'Carte d identite',
+        requirementType: 'PROFILE_FIELD',
+        profileFieldKey: 'carteIdentite',
+        isRequired: true,
+      },
+      {
+        etablissementId: esgt.id,
+        code: 'photo_identite',
+        label: 'Photo d identite',
+        requirementType: 'PROFILE_FIELD',
+        profileFieldKey: 'photo',
+        isRequired: true,
+      },
+      {
+        etablissementId: esgt.id,
+        code: 'releve_bac',
+        label: 'Releve de notes du Bac',
+        requirementType: 'PROFILE_FIELD',
+        profileFieldKey: 'releve',
+        isRequired: true,
+      },
+      {
+        etablissementId: esgt.id,
+        code: 'lettre_motivation',
+        label: 'Lettre de motivation',
+        requirementType: 'DOCUMENT_UPLOAD',
+        profileFieldKey: null,
+        isRequired: true,
+      },
+    ],
+  });
 
   const [genieInfoL, medecineL, droitL, genieInfoM, medecineM] = await Promise.all([
     prisma.filiere.create({
@@ -183,7 +234,7 @@ async function main() {
   });
 
   console.log('Seed Module 2 termine avec succes.');
-  console.log('Etablissements: 3 | Filieres: 5 | Inscriptions: 3 | Notes: 10');
+  console.log('Etablissements: 3 | Filieres: 5 | Exigences: 5 | Inscriptions: 3 | Notes: 10');
 }
 
 main()

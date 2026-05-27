@@ -37,6 +37,7 @@ const inscriptionAcadRoutes = require('./routes/inscriptionAcad.routes');
 const notesRoutes = require('./routes/notes.routes');
 const parcoursRoutes = require('./routes/parcours.routes');
 const preinscriptionEtablissementRoutes = require('./routes/preinscriptionEtablissement.routes');
+const applicationRoutes = require('./routes/application.routes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/candidats', candidatRoutes);
@@ -59,6 +60,7 @@ app.use('/api/inscriptions-academiques', inscriptionAcadRoutes);
 app.use('/api/notes', notesRoutes);
 app.use('/api/parcours', parcoursRoutes);
 app.use('/api/preinscriptions-etablissement', preinscriptionEtablissementRoutes);
+app.use('/api/applications', applicationRoutes);
 
 // ── Health check ────────────────────────────────────────────────
 app.get('/health', (req, res) => {
