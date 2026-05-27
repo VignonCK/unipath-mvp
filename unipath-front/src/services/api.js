@@ -48,6 +48,12 @@ export const authService = {
       body: JSON.stringify(userData),
     }),
 
+  registerEtablissement: (data) =>
+    request('/auth/register-etablissement', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -226,6 +232,29 @@ export const etablissementService = {
     const query = searchParams.toString();
     return request(`/etablissements/${id}/etudiants${query ? `?${query}` : ''}`);
   },
+  getMonProfil: () => request('/etablissements/mon/profil'),
+  updateMonProfil: (data) =>
+    request('/etablissements/mon/profil', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  uploadMonLogo: async (file) => {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('logo', file);
+
+    const response = await fetch(`${BASE_URL}/etablissements/mon/logo`, {
+      method: 'POST',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Erreur upload logo');
+    return data;
+  },
 };
 
 export const filiereService = {
@@ -242,6 +271,24 @@ export const inscriptionAcadService = {
   getMesInscriptions: () => request('/inscriptions-academiques/mes-inscriptions'),
 };
 
+export const preinscriptionEtablissementService = {
+  creer: (data) =>
+    request('/preinscriptions-etablissement', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getMesPreinscriptions: () => request('/preinscriptions-etablissement/mes-preinscriptions'),
+  telechargerFiche: (id) =>
+    telechargerPDF(`${BASE_URL}/preinscriptions-etablissement/${id}/pdf`, `fiche_preinscription_${id}.pdf`),
+  getDemandesEtablissement: (statut = '') =>
+    request(`/preinscriptions-etablissement/etablissement/demandes${statut ? `?statut=${statut}` : ''}`),
+  decider: (id, payload) =>
+    request(`/preinscriptions-etablissement/${id}/decision`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+};
+
 export const notesService = {
   ajouter: (data) =>
     request('/notes', {
@@ -254,6 +301,7 @@ export const notesService = {
 export const parcoursService = {
   getMonParcours: () => request('/parcours/mon-parcours'),
   getMonReleve: () => request('/parcours/mon-releve'),
+  telechargerMonReleve: () => telechargerPDF(`${BASE_URL}/parcours/mon-releve/pdf`, 'releve_academique.pdf'),
 };
 
 // ── Convocation PDF ───────────────────────────────────────────────

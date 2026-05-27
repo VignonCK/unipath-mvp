@@ -5,6 +5,7 @@ const authController = require('../controllers/auth.controller');
 
 // Routes publiques
 router.post('/register', authController.register);
+router.post('/register-etablissement', authController.registerEtablissement);
 router.post('/login', authController.login);
 router.post('/reset-password', authController.resetPassword);
 

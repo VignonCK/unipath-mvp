@@ -12,6 +12,7 @@ const statutClasses = {
 function DashboardEtudiant() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
   const [parcours, setParcours] = useState([]);
 
@@ -36,18 +37,40 @@ function DashboardEtudiant() {
     navigate('/login');
   };
 
+  const handleTelechargerReleve = async () => {
+    try {
+      setDownloading(true);
+      setError('');
+      await parcoursService.telechargerMonReleve();
+    } catch (err) {
+      setError(err.message || 'Erreur lors du telechargement du releve');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <div className='min-h-screen bg-slate-50'>
       <header className='bg-slate-900 text-white shadow'>
         <div className='mx-auto flex max-w-6xl items-center justify-between px-4 py-4'>
           <h1 className='text-lg font-semibold sm:text-2xl'>UniPath - Mon Parcours</h1>
-          <button
-            type='button'
-            onClick={handleLogout}
-            className='rounded-lg bg-white/10 px-4 py-2 text-sm font-medium hover:bg-white/20'
-          >
-            Deconnexion
-          </button>
+          <div className='flex items-center gap-2'>
+            <button
+              type='button'
+              onClick={handleTelechargerReleve}
+              disabled={downloading}
+              className='rounded-lg bg-blue-500/90 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60'
+            >
+              {downloading ? 'Generation...' : 'Telecharger mon releve'}
+            </button>
+            <button
+              type='button'
+              onClick={handleLogout}
+              className='rounded-lg bg-white/10 px-4 py-2 text-sm font-medium hover:bg-white/20'
+            >
+              Deconnexion
+            </button>
+          </div>
         </div>
       </header>
 

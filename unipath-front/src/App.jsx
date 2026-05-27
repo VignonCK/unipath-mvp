@@ -4,6 +4,7 @@ import './styles/academicBento.css';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import RegisterEtablissement from './pages/RegisterEtablissement';
 import AuthCallback from './pages/AuthCallback';
 import EmailConfirmation from './pages/EmailConfirmation';
 import DashboardCommission from './pages/DashboardCommission';
@@ -38,6 +39,7 @@ function App() {
         <Route path='/' element={<Home />} />
         <Route path='/login' element={<Login />} />
         <Route path='/register' element={<Register />} />
+        <Route path='/register-etablissement' element={<RegisterEtablissement />} />
         <Route path='/auth/callback' element={<AuthCallback />} />
         <Route path='/auth/confirm' element={<EmailConfirmation />} />
         <Route path='/design-demo' element={<DesignSystemDemo />} />
@@ -118,7 +120,7 @@ function App() {
         <Route
           path='/inscription-academique'
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['CANDIDAT']}>
               <InscriptionAcademique />
             </ProtectedRoute>
           }
@@ -127,7 +129,7 @@ function App() {
         <Route
           path='/etablissement'
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['ETABLISSEMENT']}>
               <EspaceEtablissement />
             </ProtectedRoute>
           }

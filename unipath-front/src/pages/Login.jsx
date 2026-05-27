@@ -55,6 +55,7 @@ export default function Login() {
       } else if (role === 'CANDIDAT') navigate('/dashboard');
       else if (role === 'DGES') navigate('/dashboard-dges');
       else if (role === 'CONTROLEUR') navigate('/controleur-commission/tableau-de-bord');
+      else if (role === 'ETABLISSEMENT') navigate('/etablissement');
       else navigate('/dashboard');
     } catch (err) {
       // Vérifier si l'erreur est due à un email non confirmé
@@ -273,7 +274,9 @@ export default function Login() {
 
           <p className='text-center text-xs text-gray-400 mt-6'>
             Pas encore de compte ?{' '}
-            <a href='/register' className='text-orange-500 font-semibold hover:underline'>Créer un compte</a>
+            <a href='/register' className='text-orange-500 font-semibold hover:underline'>Compte candidat</a>
+            {' · '}
+            <a href='/register-etablissement' className='text-orange-500 font-semibold hover:underline'>Compte etablissement</a>
           </p>
         </div>
 

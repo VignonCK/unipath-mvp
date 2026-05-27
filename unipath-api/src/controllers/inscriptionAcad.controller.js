@@ -1,5 +1,6 @@
 const { Prisma } = require('@prisma/client');
 const prisma = require('../prisma');
+const emailService = require('../services/email.service');
 
 const STATUTS = ['EN_COURS', 'VALIDE', 'REDOUBLANT', 'ABANDONNE'];
 
@@ -32,10 +33,29 @@ exports.creerInscriptionAcad = async (req, res) => {
         niveau: Number(niveau),
       },
       include: {
+        candidat: {
+          select: { id: true, nom: true, prenom: true, email: true },
+        },
         filiere: true,
         etablissement: true,
       },
     });
+
+    try {
+      await emailService.envoyerEmailInscriptionAcademique({
+        userId: inscription.candidat.id,
+        candidatId: inscription.candidat.id,
+        candidatEmail: inscription.candidat.email,
+        candidatNom: inscription.candidat.nom,
+        candidatPrenom: inscription.candidat.prenom,
+        filiereNom: inscription.filiere.nom,
+        etablissementNom: inscription.etablissement.nom,
+        anneeAcademique: inscription.anneeAcademique,
+        niveau: inscription.niveau,
+      });
+    } catch (emailError) {
+      console.error('Erreur envoi email inscription academique:', emailError);
+    }
 
     return res.status(201).json({
       message: 'Inscription academique creee avec succes',
@@ -144,7 +164,31 @@ exports.updateStatut = async (req, res) => {
     const inscription = await prisma.inscriptionAcademique.update({
       where: { id },
       data: { statut },
+      include: {
+        candidat: {
+          select: { id: true, nom: true, prenom: true, email: true },
+        },
+        filiere: {
+          select: { nom: true },
+        },
+      },
     });
+
+    try {
+      await emailService.envoyerEmailStatutAcademique({
+        userId: inscription.candidat.id,
+        candidatId: inscription.candidat.id,
+        candidatEmail: inscription.candidat.email,
+        candidatNom: inscription.candidat.nom,
+        candidatPrenom: inscription.candidat.prenom,
+        filiereNom: inscription.filiere.nom,
+        anneeAcademique: inscription.anneeAcademique,
+        niveau: inscription.niveau,
+        statut: inscription.statut,
+      });
+    } catch (emailError) {
+      console.error('Erreur envoi email statut academique:', emailError);
+    }
 
     return res.json({
       message: 'Statut mis a jour avec succes',

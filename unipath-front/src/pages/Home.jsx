@@ -272,6 +272,42 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ORIENTATION DES COMPTES */}
+      <section className='py-10 sm:py-12 px-4 sm:px-6'>
+        <div className='max-w-4xl mx-auto'>
+          <BentoCard className='p-6 sm:p-8 border-l-4 border-orange-500'>
+            <div className='text-center mb-6'>
+              <h2 className='text-xl sm:text-2xl font-black text-blue-900 mb-2'>Choisissez votre espace</h2>
+              <p className='text-sm sm:text-base text-gray-600'>
+                Candidat ou etablissement, accedez au formulaire adapte a votre profil.
+              </p>
+            </div>
+
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+              <button
+                onClick={() => navigate('/register')}
+                className='text-left rounded-xl border border-blue-200 bg-blue-50 p-4 hover:bg-blue-100 transition'
+              >
+                <p className='text-sm font-bold text-blue-900 mb-1'>Je suis candidat</p>
+                <p className='text-xs text-blue-800'>
+                  Inscription aux concours, suivi du dossier et telechargement des convocations.
+                </p>
+              </button>
+
+              <button
+                onClick={() => navigate('/register-etablissement')}
+                className='text-left rounded-xl border border-orange-200 bg-orange-50 p-4 hover:bg-orange-100 transition'
+              >
+                <p className='text-sm font-bold text-orange-700 mb-1'>Je suis etablissement</p>
+                <p className='text-xs text-orange-700'>
+                  Creation du compte institutionnel, gestion du profil et logo officiel.
+                </p>
+              </button>
+            </div>
+          </BentoCard>
+        </div>
+      </section>
+
       {/* FONCTIONNALITÉS */}
       <section className='py-12 sm:py-16 px-4 sm:px-6'>
         <div className='max-w-5xl mx-auto animate-slide-in'>

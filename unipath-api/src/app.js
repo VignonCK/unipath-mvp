@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const app = express();
 
 // ── Middlewares ─────────────────────────────────────────────────
@@ -13,6 +14,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // ── Routes ──────────────────────────────────────────────────────
 const authRoutes = require('./routes/auth.routes');
@@ -34,6 +36,7 @@ const filiereRoutes = require('./routes/filiere.routes');
 const inscriptionAcadRoutes = require('./routes/inscriptionAcad.routes');
 const notesRoutes = require('./routes/notes.routes');
 const parcoursRoutes = require('./routes/parcours.routes');
+const preinscriptionEtablissementRoutes = require('./routes/preinscriptionEtablissement.routes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/candidats', candidatRoutes);
@@ -55,6 +58,7 @@ app.use('/api/filieres', filiereRoutes);
 app.use('/api/inscriptions-academiques', inscriptionAcadRoutes);
 app.use('/api/notes', notesRoutes);
 app.use('/api/parcours', parcoursRoutes);
+app.use('/api/preinscriptions-etablissement', preinscriptionEtablissementRoutes);
 
 // ── Health check ────────────────────────────────────────────────
 app.get('/health', (req, res) => {

@@ -28,6 +28,7 @@ model Candidat {
   dossier               Dossier?
   inscriptions          Inscription[]
   InscriptionAcademique InscriptionAcademique[]
+  preinscriptionsEtablissement PreinscriptionEtablissement[]
 
   @@index([anip])
 }
@@ -318,6 +319,7 @@ model Etablissement {
   createdAt    DateTime                @default(now())
   filieres     Filiere[]
   inscriptions InscriptionAcademique[]
+  preinscriptions PreinscriptionEtablissement[]
 
   @@index([type])
   @@index([ville])
@@ -334,6 +336,7 @@ model Filiere {
   etablissement   Etablissement           @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
   inscriptions    InscriptionAcademique[]
   diplomes        Diplome[]
+  preinscriptions PreinscriptionEtablissement[]
 
   @@index([etablissementId])
   @@index([niveau])
@@ -352,12 +355,39 @@ model InscriptionAcademique {
   filiere         Filiere              @relation(fields: [filiereId], references: [id], onDelete: Cascade)
   etablissement   Etablissement        @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
   notes           Note[]
+  preinscriptionSource PreinscriptionEtablissement?
 
   @@unique([candidatId, filiereId, anneeAcademique])
   @@index([candidatId])
   @@index([filiereId])
   @@index([etablissementId])
   @@index([anneeAcademique])
+}
+
+model PreinscriptionEtablissement {
+  id                   String                       @id @default(uuid())
+  numeroPreinscription String                       @unique
+  candidatId           String
+  filiereId            String
+  etablissementId      String
+  anneeAcademique      String
+  niveau               Int
+  statut               StatutPreinscriptionEtablissement @default(EN_ATTENTE)
+  motifDecision        String?
+  decidedAt            DateTime?
+  decidedBy            String?
+  inscriptionAcadId    String?                      @unique
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+  candidat             Candidat                     @relation(fields: [candidatId], references: [id], onDelete: Cascade)
+  filiere              Filiere                      @relation(fields: [filiereId], references: [id], onDelete: Cascade)
+  etablissement        Etablissement                @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  inscriptionAcademique InscriptionAcademique?      @relation(fields: [inscriptionAcadId], references: [id], onDelete: SetNull)
+
+  @@unique([candidatId, filiereId, anneeAcademique])
+  @@index([candidatId])
+  @@index([etablissementId, statut])
+  @@index([createdAt])
 }
 
 model Note {
@@ -507,6 +537,13 @@ enum StatutInscriptionAcad {
   VALIDE
   REDOUBLANT
   ABANDONNE
+}
+
+enum StatutPreinscriptionEtablissement {
+  EN_ATTENTE
+  VALIDE
+  SOUS_RESERVE
+  REJETE
 }
 
 enum TypeDiplome {

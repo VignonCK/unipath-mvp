@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { etablissementService, filiereService, inscriptionAcadService } from '../services/api';
+import { etablissementService, filiereService, preinscriptionEtablissementService } from '../services/api';
 
 function InscriptionAcademique() {
   const [loading, setLoading] = useState(false);
   const [chargementInitial, setChargementInitial] = useState(true);
+  const [chargementPreinscriptions, setChargementPreinscriptions] = useState(false);
   const [etablissements, setEtablissements] = useState([]);
   const [filieres, setFilieres] = useState([]);
+  const [preinscriptions, setPreinscriptions] = useState([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [form, setForm] = useState({
@@ -29,6 +31,22 @@ function InscriptionAcademique() {
     };
 
     chargerEtablissements();
+  }, []);
+
+  useEffect(() => {
+    const chargerMesPreinscriptions = async () => {
+      try {
+        setChargementPreinscriptions(true);
+        const data = await preinscriptionEtablissementService.getMesPreinscriptions();
+        setPreinscriptions(data.preinscriptions || []);
+      } catch (err) {
+        setError(err.message || 'Erreur de chargement des pre-inscriptions');
+      } finally {
+        setChargementPreinscriptions(false);
+      }
+    };
+
+    chargerMesPreinscriptions();
   }, []);
 
   useEffect(() => {
@@ -73,8 +91,8 @@ function InscriptionAcademique() {
         niveau: Number(form.niveau),
       };
 
-      const data = await inscriptionAcadService.creer(payload);
-      setMessage(data.message || 'Inscription academique creee avec succes');
+      const data = await preinscriptionEtablissementService.creer(payload);
+      setMessage(data.message || 'Pre-inscription enregistree avec succes');
       setForm({
         etablissementId: '',
         filiereId: '',
@@ -82,12 +100,13 @@ function InscriptionAcademique() {
         niveau: '',
       });
       setFilieres([]);
+
+      const refresh = await preinscriptionEtablissementService.getMesPreinscriptions();
+      setPreinscriptions(refresh.preinscriptions || []);
     } catch (err) {
-      const texte = err.message || 'Erreur lors de la creation de l inscription academique';
+      const texte = err.message || 'Erreur lors de la creation de la pre-inscription';
       if (texte.includes('existe deja')) {
-        setError('Inscription en doublon : cette filiere a deja une inscription sur cette annee.');
-      } else if (texte.includes('Progression bloquee')) {
-        setError('Progression bloquee : annee precedente non validee.');
+        setError('Pre-inscription en doublon : cette filiere a deja une demande sur cette annee.');
       } else {
         setError(texte);
       }
@@ -192,9 +211,55 @@ function InscriptionAcademique() {
             disabled={loading}
             className='w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60'
           >
-            {loading ? 'Enregistrement...' : 'Creer l inscription academique'}
+            {loading ? 'Enregistrement...' : 'Creer la pre-inscription et recevoir la fiche par mail'}
           </button>
         </form>
+
+        <div className='mt-8 rounded-xl border border-slate-200 bg-slate-50 p-4'>
+          <div className='mb-3 flex items-center justify-between'>
+            <h2 className='text-base font-semibold text-slate-900'>Mes pre-inscriptions etablissement</h2>
+            {chargementPreinscriptions && <span className='text-xs text-slate-500'>Chargement...</span>}
+          </div>
+          {!chargementPreinscriptions && preinscriptions.length === 0 && (
+            <p className='text-sm text-slate-500'>Aucune pre-inscription pour le moment.</p>
+          )}
+          {!chargementPreinscriptions && preinscriptions.length > 0 && (
+            <div className='overflow-x-auto'>
+              <table className='min-w-full divide-y divide-slate-200 text-sm'>
+                <thead className='bg-slate-100'>
+                  <tr>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Numero</th>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Etablissement</th>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Filiere</th>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Annee</th>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Statut</th>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Action</th>
+                  </tr>
+                </thead>
+                <tbody className='divide-y divide-slate-200'>
+                  {preinscriptions.map((p) => (
+                    <tr key={p.id}>
+                      <td className='px-3 py-2'>{p.numeroPreinscription}</td>
+                      <td className='px-3 py-2'>{p.etablissement?.nom || '-'}</td>
+                      <td className='px-3 py-2'>{p.filiere?.nom || '-'}</td>
+                      <td className='px-3 py-2'>{p.anneeAcademique}</td>
+                      <td className='px-3 py-2'>{p.statut}</td>
+                      <td className='px-3 py-2'>
+                        <button
+                          type='button'
+                          onClick={() => preinscriptionEtablissementService.telechargerFiche(p.id)}
+                          className='rounded bg-slate-800 px-3 py-1 text-xs font-medium text-white hover:bg-slate-700'
+                        >
+                          Télécharger fiche
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

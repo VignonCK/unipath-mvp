@@ -12,7 +12,15 @@ exports.telechargerConvocation = async (req, res) => {
     const inscription = await prisma.inscription.findUnique({
       where: { id: inscriptionId },
       include: {
-        candidat: true,
+        candidat: {
+          include: {
+            dossier: {
+              select: {
+                photo: true,
+              },
+            },
+          },
+        },
         concours: true,
         dossierInscription: true,
       },
@@ -43,7 +51,10 @@ exports.telechargerConvocation = async (req, res) => {
     }
 
     const data = JSON.stringify({
-      candidat: inscription.candidat,
+      candidat: {
+        ...inscription.candidat,
+        photoPath: inscription.candidat?.dossier?.photo || '',
+      },
       concours: inscription.concours,
     });
 
@@ -88,7 +99,19 @@ exports.telechargerPreinscription = async (req, res) => {
 
     const inscription = await prisma.inscription.findUnique({
       where: { id: inscriptionId },
-      include: { candidat: true, concours: true },
+      include: {
+        candidat: {
+          include: {
+            dossier: {
+              select: {
+                photo: true,
+              },
+            },
+          },
+        },
+        concours: true,
+        dossierInscription: true,
+      },
     });
 
     if (!inscription) {
@@ -111,12 +134,20 @@ exports.telechargerPreinscription = async (req, res) => {
     }
 
     fs.writeFileSync(tmpInput, JSON.stringify({
-      candidat:    inscription.candidat,
-      concours:    inscription.concours,
-      inscription: inscription,
+      candidat: {
+        ...inscription.candidat,
+        photoPath: inscription.candidat?.dossier?.photo || '',
+      },
+      concours: inscription.concours,
+      numeroDossier: inscription.numeroInscription || inscription.id.substring(0, 8).toUpperCase(),
+      inscription: {
+        id: inscription.id,
+        numeroInscription: inscription.numeroInscription,
+        dossierInscription: inscription.dossierInscription || null,
+      },
     }), 'utf8');
 
-    const phpScript = path.join(__dirname, '../../php/preinscription.php');
+    const phpScript = path.join(__dirname, '../../php/fiche-preinscription.php');
     // Utiliser des guillemets doubles et normaliser les chemins
     const cmd = `php "${phpScript.replace(/\\/g, '/')}" "${tmpInput.replace(/\\/g, '/')}" "${tmpOutput.replace(/\\/g, '/')}"`;
 

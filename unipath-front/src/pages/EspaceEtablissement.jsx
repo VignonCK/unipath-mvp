@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { etablissementService, filiereService } from '../services/api';
+import { etablissementService, filiereService, preinscriptionEtablissementService } from '../services/api';
 
 function EspaceEtablissement() {
   const [loading, setLoading] = useState(true);
@@ -8,19 +8,36 @@ function EspaceEtablissement() {
   const [etablissements, setEtablissements] = useState([]);
   const [filieres, setFilieres] = useState([]);
   const [etudiants, setEtudiants] = useState([]);
+  const [demandesPreinscription, setDemandesPreinscription] = useState([]);
   const [selectedEtablissement, setSelectedEtablissement] = useState('');
+  const [monProfil, setMonProfil] = useState(null);
+  const [logoFile, setLogoFile] = useState(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [filters, setFilters] = useState({ filiere: '', annee: '' });
 
   useEffect(() => {
     const chargerEtablissements = async () => {
       try {
         setLoading(true);
+        setError('');
+
+        try {
+          const profilData = await etablissementService.getMonProfil();
+          const etab = profilData?.etablissement || null;
+          if (etab) {
+            setMonProfil(etab);
+            setEtablissements([etab]);
+            setSelectedEtablissement(etab.id);
+            return;
+          }
+        } catch {
+          // Fallback pour les roles non-etablissement utilisant cette page
+        }
+
         const data = await etablissementService.getAll();
         const list = data.etablissements || [];
         setEtablissements(list);
-        if (list.length > 0) {
-          setSelectedEtablissement(list[0].id);
-        }
+        if (list.length > 0) setSelectedEtablissement(list[0].id);
       } catch (err) {
         setError(err.message || 'Erreur lors du chargement des etablissements');
       } finally {
@@ -52,9 +69,56 @@ function EspaceEtablissement() {
     chargerDonnees();
   }, [selectedEtablissement, filters]);
 
+  useEffect(() => {
+    const chargerDemandes = async () => {
+      try {
+        const data = await preinscriptionEtablissementService.getDemandesEtablissement('EN_ATTENTE');
+        setDemandesPreinscription(data.demandes || []);
+      } catch (err) {
+        setError(err.message || 'Erreur lors du chargement des demandes de pre-inscription');
+      }
+    };
+
+    if (monProfil) chargerDemandes();
+  }, [monProfil]);
+
   const handleFilterChange = (event) => {
     const { name, value } = event.target;
     setFilters((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleUploadLogo = async () => {
+    if (!logoFile) return;
+    try {
+      setUploadingLogo(true);
+      setError('');
+      await etablissementService.uploadMonLogo(logoFile);
+      const profilData = await etablissementService.getMonProfil();
+      const etab = profilData?.etablissement || null;
+      if (etab) {
+        setMonProfil(etab);
+        setEtablissements([etab]);
+      }
+      setLogoFile(null);
+    } catch (err) {
+      setError(err.message || 'Erreur upload logo');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handleDecisionPreinscription = async (id, statut) => {
+    try {
+      let motifDecision = '';
+      if (statut === 'SOUS_RESERVE' || statut === 'REJETE') {
+        motifDecision = window.prompt('Motif de la décision :', '') || '';
+      }
+      await preinscriptionEtablissementService.decider(id, { statut, motifDecision });
+      const data = await preinscriptionEtablissementService.getDemandesEtablissement('EN_ATTENTE');
+      setDemandesPreinscription(data.demandes || []);
+    } catch (err) {
+      setError(err.message || 'Erreur lors de la decision');
+    }
   };
 
   if (loading) {
@@ -67,6 +131,110 @@ function EspaceEtablissement() {
         <h1 className='text-2xl font-semibold text-slate-900'>Espace Etablissement</h1>
 
         {error && <div className='rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700'>{error}</div>}
+
+        {monProfil && (
+          <div className='rounded-xl border border-slate-200 bg-white p-4 shadow-sm'>
+            <div className='flex flex-col gap-4 md:flex-row md:items-center md:justify-between'>
+              <div className='space-y-1 text-sm text-slate-700'>
+                <h2 className='text-lg font-semibold text-slate-900'>Profil de l etablissement</h2>
+                <p><strong>Nom:</strong> {monProfil.nom}</p>
+                <p><strong>Type:</strong> {monProfil.type}</p>
+                <p><strong>Ville:</strong> {monProfil.ville}</p>
+                <p><strong>Email:</strong> {monProfil.email || '-'}</p>
+              </div>
+
+              <div className='flex flex-col gap-2'>
+                {monProfil.logoUrl ? (
+                  <img
+                    src={`${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001'}${monProfil.logoUrl}`}
+                    alt='Logo etablissement'
+                    className='h-20 w-20 rounded border object-contain bg-white'
+                  />
+                ) : (
+                  <div className='flex h-20 w-20 items-center justify-center rounded border bg-slate-100 text-xs text-slate-500'>
+                    Aucun logo
+                  </div>
+                )}
+                <input
+                  type='file'
+                  accept='image/*'
+                  onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+                  className='text-xs'
+                />
+                <button
+                  type='button'
+                  onClick={handleUploadLogo}
+                  disabled={!logoFile || uploadingLogo}
+                  className='rounded bg-blue-700 px-3 py-2 text-xs font-medium text-white disabled:opacity-50'
+                >
+                  {uploadingLogo ? 'Upload...' : 'Mettre a jour le logo'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className='rounded-xl border border-slate-200 bg-white p-4 shadow-sm'>
+          <div className='mb-3 flex items-center justify-between'>
+            <h2 className='text-lg font-semibold text-slate-900'>Demandes de pre-inscription (en attente)</h2>
+            <span className='text-sm text-slate-500'>{demandesPreinscription.length} demande(s)</span>
+          </div>
+          {demandesPreinscription.length === 0 && (
+            <p className='text-sm text-slate-500'>Aucune demande en attente.</p>
+          )}
+          {demandesPreinscription.length > 0 && (
+            <div className='overflow-x-auto'>
+              <table className='min-w-full divide-y divide-slate-200 text-sm'>
+                <thead className='bg-slate-50'>
+                  <tr>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Numero</th>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Etudiant</th>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Filiere</th>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Annee</th>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Niveau</th>
+                    <th className='px-3 py-2 text-left font-semibold text-slate-700'>Actions</th>
+                  </tr>
+                </thead>
+                <tbody className='divide-y divide-slate-100'>
+                  {demandesPreinscription.map((d) => (
+                    <tr key={d.id}>
+                      <td className='px-3 py-2 text-slate-700'>{d.numeroPreinscription}</td>
+                      <td className='px-3 py-2 text-slate-700'>{`${d.candidat?.nom || ''} ${d.candidat?.prenom || ''}`.trim()}</td>
+                      <td className='px-3 py-2 text-slate-700'>{d.filiere?.nom || '-'}</td>
+                      <td className='px-3 py-2 text-slate-700'>{d.anneeAcademique}</td>
+                      <td className='px-3 py-2 text-slate-700'>{d.niveau}</td>
+                      <td className='px-3 py-2 text-slate-700'>
+                        <div className='flex flex-wrap gap-2'>
+                          <button
+                            type='button'
+                            onClick={() => handleDecisionPreinscription(d.id, 'VALIDE')}
+                            className='rounded bg-green-700 px-2 py-1 text-xs font-medium text-white hover:bg-green-600'
+                          >
+                            Valider
+                          </button>
+                          <button
+                            type='button'
+                            onClick={() => handleDecisionPreinscription(d.id, 'SOUS_RESERVE')}
+                            className='rounded bg-amber-600 px-2 py-1 text-xs font-medium text-white hover:bg-amber-500'
+                          >
+                            Sous reserve
+                          </button>
+                          <button
+                            type='button'
+                            onClick={() => handleDecisionPreinscription(d.id, 'REJETE')}
+                            className='rounded bg-red-700 px-2 py-1 text-xs font-medium text-white hover:bg-red-600'
+                          >
+                            Rejeter
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
         <div className='rounded-xl border border-slate-200 bg-white p-4 shadow-sm'>
           <div className='grid gap-4 md:grid-cols-3'>

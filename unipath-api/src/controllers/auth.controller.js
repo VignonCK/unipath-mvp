@@ -158,6 +158,61 @@ exports.register = async (req, res) => {
   }
 };
 
+exports.registerEtablissement = async (req, res) => {
+  try {
+    const { email, password, nom, type, ville, adresse } = req.body;
+
+    if (!email || !password || !nom || !type || !ville) {
+      return res.status(400).json({ error: 'email, password, nom, type et ville sont obligatoires' });
+    }
+
+    const typeUpper = String(type).toUpperCase();
+    if (!['PUBLIC', 'PRIVE'].includes(typeUpper)) {
+      return res.status(400).json({ error: 'Le type doit etre PUBLIC ou PRIVE' });
+    }
+
+    const etabExistant = await prisma.etablissement.findUnique({ where: { email } });
+    if (etabExistant) {
+      return res.status(400).json({ error: 'Un etablissement avec cet email existe deja' });
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: buildFrontendUrl('/auth/callback'),
+        data: {
+          nomEtablissement: nom,
+          role: 'ETABLISSEMENT',
+        },
+      },
+    });
+
+    if (authError) {
+      return res.status(400).json({ error: authError.message });
+    }
+
+    const etablissement = await prisma.etablissement.create({
+      data: {
+        id: authData.user.id,
+        nom,
+        type: typeUpper,
+        ville,
+        adresse: adresse || null,
+        email,
+      },
+    });
+
+    return res.status(201).json({
+      message: 'Compte etablissement cree avec succes',
+      etablissement,
+    });
+  } catch (error) {
+    console.error('Erreur registerEtablissement:', error);
+    return res.status(500).json({ error: 'Erreur serveur lors de la creation du compte etablissement' });
+  }
+};
+
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -245,6 +300,18 @@ exports.login = async (req, res) => {
       if (controleur) {
         role = controleur.role;
         userData = controleur;
+      }
+    }
+
+    if (!role) {
+      const etablissement = await prisma.etablissement.findUnique({
+        where: { id: userId },
+        select: { nom: true, type: true, ville: true, adresse: true, email: true },
+      });
+
+      if (etablissement) {
+        role = 'ETABLISSEMENT';
+        userData = etablissement;
       }
     }
 

@@ -480,6 +480,195 @@ class EmailService {
       emailType: 'SOUS_RESERVE',
     });
   }
+
+  /**
+   * Email de confirmation d'inscription academique (Module 2)
+   * @param {Object} data - { candidatEmail, candidatNom, candidatPrenom, filiereNom, etablissementNom, anneeAcademique, niveau, userId }
+   * @returns {Promise<Object>} { emailId, status }
+   */
+  async envoyerEmailInscriptionAcademique(data) {
+    validateParams(data, ['candidatEmail', 'candidatNom', 'candidatPrenom', 'filiereNom', 'etablissementNom', 'anneeAcademique', 'niveau']);
+
+    const subject = '[UniPath] Confirmation de votre inscription academique';
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #1e3a8a 0%, #008751 100%); padding: 30px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 26px;">📘 Inscription academique enregistree</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb;">
+          <p style="font-size: 16px; color: #374151;">Bonjour <strong>${data.candidatPrenom} ${data.candidatNom}</strong>,</p>
+          <p style="font-size: 14px; color: #6b7280; line-height: 1.6;">
+            Votre inscription academique a bien ete creee sur UniPath.
+          </p>
+          <div style="background: #f3f4f6; padding: 18px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0; font-size: 14px; color: #374151;"><strong>Filiere :</strong> ${data.filiereNom}</p>
+            <p style="margin: 8px 0 0 0; font-size: 14px; color: #374151;"><strong>Etablissement :</strong> ${data.etablissementNom}</p>
+            <p style="margin: 8px 0 0 0; font-size: 14px; color: #374151;"><strong>Annee :</strong> ${data.anneeAcademique}</p>
+            <p style="margin: 8px 0 0 0; font-size: 14px; color: #374151;"><strong>Niveau :</strong> ${data.niveau}</p>
+          </div>
+          <p style="font-size: 13px; color: #6b7280;">
+            Vous pouvez suivre l'evolution de votre parcours directement depuis votre espace etudiant.
+          </p>
+        </div>
+      </div>
+    `;
+
+    return this.createEmail({
+      userId: data.userId || data.candidatId,
+      recipient: data.candidatEmail,
+      subject,
+      htmlBody,
+      emailType: 'SYSTEME',
+    });
+  }
+
+  /**
+   * Email de mise a jour du statut academique (Module 2)
+   * @param {Object} data - { candidatEmail, candidatNom, candidatPrenom, filiereNom, anneeAcademique, niveau, statut, userId }
+   * @returns {Promise<Object>} { emailId, status }
+   */
+  async envoyerEmailStatutAcademique(data) {
+    validateParams(data, ['candidatEmail', 'candidatNom', 'candidatPrenom', 'filiereNom', 'anneeAcademique', 'niveau', 'statut']);
+
+    const libellesStatut = {
+      EN_COURS: 'En cours',
+      VALIDE: 'Valide',
+      REDOUBLANT: 'Redoublant',
+      ABANDONNE: 'Abandonne',
+    };
+
+    const statutLabel = libellesStatut[data.statut] || data.statut;
+    const subject = `[UniPath] Mise a jour de votre statut academique (${statutLabel})`;
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #1e3a8a 0%, #008751 100%); padding: 30px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 26px;">📊 Statut academique mis a jour</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb;">
+          <p style="font-size: 16px; color: #374151;">Bonjour <strong>${data.candidatPrenom} ${data.candidatNom}</strong>,</p>
+          <p style="font-size: 14px; color: #6b7280; line-height: 1.6;">
+            Le statut de votre inscription academique a ete mis a jour.
+          </p>
+          <div style="background: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; font-size: 14px; color: #1e40af;"><strong>Filiere :</strong> ${data.filiereNom}</p>
+            <p style="margin: 8px 0 0 0; font-size: 14px; color: #1e40af;"><strong>Annee :</strong> ${data.anneeAcademique}</p>
+            <p style="margin: 8px 0 0 0; font-size: 14px; color: #1e40af;"><strong>Niveau :</strong> ${data.niveau}</p>
+            <p style="margin: 8px 0 0 0; font-size: 14px; color: #1e40af;"><strong>Nouveau statut :</strong> ${statutLabel}</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    return this.createEmail({
+      userId: data.userId || data.candidatId,
+      recipient: data.candidatEmail,
+      subject,
+      htmlBody,
+      emailType: 'SYSTEME',
+    });
+  }
+
+  /**
+   * Email de notification pour generation de releve academique (Module 2)
+   * @param {Object} data - { candidatEmail, candidatNom, candidatPrenom, totalInscriptions, moyenneGlobale, userId }
+   * @returns {Promise<Object>} { emailId, status }
+   */
+  async envoyerEmailReleveAcademique(data) {
+    validateParams(data, ['candidatEmail', 'candidatNom', 'candidatPrenom']);
+
+    const moyenneText = typeof data.moyenneGlobale === 'number'
+      ? `${data.moyenneGlobale}/20`
+      : 'Non disponible';
+
+    const subject = '[UniPath] Votre releve academique est disponible';
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #1e3a8a 0%, #008751 100%); padding: 30px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 26px;">📄 Releve academique</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb;">
+          <p style="font-size: 16px; color: #374151;">Bonjour <strong>${data.candidatPrenom} ${data.candidatNom}</strong>,</p>
+          <p style="font-size: 14px; color: #6b7280; line-height: 1.6;">
+            Votre releve academique a ete genere sur UniPath et peut etre telecharge depuis votre espace etudiant.
+          </p>
+          <div style="background: #f3f4f6; padding: 18px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0; font-size: 14px; color: #374151;"><strong>Inscriptions academiques :</strong> ${data.totalInscriptions || 0}</p>
+            <p style="margin: 8px 0 0 0; font-size: 14px; color: #374151;"><strong>Moyenne globale :</strong> ${moyenneText}</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    return this.createEmail({
+      userId: data.userId || data.candidatId,
+      recipient: data.candidatEmail,
+      subject,
+      htmlBody,
+      emailType: 'SYSTEME',
+    });
+  }
+
+  /**
+   * Email de pré-inscription établissement avec fiche PDF (Module 2)
+   * @param {Object} data - { candidatEmail, candidatNom, candidatPrenom, etablissementNom, filiereNom, anneeAcademique, niveau, numeroPreinscription, userId }
+   * @param {string} pdfPath - Path to PDF file (optional)
+   */
+  async envoyerEmailPreinscriptionEtablissement(data, pdfPath = null) {
+    validateParams(data, [
+      'candidatEmail',
+      'candidatNom',
+      'candidatPrenom',
+      'etablissementNom',
+      'filiereNom',
+      'anneeAcademique',
+      'niveau',
+      'numeroPreinscription',
+    ]);
+
+    const subject = '[UniPath] Fiche de pré-inscription établissement';
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #1e3a8a 0%, #008751 100%); padding: 30px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 26px;">🏫 Pré-inscription établissement enregistrée</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb;">
+          <p style="font-size: 16px; color: #374151;">Bonjour <strong>${data.candidatPrenom} ${data.candidatNom}</strong>,</p>
+          <p style="font-size: 14px; color: #6b7280; line-height: 1.6;">
+            Votre demande de pré-inscription a bien été enregistrée et transmise à l'établissement.
+          </p>
+          <div style="background: #f3f4f6; padding: 18px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0; font-size: 14px; color: #374151;"><strong>Numéro :</strong> ${data.numeroPreinscription}</p>
+            <p style="margin: 8px 0 0 0; font-size: 14px; color: #374151;"><strong>Etablissement :</strong> ${data.etablissementNom}</p>
+            <p style="margin: 8px 0 0 0; font-size: 14px; color: #374151;"><strong>Filière :</strong> ${data.filiereNom}</p>
+            <p style="margin: 8px 0 0 0; font-size: 14px; color: #374151;"><strong>Année :</strong> ${data.anneeAcademique}</p>
+            <p style="margin: 8px 0 0 0; font-size: 14px; color: #374151;"><strong>Niveau :</strong> ${data.niveau}</p>
+          </div>
+          ${pdfPath ? `
+            <div style="background: #dcfce7; border-left: 4px solid #16a34a; padding: 15px; margin: 20px 0;">
+              <p style="margin: 0; color: #166534; font-size: 14px;">
+                <strong>📎 Fiche jointe</strong><br/>
+                <span style="font-size: 13px;">La fiche officielle de pré-inscription est jointe à cet email.</span>
+              </p>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+
+    const attachments = pdfPath ? [{
+      filename: `fiche-preinscription-etablissement-${data.numeroPreinscription}.pdf`,
+      path: pdfPath,
+    }] : [];
+
+    return this.createEmail({
+      userId: data.userId || data.candidatId,
+      recipient: data.candidatEmail,
+      subject,
+      htmlBody,
+      attachments,
+      emailType: 'SYSTEME',
+    });
+  }
 }
 
 // Export singleton instance
