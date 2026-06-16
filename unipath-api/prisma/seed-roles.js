@@ -45,39 +45,7 @@ async function main() {
     console.log('⚠️  Erreur candidat:', error.message, '\n');
   }
 
-  // 2. Créer un compte COMMISSION
-  try {
-    console.log('📝 Création du compte COMMISSION...');
-    const { data: commissionAuth, error: commissionError } = await supabase.auth.admin.createUser({
-      email: 'commission@test.com',
-      password: 'password123',
-      email_confirm: true,
-    });
-
-    if (commissionError) {
-      console.log('⚠️  Commission existe déjà ou erreur:', commissionError.message);
-    } else {
-      await prisma.membreCommission.create({
-        data: {
-          id: commissionAuth.user.id,
-          email: 'commission@test.com',
-          nom: 'TEST',
-          prenom: 'Commission',
-          telephone: '+22997000002',
-          role: 'COMMISSION',
-          sousRole: 'EXAMINATEUR',
-        },
-      });
-      console.log('✅ Compte COMMISSION créé');
-      console.log('   Email: commission@test.com');
-      console.log('   Password: password123');
-      console.log('   Sous-rôle: EXAMINATEUR\n');
-    }
-  } catch (error) {
-    console.log('⚠️  Erreur commission:', error.message, '\n');
-  }
-
-  // 3. Créer un compte DGES
+  // 2. Créer un compte DGES
   try {
     console.log('📝 Création du compte DGES...');
     const { data: dgesAuth, error: dgesError } = await supabase.auth.admin.createUser({
@@ -107,12 +75,18 @@ async function main() {
     console.log('⚠️  Erreur DGES:', error.message, '\n');
   }
 
-  // 4. Examinateur et Contrôleur commission (double verdict)
+  // 3. Commission : 2 examinateurs + 1 contrôleur (double verdict)
   const sousRoleAccounts = [
     {
       email: 'examinateur@test.com',
       prenom: 'Examinateur',
       telephone: '+22997000004',
+      sousRole: 'EXAMINATEUR',
+    },
+    {
+      email: 'examinateur2@test.com',
+      prenom: 'Examinateur2',
+      telephone: '+22997000006',
       sousRole: 'EXAMINATEUR',
     },
     {
@@ -158,8 +132,8 @@ async function main() {
   console.log('✨ Seed terminé!\n');
   console.log('📌 Récapitulatif des comptes de test:');
   console.log('   CANDIDAT              → candidat@test.com / password123');
-  console.log('   COMMISSION            → commission@test.com / password123 (EXAMINATEUR)');
-  console.log('   EXAMINATEUR           → examinateur@test.com / password123');
+  console.log('   EXAMINATEUR 1         → examinateur@test.com / password123');
+  console.log('   EXAMINATEUR 2         → examinateur2@test.com / password123');
   console.log('   CONTROLEUR COMMISSION → controleur-commission@test.com / password123');
   console.log('   DGES                  → dges@test.com / password123\n');
 }

@@ -24,6 +24,15 @@ const COMMISSION_SOUS_ROLE_ACCOUNTS = [
     redirect: '/examinateur/dossiers',
   },
   {
+    email: 'examinateur2@test.com',
+    password: 'password123',
+    nom: 'TEST',
+    prenom: 'Examinateur2',
+    telephone: '+22997000006',
+    sousRole: 'EXAMINATEUR',
+    redirect: '/examinateur/dossiers',
+  },
+  {
     email: 'controleur-commission@test.com',
     password: 'password123',
     nom: 'TEST',
@@ -46,7 +55,10 @@ async function ensureCommissionAccount(account) {
   });
 
   if (authError) {
-    if (!authError.message.includes('already registered')) {
+    const dejaExistant =
+      authError.message.includes('already registered') ||
+      authError.message.includes('already been registered');
+    if (!dejaExistant) {
       throw authError;
     }
     console.log('   ⚠️  Auth existant, recherche de l\'utilisateur...');

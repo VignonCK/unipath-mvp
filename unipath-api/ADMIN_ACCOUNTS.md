@@ -180,8 +180,9 @@ Authorization: Bearer <token_commission>
 | Rôle | Email | Mot de passe | Page après login |
 |------|-------|--------------|------------------|
 | Candidat | `candidat@test.com` | `password123` | `/dashboard` |
-| Commission (examinateur) | `examinateur@test.com` | `password123` | `/examinateur/dossiers` |
-| Commission (contrôleur) | `controleur-commission@test.com` | `password123` | `/controleur-commission/tableau-de-bord` |
+| Examinateur 1 | `examinateur@test.com` | `password123` | `/examinateur/dossiers` |
+| Examinateur 2 | `examinateur2@test.com` | `password123` | `/examinateur/dossiers` |
+| Contrôleur commission | `controleur-commission@test.com` | `password123` | `/controleur-commission/tableau-de-bord` |
 | DGES | `dges@test.com` | `password123` | `/dashboard-dges` |
 
 Création en une commande :
