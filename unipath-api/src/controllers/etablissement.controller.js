@@ -18,6 +18,66 @@ const findEtablissementLogo = (etablissementId) => {
   return `/uploads/etablissements/${logo}`;
 };
 
+const normalizeChoixFilieres = (body = {}) => {
+  const choix = [body.choix1, body.choix2, body.choix3]
+    .map((c) => (typeof c === 'string' ? c.trim() : ''))
+    .filter(Boolean);
+
+  if (choix.length !== 3) {
+    return { error: 'Les trois choix de filière sont requis.' };
+  }
+
+  const normalized = choix.map((c) => c.toLowerCase());
+  if (new Set(normalized).size !== 3) {
+    return { error: 'Les trois choix de filière doivent être différents.' };
+  }
+
+  return { choix };
+};
+
+exports.rechercherParFilieres = async (req, res) => {
+  try {
+    const parsed = normalizeChoixFilieres(req.body);
+    if (parsed.error) {
+      return res.status(400).json({ error: parsed.error });
+    }
+
+    const { choix } = parsed;
+    const filiereFilter = {
+      OR: choix.map((nom) => ({
+        nom: { equals: nom, mode: 'insensitive' },
+      })),
+    };
+
+    const etablissements = await prisma.etablissement.findMany({
+      where: {
+        type: 'PRIVE',
+        filieres: { some: filiereFilter },
+      },
+      include: {
+        filieres: {
+          where: filiereFilter,
+          orderBy: { nom: 'asc' },
+        },
+      },
+      orderBy: { nom: 'asc' },
+    });
+
+    return res.json({
+      message: `${etablissements.length} établissement(s) privé(s) trouvé(s)`,
+      choix: {
+        choix1: req.body.choix1,
+        choix2: req.body.choix2,
+        choix3: req.body.choix3,
+      },
+      etablissements,
+    });
+  } catch (error) {
+    console.error('Erreur rechercherParFilieres:', error);
+    return res.status(500).json({ error: 'Erreur serveur lors de la recherche' });
+  }
+};
+
 exports.getAllEtablissements = async (req, res) => {
   try {
     const etablissements = await prisma.etablissement.findMany({

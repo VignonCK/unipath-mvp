@@ -38,6 +38,8 @@ const notesRoutes = require('./routes/notes.routes');
 const parcoursRoutes = require('./routes/parcours.routes');
 const preinscriptionEtablissementRoutes = require('./routes/preinscriptionEtablissement.routes');
 const applicationRoutes = require('./routes/application.routes');
+const campagneAdminRoutes = require('./routes/campagneAdmin.routes');
+const campagneRoutes = require('./routes/campagne.routes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/candidats', candidatRoutes);
@@ -61,6 +63,8 @@ app.use('/api/notes', notesRoutes);
 app.use('/api/parcours', parcoursRoutes);
 app.use('/api/preinscriptions-etablissement', preinscriptionEtablissementRoutes);
 app.use('/api/applications', applicationRoutes);
+app.use('/api/etablissement/campagnes', campagneAdminRoutes);
+app.use('/api/campagnes', campagneRoutes);
 
 // ── Health check ────────────────────────────────────────────────
 app.get('/health', (req, res) => {

@@ -5,6 +5,7 @@ const logger = require('./src/utils/logger');
 const app = require('./src/app');
 const emailWorker = require('./src/services/email.worker');
 const dossiersSansVerdictJob = require('./src/jobs/dossiers-sans-verdict.job');
+const emailConfig = require('./src/config/email.config');
 
 const PORT = config.port;
 const server = app.listen(PORT, () => {
@@ -13,9 +14,13 @@ const server = app.listen(PORT, () => {
   logger.info(`API Base URL: ${config.appUrl}/api`);
   logger.info(`Environnement: ${config.env}`);
   
-  // Start email worker
-  emailWorker.start();
-  logger.info('Email worker started');
+  // Start email worker only when enabled
+  if (emailConfig.isQueueEnabled()) {
+    emailWorker.start();
+    logger.info('Email worker started');
+  } else {
+    logger.warn('Email worker disabled (EMAIL_QUEUE_ENABLED=false)');
+  }
   
   // Start dossiers sans verdict job
   dossiersSansVerdictJob.start();

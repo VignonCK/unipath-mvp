@@ -27,10 +27,18 @@ class EmailConfig {
     const missing = required.filter(varName => !process.env[varName]);
 
     if (missing.length > 0) {
-      throw new Error(
+      const message =
         `Missing required environment variables for email system: ${missing.join(', ')}\n` +
-        'Please check your .env file and ensure all SMTP_* variables are set.'
-      );
+        'Please check your .env file and ensure all SMTP_* variables are set.';
+
+      // When the email queue is explicitly disabled we don't want a missing SMTP
+      // configuration to crash the whole server at startup. Warn instead.
+      if (process.env.EMAIL_QUEUE_ENABLED === 'false') {
+        console.warn(`[EmailConfig] ${message}\nEMAIL_QUEUE_ENABLED=false: email sending is disabled, continuing without SMTP config.`);
+        return;
+      }
+
+      throw new Error(message);
     }
   }
 

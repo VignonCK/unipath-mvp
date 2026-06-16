@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { candidatService, concoursService } from '../services/api';
+import { handleSessionError } from '../utils/auth';
 import CandidatLayout from '../components/CandidatLayout';
 import PiecesRequisesCandidats from '../components/PiecesRequisesCandidats';
 import { BentoCard, BentoGrid, GlassBadge } from '../components/AcademicLayout';
@@ -23,6 +24,7 @@ export default function PageConcours() {
   const [photoUrl, setPhotoUrl]   = useState(null);
   const [recherche, setRecherche] = useState('');
   const [tri, setTri]             = useState('recent'); // 'recent' | 'ancien'
+  const [error, setError]         = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -34,7 +36,10 @@ export default function PageConcours() {
         const saved = localStorage.getItem('photoProfil_' + p.id);
         if (saved) setPhotoUrl(saved);
       })
-      .catch(() => navigate('/login'))
+      .catch((err) => {
+        if (handleSessionError(err, navigate)) return;
+        setError(err?.message || 'Erreur de chargement des concours');
+      })
       .finally(() => setLoading(false));
   }, [navigate]);
 
@@ -51,6 +56,12 @@ export default function PageConcours() {
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
       <div className='max-w-5xl mx-auto space-y-4 sm:space-y-6 px-3 sm:px-0 animate-slide-in'>
+
+        {error && (
+          <div className='rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700'>
+            {error}
+          </div>
+        )}
 
         {/* En-tête */}
         <BentoCard>
@@ -164,7 +175,7 @@ export default function PageConcours() {
                         <svg className='w-3.5 h-3.5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                           <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' />
                         </svg>
-                        <span>EPAC — Université d'Abomey-Calavi</span>
+                        <span className='line-clamp-1'>{c.etablissement || 'Etablissement non precise'}</span>
                       </div>
 
                       {/* Dates */}

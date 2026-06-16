@@ -65,11 +65,13 @@ async function main() {
           prenom: 'Commission',
           telephone: '+22997000002',
           role: 'COMMISSION',
+          sousRole: 'EXAMINATEUR',
         },
       });
       console.log('✅ Compte COMMISSION créé');
       console.log('   Email: commission@test.com');
-      console.log('   Password: password123\n');
+      console.log('   Password: password123');
+      console.log('   Sous-rôle: EXAMINATEUR\n');
     }
   } catch (error) {
     console.log('⚠️  Erreur commission:', error.message, '\n');
@@ -105,11 +107,61 @@ async function main() {
     console.log('⚠️  Erreur DGES:', error.message, '\n');
   }
 
+  // 4. Examinateur et Contrôleur commission (double verdict)
+  const sousRoleAccounts = [
+    {
+      email: 'examinateur@test.com',
+      prenom: 'Examinateur',
+      telephone: '+22997000004',
+      sousRole: 'EXAMINATEUR',
+    },
+    {
+      email: 'controleur-commission@test.com',
+      prenom: 'Controleur',
+      telephone: '+22997000005',
+      sousRole: 'CONTROLEUR',
+    },
+  ];
+
+  for (const account of sousRoleAccounts) {
+    try {
+      console.log(`📝 Création du compte ${account.sousRole}...`);
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: account.email,
+        password: 'password123',
+        email_confirm: true,
+      });
+
+      if (authError) {
+        console.log(`⚠️  ${account.sousRole} existe déjà ou erreur:`, authError.message);
+      } else {
+        await prisma.membreCommission.create({
+          data: {
+            id: authData.user.id,
+            email: account.email,
+            nom: 'TEST',
+            prenom: account.prenom,
+            telephone: account.telephone,
+            role: 'COMMISSION',
+            sousRole: account.sousRole,
+          },
+        });
+        console.log(`✅ Compte ${account.sousRole} créé`);
+        console.log(`   Email: ${account.email}`);
+        console.log('   Password: password123\n');
+      }
+    } catch (error) {
+      console.log(`⚠️  Erreur ${account.sousRole}:`, error.message, '\n');
+    }
+  }
+
   console.log('✨ Seed terminé!\n');
   console.log('📌 Récapitulatif des comptes de test:');
-  console.log('   CANDIDAT    → candidat@test.com / password123');
-  console.log('   COMMISSION  → commission@test.com / password123');
-  console.log('   DGES        → dges@test.com / password123\n');
+  console.log('   CANDIDAT              → candidat@test.com / password123');
+  console.log('   COMMISSION            → commission@test.com / password123 (EXAMINATEUR)');
+  console.log('   EXAMINATEUR           → examinateur@test.com / password123');
+  console.log('   CONTROLEUR COMMISSION → controleur-commission@test.com / password123');
+  console.log('   DGES                  → dges@test.com / password123\n');
 }
 
 main()

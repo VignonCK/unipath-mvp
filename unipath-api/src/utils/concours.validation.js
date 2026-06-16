@@ -208,10 +208,61 @@ function validatePiecesRequises(piecesRequises) {
   return { valid: true };
 }
 
+/**
+ * Valide la configuration des critères d'éligibilité
+ * @param {Object|Array} criteresEligibilite - format { criteres: [...] } ou [...]
+ * @returns {Object} { valid: boolean, error?: string }
+ */
+function validateCriteresEligibilite(criteresEligibilite) {
+  if (criteresEligibilite === undefined || criteresEligibilite === null) {
+    return { valid: true };
+  }
+
+  const criteres = Array.isArray(criteresEligibilite)
+    ? criteresEligibilite
+    : criteresEligibilite.criteres;
+
+  if (!Array.isArray(criteres)) {
+    return {
+      valid: false,
+      error: 'Les critères d éligibilité doivent être un tableau'
+    };
+  }
+
+  for (const critere of criteres) {
+    if (typeof critere === 'string') {
+      if (critere.trim() === '') {
+        return {
+          valid: false,
+          error: 'Un critère d éligibilité ne peut pas être vide'
+        };
+      }
+      continue;
+    }
+
+    if (!critere || typeof critere !== 'object') {
+      return {
+        valid: false,
+        error: 'Un critère d éligibilité doit être un texte ou un objet valide'
+      };
+    }
+
+    if (!critere.titre || typeof critere.titre !== 'string' || critere.titre.trim() === '') {
+      return {
+        valid: false,
+        error: 'Chaque critère doit avoir un titre'
+      };
+    }
+  }
+
+  return { valid: true };
+}
+
 module.exports = {
   validateDatesDepot,
   validateDatesComposition,
   validateDatesCoherence,
   validateSeries,
-  validatePiecesRequises
+  validatePiecesRequises,
+  validateCriteresEligibilite
 };

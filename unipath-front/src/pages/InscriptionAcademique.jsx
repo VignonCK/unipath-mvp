@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { applicationService, etablissementService, filiereService } from '../services/api';
 
 function InscriptionAcademique() {
+  const location = useLocation();
+  const prefill = location.state || {};
   const [loadingCreate, setLoadingCreate] = useState(false);
   const [loadingList, setLoadingList] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -19,10 +22,10 @@ function InscriptionAcademique() {
   const [bankReceiptFile, setBankReceiptFile] = useState(null);
 
   const [form, setForm] = useState({
-    etablissementId: '',
-    filiereId: '',
-    anneeAcademique: '',
-    niveau: '',
+    etablissementId: prefill.etablissementId || '',
+    filiereId: prefill.filiereId || '',
+    anneeAcademique: prefill.anneeAcademique || '',
+    niveau: prefill.niveau || '',
   });
 
   const loadApplications = useCallback(async (preferId = '') => {

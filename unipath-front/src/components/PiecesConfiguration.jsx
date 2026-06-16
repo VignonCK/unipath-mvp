@@ -536,7 +536,7 @@ export default function GestionConcours() {
                 <div>
                   <label className='block text-sm font-semibold text-gray-700 mb-2'>Séries acceptées <span className='text-red-500'>*</span></label>
                   <div className='grid grid-cols-4 gap-2'>
-                    {['A', 'B', 'C', 'D', 'E', 'F1', 'F2', 'F3', 'F4', 'G'].map(serie => (
+                    {['A', 'B', 'C', 'D', 'E', 'F1', 'F2', 'F3', 'F4', 'G1', 'G2', 'G3'].map(serie => (
                       <label key={serie} className='flex items-center gap-2 cursor-pointer'>
                         <input type='checkbox' checked={formData.seriesAcceptees.includes(serie)}
                           onChange={(e) => {

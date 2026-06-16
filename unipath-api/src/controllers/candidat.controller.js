@@ -39,9 +39,19 @@ exports.getProfil = async (req, res) => {
       statut: ins.dossierInscription?.statut ?? 'EN_ATTENTE',
       commentaireRejet: ins.dossierInscription?.commentaireRejet,
       commentaireSousReserve: ins.dossierInscription?.commentaireSousReserve,
+      quittanceUrl: ins.dossierInscription?.quittanceUrl ?? null,
+      piecesExtras: ins.dossierInscription?.piecesExtras ?? {},
+      dossierInscriptionId: ins.dossierInscription?.id ?? null,
     }));
 
-    res.json({ ...candidat, inscriptions });
+    res.json({
+      ...candidat,
+      serieBac: candidat.serie,
+      inscriptions: inscriptions.map((ins) => ({
+        ...ins,
+        estCandidatConcours: true,
+      })),
+    });
   } catch (error) {
     console.error('❌ Erreur getProfil:', error);
     res.status(500).json({ error: 'Erreur serveur' });

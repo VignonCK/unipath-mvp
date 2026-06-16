@@ -18,22 +18,29 @@ const STORAGE_KEYS = {
  * Rôles disponibles dans l'application
  */
 export const ROLES = {
+  ETUDIANT: 'ETUDIANT',
   CANDIDAT: 'CANDIDAT',
   COMMISSION: 'COMMISSION',
   DGES: 'DGES',
   CONTROLEUR: 'CONTROLEUR',
   ETABLISSEMENT: 'ETABLISSEMENT',
+  ADMIN_ETABLISSEMENT: 'ADMIN_ETABLISSEMENT',
 };
+
+/** Comptes étudiants sur la plateforme (le statut candidat concours = inscription) */
+export const STUDENT_ROLES = [ROLES.ETUDIANT, ROLES.CANDIDAT];
 
 /**
  * Routes par défaut selon le rôle
  */
 const DEFAULT_ROUTES = {
+  [ROLES.ETUDIANT]: '/dashboard',
   [ROLES.CANDIDAT]: '/dashboard',
   [ROLES.COMMISSION]: '/commission',
   [ROLES.DGES]: '/dashboard-dges',
   [ROLES.CONTROLEUR]: '/controleur-commission/tableau-de-bord',
   [ROLES.ETABLISSEMENT]: '/etablissement',
+  [ROLES.ADMIN_ETABLISSEMENT]: '/admin-etablissement/campagnes',
 };
 
 export const SOUS_ROLES_COMMISSION = {
@@ -247,6 +254,50 @@ export async function ensureValidToken() {
   }
 
   return true;
+}
+
+/**
+ * Gère une erreur API (style request() de api.js) sans confondre
+ * session expirée (401) et problème de droits / serveur (403+).
+ * @returns {boolean} true si l'erreur a été traitée
+ */
+export function handleApiAuthError(err, { onSessionExpired, onForbidden, onOther } = {}) {
+  if (err?.status === 401) {
+    clearAuth();
+    if (onSessionExpired) onSessionExpired(err);
+    else window.location.href = '/login';
+    return true;
+  }
+  if (err?.status === 403) {
+    if (onForbidden) onForbidden(err);
+    return true;
+  }
+  if (onOther) onOther(err);
+  return false;
+}
+
+/**
+ * Gère une erreur API de session (ex. après login, chargement du dashboard).
+ * - 401 : session invalide → déconnexion + redirection login
+ * - 403 / 5xx : ne pas renvoyer au login (évite la boucle login ↔ dashboard)
+ * @param {Error} err - Erreur enrichie par api.js (status, message)
+ * @param {Function} navigate - react-router navigate
+ * @returns {boolean} true si redirection login effectuée
+ */
+export function handleSessionError(err, navigate) {
+  if (err?.status === 401 || (err?.status === 403 && err?.data?.profileIncomplete)) {
+    clearAuth();
+    navigate('/login', {
+      replace: true,
+      state: {
+        message:
+          err?.data?.error ||
+          'Session invalide. Veuillez vous reconnecter.',
+      },
+    });
+    return true;
+  }
+  return false;
 }
 
 /**

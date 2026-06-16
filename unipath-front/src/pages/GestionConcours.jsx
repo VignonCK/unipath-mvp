@@ -22,6 +22,7 @@ export default function GestionConcours() {
     seriesAcceptees: [],
     matieres: [],
     piecesRequises: [],
+    criteresEligibilite: [],
     dateDebutDepot: '',
     dateFinDepot: '',
     dateDebutComposition: '',
@@ -60,6 +61,7 @@ export default function GestionConcours() {
       seriesAcceptees: [],
       matieres: [],
       piecesRequises: getDefaultPiecesRequises(), // ✅ Utilise la fonction centralisée
+      criteresEligibilite: [],
       dateDebutDepot: '',
       dateFinDepot: '',
       dateDebutComposition: '',
@@ -77,6 +79,21 @@ export default function GestionConcours() {
     if (c.piecesRequises) {
       piecesRequises = c.piecesRequises.pieces || c.piecesRequises;
     }
+
+    const criteresRaw = Array.isArray(c.criteresEligibilite)
+      ? c.criteresEligibilite
+      : (Array.isArray(c.criteresEligibilite?.criteres) ? c.criteresEligibilite.criteres : []);
+    const criteresEligibilite = criteresRaw
+      .map((item) => {
+        if (typeof item === 'string') {
+          return { titre: item, description: '' };
+        }
+        return {
+          titre: item?.titre || '',
+          description: item?.description || '',
+        };
+      })
+      .filter((item) => item.titre.trim() !== '');
     
     setFormData({
       libelle: c.libelle,
@@ -88,6 +105,7 @@ export default function GestionConcours() {
       fraisParticipation: c.fraisParticipation || '',
       seriesAcceptees: c.seriesAcceptees || [],
       piecesRequises: piecesRequises.length > 0 ? piecesRequises : getDefaultPiecesRequises(), // ✅ Utilise la fonction centralisée
+      criteresEligibilite,
       dateDebutDepot: c.dateDebutDepot ? c.dateDebutDepot.split('T')[0] : '',
       dateFinDepot: c.dateFinDepot ? c.dateFinDepot.split('T')[0] : '',
       dateDebutComposition: c.dateDebutComposition ? c.dateDebutComposition.split('T')[0] : '',
@@ -164,6 +182,15 @@ export default function GestionConcours() {
       }
     }
 
+    if (Array.isArray(formData.criteresEligibilite)) {
+      const emptyCritere = formData.criteresEligibilite.find(
+        (critere) => !critere?.titre || critere.titre.trim() === ''
+      );
+      if (emptyCritere) {
+        errors.criteresEligibilite = 'Chaque critère d éligibilité doit avoir un titre';
+      }
+    }
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -195,6 +222,31 @@ export default function GestionConcours() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const addCritereEligibilite = () => {
+    setFormData((prev) => ({
+      ...prev,
+      criteresEligibilite: [...(prev.criteresEligibilite || []), { titre: '', description: '' }],
+    }));
+  };
+
+  const updateCritereEligibilite = (index, key, value) => {
+    setFormData((prev) => {
+      const next = [...(prev.criteresEligibilite || [])];
+      next[index] = {
+        ...next[index],
+        [key]: value,
+      };
+      return { ...prev, criteresEligibilite: next };
+    });
+  };
+
+  const removeCritereEligibilite = (index) => {
+    setFormData((prev) => ({
+      ...prev,
+      criteresEligibilite: (prev.criteresEligibilite || []).filter((_, i) => i !== index),
+    }));
   };
 
   const handleDelete = async (id, libelle) => {
@@ -492,7 +544,7 @@ export default function GestionConcours() {
                   Séries acceptées <span className='text-red-500'>*</span>
                 </label>
                 <div className='grid grid-cols-4 gap-2'>
-                  {['A', 'B', 'C', 'D', 'E', 'F1', 'F2', 'F3', 'F4', 'G'].map(serie => (
+                  {['A', 'B', 'C', 'D', 'E', 'F1', 'F2', 'F3', 'F4', 'G1', 'G2', 'G3'].map(serie => (
                     <label key={serie} className='flex items-center gap-2 cursor-pointer'>
                       <input
                         type='checkbox'
@@ -553,6 +605,58 @@ export default function GestionConcours() {
                 />
                 {validationErrors.piecesRequises && (
                   <p className='mt-2 text-xs text-red-600'>{validationErrors.piecesRequises}</p>
+                )}
+              </div>
+
+              {/* Critères d'éligibilité */}
+              <div className='border-t pt-4'>
+                <div className='mb-3 flex items-center justify-between'>
+                  <h3 className='text-sm font-bold text-gray-800'>Critères d éligibilité</h3>
+                  <button
+                    type='button'
+                    onClick={addCritereEligibilite}
+                    className='rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100'
+                  >
+                    + Ajouter un critère
+                  </button>
+                </div>
+                {(formData.criteresEligibilite || []).length === 0 && (
+                  <p className='text-xs text-gray-500'>
+                    Aucun critère configuré. Vous pouvez ajouter des conditions comme l âge, la série, le diplôme requis, etc.
+                  </p>
+                )}
+                {(formData.criteresEligibilite || []).map((critere, index) => (
+                  <div key={index} className='mb-3 rounded-xl border border-gray-200 bg-gray-50 p-3'>
+                    <div className='mb-2 flex items-center justify-between'>
+                      <p className='text-xs font-semibold text-gray-600'>Critère #{index + 1}</p>
+                      <button
+                        type='button'
+                        onClick={() => removeCritereEligibilite(index)}
+                        className='text-xs font-semibold text-red-600 hover:text-red-700'
+                      >
+                        Supprimer
+                      </button>
+                    </div>
+                    <div className='grid gap-2'>
+                      <input
+                        type='text'
+                        value={critere.titre}
+                        onChange={(e) => updateCritereEligibilite(index, 'titre', e.target.value)}
+                        className='w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent'
+                        placeholder='Ex: Série C ou D obligatoire'
+                      />
+                      <textarea
+                        rows='2'
+                        value={critere.description}
+                        onChange={(e) => updateCritereEligibilite(index, 'description', e.target.value)}
+                        className='w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent'
+                        placeholder='Détail optionnel du critère'
+                      />
+                    </div>
+                  </div>
+                ))}
+                {validationErrors.criteresEligibilite && (
+                  <p className='mt-2 text-xs text-red-600'>{validationErrors.criteresEligibilite}</p>
                 )}
               </div>
 

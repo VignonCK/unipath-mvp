@@ -1,0 +1,1 @@
+ALTER TABLE "Candidat" ALTER COLUMN "role" SET DEFAULT 'ETUDIANT'::"Role";

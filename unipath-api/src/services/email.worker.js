@@ -7,7 +7,6 @@
 
 const cron = require('node-cron');
 const nodemailer = require('nodemailer');
-const { PrismaClient } = require('@prisma/client');
 const emailConfig = require('../config/email.config');
 const logger = require('../config/logger');
 
@@ -20,6 +19,8 @@ class EmailWorker {
     
     this.isProcessing = false;
     this.cronJob = null;
+    this.consecutiveDbErrors = 0;
+    this.nextDbRetryAt = null;
   }
 
   /**
@@ -36,12 +37,21 @@ class EmailWorker {
         return;
       }
 
+      if (this.nextDbRetryAt && new Date() < this.nextDbRetryAt) {
+        return;
+      }
+
       this.isProcessing = true;
       try {
         await this.processQueue();
+        this.resetDbBackoffIfNeeded();
       } catch (error) {
-        console.error('[EmailWorker] Error processing queue:', error);
-        logger.error('Queue processing error', { error: error.message, stack: error.stack });
+        if (this.isDatabaseConnectivityError(error)) {
+          this.handleDbConnectivityError(error);
+        } else {
+          console.error('[EmailWorker] Error processing queue:', error);
+          logger.error('Queue processing error', { error: error.message, stack: error.stack });
+        }
       } finally {
         this.isProcessing = false;
       }
@@ -95,6 +105,54 @@ class EmailWorker {
     await Promise.allSettled(
       emails.map(email => this.processEmail(email))
     );
+  }
+
+  isDatabaseConnectivityError(error) {
+    if (!error) return false;
+
+    const message = String(error.message || '').toLowerCase();
+    const code = String(error.code || '').toUpperCase();
+
+    return (
+      code === 'P1001' ||
+      code === 'P2024' ||
+      code === 'P1017' ||
+      message.includes("can't reach database server") ||
+      message.includes('timed out fetching a new connection from the connection pool') ||
+      message.includes('server has closed the connection') ||
+      message.includes('getaddrinfo enotfound') ||
+      message.includes('econnrefused') ||
+      message.includes('etimedout')
+    );
+  }
+
+  handleDbConnectivityError(error) {
+    this.consecutiveDbErrors += 1;
+
+    const baseDelayMs = 10 * 1000;
+    const maxDelayMs = 5 * 60 * 1000;
+    const delayMs = Math.min(maxDelayMs, baseDelayMs * (2 ** (this.consecutiveDbErrors - 1)));
+    this.nextDbRetryAt = new Date(Date.now() + delayMs);
+
+    const retryAt = this.nextDbRetryAt.toISOString();
+    const message = `[EmailWorker] DB indisponible (${error.code || 'network'}). Retry dans ${Math.round(delayMs / 1000)}s (${retryAt})`;
+
+    console.warn(message);
+    logger.warn('Email worker database temporarily unavailable', {
+      error: error.message,
+      code: error.code || null,
+      consecutiveDbErrors: this.consecutiveDbErrors,
+      retryAt,
+      retryDelayMs: delayMs,
+    });
+  }
+
+  resetDbBackoffIfNeeded() {
+    if (this.consecutiveDbErrors > 0 || this.nextDbRetryAt) {
+      this.consecutiveDbErrors = 0;
+      this.nextDbRetryAt = null;
+      console.log('[EmailWorker] DB connexion retablie, reprise normale du worker');
+    }
   }
 
   /**

@@ -1,7 +1,8 @@
 // src/pages/Login.jsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../services/api';
+import { getDefaultRoute, isAuthenticated, getUser } from '../utils/auth';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -40,6 +41,15 @@ export default function Login() {
   const messageType    = location.state?.type;
   const premiereFois   = estPremiereVisite();
 
+  useEffect(() => {
+    if (!isAuthenticated()) return;
+    const user = getUser();
+    const route = getDefaultRoute(user?.role, user?.sousRole);
+    if (route && route !== '/login') {
+      navigate(route, { replace: true });
+    }
+  }, [navigate]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -47,15 +57,19 @@ export default function Login() {
     setEmailNotConfirmed(false);
     try {
       const data = await authService.login(email, password);
-      const { role, sousRole } = data.user || {};
+      if (!data?.token || !data?.user?.role) {
+        throw new Error('Réponse de connexion incomplète. Réessayez.');
+      }
+      const { role, sousRole } = data.user;
       if (role === 'COMMISSION') {
         if (sousRole === 'EXAMINATEUR') navigate('/examinateur/dossiers');
         else if (sousRole === 'CONTROLEUR') navigate('/controleur-commission/tableau-de-bord');
         else navigate('/commission');
-      } else if (role === 'CANDIDAT') navigate('/dashboard');
+      } else if (role === 'ETUDIANT' || role === 'CANDIDAT') navigate('/dashboard');
       else if (role === 'DGES') navigate('/dashboard-dges');
       else if (role === 'CONTROLEUR') navigate('/controleur-commission/tableau-de-bord');
       else if (role === 'ETABLISSEMENT') navigate('/etablissement');
+      else if (role === 'ADMIN_ETABLISSEMENT') navigate('/admin-etablissement/campagnes');
       else navigate('/dashboard');
     } catch (err) {
       // Vérifier si l'erreur est due à un email non confirmé

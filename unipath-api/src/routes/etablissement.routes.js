@@ -6,6 +6,12 @@ const { checkRole } = require('../middleware/role.middleware');
 const { upload } = require('../middleware/upload.middleware');
 
 router.get('/', etablissementController.getAllEtablissements);
+router.post(
+  '/recherche-filieres',
+  protect,
+  checkRole(['CANDIDAT']),
+  etablissementController.rechercherParFilieres
+);
 router.get('/mon/profil', protect, checkRole(['ETABLISSEMENT']), etablissementController.getMonProfilEtablissement);
 router.put('/mon/profil', protect, checkRole(['ETABLISSEMENT']), etablissementController.updateMonProfilEtablissement);
 router.post('/mon/logo', protect, checkRole(['ETABLISSEMENT']), upload.single('logo'), etablissementController.uploadMonLogoEtablissement);

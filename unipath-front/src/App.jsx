@@ -17,6 +17,9 @@ import PageConcours from './pages/PageConcours';
 import DetailConcours from './pages/DetailConcours';
 import CarteCandidat from './pages/CarteCandidat';
 import AccueilCandidat from './pages/AccueilCandidat';
+import AccueilEtudiant from './pages/AccueilEtudiant';
+import EtablissementsPrives from './pages/EtablissementsPrives';
+import { STUDENT_ROLES } from './utils/auth';
 import MonCompte from './pages/MonCompte';
 import DetailInscription from './pages/DetailInscription';
 import DesignSystemDemo from './pages/DesignSystemDemo';
@@ -30,6 +33,13 @@ import DossiersSansVerdictControleur from './pages/DossiersSansVerdictControleur
 import DashboardEtudiant from './pages/DashboardEtudiant';
 import InscriptionAcademique from './pages/InscriptionAcademique';
 import EspaceEtablissement from './pages/EspaceEtablissement';
+import DGESEtablissementsAdmins from './pages/dges/DGESEtablissementsAdmins';
+import MesCampagnes from './pages/admin-etablissement/MesCampagnes';
+import CampagneForm from './pages/admin-etablissement/CampagneForm';
+import DetailCampagneAdmin from './pages/admin-etablissement/DetailCampagneAdmin';
+import MonEtablissementAdmin from './pages/admin-etablissement/MonEtablissementAdmin';
+import PageCampagnesInscription from './pages/campagnes/PageCampagnesInscription';
+import DetailCampagneCandidat from './pages/campagnes/DetailCampagneCandidat';
 
 function App() {
   return (
@@ -42,14 +52,33 @@ function App() {
         <Route path='/register-etablissement' element={<RegisterEtablissement />} />
         <Route path='/auth/callback' element={<AuthCallback />} />
         <Route path='/auth/confirm' element={<EmailConfirmation />} />
+        <Route path='/confirmer-email' element={<EmailConfirmation />} />
         <Route path='/design-demo' element={<DesignSystemDemo />} />
 
-        {/* Routes protégées - CANDIDAT uniquement */}
+        {/* Routes protégées - Étudiant / Candidat */}
         <Route
           path='/dashboard'
           element={
-            <ProtectedRoute allowedRoles={['CANDIDAT']}>
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
+              <AccueilEtudiant />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/mes-concours'
+          element={
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
               <AccueilCandidat />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/etablissements-prives'
+          element={
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
+              <EtablissementsPrives />
             </ProtectedRoute>
           }
         />
@@ -57,7 +86,7 @@ function App() {
         <Route
           path='/mon-compte'
           element={
-            <ProtectedRoute allowedRoles={['CANDIDAT']}>
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
               <MonCompte />
             </ProtectedRoute>
           }
@@ -66,7 +95,7 @@ function App() {
         <Route
           path='/ma-carte'
           element={
-            <ProtectedRoute allowedRoles={['CANDIDAT']}>
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
               <CarteCandidat />
             </ProtectedRoute>
           }
@@ -75,7 +104,7 @@ function App() {
         <Route
           path='/concours'
           element={
-            <ProtectedRoute allowedRoles={['CANDIDAT']}>
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
               <PageConcours />
             </ProtectedRoute>
           }
@@ -84,7 +113,7 @@ function App() {
         <Route
           path='/concours/:id'
           element={
-            <ProtectedRoute allowedRoles={['CANDIDAT']}>
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
               <DetailConcours />
             </ProtectedRoute>
           }
@@ -93,7 +122,7 @@ function App() {
         <Route
           path='/concours/:id/classement'
           element={
-            <ProtectedRoute allowedRoles={['CANDIDAT']}>
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
               <ClassementConcours />
             </ProtectedRoute>
           }
@@ -102,7 +131,7 @@ function App() {
         <Route
           path='/inscription/:inscriptionId'
           element={
-            <ProtectedRoute allowedRoles={['CANDIDAT']}>
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
               <DetailInscription />
             </ProtectedRoute>
           }
@@ -111,7 +140,7 @@ function App() {
         <Route
           path='/etudiant'
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
               <DashboardEtudiant />
             </ProtectedRoute>
           }
@@ -120,8 +149,26 @@ function App() {
         <Route
           path='/inscription-academique'
           element={
-            <ProtectedRoute allowedRoles={['CANDIDAT']}>
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
               <InscriptionAcademique />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/campagnes-inscription'
+          element={
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
+              <PageCampagnesInscription />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/campagnes-inscription/:id'
+          element={
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
+              <DetailCampagneCandidat />
             </ProtectedRoute>
           }
         />
@@ -234,6 +281,61 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['DGES']}>
               <GestionConcours />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/dges-etablissements-admins'
+          element={
+            <ProtectedRoute allowedRoles={['DGES']}>
+              <DGESEtablissementsAdmins />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Routes protégées - ADMIN_ETABLISSEMENT */}
+        <Route
+          path='/admin-etablissement/campagnes'
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+              <MesCampagnes />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/admin-etablissement/campagnes/nouvelle'
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+              <CampagneForm />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/admin-etablissement/campagnes/:id/modifier'
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+              <CampagneForm />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/admin-etablissement/campagnes/:id'
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+              <DetailCampagneAdmin />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/admin-etablissement/etablissement'
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+              <MonEtablissementAdmin />
             </ProtectedRoute>
           }
         />

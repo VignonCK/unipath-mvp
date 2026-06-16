@@ -3,33 +3,33 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Candidat {
-  id                    String                  @id @default(uuid())
-  matricule             String                  @unique
-  nom                   String
-  prenom                String
-  anip                  String?                 @unique
-  serie                 String?
-  sexe                  String?
-  nationalite           String?
-  email                 String                  @unique
-  emailConfirme         Boolean                 @default(false)
-  telephone             String?
-  dateNaiss             DateTime?
-  lieuNaiss             String?
-  role                  Role                    @default(CANDIDAT)
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-  diplome               Diplome?
-  dossier               Dossier?
-  inscriptions          Inscription[]
-  InscriptionAcademique InscriptionAcademique[]
+  id                           String                        @id @default(uuid())
+  matricule                    String                        @unique
+  nom                          String
+  prenom                       String
+  anip                         String?                       @unique
+  serie                        String?
+  sexe                         String?
+  nationalite                  String?
+  email                        String                        @unique
+  emailConfirme                Boolean                       @default(false)
+  telephone                    String?
+  dateNaiss                    DateTime?
+  lieuNaiss                    String?
+  role                         Role                          @default(CANDIDAT)
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime                      @updatedAt
+  diplome                      Diplome?
+  dossier                      Dossier?
+  inscriptions                 Inscription[]
+  InscriptionAcademique        InscriptionAcademique[]
   preinscriptionsEtablissement PreinscriptionEtablissement[]
-  applications          Application[]
 
   @@index([anip])
 }
@@ -41,9 +41,9 @@ model MembreCommission {
   email     String             @unique
   telephone String?
   role      Role               @default(COMMISSION)
-  sousRole  SousRoleCommission // Sous-rôle: EXAMINATEUR ou CONTROLEUR
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
+  sousRole  SousRoleCommission
 
   @@index([sousRole])
 }
@@ -87,6 +87,7 @@ model Concours {
   dateDebutComposition DateTime?
   dateFinComposition   DateTime?
   createdAt            DateTime      @default(now())
+  criteresEligibilite  Json?
   inscriptions         Inscription[]
 
   @@index([dateDebutDepot])
@@ -94,15 +95,15 @@ model Concours {
 }
 
 model Inscription {
-  id                     String              @id @default(uuid())
-  numeroInscription      String?             @unique
-  candidatId             String
-  concoursId             String
-  note                   Float?
-  createdAt              DateTime            @default(now())
-  candidat               Candidat            @relation(fields: [candidatId], references: [id])
-  concours               Concours            @relation(fields: [concoursId], references: [id])
-  dossierInscription     DossierInscription?
+  id                 String              @id @default(uuid())
+  numeroInscription  String?             @unique
+  candidatId         String
+  concoursId         String
+  note               Float?
+  createdAt          DateTime            @default(now())
+  dossierInscription DossierInscription?
+  candidat           Candidat            @relation(fields: [candidatId], references: [id])
+  concours           Concours            @relation(fields: [concoursId], references: [id])
 
   @@unique([candidatId, concoursId])
   @@index([candidatId])
@@ -110,50 +111,34 @@ model Inscription {
 }
 
 model DossierInscription {
-  id            String @id @default(uuid())
-  inscriptionId String @unique
-
-  // Pièces spécifiques au concours
-  quittanceUrl String?
-  piecesExtras Json?
-
-  // Statut et workflow
-  statut StatutDossier @default(EN_ATTENTE)
-
-  // ✅ NOUVEAU : Verdict Examinateur 1
-  verdict1Par          String?
-  verdict1             Verdict?
-  verdict1Motif        String?
-  verdict1Date         DateTime?
-  verdict1ModifieCount Int       @default(0)
-
-  // ✅ NOUVEAU : Verdict Examinateur 2
-  verdict2Par          String?
-  verdict2             Verdict?
-  verdict2Motif        String?
-  verdict2Date         DateTime?
-  verdict2ModifieCount Int       @default(0)
-
-  // ✅ NOUVEAU : Décision Contrôleur (Double Verdict)
+  id                      String          @id @default(uuid())
+  inscriptionId           String          @unique
+  quittanceUrl            String?
+  piecesExtras            Json?
+  statut                  StatutDossier   @default(EN_ATTENTE)
+  verdict1Par             String?
+  verdict1                Verdict?
+  verdict1Motif           String?
+  verdict1Date            DateTime?
+  verdict1ModifieCount    Int             @default(0)
+  verdict2Par             String?
+  verdict2                Verdict?
+  verdict2Motif           String?
+  verdict2Date            DateTime?
+  verdict2ModifieCount    Int             @default(0)
   decisionControleur      Verdict?
   decisionControleurMotif String?
   decisionControleurDate  DateTime?
   decisionControleurPar   String?
-
-  // Anciens champs (conservés pour compatibilité)
-  commentaireRejet       String?
-  commentaireSousReserve String?
-  decisionCommissionPar  String?
-  decisionCommissionDate DateTime?
-  commentaireControleur  String?
-
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  inscription   Inscription     @relation(fields: [inscriptionId], references: [id], onDelete: Cascade)
-  actionHistory ActionHistory[]
+  commentaireRejet        String?
+  commentaireSousReserve  String?
+  decisionCommissionPar   String?
+  decisionCommissionDate  DateTime?
+  commentaireControleur   String?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  actionHistory           ActionHistory[]
+  inscription             Inscription     @relation(fields: [inscriptionId], references: [id], onDelete: Cascade)
 
   @@index([inscriptionId])
   @@index([statut])
@@ -178,7 +163,6 @@ model Dossier {
 model ActionHistory {
   id                   String             @id @default(uuid())
   utilisateurId        String
-  dossierInscriptionId String
   typeAction           String
   details              Json?
   timestamp            DateTime           @default(now())
@@ -186,6 +170,7 @@ model ActionHistory {
   userAgent            String?
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
+  dossierInscriptionId String
   dossierInscription   DossierInscription @relation(fields: [dossierInscriptionId], references: [id], onDelete: Cascade)
 
   @@index([dossierInscriptionId])
@@ -311,54 +296,51 @@ model SystemAlert {
 }
 
 model Etablissement {
-  id           String                  @id @default(uuid())
-  nom          String
-  type         TypeEtablissement
-  ville        String
-  adresse      String?
-  email        String?                 @unique
-  createdAt    DateTime                @default(now())
-  filieres     Filiere[]
-  inscriptions InscriptionAcademique[]
+  id              String                        @id @default(uuid())
+  nom             String
+  type            TypeEtablissement
+  ville           String
+  createdAt       DateTime                      @default(now())
+  adresse         String?
+  email           String?                       @unique
+  filieres        Filiere[]
+  inscriptions    InscriptionAcademique[]
   preinscriptions PreinscriptionEtablissement[]
-  applications  Application[]
-  schoolRequirements SchoolRequirement[]
 
   @@index([type])
   @@index([ville])
 }
 
 model Filiere {
-  id              String                  @id @default(uuid())
+  id              String                        @id @default(uuid())
   nom             String
-  code            String                  @unique
-  niveau          NiveauFiliere
-  dureeAnnees     Int
   etablissementId String
-  createdAt       DateTime                @default(now())
-  etablissement   Etablissement           @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
-  inscriptions    InscriptionAcademique[]
+  dureeAnnees     Int
+  createdAt       DateTime                      @default(now())
+  code            String                        @unique
+  niveau          NiveauFiliere
   diplomes        Diplome[]
+  etablissement   Etablissement                 @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  inscriptions    InscriptionAcademique[]
   preinscriptions PreinscriptionEtablissement[]
-  applications    Application[]
 
   @@index([etablissementId])
   @@index([niveau])
 }
 
 model InscriptionAcademique {
-  id              String               @id @default(uuid())
-  candidatId      String
-  filiereId       String
-  etablissementId String
-  anneeAcademique String
-  niveau          Int
-  statut          StatutInscriptionAcad @default(EN_COURS)
-  createdAt       DateTime             @default(now())
-  candidat        Candidat             @relation(fields: [candidatId], references: [id], onDelete: Cascade)
-  filiere         Filiere              @relation(fields: [filiereId], references: [id], onDelete: Cascade)
-  etablissement   Etablissement        @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
-  notes           Note[]
+  id                   String                       @id @default(uuid())
+  candidatId           String
+  etablissementId      String
+  filiereId            String
+  anneeAcademique      String
+  createdAt            DateTime                     @default(now())
+  niveau               Int
+  statut               StatutInscriptionAcad        @default(EN_COURS)
+  candidat             Candidat                     @relation(fields: [candidatId], references: [id], onDelete: Cascade)
+  etablissement        Etablissement                @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  filiere              Filiere                      @relation(fields: [filiereId], references: [id], onDelete: Cascade)
+  notes                Note[]
   preinscriptionSource PreinscriptionEtablissement?
 
   @@unique([candidatId, filiereId, anneeAcademique])
@@ -369,25 +351,24 @@ model InscriptionAcademique {
 }
 
 model PreinscriptionEtablissement {
-  id                   String                       @id @default(uuid())
-  numeroPreinscription String                       @unique
-  candidatId           String
-  filiereId            String
-  etablissementId      String
-  anneeAcademique      String
-  niveau               Int
-  statut               StatutPreinscriptionEtablissement @default(EN_ATTENTE)
-  motifDecision        String?
-  decidedAt            DateTime?
-  decidedBy            String?
-  inscriptionAcadId    String?                      @unique
-  createdAt            DateTime                     @default(now())
-  updatedAt            DateTime                     @updatedAt
-  candidat             Candidat                     @relation(fields: [candidatId], references: [id], onDelete: Cascade)
-  filiere              Filiere                      @relation(fields: [filiereId], references: [id], onDelete: Cascade)
-  etablissement        Etablissement                @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
-  inscriptionAcademique InscriptionAcademique?      @relation(fields: [inscriptionAcadId], references: [id], onDelete: SetNull)
-  application          Application?
+  id                    String                            @id @default(uuid())
+  numeroPreinscription  String                            @unique
+  candidatId            String
+  filiereId             String
+  etablissementId       String
+  anneeAcademique       String
+  niveau                Int
+  statut                StatutPreinscriptionEtablissement @default(EN_ATTENTE)
+  motifDecision         String?
+  decidedAt             DateTime?
+  decidedBy             String?
+  inscriptionAcadId     String?                           @unique
+  createdAt             DateTime                          @default(now())
+  updatedAt             DateTime                          @updatedAt
+  candidat              Candidat                          @relation(fields: [candidatId], references: [id], onDelete: Cascade)
+  etablissement         Etablissement                     @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  filiere               Filiere                           @relation(fields: [filiereId], references: [id], onDelete: Cascade)
+  inscriptionAcademique InscriptionAcademique?            @relation(fields: [inscriptionAcadId], references: [id])
 
   @@unique([candidatId, filiereId, anneeAcademique])
   @@index([candidatId])
@@ -395,117 +376,18 @@ model PreinscriptionEtablissement {
   @@index([createdAt])
 }
 
-model Application {
-  id                    String                  @id @default(uuid())
-  numeroApplication     String                  @unique
-  candidatId            String
-  etablissementId       String
-  filiereId             String
-  anneeAcademique       String
-  niveau                Int
-  status                ApplicationStatus       @default(DRAFT)
-  preinscriptionId      String?                 @unique
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-  candidat              Candidat                @relation(fields: [candidatId], references: [id], onDelete: Cascade)
-  etablissement         Etablissement           @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
-  filiere               Filiere                 @relation(fields: [filiereId], references: [id], onDelete: Cascade)
-  preinscription        PreinscriptionEtablissement? @relation(fields: [preinscriptionId], references: [id], onDelete: SetNull)
-  documents             ApplicationDocument[]
-  payments              Payment[]
-  receipts              Receipt[]
-
-  @@unique([candidatId, filiereId, anneeAcademique])
-  @@index([candidatId])
-  @@index([etablissementId, status])
-  @@index([createdAt])
-}
-
-model SchoolRequirement {
-  id               String               @id @default(uuid())
-  etablissementId  String
-  code             String
-  label            String
-  requirementType  RequirementType
-  profileFieldKey  String?
-  isRequired       Boolean              @default(true)
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
-  etablissement    Etablissement        @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
-  applicationDocuments ApplicationDocument[]
-
-  @@unique([etablissementId, code])
-  @@index([etablissementId])
-}
-
-model ApplicationDocument {
-  id                String                 @id @default(uuid())
-  applicationId     String
-  schoolRequirementId String?
-  code              String
-  label             String
-  source            ApplicationDocSource
-  documentUrl       String?
-  status            ApplicationDocStatus   @default(PENDING)
-  metadata          Json?
-  createdAt         DateTime               @default(now())
-  updatedAt         DateTime               @updatedAt
-  application       Application            @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  schoolRequirement SchoolRequirement?     @relation(fields: [schoolRequirementId], references: [id], onDelete: SetNull)
-
-  @@unique([applicationId, code])
-  @@index([applicationId])
-}
-
-model Payment {
-  id                String              @id @default(uuid())
-  applicationId     String
-  paymentType       PaymentType
-  amount            Int
-  currency          String              @default("XOF")
-  paymentProvider   String?
-  paymentMethod     PaymentMethod
-  status            PaymentStatus       @default(PENDING)
-  externalRef       String?
-  providerPayload   Json?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  application       Application         @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  receipt           Receipt?
-
-  @@index([applicationId, paymentType])
-  @@index([status])
-}
-
-model Receipt {
-  id                String              @id @default(uuid())
-  paymentId         String?             @unique
-  applicationId     String
-  receiptNumber     String              @unique
-  receiptType       ReceiptType
-  receiptUrl        String?
-  issuedAt          DateTime            @default(now())
-  metadata          Json?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  payment           Payment?            @relation(fields: [paymentId], references: [id], onDelete: SetNull)
-  application       Application         @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-
-  @@index([applicationId, receiptType])
-}
-
 model Note {
-  id               String               @id @default(uuid())
+  id                String                @id @default(uuid())
   inscriptionAcadId String
-  matiere          String
-  noteCC           Float?
-  noteExamen       Float?
-  noteMoyenne      Float?
-  credits          Int
-  semestre         Int
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
-  inscriptionAcad  InscriptionAcademique @relation(fields: [inscriptionAcadId], references: [id], onDelete: Cascade)
+  matiere           String
+  noteCC            Float?
+  noteExamen        Float?
+  noteMoyenne       Float?
+  credits           Int
+  semestre          Int
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  inscriptionAcad   InscriptionAcademique @relation(fields: [inscriptionAcadId], references: [id], onDelete: Cascade)
 
   @@index([inscriptionAcadId])
   @@index([semestre])
@@ -522,7 +404,7 @@ model Diplome {
   mention         Mention?
   createdAt       DateTime    @default(now())
   candidat        Candidat    @relation(fields: [candidatId], references: [id], onDelete: Cascade)
-  filiereRelation Filiere?    @relation(fields: [filiereId], references: [id], onDelete: SetNull)
+  filiereRelation Filiere?    @relation(fields: [filiereId], references: [id])
 
   @@index([filiereId])
   @@index([type])
@@ -648,52 +530,6 @@ enum StatutPreinscriptionEtablissement {
   VALIDE
   SOUS_RESERVE
   REJETE
-}
-
-enum ApplicationStatus {
-  DRAFT
-  DOSSIER_FEES_PAID
-  PENDING_DOCUMENTS
-  READY_FOR_PREINSCRIPTION
-  FICHE_GENERATED
-}
-
-enum RequirementType {
-  PROFILE_FIELD
-  DOCUMENT_UPLOAD
-}
-
-enum ApplicationDocSource {
-  PROFILE_AUTO
-  STUDENT_UPLOAD
-  SYSTEM_GENERATED
-}
-
-enum ApplicationDocStatus {
-  PENDING
-  PROVIDED
-}
-
-enum PaymentType {
-  DOSSIER_FEES
-  DROITS_INSCRIPTION
-}
-
-enum PaymentMethod {
-  PLATFORM_GATEWAY
-  BANK_TRANSFER
-}
-
-enum PaymentStatus {
-  PENDING
-  CONFIRMED
-  FAILED
-}
-
-enum ReceiptType {
-  DOSSIER_FEES_RECEIPT
-  BANK_RECEIPT
-  PREINSCRIPTION_FICHE
 }
 
 enum TypeDiplome {

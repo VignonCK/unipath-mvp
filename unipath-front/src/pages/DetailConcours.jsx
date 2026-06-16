@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { candidatService, concoursService, inscriptionService, dossierService, convocationService } from '../services/api';
+import { handleSessionError } from '../utils/auth';
 import CandidatLayout from '../components/CandidatLayout';
 
 const CHAMPS_REQUIS = ['telephone', 'dateNaiss', 'lieuNaiss'];
@@ -21,6 +22,35 @@ const PIECES_FORMATS = {
   quittance:     '.pdf',
 };
 
+function getSerieAliases(serie) {
+  const s = String(serie || '').trim().toUpperCase();
+  if (!s) return [];
+  if (s === 'G') return ['G', 'G1', 'G2', 'G3'];
+  if (['G1', 'G2', 'G3'].includes(s)) return [s, 'G'];
+  if (s === 'F') return ['F', 'F1', 'F2', 'F3', 'F4'];
+  if (['F1', 'F2', 'F3', 'F4'].includes(s)) return [s, 'F'];
+  return [s];
+}
+
+function isSerieMatched(candidateSerie, serieConcours) {
+  const aliases = getSerieAliases(candidateSerie);
+  if (aliases.length === 0) return false;
+  return aliases.includes(String(serieConcours || '').trim().toUpperCase());
+}
+
+// Un concours sans série configurée est ouvert à toutes les séries.
+function serieCandidatAcceptee(candidat, concours) {
+  const series = concours?.seriesAcceptees;
+  if (!Array.isArray(series) || series.length === 0) return true;
+  return series.some(s => isSerieMatched(candidat?.serie, s));
+}
+
+function depotEstFerme(concours) {
+  const dateLimite = concours?.dateFinDepot || concours?.dateFin;
+  if (!dateLimite) return false;
+  return new Date() > new Date(dateLimite);
+}
+
 function getPiecesRequisesConcours(concours) {
   if (!concours?.piecesRequises) return Object.keys(PIECES_DOSSIER_BASE);
   const pr = concours.piecesRequises;
@@ -39,17 +69,47 @@ function getLabelPiece(piece, concours) {
   return piece.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
 }
 
+function getCriteresEligibilite(concours) {
+  const rootCriteres = concours?.criteresEligibilite;
+  const nestedCriteres = concours?.piecesRequises?.criteresEligibilite;
+  const source = rootCriteres || nestedCriteres;
+  if (!source) return [];
+  const raw = Array.isArray(source)
+    ? source
+    : (Array.isArray(source?.criteres) ? source.criteres : []);
+
+  return raw
+    .map((item) => {
+      if (typeof item === 'string') {
+        return { titre: item, description: '' };
+      }
+      return {
+        titre: item?.titre || '',
+        description: item?.description || '',
+      };
+    })
+    .filter((item) => item.titre.trim() !== '');
+}
+
 function profilIncomplet(candidat) {
   if (!candidat) return false;
   return CHAMPS_REQUIS.some(c => !candidat[c]);
 }
 
+function getQuittanceUrl(inscription) {
+  return inscription?.quittanceUrl || inscription?.dossierInscription?.quittanceUrl;
+}
+
+function getPiecesExtras(inscription) {
+  return inscription?.piecesExtras || inscription?.dossierInscription?.piecesExtras || {};
+}
+
 function getPieceStatut(piece, candidat, inscription) {
-  if (piece === 'quittance') return !!inscription?.quittanceUrl;
+  if (piece === 'quittance') return !!getQuittanceUrl(inscription);
   if (PIECES_DOSSIER_BASE[piece]) {
     return !!candidat?.dossier?.[piece];
   }
-  return !!(inscription?.piecesExtras?.[piece]);
+  return !!getPiecesExtras(inscription)?.[piece];
 }
 
 async function refreshData(id) {
@@ -84,7 +144,10 @@ export default function DetailConcours() {
         const inscriptionExistante = p.inscriptions?.find(i => i.concoursId === c.id);
         if (inscriptionExistante) setInscription(inscriptionExistante);
       })
-      .catch(() => navigate('/login'))
+      .catch((err) => {
+        if (handleSessionError(err, navigate)) return;
+        showMessage(err?.message || 'Impossible de charger ce concours.', 'error');
+      })
       .finally(() => setLoading(false));
   }, [id, navigate]);
 
@@ -130,6 +193,14 @@ export default function DetailConcours() {
     
     // Si pas encore inscrit, créer l'inscription d'abord (sans vérifier la quittance)
     if (!inscription) {
+      if (!serieCandidatAcceptee(candidat, concours)) {
+        showMessage("Votre série n'est pas acceptée pour ce concours.", 'error');
+        return;
+      }
+      if (depotEstFerme(concours)) {
+        showMessage('La période de dépôt pour ce concours est terminée.', 'error');
+        return;
+      }
       const piecesDossier = getPiecesRequisesConcours(concours).filter(p => p !== 'quittance');
       const manquantes = piecesDossier.filter(p => !getPieceStatut(p, candidat, inscription));
       if (manquantes.length > 0) {
@@ -163,11 +234,10 @@ export default function DetailConcours() {
       return;
     }
     
-    // Soumettre le dossier complet
     setSubmitting(true);
     try {
-      // TODO: Appeler une API pour marquer le dossier comme SOUMIS
-      showMessage('Dossier soumis avec succès ! Fiche de pré-inscription envoyée par email.', 'success');
+      await inscriptionService.soumettre(inscription.id);
+      showMessage('Dossier soumis avec succès ! La commission va l\'examiner.', 'success');
       const { candidat: updated, concours: updatedConcours } = await refreshData(id);
       setCandidat(updated);
       setConcours(updatedConcours);
@@ -206,6 +276,10 @@ export default function DetailConcours() {
   );
 
   const toutesLesPieces = getPiecesRequisesConcours(concours);
+  const criteresEligibilite = getCriteresEligibilite(concours);
+  const serieOk = serieCandidatAcceptee(candidat, concours);
+  const depotFerme = depotEstFerme(concours);
+  const inscriptionBloquee = !inscription && (!serieOk || depotFerme);
   // ✅ Toutes les pièces y compris la quittance doivent être fournies avant soumission
   const nbFournies = toutesLesPieces.filter(p => getPieceStatut(p, candidat, inscription)).length;
   const pct = toutesLesPieces.length > 0 ? Math.round((nbFournies / toutesLesPieces.length) * 100) : 100;
@@ -236,7 +310,7 @@ export default function DetailConcours() {
 
           <div>
             <h1 className='text-2xl sm:text-3xl font-black text-gray-900 mb-2'>{concours.libelle}</h1>
-            <p className='text-gray-500 text-xs sm:text-sm'>{concours.etablissement || "EPAC — Université d'Abomey-Calavi"}</p>
+            <p className='text-gray-500 text-xs sm:text-sm'>{concours.etablissement || 'Etablissement non precise'}</p>
           </div>
 
           <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
@@ -265,9 +339,9 @@ export default function DetailConcours() {
               <div className='flex flex-wrap gap-2'>
                 {concours.seriesAcceptees.map(serie => (
                   <span key={serie} className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                    candidat?.serie === serie ? 'bg-green-100 text-green-800 border-green-300' : 'bg-gray-100 text-gray-600 border-gray-200'
+                    isSerieMatched(candidat?.serie, serie) ? 'bg-green-100 text-green-800 border-green-300' : 'bg-gray-100 text-gray-600 border-gray-200'
                   }`}>
-                    Série {serie}{candidat?.serie === serie && ' ✓'}
+                    Série {serie}{isSerieMatched(candidat?.serie, serie) && ' ✓'}
                   </span>
                 ))}
               </div>
@@ -294,6 +368,22 @@ export default function DetailConcours() {
             <div>
               <h2 className='text-lg font-bold text-gray-900 mb-2'>Description</h2>
               <p className='text-gray-600 text-sm'>{concours.description}</p>
+            </div>
+          )}
+
+          {criteresEligibilite.length > 0 && (
+            <div>
+              <h2 className='text-lg font-bold text-gray-900 mb-2'>Critères d éligibilité</h2>
+              <div className='space-y-2'>
+                {criteresEligibilite.map((critere, index) => (
+                  <div key={`${critere.titre}-${index}`} className='rounded-xl border border-blue-100 bg-blue-50 p-3'>
+                    <p className='text-sm font-semibold text-blue-900'>{critere.titre}</p>
+                    {critere.description && (
+                      <p className='mt-1 text-xs text-blue-800'>{critere.description}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -361,6 +451,24 @@ export default function DetailConcours() {
               })}
             </div>
           </div>
+
+          {inscriptionBloquee && (
+            <div className='bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3'>
+              <div className='w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white flex-shrink-0'>
+                <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                  <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' />
+                </svg>
+              </div>
+              <div>
+                <p className='font-bold text-red-900 text-sm'>Inscription impossible</p>
+                <p className='text-xs text-red-700 mt-0.5'>
+                  {!serieOk
+                    ? `Votre série (${candidat?.serie || 'non renseignée'}) n'est pas acceptée pour ce concours.`
+                    : 'La période de dépôt des dossiers est terminée.'}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* SECTION SELON STATUT */}
           {inscription ? (
@@ -447,9 +555,9 @@ export default function DetailConcours() {
           ) : (
             <button
               onClick={handleSoumettreDossier}
-              disabled={submitting || (!inscription && !dossierComplet)}
+              disabled={submitting || inscriptionBloquee || (!inscription && !dossierComplet)}
               className={`w-full py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2 ${
-                (inscription || dossierComplet)
+                (!inscriptionBloquee && (inscription || dossierComplet))
                   ? 'bg-orange-500 text-white hover:bg-orange-600'
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
               }`}

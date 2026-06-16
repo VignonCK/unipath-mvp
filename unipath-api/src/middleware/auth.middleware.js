@@ -25,7 +25,16 @@ const protect = async (req, res, next) => {
 
     req.user = user;
     req.token = token;
-    const ctx = await resolveUserContext(user.id);
+    const ctx = await resolveUserContext(user.id, user.email);
+
+    if (!ctx.role) {
+      return res.status(403).json({
+        error:
+          'Profil UniPath introuvable pour ce compte. Déconnectez-vous, reconnectez-vous, ou réinscrivez-vous si le problème persiste.',
+        profileIncomplete: true,
+      });
+    }
+
     attachUserContext(req, ctx);
     next();
   } catch (error) {

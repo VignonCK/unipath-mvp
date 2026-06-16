@@ -556,8 +556,13 @@ function FormLeft({ isMobile }) {
                 <option value="C">Série C (Mathématiques)</option>
                 <option value="D">Série D (Sciences Expérimentales)</option>
                 <option value="E">Série E (Technique)</option>
-                <option value="F">Série F (Industrielle)</option>
-                <option value="G">Série G (Gestion)</option>
+                <option value="F1">Série F1 (Construction Mécanique)</option>
+                <option value="F2">Série F2 (Électronique)</option>
+                <option value="F3">Série F3 (Électrotechnique)</option>
+                <option value="F4">Série F4 (Génie Civil)</option>
+                <option value="G1">Série G1 (Techniques Administratives)</option>
+                <option value="G2">Série G2 (Comptabilité/Gestion)</option>
+                <option value="G3">Série G3 (Commerce/Marketing)</option>
               </Select>
             </Field>
           </div>

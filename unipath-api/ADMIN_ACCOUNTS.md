@@ -175,12 +175,31 @@ Authorization: Bearer <token_commission>
 
 ---
 
+## 🧪 Comptes de test (démo / présentation)
+
+| Rôle | Email | Mot de passe | Page après login |
+|------|-------|--------------|------------------|
+| Candidat | `candidat@test.com` | `password123` | `/dashboard` |
+| Commission (examinateur) | `examinateur@test.com` | `password123` | `/examinateur/dossiers` |
+| Commission (contrôleur) | `controleur-commission@test.com` | `password123` | `/controleur-commission/tableau-de-bord` |
+| DGES | `dges@test.com` | `password123` | `/dashboard-dges` |
+
+Création en une commande :
+
+```bash
+npm run seed:roles
+npm run create-commission-roles   # uniquement examinateur + contrôleur commission
+```
+
+---
+
 ## 🧪 Tester les Comptes
 
 ### 1. Créer les comptes
 
 ```bash
 npm run create-admins
+npm run seed:roles
 ```
 
 ### 2. Tester la connexion Commission

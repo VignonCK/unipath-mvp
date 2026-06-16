@@ -4,6 +4,8 @@ const prisma = require('../prisma');
 const emailService = require('../services/email.service');
 const { getFrontendUrl, buildFrontendUrl } = require('../utils/url.helper');
 const { genererMatriculeUnique } = require('../utils/matricule.helper');
+const { SERIES_VALIDES } = require('../constants/pieces.constants');
+const { alignCandidatIdToAuth } = require('../utils/candidat-alignment.helper');
 
 exports.register = async (req, res) => {
   try {
@@ -38,10 +40,9 @@ exports.register = async (req, res) => {
     }
 
     // Validation série
-    const seriesValides = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
-    if (serie && !seriesValides.includes(serie)) {
+    if (serie && !SERIES_VALIDES.includes(serie)) {
       return res.status(400).json({ 
-        error: 'Série invalide. Séries acceptées : A, B, C, D, E, F, G' 
+        error: 'Série invalide. Séries acceptées : A, B, C, D, E, F1, F2, F3, F4, G1, G2, G3' 
       });
     }
 
@@ -84,6 +85,7 @@ exports.register = async (req, res) => {
         lieuNaiss: lieuNaiss || null,
         matricule, // ✅ Matricule au format UAC-2026-00001
         emailConfirme: false,
+        role: 'ETUDIANT',
       },
     });
 
@@ -232,7 +234,7 @@ exports.login = async (req, res) => {
     let userData = null;
 
     // Chercher dans Candidat
-    const candidat = await prisma.candidat.findUnique({
+    let candidat = await prisma.candidat.findUnique({
       where: { id: userId },
       select: { 
         role: true, 
@@ -243,6 +245,21 @@ exports.login = async (req, res) => {
         emailConfirme: true
       },
     });
+
+    if (!candidat && data.user.email) {
+      await alignCandidatIdToAuth(userId, data.user.email);
+      candidat = await prisma.candidat.findUnique({
+        where: { id: userId },
+        select: {
+          role: true,
+          nom: true,
+          prenom: true,
+          matricule: true,
+          email: true,
+          emailConfirme: true,
+        },
+      });
+    }
 
     if (candidat) {
       role = candidat.role;
@@ -303,6 +320,25 @@ exports.login = async (req, res) => {
       }
     }
 
+    if (!role && prisma.adminEtablissement) {
+      const adminEtablissement = await prisma.adminEtablissement.findUnique({
+        where: { id: userId },
+        select: {
+          role: true,
+          nom: true,
+          prenom: true,
+          email: true,
+          telephone: true,
+          etablissementId: true,
+        },
+      });
+
+      if (adminEtablissement) {
+        role = adminEtablissement.role;
+        userData = adminEtablissement;
+      }
+    }
+
     if (!role) {
       const etablissement = await prisma.etablissement.findUnique({
         where: { id: userId },
@@ -315,13 +351,60 @@ exports.login = async (req, res) => {
       }
     }
 
+    // Compte Supabase sans profil DB (inscription interrompue) — tentative de réparation
+    if (!role) {
+      const meta = data.user.user_metadata || {};
+      const nom = meta.nom;
+      const prenom = meta.prenom;
+      const anip = meta.anip || null;
+
+      if (nom && prenom && data.user.email) {
+        try {
+          const matricule = await genererMatriculeUnique();
+          const repaired = await prisma.candidat.create({
+            data: {
+              id: userId,
+              email: data.user.email,
+              nom,
+              prenom,
+              anip,
+              matricule,
+              emailConfirme: !!data.user.email_confirmed_at,
+              role: 'ETUDIANT',
+            },
+            select: {
+              role: true,
+              nom: true,
+              prenom: true,
+              matricule: true,
+              email: true,
+            },
+          });
+          role = repaired.role;
+          userData = repaired;
+          console.log(`🔧 Profil Candidat réparé à la connexion pour ${data.user.email}`);
+        } catch (repairError) {
+          console.error('❌ Échec réparation profil à la connexion:', repairError.message);
+        }
+      }
+    }
+
+    if (!role) {
+      return res.status(403).json({
+        error:
+          'Votre compte existe mais votre profil UniPath est incomplet. Réinscrivez-vous ou contactez le support.',
+        profileIncomplete: true,
+      });
+    }
+
     res.json({
       token: data.session.access_token,
       user: {
+        id: userId,
         email: data.user.email,
-        role: role || 'CANDIDAT',
-        ...(sousRole && { sousRole }),
         ...userData,
+        role,
+        ...(sousRole && { sousRole }),
       },
     });
   } catch (error) {
@@ -412,17 +495,19 @@ exports.confirmEmail = async (req, res) => {
       return res.status(400).json({ error: 'Token invalide ou expiré' });
     }
 
-    // Vérifier si l'email est déjà confirmé
+    // Déjà confirmé : succès (le candidat peut se connecter)
     if (candidatExistant.emailConfirme) {
       console.log('⚠️ Email déjà confirmé pour:', candidatExistant.email);
-      return res.status(400).json({ 
-        error: 'Email déjà confirmé',
+      return res.json({
+        success: true,
+        alreadyConfirmed: true,
+        message: 'Votre email était déjà confirmé. Vous pouvez vous connecter.',
         candidat: {
           nom: candidatExistant.nom,
           prenom: candidatExistant.prenom,
           email: candidatExistant.email,
-          matricule: candidatExistant.matricule
-        }
+          matricule: candidatExistant.matricule,
+        },
       });
     }
 

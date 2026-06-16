@@ -5,6 +5,7 @@ import {
   candidatService, concoursService,
   inscriptionService, dossierService
 } from '../services/api';
+import { handleSessionError } from '../utils/auth';
 import DossierCompletion from '../components/DossierCompletion';
 import CandidatLayout from '../components/CandidatLayout';
 import { BentoCard, GlassBadge, ProgressBar } from '../components/AcademicLayout';
@@ -80,7 +81,11 @@ export default function DashboardCandidat() {
         // On utilise un champ séparé si disponible, sinon null
         if (p.photoProfilUrl) setPhotoUrl(p.photoProfilUrl);
       })
-      .catch(() => navigate('/login'))
+      .catch((err) => {
+        if (!handleSessionError(err, navigate)) {
+          setMessage({ text: err?.message || 'Erreur de chargement', type: 'error' });
+        }
+      })
       .finally(() => setLoading(false));
   }, [navigate]);
 

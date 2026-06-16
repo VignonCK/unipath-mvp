@@ -89,7 +89,7 @@ class EmailService {
     }
 
     const frontendUrl = getFrontendUrl();
-    const confirmationUrl = `${frontendUrl}/confirmer-email?token=${confirmationToken}`;
+    const confirmationUrl = `${frontendUrl}/auth/confirm?token=${confirmationToken}`;
     
     const subject = '[UniPath] Confirmez votre adresse email';
     const htmlBody = `

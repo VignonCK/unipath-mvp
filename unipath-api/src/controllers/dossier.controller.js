@@ -1,5 +1,6 @@
 const { supabaseAdmin } = require('../supabase');
 const prisma = require('../prisma');
+const { isEtudiantRole } = require('../constants/roles.constants');
 const multer = require('multer');
 
 const upload = multer({
@@ -223,7 +224,7 @@ exports.getDossierPersonnel = async (req, res) => {
     const userRole = req.userRole || req.user?.role;
 
     // Vérification des permissions
-    if (userRole === 'CANDIDAT' && userId !== candidatId) {
+    if (isEtudiantRole(userRole) && userId !== candidatId) {
       return res.status(403).json({ 
         error: 'Vous ne pouvez acceder qu\'a votre propre dossier' 
       });

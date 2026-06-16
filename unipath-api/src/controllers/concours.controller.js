@@ -5,8 +5,34 @@ const {
   validateDatesComposition,
   validateDatesCoherence,
   validateSeries,
-  validatePiecesRequises
+  validatePiecesRequises,
+  validateCriteresEligibilite
 } = require('../utils/concours.validation');
+const { candidateSerieMatchesConcours } = require('../utils/series.helper');
+
+const normalizeCriteresEligibilite = (criteresEligibilite) => {
+  if (criteresEligibilite === undefined || criteresEligibilite === null) return null;
+
+  const rawList = Array.isArray(criteresEligibilite)
+    ? criteresEligibilite
+    : criteresEligibilite.criteres;
+
+  if (!Array.isArray(rawList)) return { criteres: [] };
+
+  const criteres = rawList
+    .map((item) => {
+      if (typeof item === 'string') {
+        return { titre: item.trim(), description: null };
+      }
+      return {
+        titre: String(item.titre || '').trim(),
+        description: item.description ? String(item.description).trim() : null,
+      };
+    })
+    .filter((item) => item.titre);
+
+  return { criteres };
+};
 
 exports.getAllConcours = async (req, res) => {
   try {
@@ -27,8 +53,7 @@ exports.getAllConcours = async (req, res) => {
     let concoursFiltres = concours;
     if (candidat?.serie) {
       concoursFiltres = concours.filter(c => {
-        if (!c.seriesAcceptees || c.seriesAcceptees.length === 0) return true;
-        return c.seriesAcceptees.includes(candidat.serie);
+        return candidateSerieMatchesConcours(candidat.serie, c.seriesAcceptees);
       });
     }
 
@@ -148,6 +173,7 @@ exports.createConcours = async (req, res) => {
       seriesAcceptees,
       matieres,
       piecesRequises,
+      criteresEligibilite,
       dateDebutDepot,
       dateFinDepot,
       dateDebutComposition,
@@ -205,9 +231,19 @@ exports.createConcours = async (req, res) => {
       return res.status(400).json({ error: validationPieces.error });
     }
 
+    const validationCriteres = validateCriteresEligibilite(criteresEligibilite);
+    if (!validationCriteres.valid) {
+      return res.status(400).json({ error: validationCriteres.error });
+    }
+
     const piecesData = Array.isArray(piecesRequises)
       ? { pieces: piecesRequises }
       : piecesRequises;
+    const criteresData = normalizeCriteresEligibilite(criteresEligibilite);
+    const piecesPayload = Array.isArray(piecesData) ? { pieces: piecesData } : { ...piecesData };
+    if (criteresData) {
+      piecesPayload.criteresEligibilite = criteresData.criteres;
+    }
 
     const concours = await prisma.concours.create({
       data: {
@@ -220,7 +256,7 @@ exports.createConcours = async (req, res) => {
         fraisParticipation: parseInt(fraisParticipation),
         seriesAcceptees,
         matieres: matieres || [],
-        piecesRequises: piecesData,
+        piecesRequises: piecesPayload,
         dateDebutDepot: new Date(dateDebutDepot),
         dateFinDepot: new Date(dateFinDepot),
         dateDebutComposition: new Date(dateDebutComposition),
@@ -249,6 +285,7 @@ exports.updateConcours = async (req, res) => {
       seriesAcceptees,
       matieres,
       piecesRequises,
+      criteresEligibilite,
       dateDebutDepot,
       dateFinDepot,
       dateDebutComposition,
@@ -333,6 +370,22 @@ exports.updateConcours = async (req, res) => {
 
       updateData.piecesRequises = piecesData;
       piecesModified = true;
+    }
+
+    if (criteresEligibilite !== undefined) {
+      const validationCriteres = validateCriteresEligibilite(criteresEligibilite);
+      if (!validationCriteres.valid) {
+        return res.status(400).json({ error: validationCriteres.error });
+      }
+      const criteresData = normalizeCriteresEligibilite(criteresEligibilite);
+      const basePieces = updateData.piecesRequises !== undefined
+        ? updateData.piecesRequises
+        : (existing.piecesRequises || { pieces: [] });
+      const normalizedPieces = Array.isArray(basePieces)
+        ? { pieces: basePieces }
+        : { ...basePieces };
+      normalizedPieces.criteresEligibilite = criteresData ? criteresData.criteres : [];
+      updateData.piecesRequises = normalizedPieces;
     }
 
     const concours = await prisma.concours.update({

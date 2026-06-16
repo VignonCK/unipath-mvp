@@ -2,6 +2,12 @@ const prisma = require('../prisma');
 const { supabaseAdmin } = require('../supabase');
 const { genererNumeroInscriptionUnique } = require('../utils/numero-inscription.helper');
 const { envoyerPreInscriptionApresCreation } = require('../utils/inscription-email.helper');
+const { candidateSerieMatchesConcours } = require('../utils/series.helper');
+const { PIECES_BASE, getPiecesExtrasConfig } = require('../utils/completude.helper');
+const {
+  computeInscriptionCompletude,
+  profilCandidatComplet,
+} = require('../utils/dossier-submission.helper');
 
 /**
  * Créer une nouvelle inscription à un concours
@@ -18,6 +24,26 @@ exports.creerInscription = async (req, res) => {
 
     if (!concours) {
       return res.status(404).json({ error: 'Concours non trouvé' });
+    }
+
+    // Vérifier que la période de dépôt n'est pas terminée
+    const dateLimite = concours.dateFinDepot || concours.dateFin;
+    if (dateLimite && new Date() > new Date(dateLimite)) {
+      return res.status(400).json({
+        error: 'La période de dépôt pour ce concours est terminée',
+      });
+    }
+
+    // Vérifier que la série du candidat est acceptée par le concours
+    const candidat = await prisma.candidat.findUnique({
+      where: { id: candidatId },
+      select: { serie: true },
+    });
+
+    if (!candidateSerieMatchesConcours(candidat?.serie, concours.seriesAcceptees)) {
+      return res.status(403).json({
+        error: "Votre série n'est pas acceptée pour ce concours",
+      });
     }
 
     // Vérifier que le candidat n'est pas déjà inscrit
@@ -80,12 +106,11 @@ exports.creerInscription = async (req, res) => {
     });
 
     // Calculer la complétude initiale
-    const piecesBase = ['acteNaissance', 'carteIdentite', 'photo', 'releve'];
-    const piecesBasesPresentes = piecesBase.filter(p => dossier[p]).length;
-    
-    // Quittance + piecesExtras configurées par le concours
-    const piecesExtrasConfig = concours.piecesRequises?.extras || [];
-    const total = 4 + 1 + piecesExtrasConfig.length; // 4 base + 1 quittance + extras
+    const piecesBasesPresentes = PIECES_BASE.filter(p => dossier[p]).length;
+
+    // Quittance + pièces extra configurées par le concours
+    const piecesExtrasConfig = getPiecesExtrasConfig(concours);
+    const total = PIECES_BASE.length + 1 + piecesExtrasConfig.length; // base + quittance + extras
     const presentes = piecesBasesPresentes; // Initialement, seules les pièces de base peuvent être présentes
     const completude = Math.round((presentes / total) * 100);
 
@@ -118,8 +143,13 @@ exports.creerInscription = async (req, res) => {
     }).catch((err) => console.error('Erreur envoi email pré-inscription:', err));
 
     res.status(201).json({
-      message: 'Inscription créée avec succès',
-      inscription: inscriptionComplete,
+      message: 'Inscription créée avec succès. Vous êtes candidat pour ce concours.',
+      inscription: {
+        ...inscriptionComplete,
+        estCandidatConcours: true,
+      },
+      roleContext: 'candidat',
+      concoursId: inscriptionComplete.concoursId,
       completude: {
         pourcentage: completude,
         piecesPresentes: presentes,
@@ -305,6 +335,110 @@ exports.uploadQuittanceInscription = async (req, res) => {
     });
   } catch (error) {
     console.error('Erreur upload quittance inscription:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+/**
+ * Soumettre officiellement un dossier complet pour examen par la commission.
+ * Le statut reste EN_ATTENTE ; la soumission est tracée dans l'historique.
+ */
+exports.soumettreDossier = async (req, res) => {
+  try {
+    const { inscriptionId } = req.params;
+    const candidatId = req.user.id;
+
+    const inscription = await prisma.inscription.findFirst({
+      where: { id: inscriptionId, candidatId },
+      include: {
+        candidat: { include: { dossier: true } },
+        concours: true,
+        dossierInscription: true,
+      },
+    });
+
+    if (!inscription) {
+      return res.status(404).json({ error: 'Inscription non trouvée ou non autorisée' });
+    }
+
+    const dossierInscription = inscription.dossierInscription;
+    if (!dossierInscription) {
+      return res.status(400).json({ error: 'Dossier d\'inscription introuvable' });
+    }
+
+    if (dossierInscription.statut !== 'EN_ATTENTE') {
+      return res.status(400).json({
+        error: 'Ce dossier a déjà été traité par la commission',
+      });
+    }
+
+    if (!profilCandidatComplet(inscription.candidat)) {
+      return res.status(400).json({
+        error: 'Complétez votre profil (téléphone, date et lieu de naissance) avant de soumettre',
+      });
+    }
+
+    const dejaSoumis = await prisma.actionHistory.findFirst({
+      where: {
+        dossierInscriptionId: dossierInscription.id,
+        typeAction: 'DOSSIER_SOUMIS',
+      },
+    });
+
+    if (dejaSoumis) {
+      return res.status(400).json({
+        error: 'Ce dossier a déjà été soumis',
+        soumisAt: dejaSoumis.timestamp,
+      });
+    }
+
+    const completude = computeInscriptionCompletude(inscription);
+    if (!completude.estComplet) {
+      return res.status(400).json({
+        error: 'Dossier incomplet. Déposez toutes les pièces requises avant de soumettre.',
+        piecesManquantes: completude.piecesManquantes,
+        completude: {
+          pourcentage: completude.pourcentage,
+          piecesPresentes: completude.presentes,
+          piecesRequises: completude.total,
+        },
+      });
+    }
+
+    const ipAddress = req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+
+    const action = await prisma.actionHistory.create({
+      data: {
+        utilisateurId: candidatId,
+        dossierInscriptionId: dossierInscription.id,
+        typeAction: 'DOSSIER_SOUMIS',
+        details: {
+          message: 'Dossier soumis officiellement par le candidat',
+          concoursId: inscription.concoursId,
+          inscriptionId: inscription.id,
+        },
+        ipAddress,
+        userAgent,
+      },
+    });
+
+    res.json({
+      message: 'Dossier soumis avec succès. Il sera examiné par la commission.',
+      soumisAt: action.timestamp,
+      inscription: {
+        id: inscription.id,
+        statut: dossierInscription.statut,
+        soumis: true,
+      },
+      completude: {
+        pourcentage: completude.pourcentage,
+        piecesPresentes: completude.presentes,
+        piecesRequises: completude.total,
+      },
+    });
+  } catch (error) {
+    console.error('Erreur soumission dossier:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };

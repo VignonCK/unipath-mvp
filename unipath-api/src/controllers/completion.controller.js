@@ -1,5 +1,7 @@
 // src/controllers/completion.controller.js
 const prisma = require('../prisma');
+const { getPiecesExtrasConfig } = require('../utils/completude.helper');
+const { isEtudiantRole } = require('../constants/roles.constants');
 
 const PIECES_DOSSIER = ['acteNaissance', 'carteIdentite', 'photo', 'releve']; // ✅ sans quittance
 
@@ -9,7 +11,7 @@ exports.getCompletion = async (req, res) => {
     const userId = req.user.id;
     const userRole = req.userRole || req.user?.role;
 
-    if (userRole === 'CANDIDAT' && userId !== candidatId) {
+    if (isEtudiantRole(userRole) && userId !== candidatId) {
       return res.status(403).json({ error: 'Accès refusé. Vous ne pouvez consulter que votre propre dossier.' });
     }
 
@@ -38,7 +40,7 @@ exports.getCompletion = async (req, res) => {
       timestamp: new Date().toISOString(),
       candidat: { id: candidat.id, nom: candidat.nom, prenom: candidat.prenom, email: candidat.email },
       permissions: {
-        peutModifier: userRole === 'CANDIDAT' && userId === candidatId,
+        peutModifier: isEtudiantRole(userRole) && userId === candidatId,
         peutVoirDetails: ['COMMISSION', 'CONTROLEUR', 'DGES'].includes(userRole)
       }
     });
@@ -55,7 +57,7 @@ exports.getPiecesManquantes = async (req, res) => {
     const userId = req.user.id;
     const userRole = req.userRole || req.user?.role;
 
-    if (userRole === 'CANDIDAT' && userId !== candidatId) {
+    if (isEtudiantRole(userRole) && userId !== candidatId) {
       return res.status(403).json({ error: 'Accès refusé. Vous ne pouvez consulter que votre propre dossier.' });
     }
 
@@ -166,7 +168,7 @@ exports.getCompletionInscription = async (req, res) => {
     }
 
     // Vérification des permissions
-    if (userRole === 'CANDIDAT' && userId !== inscription.candidatId) {
+    if (isEtudiantRole(userRole) && userId !== inscription.candidatId) {
       return res.status(403).json({ error: 'Accès refusé' });
     }
 
@@ -180,14 +182,14 @@ exports.getCompletionInscription = async (req, res) => {
     // Extraire la quittance
     const quittancePresente = inscription.dossierInscription?.quittanceUrl ? 1 : 0;
 
-    // Extraire les pièces extras
-    const piecesExtrasConfig = inscription.concours.piecesRequises?.extras || [];
+    // Extraire les pièces extras (indexées par id dans piecesExtras)
+    const piecesExtrasConfig = getPiecesExtrasConfig(inscription.concours);
     const piecesExtrasPresentes = piecesExtrasConfig.filter(
-      p => inscription.dossierInscription?.piecesExtras?.[p.nom]
+      p => inscription.dossierInscription?.piecesExtras?.[p.id]
     ).length;
 
     // Calculer le pourcentage global
-    const total = 4 + 1 + piecesExtrasConfig.length;
+    const total = piecesBase.length + 1 + piecesExtrasConfig.length;
     const presentes = piecesBasesPresentes + quittancePresente + piecesExtrasPresentes;
     const pourcentage = Math.round((presentes / total) * 100);
 
@@ -220,11 +222,11 @@ exports.getCompletionInscription = async (req, res) => {
           obligatoire: true
         },
         ...piecesExtrasConfig.map(p => ({
-          nom: p.nom,
-          statut: inscription.dossierInscription?.piecesExtras?.[p.nom] ? 'fournie' : 'manquante',
+          nom: p.nom || p.id,
+          statut: inscription.dossierInscription?.piecesExtras?.[p.id] ? 'fournie' : 'manquante',
           source: 'dossier_concours',
-          url: inscription.dossierInscription?.piecesExtras?.[p.nom],
-          uploadedAt: inscription.dossierInscription?.piecesExtras?.[p.nom] ? inscription.dossierInscription.updatedAt : null,
+          url: inscription.dossierInscription?.piecesExtras?.[p.id],
+          uploadedAt: inscription.dossierInscription?.piecesExtras?.[p.id] ? inscription.dossierInscription.updatedAt : null,
           obligatoire: p.obligatoire || false
         }))
       ],
@@ -241,7 +243,7 @@ exports.getCompletionInscription = async (req, res) => {
         updatedAt: inscription.dossierInscription?.updatedAt
       },
       permissions: {
-        peutModifier: userRole === 'CANDIDAT' && userId === inscription.candidatId,
+        peutModifier: isEtudiantRole(userRole) && userId === inscription.candidatId,
         peutVoirDetails: ['COMMISSION', 'CONTROLEUR', 'DGES'].includes(userRole)
       }
     };
@@ -309,12 +311,12 @@ exports.getDossierComplet = async (req, res) => {
       : 0;
 
     const quittancePresente = inscription.dossierInscription?.quittanceUrl ? 1 : 0;
-    const piecesExtrasConfig = inscription.concours.piecesRequises?.extras || [];
+    const piecesExtrasConfig = getPiecesExtrasConfig(inscription.concours);
     const piecesExtrasPresentes = piecesExtrasConfig.filter(
-      p => inscription.dossierInscription?.piecesExtras?.[p.nom]
+      p => inscription.dossierInscription?.piecesExtras?.[p.id]
     ).length;
 
-    const total = 4 + 1 + piecesExtrasConfig.length;
+    const total = piecesBase.length + 1 + piecesExtrasConfig.length;
     const presentes = piecesBasesPresentes + quittancePresente + piecesExtrasPresentes;
     const pourcentage = Math.round((presentes / total) * 100);
 
@@ -345,11 +347,11 @@ exports.getDossierComplet = async (req, res) => {
           obligatoire: true
         },
         ...piecesExtrasConfig.map(p => ({
-          nom: p.nom,
-          statut: inscription.dossierInscription?.piecesExtras?.[p.nom] ? 'fournie' : 'manquante',
+          nom: p.nom || p.id,
+          statut: inscription.dossierInscription?.piecesExtras?.[p.id] ? 'fournie' : 'manquante',
           source: 'dossier_concours',
-          url: inscription.dossierInscription?.piecesExtras?.[p.nom],
-          uploadedAt: inscription.dossierInscription?.piecesExtras?.[p.nom] ? inscription.dossierInscription.updatedAt : null,
+          url: inscription.dossierInscription?.piecesExtras?.[p.id],
+          uploadedAt: inscription.dossierInscription?.piecesExtras?.[p.id] ? inscription.dossierInscription.updatedAt : null,
           obligatoire: p.obligatoire || false
         }))
       ],

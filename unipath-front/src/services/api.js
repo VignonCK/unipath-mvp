@@ -2,6 +2,8 @@
 // Ce fichier centralise TOUS les appels vers le backend (API de Harry)
 // Chaque page importe uniquement ce dont elle a besoin depuis ce fichier
 
+import { saveAuth, clearAuth } from '../utils/auth';
+
 // ── URL de base ──────────────────────────────────────────────────
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -20,7 +22,17 @@ async function request(endpoint, options = {}) {
   const response = await fetch(`${BASE_URL}${endpoint}`, config);
   const data = await response.json();
 
-  if (!response.ok) throw new Error(data.error || 'Erreur API');
+  if (!response.ok) {
+    const error = new Error(data.error || 'Erreur API');
+    error.status = response.status;
+    error.data = data;
+    // Compatibilite avec les appels existants qui attendent err.response (style axios)
+    error.response = {
+      status: response.status,
+      data,
+    };
+    throw error;
+  }
 
   return data;
 }
@@ -33,12 +45,10 @@ export const authService = {
       body: JSON.stringify({ email, password }),
     });
     
-    // Stocker le token ET les infos utilisateur (incluant le rôle)
-    if (data.token) {
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+    if (data.token && data.user) {
+      saveAuth(data.token, data.user);
     }
-    
+
     return data;
   },
 
@@ -55,8 +65,7 @@ export const authService = {
     }),
 
   logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    clearAuth();
   },
 
   resetPassword: (email) =>
@@ -119,6 +128,11 @@ export const inscriptionService = {
     request('/inscriptions', {
       method: 'POST',
       body: JSON.stringify({ concoursId }),
+    }),
+
+  soumettre: (inscriptionId) =>
+    request(`/inscriptions/${inscriptionId}/soumettre`, {
+      method: 'POST',
     }),
 
   getMesInscriptions: () => request('/inscriptions/mes-inscriptions'),
@@ -219,12 +233,69 @@ export const dgesService = {
 
   // Récupère les statistiques d'UN seul concours par son ID
   getStatistiquesConcours: (id) => request(`/dges/statistiques/${id}`),
+
+  listerAdminsEtablissement: (etablissementId) =>
+    request(`/dges/etablissements/${etablissementId}/admins`),
+
+  creerAdminEtablissement: (etablissementId, data) =>
+    request(`/dges/etablissements/${etablissementId}/admins`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  supprimerAdminEtablissement: (etablissementId, adminId) =>
+    request(`/dges/etablissements/${etablissementId}/admins/${adminId}`, {
+      method: 'DELETE',
+    }),
+};
+
+export const campagneAdminService = {
+  getAll: (statut = '') =>
+    request(`/etablissement/campagnes${statut ? `?statut=${statut}` : ''}`),
+  getById: (id) => request(`/etablissement/campagnes/${id}`),
+  creer: (data) =>
+    request('/etablissement/campagnes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  modifier: (id, data) =>
+    request(`/etablissement/campagnes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  supprimer: (id) =>
+    request(`/etablissement/campagnes/${id}`, { method: 'DELETE' }),
+  publier: (id) =>
+    request(`/etablissement/campagnes/${id}/publier`, { method: 'PATCH' }),
+  cloturer: (id) =>
+    request(`/etablissement/campagnes/${id}/cloturer`, { method: 'PATCH' }),
+};
+
+export const campagneService = {
+  getAll: (params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.ville) searchParams.set('ville', params.ville);
+    if (params.anneeAcademique) searchParams.set('anneeAcademique', params.anneeAcademique);
+    if (params.filiereId) searchParams.set('filiereId', params.filiereId);
+    const query = searchParams.toString();
+    return request(`/campagnes${query ? `?${query}` : ''}`);
+  },
+  getById: (id) => request(`/campagnes/${id}`),
 };
 
 // ── Module 2 - Parcours Academique ───────────────────────────────
+export const completionService = {
+  getCompletion: (candidatId) => request(`/completion/${candidatId}`),
+};
+
 export const etablissementService = {
   getAll: () => request('/etablissements'),
   getById: (id) => request(`/etablissements/${id}`),
+  rechercherParFilieres: (choix) =>
+    request('/etablissements/recherche-filieres', {
+      method: 'POST',
+      body: JSON.stringify(choix),
+    }),
   getEtudiants: (id, params = {}) => {
     const searchParams = new URLSearchParams();
     if (params.filiere) searchParams.set('filiere', params.filiere);

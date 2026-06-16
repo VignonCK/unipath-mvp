@@ -57,7 +57,7 @@ const FORMATS_DISPONIBLES = [
 /**
  * Liste des séries scolaires valides
  */
-const SERIES_VALIDES = ['A', 'B', 'C', 'D', 'E', 'F1', 'F2', 'F3', 'F4', 'G'];
+const SERIES_VALIDES = ['A', 'B', 'C', 'D', 'E', 'F1', 'F2', 'F3', 'F4', 'G1', 'G2', 'G3', 'F', 'G'];
 
 module.exports = {
   PIECES_PREDEFINIES,

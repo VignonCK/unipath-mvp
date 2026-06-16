@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { PIECE_IDS, PIECES_LABELS, convertLegacyId } from '../constants/pieces';
 import { getAuthHeaders } from '../utils/auth';
+import { inscriptionService } from '../services/api';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -13,7 +14,7 @@ const PIECES_DOSSIER = [
   PIECE_IDS.RELEVE_NOTES,
 ];
 
-export default function DossierCompletion({ candidatId, dossier, onSoumettre, dossierInscriptionId }) {
+export default function DossierCompletion({ candidatId, dossier, onSoumettre, inscriptionId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [soumission, setSoumission] = useState(false);
@@ -90,26 +91,18 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre, do
   }, [candidatId, dossier, etaitIncomplet]);
 
   const handleSoumettre = async () => {
-    if (!dossierInscriptionId) {
-      console.error('dossierInscriptionId manquant');
+    if (!inscriptionId) {
+      console.error('inscriptionId manquant');
       return;
     }
-    
+
     setSoumission(true);
     try {
-      // ✅ REFONTE - Utiliser dossierInscriptionId au lieu de dossierId
-      await fetch(`${BASE_URL}/history/action`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          dossierInscriptionId: dossierInscriptionId,
-          typeAction: 'DOSSIER_SOUMIS',
-          details: { message: 'Dossier soumis officiellement par le candidat' },
-        }),
-      });
+      await inscriptionService.soumettre(inscriptionId);
       if (onSoumettre) onSoumettre();
     } catch (err) {
       console.error('Erreur soumission:', err);
+      alert(err?.message || 'Erreur lors de la soumission du dossier');
     } finally {
       setSoumission(false);
     }
@@ -185,7 +178,7 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre, do
         })}
       </div>
 
-      {estComplet && dossierInscriptionId && (
+      {estComplet && inscriptionId && (
         <button
           onClick={handleSoumettre}
           disabled={soumission}

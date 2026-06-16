@@ -310,7 +310,7 @@ describe('EmailService - Tests unitaires', () => {
       const htmlBody = createCall.data.htmlBody;
 
       // Vérifier que le lien de confirmation est présent
-      expect(htmlBody).toContain('http://localhost:3000/confirmer-email?token=token123');
+      expect(htmlBody).toContain('http://localhost:3000/auth/confirm?token=token123');
       expect(htmlBody).toContain('User TEST');
     });
 

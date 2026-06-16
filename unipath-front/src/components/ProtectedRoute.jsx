@@ -1,6 +1,6 @@
 // src/components/ProtectedRoute.jsx
 import { Navigate } from 'react-router-dom';
-import { isAuthenticated, getDefaultRoute, hasRole, hasSousRole, getUser } from '../utils/auth';
+import { isAuthenticated, getDefaultRoute, hasRole, hasSousRole, getUser, clearAuth } from '../utils/auth';
 
 /**
  * @param {Array<string>} [allowedRoles]
@@ -11,14 +11,18 @@ export default function ProtectedRoute({ children, allowedRoles = [], allowedSou
     return <Navigate to='/login' replace />;
   }
 
+  const user = getUser();
+  if (!user?.role) {
+    clearAuth();
+    return <Navigate to='/login' replace />;
+  }
+
   if (allowedRoles.length > 0 && !hasRole(allowedRoles)) {
-    const user = getUser();
     const defaultRoute = getDefaultRoute(user?.role, user?.sousRole);
     return <Navigate to={defaultRoute} replace />;
   }
 
   if (allowedSousRoles.length > 0 && !hasSousRole(allowedSousRoles)) {
-    const user = getUser();
     const defaultRoute = getDefaultRoute(user?.role, user?.sousRole);
     return <Navigate to={defaultRoute} replace />;
   }

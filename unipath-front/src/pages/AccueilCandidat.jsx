@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { candidatService, concoursService } from '../services/api';
+import { handleSessionError } from '../utils/auth';
 import CandidatLayout from '../components/CandidatLayout';
 import BentoGrid from '../components/BentoGrid';
 import BentoCard from '../components/BentoCard';
@@ -25,6 +26,7 @@ export default function AccueilCandidat() {
   const [concours, setConcours] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [photoUrl, setPhotoUrl] = useState(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -36,7 +38,14 @@ export default function AccueilCandidat() {
         const saved = localStorage.getItem('photoProfil_' + p.id);
         if (saved) setPhotoUrl(saved);
       })
-      .catch(() => navigate('/login'))
+      .catch((err) => {
+        if (handleSessionError(err, navigate)) return;
+        if (err?.status === 403) {
+          setError(err?.message || 'Accès refusé à votre profil candidat.');
+          return;
+        }
+        setError(err?.message || 'Erreur de chargement du tableau de bord');
+      })
       .finally(() => setLoading(false));
   }, [navigate]);
 
@@ -51,8 +60,8 @@ export default function AccueilCandidat() {
   const nbPieces = pieces.filter(p => candidat?.dossier?.[p]).length;
   const pct = Math.round((nbPieces / pieces.length) * 100);
   const nbInscriptions = candidat?.inscriptions?.length || 0;
-  const nbValides = candidat?.inscriptions?.filter(i => i.statut === 'VALIDE').length || 0;
-  const nbRejetes = candidat?.inscriptions?.filter(i => i.statut === 'REJETE').length || 0;
+  const nbValides = candidat?.inscriptions?.filter(i => ['VALIDE', 'VALIDE_PAR_COMMISSION'].includes(i.statut)).length || 0;
+  const nbRejetes = candidat?.inscriptions?.filter(i => ['REJETE', 'REJETE_PAR_COMMISSION'].includes(i.statut)).length || 0;
   const profilOk = ['telephone', 'dateNaiss', 'lieuNaiss'].every(c => candidat?.[c]);
 
   // Concours avec clôture proche (< 7 jours) et non inscrit
@@ -68,11 +77,14 @@ export default function AccueilCandidat() {
     notifications.push({ type: 'warning', msg: 'Votre profil est incomplet. Renseignez vos informations pour vous inscrire.' });
   }
   candidat?.inscriptions?.forEach(ins => {
-    if (ins.statut === 'VALIDE') {
+    if (['VALIDE', 'VALIDE_PAR_COMMISSION'].includes(ins.statut)) {
       notifications.push({ type: 'success', msg: `Votre dossier pour "${ins.concours?.libelle}" a été validé. Téléchargez votre convocation.` });
     }
-    if (ins.statut === 'REJETE') {
+    if (['REJETE', 'REJETE_PAR_COMMISSION'].includes(ins.statut)) {
       notifications.push({ type: 'error', msg: `Votre dossier pour "${ins.concours?.libelle}" a été rejeté.` });
+    }
+    if (['SOUS_RESERVE', 'SOUS_RESERVE_PAR_COMMISSION'].includes(ins.statut)) {
+      notifications.push({ type: 'warning', msg: `Votre dossier pour "${ins.concours?.libelle}" a été accepté sous réserve. Consultez les remarques.` });
     }
   });
   if (pct > 0 && pct < 100) {
@@ -85,6 +97,11 @@ export default function AccueilCandidat() {
       <div className="fixed inset-0 -z-10 bg-gradient-to-br from-gray-50 via-blue-50/30 to-orange-50/20 dark:from-gray-950 dark:via-academic-950 dark:to-gray-900" />
       
       <div className='max-w-7xl mx-auto space-y-8 animate-slide-up'>
+        {error && (
+          <div className='rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700'>
+            {error}
+          </div>
+        )}
 
         {/* Hero Section - Message de bienvenue avec glassmorphism */}
         <BentoCard size="full" variant="gradient" glow className="relative overflow-hidden">
@@ -409,12 +426,40 @@ export default function AccueilCandidat() {
                     icon: '✓',
                     label: 'Validé'
                   },
+                  VALIDE_PAR_COMMISSION: {
+                    bg: 'from-green-500/20 to-green-600/20',
+                    border: 'border-green-500/30',
+                    text: 'text-green-700 dark:text-green-400',
+                    icon: '✓',
+                    label: 'Validé (commission)'
+                  },
                   REJETE: {
                     bg: 'from-red-500/20 to-red-600/20',
                     border: 'border-red-500/30',
                     text: 'text-red-700 dark:text-red-400',
                     icon: '✗',
                     label: 'Rejeté'
+                  },
+                  REJETE_PAR_COMMISSION: {
+                    bg: 'from-red-500/20 to-red-600/20',
+                    border: 'border-red-500/30',
+                    text: 'text-red-700 dark:text-red-400',
+                    icon: '✗',
+                    label: 'Rejeté (commission)'
+                  },
+                  SOUS_RESERVE: {
+                    bg: 'from-amber-500/20 to-amber-600/20',
+                    border: 'border-amber-500/30',
+                    text: 'text-amber-700 dark:text-amber-400',
+                    icon: '⚠',
+                    label: 'Sous réserve'
+                  },
+                  SOUS_RESERVE_PAR_COMMISSION: {
+                    bg: 'from-amber-500/20 to-amber-600/20',
+                    border: 'border-amber-500/30',
+                    text: 'text-amber-700 dark:text-amber-400',
+                    icon: '⚠',
+                    label: 'Sous réserve (commission)'
                   },
                   EN_ATTENTE: {
                     bg: 'from-yellow-500/20 to-yellow-600/20',
@@ -424,7 +469,7 @@ export default function AccueilCandidat() {
                     label: 'En attente'
                   },
                 };
-                const config = statusConfig[ins.statut];
+                const config = statusConfig[ins.statut] || statusConfig.EN_ATTENTE;
                 
                 return (
                   <div 
@@ -456,7 +501,7 @@ export default function AccueilCandidat() {
                       {ins.concours?.libelle}
                     </h3>
                     <p className="text-xs text-gray-600 dark:text-gray-400">
-                      {new Date(ins.dateInscription).toLocaleDateString('fr-FR')}
+                      {ins.createdAt ? new Date(ins.createdAt).toLocaleDateString('fr-FR') : ''}
                     </p>
                   </div>
                 );

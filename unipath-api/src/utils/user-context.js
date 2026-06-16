@@ -1,13 +1,21 @@
 const prisma = require('../prisma');
+const { alignCandidatIdToAuth } = require('./candidat-alignment.helper');
 
 /**
  * Résout le rôle (et sous-rôle commission) d'un utilisateur Supabase.
+ * @param {string} userId - ID Supabase Auth
+ * @param {string} [email] - Email (fallback si id Candidat désaligné)
  */
-async function resolveUserContext(userId) {
-  const candidat = await prisma.candidat.findUnique({
+async function resolveUserContext(userId, email) {
+  let candidat = await prisma.candidat.findUnique({
     where: { id: userId },
     select: { role: true, nom: true, prenom: true },
   });
+
+  if (!candidat && email) {
+    candidat = await alignCandidatIdToAuth(userId, email);
+  }
+
   if (candidat) {
     return { role: candidat.role, sousRole: null, profile: candidat };
   }
@@ -36,6 +44,21 @@ async function resolveUserContext(userId) {
     return { role: controleur.role, sousRole: null, profile: controleur };
   }
 
+  const adminEtablissement = prisma.adminEtablissement
+    ? await prisma.adminEtablissement.findUnique({
+        where: { id: userId },
+        select: { role: true, nom: true, prenom: true, etablissementId: true },
+      })
+    : null;
+  if (adminEtablissement) {
+    return {
+      role: adminEtablissement.role,
+      sousRole: null,
+      profile: adminEtablissement,
+      etablissementId: adminEtablissement.etablissementId,
+    };
+  }
+
   const etablissement = await prisma.etablissement.findUnique({
     where: { id: userId },
     select: { id: true, nom: true, type: true, ville: true, email: true },
@@ -53,6 +76,10 @@ function attachUserContext(req, ctx) {
   req.user.role = ctx.role;
   if (ctx.sousRole) {
     req.user.sousRole = ctx.sousRole;
+  }
+  if (ctx.etablissementId) {
+    req.etablissementId = ctx.etablissementId;
+    req.user.etablissementId = ctx.etablissementId;
   }
 }
 

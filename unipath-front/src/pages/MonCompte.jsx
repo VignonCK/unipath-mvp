@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { candidatService, dossierService } from '../services/api';
+import { handleSessionError } from '../utils/auth';
 import CandidatLayout from '../components/CandidatLayout';
 import DossierCompletion from '../components/DossierCompletion';
 import { BentoCard, GlassBadge, AcademicButton } from '../components/AcademicLayout';
@@ -55,7 +56,11 @@ export default function MonCompte() {
         const saved = localStorage.getItem('photoProfil_' + p.id);
         if (saved) setPhotoUrl(saved);
       })
-      .catch(() => navigate('/login'))
+      .catch((err) => {
+        if (!handleSessionError(err, navigate)) {
+          showMessage(err?.message || 'Erreur de chargement du profil', 'error');
+        }
+      })
       .finally(() => setLoading(false));
   }, [navigate]);
 

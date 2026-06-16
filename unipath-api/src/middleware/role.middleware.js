@@ -1,5 +1,15 @@
 // src/middleware/role.middleware.js
 const { resolveUserContext, attachUserContext } = require('../utils/user-context');
+const { ROLES_ETUDIANT } = require('../constants/roles.constants');
+
+const expandAuthorizedRoles = (rolesAutorises) => {
+  const expanded = new Set(rolesAutorises);
+  const needsStudentAlias = rolesAutorises.some((r) => ROLES_ETUDIANT.includes(r));
+  if (needsStudentAlias) {
+    ROLES_ETUDIANT.forEach((r) => expanded.add(r));
+  }
+  return [...expanded];
+};
 
 /**
  * Middleware pour vérifier le rôle de l'utilisateur
@@ -14,15 +24,24 @@ const checkRole = (rolesAutorises) => {
         });
       }
 
-      const ctx = await resolveUserContext(req.user.id);
+      // Réutiliser le contexte déjà résolu par `protect` quand disponible
+      let ctx;
+      if (req.userRole) {
+        ctx = { role: req.userRole, sousRole: req.user.sousRole || null };
+      } else {
+        ctx = await resolveUserContext(req.user.id, req.user.email);
+      }
 
       if (!ctx.role) {
         return res.status(403).json({
-          error: 'Utilisateur non trouvé ou rôle non défini',
+          error:
+            'Profil UniPath introuvable pour ce compte. Déconnectez-vous, reconnectez-vous, ou réinscrivez-vous si le problème persiste.',
+          profileIncomplete: true,
         });
       }
 
-      if (!rolesAutorises.includes(ctx.role)) {
+      const rolesEffectifs = expandAuthorizedRoles(rolesAutorises);
+      if (!rolesEffectifs.includes(ctx.role)) {
         return res.status(403).json({
           error: `Accès refusé. Rôle requis: ${rolesAutorises.join(' ou ')}`,
           roleActuel: ctx.role,
