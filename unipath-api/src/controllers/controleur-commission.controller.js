@@ -1,6 +1,14 @@
 // src/controllers/controleur-commission.controller.js
 const prisma = require('../prisma');
-const { validateAndSanitizeVerdict, validateUUID } = require('../utils/validation');
+const { validateAndSanitizeVerdict, validateUUID, validateDecisionControleur } = require('../utils/validation');
+const {
+  etapesCompletees,
+  verdictsDivergents,
+  buildDecisionControleurUpdate,
+  getVerdictControleur,
+  isArbitrageDivergent,
+} = require('../utils/verdict-workflow.helper');
+const { notifierExaminateurArbitrageDivergent } = require('../utils/arbitrage-examinateur.helper');
 
 /**
  * Tableau de bord avec indicateurs clés
@@ -11,16 +19,14 @@ exports.getTableauDeBord = async (req, res) => {
     const [dossiersAvec1Verdict, dossiersAvec2Verdicts, dossiersAvecDecision] = await Promise.all([
       prisma.dossierInscription.count({
         where: {
-          OR: [
-            { verdict1Par: { not: null }, verdict2Par: null },
-            { verdict1Par: null, verdict2Par: { not: null } },
-          ],
+          verdict1Par: { not: null },
+          decisionControleur: null,
         },
       }),
       prisma.dossierInscription.count({
         where: {
           verdict1Par: { not: null },
-          verdict2Par: { not: null },
+          decisionControleur: { not: null },
         },
       }),
       prisma.dossierInscription.count({
@@ -28,36 +34,54 @@ exports.getTableauDeBord = async (req, res) => {
       }),
     ]);
 
-    // Compter les verdicts divergents
-    const dossiers2Verdicts = await prisma.dossierInscription.findMany({
+    const dossiersArbitres = await prisma.dossierInscription.findMany({
       where: {
         verdict1Par: { not: null },
-        verdict2Par: { not: null },
+        decisionControleur: { not: null },
       },
-      select: { verdict1: true, verdict2: true },
+      select: { verdict1: true, decisionControleur: true },
     });
 
-    const dossiersVerdictsDivergents = dossiers2Verdicts.filter((d) => d.verdict1 !== d.verdict2).length;
+    const dossiersVerdictsDivergents = dossiersArbitres.filter(
+      (d) => d.verdict1 !== d.decisionControleur
+    ).length;
+
+    const dossiersArbitragesAlignes = dossiersAvec2Verdicts - dossiersVerdictsDivergents;
 
     const tauxDivergence =
-      dossiersAvec2Verdicts > 0 ? ((dossiersVerdictsDivergents / dossiersAvec2Verdicts) * 100).toFixed(2) : 0;
+      dossiersAvec2Verdicts > 0
+        ? parseFloat(((dossiersVerdictsDivergents / dossiersAvec2Verdicts) * 100).toFixed(2))
+        : 0;
 
-    // Répartition des verdicts
+    const tauxAlignement =
+      dossiersAvec2Verdicts > 0
+        ? parseFloat(((dossiersArbitragesAlignes / dossiersAvec2Verdicts) * 100).toFixed(2))
+        : 0;
+
     const tousLesDossiers = await prisma.dossierInscription.findMany({
       where: {
-        OR: [{ verdict1: { not: null } }, { verdict2: { not: null } }],
+        OR: [{ verdict1: { not: null } }, { decisionControleur: { not: null } }],
       },
-      select: { verdict1: true, verdict2: true },
+      select: { verdict1: true, decisionControleur: true },
     });
 
     const repartitionVerdicts = {
+      verdictExaminateur: { VALIDE: 0, REJETE: 0, SOUS_RESERVE: 0 },
+      verdictControleur: { VALIDE: 0, REJETE: 0, SOUS_RESERVE: 0 },
+      // Alias rétrocompatibles pour le frontend existant
       verdict1: { VALIDE: 0, REJETE: 0, SOUS_RESERVE: 0 },
       verdict2: { VALIDE: 0, REJETE: 0, SOUS_RESERVE: 0 },
     };
 
     tousLesDossiers.forEach((d) => {
-      if (d.verdict1) repartitionVerdicts.verdict1[d.verdict1]++;
-      if (d.verdict2) repartitionVerdicts.verdict2[d.verdict2]++;
+      if (d.verdict1) {
+        repartitionVerdicts.verdictExaminateur[d.verdict1]++;
+        repartitionVerdicts.verdict1[d.verdict1]++;
+      }
+      if (d.decisionControleur) {
+        repartitionVerdicts.verdictControleur[d.decisionControleur]++;
+        repartitionVerdicts.verdict2[d.decisionControleur]++;
+      }
     });
 
     res.json({
@@ -65,8 +89,10 @@ exports.getTableauDeBord = async (req, res) => {
         dossiersAvec1Verdict,
         dossiersAvec2Verdicts,
         dossiersVerdictsDivergents,
+        dossiersArbitragesAlignes,
         dossiersAvecDecisionFinale: dossiersAvecDecision,
-        tauxDivergence: parseFloat(tauxDivergence),
+        tauxDivergence,
+        tauxAlignement,
       },
       repartitionVerdicts,
       timestamp: new Date().toISOString(),
@@ -85,24 +111,29 @@ exports.getDossiers = async (req, res) => {
     const { filtre, concoursId, limite = 50, offset = 0 } = req.query;
 
     let whereClause = {
-      OR: [{ verdict1Par: { not: null } }, { verdict2Par: { not: null } }],
+      verdict1Par: { not: null },
     };
 
-    // Appliquer les filtres
     if (filtre === '1_verdict') {
       whereClause = {
-        OR: [
-          { verdict1Par: { not: null }, verdict2Par: null },
-          { verdict1Par: null, verdict2Par: { not: null } },
-        ],
+        verdict1Par: { not: null },
+        decisionControleur: null,
       };
     } else if (filtre === '2_verdicts') {
       whereClause = {
         verdict1Par: { not: null },
-        verdict2Par: { not: null },
+        decisionControleur: { not: null },
       };
     } else if (filtre === 'sans_decision') {
-      whereClause.decisionControleur = null;
+      whereClause = {
+        verdict1Par: { not: null },
+        decisionControleur: null,
+      };
+    } else if (filtre === 'divergents') {
+      whereClause = {
+        verdict1Par: { not: null },
+        decisionControleur: { not: null },
+      };
     }
 
     if (concoursId) {
@@ -127,18 +158,21 @@ exports.getDossiers = async (req, res) => {
       prisma.dossierInscription.count({ where: whereClause }),
     ]);
 
-    // Récupérer les noms des examinateurs
-    const examinateurIds = [
-      ...new Set(dossiers.flatMap((d) => [d.verdict1Par, d.verdict2Par].filter(Boolean))),
+    const membreIds = [
+      ...new Set(
+        dossiers.flatMap((d) => [d.verdict1Par, d.decisionControleurPar].filter(Boolean))
+      ),
     ];
-    const examinateurs = await prisma.membreCommission.findMany({
-      where: { id: { in: examinateurIds } },
+    const membres = await prisma.membreCommission.findMany({
+      where: { id: { in: membreIds } },
       select: { id: true, nom: true, prenom: true },
     });
-    const examinateursMap = Object.fromEntries(examinateurs.map((e) => [e.id, `${e.nom} ${e.prenom}`]));
+    const membresMap = Object.fromEntries(membres.map((e) => [e.id, `${e.nom} ${e.prenom}`]));
 
     const dossiersFormates = dossiers.map((d) => {
-      const verdictsDivergents = d.verdict1 && d.verdict2 && d.verdict1 !== d.verdict2;
+      const divergent = verdictsDivergents(d);
+      const etapes = etapesCompletees(d);
+      const verdictControleur = getVerdictControleur(d);
 
       return {
         dossierInscriptionId: d.id,
@@ -152,30 +186,30 @@ exports.getDossiers = async (req, res) => {
             ? {
                 verdict: d.verdict1,
                 par: d.verdict1Par,
-                nomExaminateur: examinateursMap[d.verdict1Par],
+                nomExaminateur: membresMap[d.verdict1Par],
                 date: d.verdict1Date,
                 motif: d.verdict1Motif,
               }
             : null,
-          verdict2: d.verdict2Par
+          verdict2: verdictControleur
             ? {
-                verdict: d.verdict2,
-                par: d.verdict2Par,
-                nomExaminateur: examinateursMap[d.verdict2Par],
-                date: d.verdict2Date,
-                motif: d.verdict2Motif,
+                verdict: verdictControleur.verdict,
+                par: verdictControleur.par,
+                nomControleur: membresMap[verdictControleur.par],
+                nomExaminateur: membresMap[verdictControleur.par],
+                date: verdictControleur.date,
+                motif: verdictControleur.motif,
               }
             : null,
         },
-        statutVerdicts: `${(d.verdict1Par ? 1 : 0) + (d.verdict2Par ? 1 : 0)}/2`,
-        verdictsDivergents,
+        statutVerdicts: `${etapes}/2`,
+        verdictsDivergents: divergent,
         decisionFinale: d.decisionControleur,
-        priorite: verdictsDivergents ? 'HIGH' : 'NORMAL',
+        priorite: divergent ? 'HIGH' : d.verdict1Par && !d.decisionControleur ? 'HIGH' : 'NORMAL',
         dateCreation: d.createdAt,
       };
     });
 
-    // Filtrer les divergents si demandé
     const dossiersFinaux =
       filtre === 'divergents' ? dossiersFormates.filter((d) => d.verdictsDivergents) : dossiersFormates;
 
@@ -203,7 +237,7 @@ exports.getDossiersDivergents = async (req, res) => {
 
     const whereClause = {
       verdict1Par: { not: null },
-      verdict2Par: { not: null },
+      decisionControleur: { not: null },
     };
 
     const dossiers = await prisma.dossierInscription.findMany({
@@ -219,52 +253,58 @@ exports.getDossiersDivergents = async (req, res) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Filtrer uniquement les divergents
-    const dossiersDivergents = dossiers.filter((d) => d.verdict1 !== d.verdict2);
+    const dossiersDivergents = dossiers.filter((d) => verdictsDivergents(d));
 
     // Pagination manuelle
     const total = dossiersDivergents.length;
     const dossiersPagines = dossiersDivergents.slice(parseInt(offset), parseInt(offset) + parseInt(limite));
 
-    // Récupérer les noms des examinateurs
-    const examinateurIds = [
-      ...new Set(dossiersPagines.flatMap((d) => [d.verdict1Par, d.verdict2Par].filter(Boolean))),
+    const membreIds = [
+      ...new Set(
+        dossiersPagines.flatMap((d) => [d.verdict1Par, d.decisionControleurPar].filter(Boolean))
+      ),
     ];
-    const examinateurs = await prisma.membreCommission.findMany({
-      where: { id: { in: examinateurIds } },
+    const membres = await prisma.membreCommission.findMany({
+      where: { id: { in: membreIds } },
       select: { id: true, nom: true, prenom: true },
     });
-    const examinateursMap = Object.fromEntries(examinateurs.map((e) => [e.id, `${e.nom} ${e.prenom}`]));
+    const membresMap = Object.fromEntries(membres.map((e) => [e.id, `${e.nom} ${e.prenom}`]));
 
-    const dossiersFormates = dossiersPagines.map((d) => ({
-      dossierInscriptionId: d.id,
-      inscription: {
-        numeroInscription: d.inscription.numeroInscription,
-        candidat: d.inscription.candidat,
-        concours: d.inscription.concours,
-      },
-      verdicts: {
-        verdict1: {
-          verdict: d.verdict1,
-          par: d.verdict1Par,
-          nomExaminateur: examinateursMap[d.verdict1Par],
-          date: d.verdict1Date,
-          motif: d.verdict1Motif,
+    const dossiersFormates = dossiersPagines.map((d) => {
+      const verdictControleur = getVerdictControleur(d);
+      return {
+        dossierInscriptionId: d.id,
+        inscription: {
+          numeroInscription: d.inscription.numeroInscription,
+          candidat: d.inscription.candidat,
+          concours: d.inscription.concours,
         },
-        verdict2: {
-          verdict: d.verdict2,
-          par: d.verdict2Par,
-          nomExaminateur: examinateursMap[d.verdict2Par],
-          date: d.verdict2Date,
-          motif: d.verdict2Motif,
+        verdicts: {
+          verdict1: {
+            verdict: d.verdict1,
+            par: d.verdict1Par,
+            nomExaminateur: membresMap[d.verdict1Par],
+            date: d.verdict1Date,
+            motif: d.verdict1Motif,
+          },
+          verdict2: verdictControleur
+            ? {
+                verdict: verdictControleur.verdict,
+                par: verdictControleur.par,
+                nomControleur: membresMap[verdictControleur.par],
+                nomExaminateur: membresMap[verdictControleur.par],
+                date: verdictControleur.date,
+                motif: verdictControleur.motif,
+              }
+            : null,
         },
-      },
-      statutVerdicts: '2/2',
-      verdictsDivergents: true,
-      decisionFinale: d.decisionControleur,
-      priorite: 'HIGH',
-      dateCreation: d.createdAt,
-    }));
+        statutVerdicts: '2/2',
+        verdictsDivergents: true,
+        decisionFinale: d.decisionControleur,
+        priorite: 'HIGH',
+        dateCreation: d.createdAt,
+      };
+    });
 
     res.json({
       dossiers: dossiersFormates,
@@ -313,13 +353,15 @@ exports.getDetailDossier = async (req, res) => {
       return res.status(404).json({ error: 'Dossier non trouvé' });
     }
 
-    // Récupérer les noms des examinateurs
-    const examinateurIds = [dossier.verdict1Par, dossier.verdict2Par].filter(Boolean);
-    const examinateurs = await prisma.membreCommission.findMany({
-      where: { id: { in: examinateurIds } },
-      select: { id: true, nom: true, prenom: true },
+    const membreIds = [dossier.verdict1Par, dossier.decisionControleurPar].filter(Boolean);
+    const membres = await prisma.membreCommission.findMany({
+      where: { id: { in: membreIds } },
+      select: { id: true, nom: true, prenom: true, sousRole: true },
     });
-    const examinateursMap = Object.fromEntries(examinateurs.map((e) => [e.id, { nom: e.nom, prenom: e.prenom }]));
+    const membresMap = Object.fromEntries(
+      membres.map((e) => [e.id, { nom: e.nom, prenom: e.prenom, sousRole: e.sousRole }])
+    );
+    const verdictControleur = getVerdictControleur(dossier);
 
     res.json({
       dossierInscription: {
@@ -372,19 +414,20 @@ exports.getDetailDossier = async (req, res) => {
               verdict: dossier.verdict1,
               motif: dossier.verdict1Motif,
               date: dossier.verdict1Date,
-              examinateur: examinateursMap[dossier.verdict1Par],
+              examinateur: membresMap[dossier.verdict1Par],
             }
           : null,
-        verdict2: dossier.verdict2Par
+        verdict2: verdictControleur
           ? {
-              verdict: dossier.verdict2,
-              motif: dossier.verdict2Motif,
-              date: dossier.verdict2Date,
-              examinateur: examinateursMap[dossier.verdict2Par],
+              verdict: verdictControleur.verdict,
+              motif: verdictControleur.motif,
+              date: verdictControleur.date,
+              controleur: membresMap[verdictControleur.par],
+              examinateur: membresMap[verdictControleur.par],
             }
           : null,
       },
-      verdictsDivergents: dossier.verdict1 && dossier.verdict2 && dossier.verdict1 !== dossier.verdict2,
+      verdictsDivergents: verdictsDivergents(dossier),
       decisionControleur: dossier.decisionControleur
         ? {
             decision: dossier.decisionControleur,
@@ -415,8 +458,10 @@ exports.modifierVerdictExaminateur = async (req, res) => {
     }
 
     const num = parseInt(numeroVerdict, 10);
-    if (num !== 1 && num !== 2) {
-      return res.status(400).json({ error: 'numeroVerdict doit être 1 ou 2' });
+    if (num !== 1) {
+      return res.status(400).json({
+        error: 'Seul le verdict de l\'examinateur (slot 1) peut être corrigé. La décision du contrôleur se modifie via la décision finale.',
+      });
     }
 
     const validation = validateAndSanitizeVerdict(verdict, motif);
@@ -433,26 +478,19 @@ exports.modifierVerdictExaminateur = async (req, res) => {
       return res.status(404).json({ error: 'Dossier non trouvé' });
     }
 
-    const auteurId = num === 1 ? dossier.verdict1Par : dossier.verdict2Par;
+    const auteurId = dossier.verdict1Par;
     if (!auteurId) {
-      return res.status(400).json({ error: `Aucun verdict examinateur ${num} à modifier sur ce dossier` });
+      return res.status(400).json({ error: 'Aucun verdict examinateur à modifier sur ce dossier' });
     }
 
-    const ancienVerdict = num === 1 ? dossier.verdict1 : dossier.verdict2;
-    const ancienMotif = num === 1 ? dossier.verdict1Motif : dossier.verdict2Motif;
+    const ancienVerdict = dossier.verdict1;
+    const ancienMotif = dossier.verdict1Motif;
 
-    const updateData =
-      num === 1
-        ? {
-            verdict1: verdict,
-            verdict1Motif: validation.sanitizedMotif,
-            verdict1Date: new Date(),
-          }
-        : {
-            verdict2: verdict,
-            verdict2Motif: validation.sanitizedMotif,
-            verdict2Date: new Date(),
-          };
+    const updateData = {
+      verdict1: verdict,
+      verdict1Motif: validation.sanitizedMotif,
+      verdict1Date: new Date(),
+    };
 
     const result = await prisma.$transaction(async (tx) => {
       const dossierMisAJour = await tx.dossierInscription.update({
@@ -481,34 +519,24 @@ exports.modifierVerdictExaminateur = async (req, res) => {
       return dossierMisAJour;
     });
 
-    if (result.verdict1 && result.verdict2 && result.verdict1 !== result.verdict2) {
-      const controleur = await prisma.membreCommission.findFirst({
-        where: { sousRole: 'CONTROLEUR' },
+    if (dossier.verdict1Par) {
+      await prisma.notification.create({
+        data: {
+          userId: dossier.verdict1Par,
+          type: 'ALERTE',
+          priority: 'NORMAL',
+          title: 'Verdict examinateur corrigé',
+          message: `Le contrôleur a corrigé votre verdict sur le dossier ${dossier.inscription.numeroInscription} : ${ancienVerdict} → ${verdict}.`,
+          data: { dossierInscriptionId, ancienVerdict, nouveauVerdict: verdict },
+        },
       });
-      if (controleur) {
-        await prisma.notification.create({
-          data: {
-            userId: controleur.id,
-            type: 'ALERTE',
-            priority: 'HIGH',
-            title: '⚠️ Verdicts divergents détectés',
-            message: `Le dossier ${dossier.inscription.numeroInscription} a des verdicts divergents après correction.`,
-            data: {
-              dossierInscriptionId,
-              verdict1: result.verdict1,
-              verdict2: result.verdict2,
-            },
-          },
-        });
-      }
     }
 
     res.json({
       message: 'Verdict examinateur modifié par le contrôleur',
-      numeroVerdict: num,
+      numeroVerdict: 1,
       verdict: { verdict, motif: validation.sanitizedMotif },
-      verdictsDivergents:
-        result.verdict1 && result.verdict2 && result.verdict1 !== result.verdict2,
+      verdictsDivergents: verdictsDivergents(result),
     });
   } catch (error) {
     console.error('Erreur modifierVerdictExaminateur:', error);
@@ -530,12 +558,6 @@ exports.rendreDecision = async (req, res) => {
       return res.status(400).json({ error: 'Identifiant de dossier invalide' });
     }
 
-    // Valider et sanitiser la décision et le motif
-    const validation = validateAndSanitizeVerdict(decision, motif);
-    if (!validation.valid) {
-      return res.status(400).json({ error: validation.error });
-    }
-
     const dossier = await prisma.dossierInscription.findUnique({
       where: { id: dossierInscriptionId },
       include: { inscription: { include: { candidat: true, concours: true } } },
@@ -545,8 +567,12 @@ exports.rendreDecision = async (req, res) => {
       return res.status(404).json({ error: 'Dossier non trouvé' });
     }
 
-    // Accepter les décisions même si un seul verdict est rendu (intervention précoce)
-    const nombreVerdictsPresents = (dossier.verdict1Par ? 1 : 0) + (dossier.verdict2Par ? 1 : 0);
+    const validation = validateDecisionControleur(dossier, decision, motif);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    const nombreVerdictsPresents = etapesCompletees(dossier);
 
     // Mapper la décision vers le statut
     let nouveauStatut;
@@ -566,10 +592,7 @@ exports.rendreDecision = async (req, res) => {
 
     // Préparer les données de mise à jour
     const updateData = {
-      decisionControleurPar: controleurId,
-      decisionControleur: decision,
-      decisionControleurMotif: validation.sanitizedMotif,
-      decisionControleurDate: new Date(),
+      ...buildDecisionControleurUpdate(controleurId, decision, validation.sanitizedMotif),
       statut: nouveauStatut,
     };
 
@@ -620,6 +643,31 @@ exports.rendreDecision = async (req, res) => {
       },
     });
 
+    if (isArbitrageDivergent(dossier.verdict1, decision)) {
+      await notifierExaminateurArbitrageDivergent({
+        dossier,
+        inscription: dossier.inscription,
+        concours: dossier.inscription.concours,
+        decision,
+        motif: validation.sanitizedMotif,
+      });
+    } else if (dossier.verdict1Par) {
+      await prisma.notification.create({
+        data: {
+          userId: dossier.verdict1Par,
+          type: 'NOUVEAU_DOSSIER',
+          priority: 'NORMAL',
+          title: 'Décision du contrôleur enregistrée',
+          message: `Le contrôleur a confirmé votre verdict (${decision}) sur le dossier ${dossier.inscription.numeroInscription}.`,
+          data: {
+            dossierInscriptionId,
+            decision,
+            verdictExaminateur: dossier.verdict1,
+          },
+        },
+      });
+    }
+
     try {
       const { envoyerEmailDecisionFinale } = require('../utils/email-decision.helper');
       await envoyerEmailDecisionFinale({
@@ -666,12 +714,6 @@ exports.modifierDecision = async (req, res) => {
       return res.status(400).json({ error: 'Identifiant de dossier invalide' });
     }
 
-    // Valider et sanitiser la décision et le motif
-    const validation = validateAndSanitizeVerdict(decision, motif);
-    if (!validation.valid) {
-      return res.status(400).json({ error: validation.error });
-    }
-
     const dossier = await prisma.dossierInscription.findUnique({
       where: { id: dossierInscriptionId },
       include: { inscription: { include: { candidat: true, concours: true } } },
@@ -681,9 +723,13 @@ exports.modifierDecision = async (req, res) => {
       return res.status(404).json({ error: 'Dossier non trouvé' });
     }
 
-    // Vérifier qu'une décision existe déjà
     if (!dossier.decisionControleur) {
       return res.status(400).json({ error: 'Aucune décision n\'a encore été rendue sur ce dossier' });
+    }
+
+    const validation = validateDecisionControleur(dossier, decision, motif);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
     }
 
     const ancienneDecision = dossier.decisionControleur;
@@ -706,9 +752,7 @@ exports.modifierDecision = async (req, res) => {
 
     // Préparer les données de mise à jour
     const updateData = {
-      decisionControleur: decision,
-      decisionControleurMotif: validation.sanitizedMotif,
-      decisionControleurDate: new Date(),
+      ...buildDecisionControleurUpdate(controleurId, decision, validation.sanitizedMotif),
       statut: nouveauStatut,
     };
 
@@ -744,16 +788,22 @@ exports.modifierDecision = async (req, res) => {
       return dossierMisAJour;
     });
 
-    // Créer des notifications pour les examinateurs
-    const examinateurIds = [dossier.verdict1Par, dossier.verdict2Par].filter(Boolean);
-    for (const examinateurId of examinateurIds) {
+    if (isArbitrageDivergent(dossier.verdict1, decision)) {
+      await notifierExaminateurArbitrageDivergent({
+        dossier,
+        inscription: dossier.inscription,
+        concours: dossier.inscription.concours,
+        decision,
+        motif: validation.sanitizedMotif,
+      });
+    } else if (dossier.verdict1Par && decision !== ancienneDecision) {
       await prisma.notification.create({
         data: {
-          userId: examinateurId,
+          userId: dossier.verdict1Par,
           type: 'ALERTE',
           priority: 'NORMAL',
           title: 'Décision modifiée par le contrôleur',
-          message: `La décision sur le dossier ${dossier.inscription.numeroInscription} (${dossier.inscription.candidat.nom} ${dossier.inscription.candidat.prenom}) a été modifiée : ${ancienneDecision} → ${decision}`,
+          message: `La décision sur le dossier ${dossier.inscription.numeroInscription} a été modifiée : ${ancienneDecision} → ${decision}.`,
           data: {
             dossierInscriptionId,
             ancienneDecision,
@@ -811,7 +861,6 @@ exports.getDossiersSansVerdict = async (req, res) => {
 
     const whereClause = {
       verdict1Par: null,
-      verdict2Par: null,
       createdAt: {
         lte: dateLimite,
       },

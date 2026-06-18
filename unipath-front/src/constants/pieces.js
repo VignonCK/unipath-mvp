@@ -186,6 +186,11 @@ export function getDefaultPiecesRequises() {
  * @param {Array} pieces - Liste des pièces à valider
  * @returns {Object} { valid: boolean, errors: Array<string> }
  */
+function normalizeFormat(format) {
+  if (format === 'JPG') return FORMATS_FICHIERS.JPEG;
+  return format;
+}
+
 export function validatePiecesConfiguration(pieces) {
   const errors = [];
 
@@ -195,7 +200,7 @@ export function validatePiecesConfiguration(pieces) {
   }
 
   // Vérifier que la quittance est présente
-  const hasQuittance = pieces.some(p => p.id === PIECE_IDS.QUITTANCE);
+  const hasQuittance = pieces.some((p) => convertLegacyId(p.id) === PIECE_IDS.QUITTANCE);
   if (!hasQuittance) {
     errors.push('La quittance de paiement est obligatoire');
   }
@@ -208,8 +213,9 @@ export function validatePiecesConfiguration(pieces) {
 
     // Vérifier que les formats sont valides
     if (piece.formats) {
-      piece.formats.forEach(format => {
-        if (!isFormatValide(format)) {
+      piece.formats.forEach((format) => {
+        const normalized = normalizeFormat(format);
+        if (!isFormatValide(normalized)) {
           errors.push(`Format invalide "${format}" pour la pièce "${piece.nom}"`);
         }
       });

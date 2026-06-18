@@ -4,11 +4,13 @@ import DGESLayout from '../../components/DGESLayout';
 import { BentoCard } from '../../components/AcademicLayout';
 
 const FORM_INIT = { nom: '', prenom: '', email: '', telephone: '' };
+const ETAB_FORM_INIT = { nom: '', ville: '', type: 'PUBLIC', adresse: '', email: '' };
 
 export default function DGESEtablissementsAdmins() {
   const [etablissements, setEtablissements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [pageMessage, setPageMessage] = useState('');
 
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedEtab, setSelectedEtab] = useState(null);
@@ -19,12 +21,23 @@ export default function DGESEtablissementsAdmins() {
   const [message, setMessage] = useState('');
   const [modalError, setModalError] = useState('');
 
-  useEffect(() => {
-    etablissementService
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [etabForm, setEtabForm] = useState(ETAB_FORM_INIT);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+
+  const chargerEtablissements = () => {
+    setLoading(true);
+    setError('');
+    return etablissementService
       .getAll()
       .then((data) => setEtablissements(data.etablissements || []))
       .catch((err) => setError(err.message || 'Erreur de chargement'))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    chargerEtablissements();
   }, []);
 
   const ouvrirModal = async (etab) => {
@@ -82,15 +95,68 @@ export default function DGESEtablissementsAdmins() {
     }
   };
 
+  const ouvrirCreateModal = () => {
+    setEtabForm(ETAB_FORM_INIT);
+    setCreateError('');
+    setCreateModalOpen(true);
+  };
+
+  const fermerCreateModal = () => {
+    setCreateModalOpen(false);
+    setCreateError('');
+  };
+
+  const handleCreateEtablissement = async (e) => {
+    e.preventDefault();
+    setCreating(true);
+    setCreateError('');
+    try {
+      const data = await dgesService.creerEtablissement(etabForm);
+      setPageMessage(data.message || 'Établissement créé');
+      fermerCreateModal();
+      await chargerEtablissements();
+    } catch (err) {
+      setCreateError(err.message || 'Erreur lors de la création');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDeleteEtablissement = async (etab) => {
+    if (!window.confirm(`Supprimer « ${etab.nom} » ? Tous les administrateurs et données liées seront supprimés.`)) return;
+    setPageMessage('');
+    setError('');
+    try {
+      const data = await dgesService.supprimerEtablissement(etab.id);
+      setPageMessage(data.message || 'Établissement supprimé');
+      setEtablissements((prev) => prev.filter((e) => e.id !== etab.id));
+    } catch (err) {
+      setError(err.message || 'Erreur lors de la suppression');
+    }
+  };
+
   return (
     <DGESLayout>
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-6 animate-slide-in">
-        <div>
-          <h1 className="text-2xl font-black text-gray-900">Établissements &amp; Admins</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Gérez les administrateurs de chaque établissement privé ou public.
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-black text-gray-900">Établissements &amp; Admins</h1>
+            <p className="text-gray-500 text-sm mt-1">
+              Gérez les établissements et leurs administrateurs.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={ouvrirCreateModal}
+            className="px-4 py-2.5 rounded-lg bg-blue-900 text-white text-sm font-semibold hover:bg-blue-800 transition shrink-0"
+          >
+            + Ajouter un établissement
+          </button>
         </div>
+
+        {pageMessage && (
+          <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">{pageMessage}</div>
+        )}
 
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
@@ -129,13 +195,24 @@ export default function DGESEtablissementsAdmins() {
                             {etab.type}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-6 py-4 text-right space-x-3 whitespace-nowrap">
+                          {etab.type === 'PRIVE' ? (
+                            <button
+                              type="button"
+                              onClick={() => ouvrirModal(etab)}
+                              className="text-sm font-semibold text-blue-900 hover:text-orange-500 transition"
+                            >
+                              Gérer les admins
+                            </button>
+                          ) : (
+                            <span className="text-gray-400 text-sm">—</span>
+                          )}
                           <button
                             type="button"
-                            onClick={() => ouvrirModal(etab)}
-                            className="text-sm font-semibold text-blue-900 hover:text-orange-500 transition"
+                            onClick={() => handleDeleteEtablissement(etab)}
+                            className="text-sm font-semibold text-red-600 hover:text-red-800 transition"
                           >
-                            Gérer les admins
+                            Supprimer
                           </button>
                         </td>
                       </tr>
@@ -223,6 +300,53 @@ export default function DGESEtablissementsAdmins() {
                 </form>
               </section>
             </div>
+          </div>
+        </div>
+      )}
+
+      {createModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-900">Nouvel établissement</h2>
+              <button type="button" onClick={fermerCreateModal} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+            </div>
+            <form onSubmit={handleCreateEtablissement} className="p-6 space-y-4">
+              {createError && (
+                <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{createError}</div>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Nom *</label>
+                <input required value={etabForm.nom} onChange={(e) => setEtabForm((p) => ({ ...p, nom: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              </div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Ville *</label>
+                  <input required value={etabForm.ville} onChange={(e) => setEtabForm((p) => ({ ...p, ville: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Type *</label>
+                  <select required value={etabForm.type} onChange={(e) => setEtabForm((p) => ({ ...p, type: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                    <option value="PUBLIC">PUBLIC</option>
+                    <option value="PRIVE">PRIVE</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Adresse</label>
+                <input value={etabForm.adresse} onChange={(e) => setEtabForm((p) => ({ ...p, adresse: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Email (optionnel)</label>
+                <input type="email" value={etabForm.email} onChange={(e) => setEtabForm((p) => ({ ...p, email: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={fermerCreateModal} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Annuler</button>
+                <button type="submit" disabled={creating} className="px-5 py-2.5 rounded-lg bg-blue-900 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-60">
+                  {creating ? 'Création…' : 'Créer'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

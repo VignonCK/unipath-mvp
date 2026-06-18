@@ -3,26 +3,38 @@ import { useState, useEffect } from 'react';
 import { concoursService } from '../services/api';
 import DGESLayout from '../components/DGESLayout';
 
-const PIECES_PREDEFINIES = [
-  { id: 'acteNaissance', nom: 'Acte de naissance', formats: ['PDF'], obligatoire: true, predefined: true },
-  { id: 'carteIdentite', nom: "Carte d'identité", formats: ['PDF', 'JPG', 'PNG'], obligatoire: true, predefined: true },
-  { id: 'photo', nom: "Photo d'identité", formats: ['JPG', 'PNG'], obligatoire: true, predefined: true },
-  { id: 'releve', nom: 'Relevé de notes Bac', formats: ['PDF'], obligatoire: true, predefined: true },
-  { id: 'quittance', nom: 'Quittance de paiement', formats: ['PDF'], obligatoire: true, predefined: true },
+import {
+  PIECES_PREDEFINIES,
+  PIECE_IDS,
+  FORMATS_FICHIERS,
+  convertLegacyId,
+} from '../constants/pieces';
+
+const PIECES_UI = PIECES_PREDEFINIES.map((piece) => ({
+  id: piece.id,
+  nom: piece.nom,
+  formats: [...piece.formatsDefaut],
+  obligatoire: piece.obligatoire ?? false,
+  predefined: true,
+}));
+
+const FORMATS_PIECE_PERSO = [
+  FORMATS_FICHIERS.PDF,
+  FORMATS_FICHIERS.JPEG,
+  FORMATS_FICHIERS.PNG,
 ];
 
-function PiecesConfiguration({ piecesRequises, onChange }) {
+export function PiecesConfiguration({ piecesRequises, onChange }) {
   const [nouvellepiece, setNouvellePiece] = useState({ nom: '', formats: ['PDF'], obligatoire: true });
   const [ajoutOuvert, setAjoutOuvert] = useState(false);
 
   const togglePiecePredéfinie = (piece) => {
-    const existe = piecesRequises.find(p => p.id === piece.id);
+    const existe = piecesRequises.find((p) => convertLegacyId(p.id) === piece.id);
     if (existe) {
-      // Ne pas permettre de supprimer la quittance
-      if (piece.id === 'quittance') return;
-      onChange(piecesRequises.filter(p => p.id !== piece.id));
+      if (piece.id === PIECE_IDS.QUITTANCE) return;
+      onChange(piecesRequises.filter((p) => convertLegacyId(p.id) !== piece.id));
     } else {
-      onChange([...piecesRequises, piece]);
+      onChange([...piecesRequises, { ...piece }]);
     }
   };
 
@@ -66,8 +78,8 @@ function PiecesConfiguration({ piecesRequises, onChange }) {
   };
 
   const supprimerPiece = (id) => {
-    if (id === 'quittance') return;
-    onChange(piecesRequises.filter(p => p.id !== id));
+    if (convertLegacyId(id) === PIECE_IDS.QUITTANCE) return;
+    onChange(piecesRequises.filter((p) => p.id !== id));
   };
 
   const toggleFormat = (format) => {
@@ -90,9 +102,9 @@ function PiecesConfiguration({ piecesRequises, onChange }) {
       <div>
         <p className='text-xs text-gray-500 mb-2'>Pièces standard</p>
         <div className='space-y-2'>
-          {PIECES_PREDEFINIES.map(piece => {
-            const selectionnee = !!piecesRequises.find(p => p.id === piece.id);
-            const estQuittance = piece.id === 'quittance';
+          {PIECES_UI.map((piece) => {
+            const selectionnee = !!piecesRequises.find((p) => convertLegacyId(p.id) === piece.id);
+            const estQuittance = piece.id === PIECE_IDS.QUITTANCE;
             return (
               <div
                 key={piece.id}
@@ -165,7 +177,7 @@ function PiecesConfiguration({ piecesRequises, onChange }) {
           <div>
             <p className='text-xs text-gray-500 mb-1'>Formats acceptés</p>
             <div className='flex gap-2'>
-              {['PDF', 'JPG', 'PNG'].map(format => (
+              {FORMATS_PIECE_PERSO.map((format) => (
                 <label key={format} className='flex items-center gap-1 cursor-pointer'>
                   <input
                     type='checkbox'

@@ -96,6 +96,19 @@ export default function DashboardCandidat() {
 
   // ── Mise à jour du profil ──────────────────────────────────
   const handleSaveProfil = async () => {
+    if (!editForm.telephone?.trim()) {
+      showMessage('Le téléphone est obligatoire.', 'error');
+      return;
+    }
+    if (!editForm.dateNaiss) {
+      showMessage('La date de naissance est obligatoire.', 'error');
+      return;
+    }
+    if (!editForm.lieuNaiss?.trim()) {
+      showMessage('Le lieu de naissance est obligatoire.', 'error');
+      return;
+    }
+
     setEditLoading(true);
     try {
       await candidatService.updateProfil(editForm);

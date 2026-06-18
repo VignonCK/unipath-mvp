@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import { dgesService } from '../services/api';
 import DGESLayout from '../components/DGESLayout';
-import { BentoCard, ProgressBar } from '../components/AcademicLayout';
+import { BentoCard } from '../components/AcademicLayout';
 
 export default function DashboardDGES() {
   const [data, setData] = useState(null);
@@ -44,12 +44,16 @@ export default function DashboardDGES() {
     </DGESLayout>
   );
 
-  const chartData = data?.statistiques?.map(s => ({
-    name: s.concours.length > 18 ? s.concours.substring(0, 18) + '…' : s.concours,
-    'En attente': Number(s.en_attente),
-    'Validés':    Number(s.dossiers_valides),
-    'Rejetés':    Number(s.dossiers_rejetes),
-  })) || [];
+  const chartData = data?.statistiques
+    ?.filter(s => Number(s.total_inscrits) > 0)
+    .map(s => ({
+      name: s.concours.length > 18 ? s.concours.substring(0, 18) + '…' : s.concours,
+      'En attente': Number(s.en_attente),
+      'Validés':    Number(s.dossiers_valides),
+      'Rejetés':    Number(s.dossiers_rejetes),
+    })) || [];
+
+  const hasInscriptions = (data?.totaux?.total_inscrits ?? 0) > 0;
 
   const tauxGlobal = data?.totaux?.total_inscrits > 0
     ? Math.round((data.totaux.total_valides / data.totaux.total_inscrits) * 100)
@@ -59,20 +63,30 @@ export default function DashboardDGES() {
     <DGESLayout>
       <div className='max-w-6xl mx-auto px-4 py-4 sm:p-6 space-y-4 sm:space-y-6 animate-slide-in'>
 
-        {/* KPI CARDS */}
+        {/* KPI CARDS — fonds opaques (BentoCard/glass-card masquait le texte blanc) */}
         <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
           {[
-            { label: 'Concours actifs', value: data?.totaux?.total_concours ?? 0,  color: 'bg-blue-900',   text: 'text-white', sub: 'text-blue-300' },
-            { label: 'Total inscrits',  value: data?.totaux?.total_inscrits ?? 0,   color: 'bg-orange-500', text: 'text-white', sub: 'text-orange-100' },
-            { label: 'Dossiers validés',value: data?.totaux?.total_valides ?? 0,    color: 'bg-green-600',  text: 'text-white', sub: 'text-green-100' },
-            { label: 'En attente',      value: data?.totaux?.total_attente ?? 0,    color: 'bg-yellow-500', text: 'text-white', sub: 'text-yellow-100' },
+            { label: 'Concours actifs', value: data?.totaux?.total_concours ?? 0,  color: 'bg-blue-900',   sub: 'text-blue-200' },
+            { label: 'Total inscrits',  value: data?.totaux?.total_inscrits ?? 0,   color: 'bg-orange-500', sub: 'text-orange-100' },
+            { label: 'Dossiers validés',value: data?.totaux?.total_valides ?? 0,    color: 'bg-green-600',  sub: 'text-green-100' },
+            { label: 'En attente',      value: data?.totaux?.total_attente ?? 0,    color: 'bg-yellow-500', sub: 'text-yellow-900' },
           ].map(card => (
-            <BentoCard key={card.label} className={`${card.color} p-5`}>
-              <p className={`text-3xl font-black ${card.text}`}>{card.value}</p>
+            <div key={card.label} className={`${card.color} p-5 rounded-2xl shadow-lg`}>
+              <p className='text-3xl font-black text-white'>{card.value}</p>
               <p className={`text-xs font-medium mt-1 ${card.sub}`}>{card.label}</p>
-            </BentoCard>
+            </div>
           ))}
         </div>
+
+        {!hasInscriptions && (
+          <div className='rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-900'>
+            <p className='font-semibold'>Aucune inscription enregistrée pour le moment</p>
+            <p className='mt-1 text-blue-700'>
+              Les {data?.totaux?.total_concours ?? 0} concours sont bien chargés, mais aucun candidat ne s&apos;est encore inscrit.
+              Les statistiques d&apos;inscriptions apparaîtront dès qu&apos;un dossier sera déposé.
+            </p>
+          </div>
+        )}
 
         {/* TAUX GLOBAL */}
         {data?.totaux?.total_inscrits > 0 && (
@@ -98,7 +112,11 @@ export default function DashboardDGES() {
         <BentoCard className='p-6'>
           <h2 className='text-base font-bold text-gray-800 mb-6'>Inscriptions par concours</h2>
           {chartData.length === 0 ? (
-            <p className='text-center text-gray-400 text-sm py-10'>Aucune donnée disponible.</p>
+            <p className='text-center text-gray-400 text-sm py-10'>
+              {hasInscriptions
+                ? 'Aucun concours avec inscriptions à afficher.'
+                : 'Le graphique s\'affichera lorsque des candidats commenceront à s\'inscrire.'}
+            </p>
           ) : (
             <ResponsiveContainer width='100%' height={280}>
               <BarChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 60 }}>

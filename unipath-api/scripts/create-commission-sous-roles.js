@@ -106,20 +106,6 @@ async function ensureCommissionAccount(account) {
   console.log(`   ✅ MembreCommission créé (sousRole: ${account.sousRole})`);
 }
 
-async function fixLegacyCommissionAccount() {
-  const legacy = await prisma.membreCommission.findUnique({
-    where: { email: 'commission@test.com' },
-  });
-
-  if (legacy && !legacy.sousRole) {
-    await prisma.membreCommission.update({
-      where: { id: legacy.id },
-      data: { sousRole: 'EXAMINATEUR' },
-    });
-    console.log('\n🔧 commission@test.com : sousRole EXAMINATEUR appliqué');
-  }
-}
-
 async function main() {
   console.log('🚀 Création des comptes commission (Examinateur / Contrôleur)\n');
   console.log('='.repeat(60));
@@ -132,18 +118,13 @@ async function main() {
     }
   }
 
-  try {
-    await fixLegacyCommissionAccount();
-  } catch (error) {
-    console.error(`❌ Erreur correction legacy: ${error.message}`);
-  }
-
   console.log('\n' + '='.repeat(60));
   console.log('📌 Comptes de test commission (double verdict):\n');
   COMMISSION_SOUS_ROLE_ACCOUNTS.forEach((account) => {
     console.log(`   ${account.sousRole.padEnd(12)} → ${account.email} / ${account.password}`);
     console.log(`   ${''.padEnd(12)}   Redirection: ${account.redirect}\n`);
   });
+  console.log('   Commission complète (sans sous-rôle) → commission@test.com / password123 → /commission');
   console.log('   Pack complet: node prisma/seed-roles.js');
   console.log('='.repeat(60));
 }

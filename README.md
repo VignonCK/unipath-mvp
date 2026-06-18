@@ -270,31 +270,14 @@ node test-statuts-workflow.js
 
 ## 📚 Documentation
 
-### Documentation Complète
+Documentation utile conservée dans le dépôt :
 
-Toute la documentation est disponible dans `docs/documentation-projet/` :
+- [README](./README.md) — vue d'ensemble et installation
+- [Comptes admin (DGES, Commission)](./unipath-api/ADMIN_ACCOUNTS.md)
+- [Frontend](./unipath-front/README.md)
+- Modèles GitHub : `.github/ISSUE_TEMPLATE/`, `.github/pull_request_template.md`
 
-- 📖 **[Index Complet](./docs/documentation-projet/INDEX_COMPLET.md)** - Navigation complète
-- 🚀 **[Guide de Démarrage Rapide](./docs/documentation-projet/GUIDE_DEMARRAGE_RAPIDE.md)** - Démarrer en 5 minutes
-- 📋 **[Récapitulatif Final](./docs/documentation-projet/RECAP_CORRECTIONS_FINALES.md)** - Toutes les corrections
-- 🏗️ **[Architecture](./docs/documentation-projet/ARCHITECTURE.md)** - Architecture du système
-
-### Documentation par Catégorie
-
-**Corrections Appliquées :**
-- [Corrections Sécurité Complète](./docs/documentation-projet/CORRECTIONS_SECURITE_COMPLETE.md) - Backend contrôleurs
-- [Corrections Routes Sécurité](./docs/documentation-projet/CORRECTIONS_ROUTES_SECURITE.md) - Backend routes
-- [Corrections Frontend](./docs/documentation-projet/CORRECTIONS_FRONTEND_INCOHERENCES.md) - Frontend
-
-**Configuration :**
-- [Variables d'Environnement](./docs/documentation-projet/configuration/ENV_VARIABLES.md)
-- [Configuration Email](./docs/documentation-projet/configuration/EMAIL_CONFIRMATION_CONFIG.md)
-- [Configuration URLs](./docs/documentation-projet/configuration/URL_CONFIGURATION.md)
-
-**Guides Utilisateur :**
-- [Guide Commission](./docs/documentation-projet/guides/GUIDE_UTILISATION_COMMISSION.md)
-- [Guide Test Rapide](./docs/documentation-projet/guides/GUIDE_TEST_RAPIDE.md)
-- [Instructions Test](./docs/documentation-projet/guides/INSTRUCTIONS_TEST.md)
+Configuration : voir `unipath-api/.env.example` et `unipath-front/.env.example`.
 
 ---
 

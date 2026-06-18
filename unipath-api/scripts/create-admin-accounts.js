@@ -62,7 +62,7 @@ async function createAdminAccounts() {
             prenom: account.prenom,
             telephone: account.telephone,
             role: 'COMMISSION',
-            sousRole: 'EXAMINATEUR',
+            sousRole: 'MEMBRE',
           },
         });
       } else if (account.type === 'DGES') {

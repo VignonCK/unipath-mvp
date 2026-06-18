@@ -1,22 +1,63 @@
 // src/controllers/dges.controller.js
 const prisma = require('../prisma');
 
+function buildConcoursStats(concours) {
+  const total_inscrits = concours.inscriptions.length;
+  let dossiers_valides = 0;
+  let dossiers_rejetes = 0;
+  let en_attente = 0;
+
+  concours.inscriptions.forEach((ins) => {
+    const statut = ins.dossierInscription?.statut;
+    if (statut === 'VALIDE') dossiers_valides += 1;
+    else if (statut === 'REJETE') dossiers_rejetes += 1;
+    else en_attente += 1;
+  });
+
+  const taux_validation_pct =
+    total_inscrits > 0
+      ? Math.round((dossiers_valides / total_inscrits) * 10000) / 100
+      : 0;
+
+  return {
+    concours_id: concours.id,
+    concours: concours.libelle,
+    description: concours.description,
+    dateDebut: concours.dateDebut,
+    dateFin: concours.dateFin,
+    total_inscrits,
+    dossiers_valides,
+    dossiers_rejetes,
+    en_attente,
+    taux_validation_pct,
+  };
+}
+
+const concoursStatsInclude = {
+  inscriptions: {
+    select: {
+      dossierInscription: {
+        select: { statut: true },
+      },
+    },
+  },
+};
+
 exports.getStatistiques = async (req, res) => {
   try {
-    const statistiques = await prisma.$queryRaw`
-      SELECT
-        concours_id,
-        concours,
-        description,
-        "dateDebut",
-        "dateFin",
-        total_inscrits::integer,
-        dossiers_valides::integer,
-        dossiers_rejetes::integer,
-        en_attente::integer,
-        taux_validation_pct::float
-      FROM v_statistiques_dges
-    `;
+    const concoursList = await prisma.concours.findMany({
+      select: {
+        id: true,
+        libelle: true,
+        description: true,
+        dateDebut: true,
+        dateFin: true,
+        ...concoursStatsInclude,
+      },
+      orderBy: { dateDebut: 'desc' },
+    });
+
+    const statistiques = concoursList.map(buildConcoursStats);
 
     const totaux = {
       total_concours: statistiques.length,
@@ -36,17 +77,25 @@ exports.getStatistiques = async (req, res) => {
 exports.getStatistiquesConcours = async (req, res) => {
   try {
     const { concoursId } = req.params;
-    const stats = await prisma.$queryRaw`
-      SELECT * FROM v_statistiques_dges
-      WHERE concours_id = ${concoursId}::uuid
-    `;
+    const concours = await prisma.concours.findUnique({
+      where: { id: concoursId },
+      select: {
+        id: true,
+        libelle: true,
+        description: true,
+        dateDebut: true,
+        dateFin: true,
+        ...concoursStatsInclude,
+      },
+    });
 
-    if (!stats.length) {
+    if (!concours) {
       return res.status(404).json({ error: 'Concours non trouve' });
     }
 
-    res.json(stats[0]);
+    res.json(buildConcoursStats(concours));
   } catch (error) {
+    console.error('Erreur DGES concours:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };

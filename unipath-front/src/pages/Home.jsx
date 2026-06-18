@@ -108,7 +108,7 @@ export default function Home() {
     {
       numero: '02',
       titre: 'Choisissez vos concours',
-      desc: 'Consultez les concours disponibles et inscrivez-vous. Le système vérifie automatiquement les conflits de dates.',
+      desc: 'Consultez les concours disponibles et inscrivez-vous. Le système détecte automatiquement les conflits de dates de composition entre concours.',
       icon: '',
     },
     {
@@ -385,7 +385,7 @@ export default function Home() {
               },
               {
                 question: 'Puis-je m\'inscrire à plusieurs concours ?',
-                reponse: 'Oui ! Vous pouvez vous inscrire à autant de concours que vous le souhaitez. Le système vérifie automatiquement les conflits de dates pour éviter les chevauchements.',
+                reponse: 'Oui ! Vous pouvez vous inscrire à plusieurs concours, à condition que leurs périodes de composition ne se chevauchent pas et soient espacées d\'au moins 2 jours. Le système détecte automatiquement les conflits de dates de composition entre concours.',
               },
               {
                 question: 'Comment savoir si mon dossier est validé ?',

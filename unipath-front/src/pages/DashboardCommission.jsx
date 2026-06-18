@@ -152,14 +152,6 @@ export default function DashboardCommission() {
           </div>
         )}
 
-        <BentoCard className='p-4 bg-blue-50 border border-blue-100'>
-          <p className='text-sm text-blue-900'>
-            <strong>Workflow double verdict :</strong> les dossiers en attente sont évalués par deux examinateurs,
-            puis arbitrés par le contrôleur. Ce tableau est une vue de suivi ; les décisions se prennent dans les
-            espaces Examinateur / Contrôleur.
-          </p>
-        </BentoCard>
-
         {/* STATS GLOBALES */}
         <div className='grid grid-cols-2 md:grid-cols-5 gap-4'>
           <BentoCard className='p-5'>
@@ -332,9 +324,9 @@ export default function DashboardCommission() {
                       
                       {ins.statut === 'EN_ATTENTE' && dv && (
                         <div className='text-xs text-gray-600 bg-gray-50 rounded-lg p-2'>
-                          <p>Verdicts examinateurs : <strong>{dv.nombreVerdicts}/2</strong></p>
+                          <p>Étapes : <strong>{dv.nombreVerdicts}/2</strong> (examinateur + contrôleur)</p>
                           {dv.verdictsDivergents && (
-                            <p className='text-orange-700 mt-1'>Verdicts divergents — arbitrage contrôleur requis</p>
+                            <p className='text-orange-700 mt-1'>Arbitrage divergent — examinateur ≠ contrôleur</p>
                           )}
                           {dv.decisionControleur && (
                             <p className='mt-1'>Décision finale : {dv.decisionControleur}</p>

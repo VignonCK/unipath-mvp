@@ -6,6 +6,7 @@ const { checkRole } = require('../middleware/role.middleware');
 const { upload } = require('../middleware/upload.middleware');
 
 router.get('/', etablissementController.getAllEtablissements);
+router.get('/prives', etablissementController.getEtablissementsPrives);
 router.post(
   '/recherche-filieres',
   protect,

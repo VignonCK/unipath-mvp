@@ -2,7 +2,22 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../utils/apiConfig';
-import CommissionLayout from '../components/CommissionLayout';
+import { BentoCard } from '../components/AcademicLayout';
+import { PRIORITE_STYLES, PRIORITE_CARD_STYLES } from '../constants/controleurStyles';
+import {
+  ControleurLoading,
+  ControleurPage,
+  ControleurAlert,
+  ControleurPagination,
+  InfoRow,
+  StatCard,
+} from '../components/controleur/ControleurShell';
+
+const PRIORITE_LABELS = {
+  URGENT: 'Urgent',
+  HIGH: 'Prioritaire',
+  NORMAL: 'Normal',
+};
 
 const DossiersSansVerdictControleur = () => {
   const navigate = useNavigate();
@@ -44,170 +59,129 @@ const DossiersSansVerdictControleur = () => {
   }, [chargerDossiers]);
 
   const handlePageChange = (newOffset) => {
-    setPagination(prev => ({ ...prev, offset: newOffset }));
+    setPagination((prev) => ({ ...prev, offset: newOffset }));
   };
 
   const getPrioriteBadge = (priorite) => {
-    switch (priorite) {
-      case 'URGENT':
-        return <span className="academic-badge academic-badge-error">🚨 Urgent</span>;
-      case 'HIGH':
-        return <span className="academic-badge academic-badge-warning">⚠️ Prioritaire</span>;
-      default:
-        return <span className="academic-badge academic-badge-info">Normal</span>;
-    }
+    const key = priorite === 'URGENT' || priorite === 'HIGH' ? priorite : 'NORMAL';
+    const cls = PRIORITE_STYLES[key];
+    const label = PRIORITE_LABELS[key];
+
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cls}`}>
+        {label}
+      </span>
+    );
   };
 
   if (loading) {
-    return (
-      <div className="academic-container">
-        <div className="academic-bento-card">
-          <p className="academic-text-muted">Chargement des dossiers...</p>
-        </div>
-      </div>
-    );
+    return <ControleurLoading message="Chargement des dossiers..." />;
   }
 
   return (
-    <CommissionLayout>
-    <div className="academic-container">
-      <div className="academic-header">
+    <ControleurPage>
+      <div>
         <button
-          className="academic-btn academic-btn-secondary"
+          type="button"
+          className="mb-4 px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
           onClick={() => navigate('/controleur-commission/tableau-de-bord')}
-          style={{ marginBottom: '1rem' }}
         >
           ← Retour au tableau de bord
         </button>
-        <h1 className="academic-title">Dossiers sans verdict</h1>
-        <p className="academic-subtitle">
-          Dossiers en attente d'évaluation depuis plus de 2 jours
+        <h1 className="text-2xl font-bold text-slate-800">Dossiers sans verdict</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Dossiers en attente d&apos;évaluation depuis plus de 2 jours
         </p>
       </div>
 
       {error && (
-        <div className="academic-alert academic-alert-error">
-          <span className="academic-alert-icon">⚠️</span>
+        <ControleurAlert type="error">
+          <span>⚠️</span>
           <span>{error}</span>
-        </div>
+        </ControleurAlert>
       )}
 
-      {/* Statistiques */}
       {statistiques && (
-        <div className="academic-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '2rem' }}>
-          <div className="academic-bento-card">
-            <h3 className="academic-card-title">Total</h3>
-            <p className="academic-stat-number">{statistiques.totalDossiersSansVerdict}</p>
-          </div>
-          <div className="academic-bento-card academic-card-warning">
-            <h3 className="academic-card-title">🚨 Urgents</h3>
-            <p className="academic-stat-number">{statistiques.dossiersUrgents}</p>
-            <small className="academic-text-muted">&gt; 5 jours</small>
-          </div>
-          <div className="academic-bento-card">
-            <h3 className="academic-card-title">⚠️ Prioritaires</h3>
-            <p className="academic-stat-number">{statistiques.dossiersHigh}</p>
-            <small className="academic-text-muted">3-5 jours</small>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <StatCard label="Total" value={statistiques.totalDossiersSansVerdict} />
+          <StatCard
+            label="Urgents"
+            value={statistiques.dossiersUrgents}
+            sub="> 5 jours"
+            className="border border-orange-200 bg-orange-50/50"
+          />
+          <StatCard
+            label="Prioritaires"
+            value={statistiques.dossiersHigh}
+            sub="3-5 jours"
+            className="border border-yellow-200 bg-yellow-50/50"
+          />
         </div>
       )}
 
-      {/* Liste des dossiers */}
       {dossiers.length === 0 ? (
-        <div className="academic-bento-card">
-          <p className="academic-text-muted">✓ Aucun dossier sans verdict depuis plus de 2 jours. Excellent travail !</p>
-        </div>
+        <BentoCard className="p-6 bg-white text-center">
+          <p className="text-sm text-green-700">
+            Aucun dossier sans verdict depuis plus de 2 jours. Excellent travail !
+          </p>
+        </BentoCard>
       ) : (
-        <div className="academic-grid">
-          {dossiers.map((dossier) => (
-            <div
-              key={dossier.dossierInscriptionId}
-              className={`academic-bento-card academic-card-hover ${
-                dossier.priorite === 'URGENT' ? 'academic-card-error' : 
-                dossier.priorite === 'HIGH' ? 'academic-card-warning' : ''
-              }`}
-            >
-              <div className="academic-card-header">
-                <h3 className="academic-card-title">
-                  {dossier.inscription.candidat.nom} {dossier.inscription.candidat.prenom}
-                </h3>
-                {getPrioriteBadge(dossier.priorite)}
-              </div>
+        <div className="space-y-4">
+          {dossiers.map((dossier) => {
+            const prioriteKey =
+              dossier.priorite === 'URGENT' || dossier.priorite === 'HIGH'
+                ? dossier.priorite
+                : 'NORMAL';
+            const cardStyle = PRIORITE_CARD_STYLES[prioriteKey] || '';
 
-              <div className="academic-card-content">
-                <div className="academic-info-row">
-                  <span className="academic-label">Concours :</span>
-                  <span className="academic-text">
-                    {dossier.inscription.concours.libelle}
-                  </span>
-                </div>
+            return (
+              <BentoCard
+                key={dossier.dossierInscriptionId}
+                className={`p-0 overflow-hidden bg-white hover:shadow-lg transition-shadow ${cardStyle}`}
+              >
+                <div className="p-5">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+                    <h3 className="font-semibold text-gray-900">
+                      {dossier.inscription.candidat.nom} {dossier.inscription.candidat.prenom}
+                    </h3>
+                    {getPrioriteBadge(dossier.priorite)}
+                  </div>
 
-                <div className="academic-info-row">
-                  <span className="academic-label">Établissement :</span>
-                  <span className="academic-text">
-                    {dossier.inscription.concours.etablissement}
-                  </span>
-                </div>
-
-                <div className="academic-info-row">
-                  <span className="academic-label">N° Inscription :</span>
-                  <span className="academic-text">
-                    {dossier.inscription.numeroInscription}
-                  </span>
-                </div>
-
-                <div className="academic-info-row">
-                  <span className="academic-label">Date de création :</span>
-                  <span className="academic-text">
+                  <InfoRow label="Concours">{dossier.inscription.concours.libelle}</InfoRow>
+                  <InfoRow label="Établissement">{dossier.inscription.concours.etablissement}</InfoRow>
+                  <InfoRow label="N° Inscription">{dossier.inscription.numeroInscription}</InfoRow>
+                  <InfoRow label="Date de création">
                     {new Date(dossier.dateCreation).toLocaleDateString('fr-FR')}
-                  </span>
-                </div>
+                  </InfoRow>
 
-                <div className="academic-alert academic-alert-warning" style={{ marginTop: '1rem' }}>
-                  <span className="academic-alert-icon">⏰</span>
-                  <span>
-                    <strong>{dossier.joursEcoules} jour{dossier.joursEcoules > 1 ? 's' : ''}</strong> sans aucun verdict
-                  </span>
-                </div>
-              </div>
+                  <ControleurAlert type="warning">
+                    <span>⏰</span>
+                    <span>
+                      <strong>{dossier.joursEcoules} jour{dossier.joursEcoules > 1 ? 's' : ''}</strong>{' '}
+                      sans aucun verdict
+                    </span>
+                  </ControleurAlert>
 
-              <div className="academic-card-footer">
-                <button
-                  className="academic-btn academic-btn-primary"
-                  onClick={() => navigate(`/controleur-commission/dossiers/${dossier.dossierInscriptionId}`)}
-                >
-                  Voir le dossier
-                </button>
-              </div>
-            </div>
-          ))}
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <button
+                      type="button"
+                      className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-700 text-white hover:bg-slate-800 transition"
+                      onClick={() =>
+                        navigate(`/controleur-commission/dossiers/${dossier.dossierInscriptionId}`)
+                      }
+                    >
+                      Voir le dossier
+                    </button>
+                  </div>
+                </div>
+              </BentoCard>
+            );
+          })}
         </div>
       )}
 
-      {/* Pagination */}
-      {pagination.pages > 1 && (
-        <div className="academic-pagination">
-          <button
-            className="academic-btn academic-btn-secondary"
-            disabled={pagination.offset === 0}
-            onClick={() => handlePageChange(pagination.offset - pagination.limite)}
-          >
-            ← Précédent
-          </button>
-          <span className="academic-text">
-            Page {Math.floor(pagination.offset / pagination.limite) + 1} sur {pagination.pages}
-          </span>
-          <button
-            className="academic-btn academic-btn-secondary"
-            disabled={pagination.offset + pagination.limite >= pagination.total}
-            onClick={() => handlePageChange(pagination.offset + pagination.limite)}
-          >
-            Suivant →
-          </button>
-        </div>
-      )}
-    </div>
-    </CommissionLayout>
+      <ControleurPagination pagination={pagination} onPageChange={handlePageChange} />
+    </ControleurPage>
   );
 };
 

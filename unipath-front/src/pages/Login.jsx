@@ -289,8 +289,6 @@ export default function Login() {
           <p className='text-center text-xs text-gray-400 mt-6'>
             Pas encore de compte ?{' '}
             <a href='/register' className='text-orange-500 font-semibold hover:underline'>Compte candidat</a>
-            {' · '}
-            <a href='/register-etablissement' className='text-orange-500 font-semibold hover:underline'>Compte etablissement</a>
           </p>
         </div>
 

@@ -2,7 +2,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../utils/apiConfig';
-import CommissionLayout from '../components/CommissionLayout';
+import { BentoCard } from '../components/AcademicLayout';
+import {
+  ControleurLoading,
+  ControleurPage,
+  ControleurAlert,
+  InfoRow,
+  VerdictBadge,
+} from '../components/controleur/ControleurShell';
+
+const VERDICT_OPTIONS = ['VALIDE', 'REJETE', 'SOUS_RESERVE'];
 
 const DetailDossierExaminateur = () => {
   const { dossierInscriptionId } = useParams();
@@ -13,7 +22,6 @@ const DetailDossierExaminateur = () => {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  // Formulaire de verdict
   const [verdict, setVerdict] = useState('');
   const [motif, setMotif] = useState('');
   const [validationError, setValidationError] = useState('');
@@ -33,7 +41,6 @@ const DetailDossierExaminateur = () => {
       const data = await response.json();
       setDossier(data);
 
-      // Pré-remplir le formulaire si un verdict existe déjà
       if (data.monVerdict.rendu) {
         setVerdict(data.monVerdict.verdict);
         setMotif(data.monVerdict.motif || '');
@@ -56,7 +63,9 @@ const DetailDossierExaminateur = () => {
     }
 
     if ((verdict === 'REJETE' || verdict === 'SOUS_RESERVE') && (!motif || motif.trim().length < 10)) {
-      setValidationError('Le motif est obligatoire et doit contenir au moins 10 caractères pour un rejet ou une validation sous réserve');
+      setValidationError(
+        'Le motif est obligatoire et doit contenir au moins 10 caractères pour un rejet ou une validation sous réserve'
+      );
       return false;
     }
 
@@ -104,164 +113,159 @@ const DetailDossierExaminateur = () => {
   };
 
   if (loading) {
-    return (
-      <div className="academic-container">
-        <div className="academic-bento-card">
-          <p className="academic-text-muted">Chargement du dossier...</p>
-        </div>
-      </div>
-    );
+    return <ControleurLoading message="Chargement du dossier..." />;
   }
 
   if (error && !dossier) {
     return (
-      <div className="academic-container">
-        <div className="academic-alert academic-alert-error">
-          <span className="academic-alert-icon">⚠️</span>
+      <ControleurPage>
+        <ControleurAlert type="error">
+          <span>⚠️</span>
           <span>{error}</span>
-        </div>
+        </ControleurAlert>
         <button
-          className="academic-btn academic-btn-secondary"
+          type="button"
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
           onClick={() => navigate('/examinateur/dossiers')}
         >
           ← Retour à la liste
         </button>
-      </div>
+      </ControleurPage>
     );
   }
 
   return (
-    <CommissionLayout>
-    <div className="academic-container">
-      <div className="academic-header">
+    <ControleurPage>
+      <div>
         <button
-          className="academic-btn academic-btn-secondary"
+          type="button"
+          className="mb-4 px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
           onClick={() => navigate('/examinateur/dossiers')}
-          style={{ marginBottom: '1rem' }}
         >
           ← Retour à la liste
         </button>
-        <h1 className="academic-title">Évaluation du dossier</h1>
-        <p className="academic-subtitle">
+        <h1 className="text-2xl font-bold text-slate-800">Évaluation du dossier</h1>
+        <p className="text-sm text-gray-500 mt-1">
           {dossier.inscription.candidat.nom} {dossier.inscription.candidat.prenom}
         </p>
       </div>
 
       {success && (
-        <div className="academic-alert academic-alert-success">
-          <span className="academic-alert-icon">✓</span>
+        <ControleurAlert type="success">
+          <span>✓</span>
           <span>Verdict enregistré avec succès ! Redirection en cours...</span>
-        </div>
+        </ControleurAlert>
       )}
 
       {error && (
-        <div className="academic-alert academic-alert-error">
-          <span className="academic-alert-icon">⚠️</span>
+        <ControleurAlert type="error">
+          <span>⚠️</span>
           <span>{error}</span>
-        </div>
+        </ControleurAlert>
       )}
 
-      {/* Informations candidat */}
-      <div className="academic-bento-card">
-        <h2 className="academic-card-title">Informations du candidat</h2>
-        <div className="academic-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))' }}>
-          <div className="academic-info-row">
-            <span className="academic-label">Nom complet :</span>
-            <span className="academic-text">
-              {dossier.inscription.candidat.nom} {dossier.inscription.candidat.prenom}
-            </span>
-          </div>
-          <div className="academic-info-row">
-            <span className="academic-label">Email :</span>
-            <span className="academic-text">{dossier.inscription.candidat.email}</span>
-          </div>
-          <div className="academic-info-row">
-            <span className="academic-label">ANIP :</span>
-            <span className="academic-text">{dossier.inscription.candidat.anip}</span>
-          </div>
-          <div className="academic-info-row">
-            <span className="academic-label">Série :</span>
-            <span className="academic-text">{dossier.inscription.candidat.serie}</span>
-          </div>
-          <div className="academic-info-row">
-            <span className="academic-label">Concours :</span>
-            <span className="academic-text">{dossier.inscription.concours.libelle}</span>
-          </div>
-          <div className="academic-info-row">
-            <span className="academic-label">Établissement :</span>
-            <span className="academic-text">{dossier.inscription.concours.etablissement}</span>
-          </div>
+      <BentoCard className="p-5 bg-white">
+        <h2 className="text-base font-semibold text-slate-800 mb-4">Informations du candidat</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+          <InfoRow label="Nom complet">
+            {dossier.inscription.candidat.nom} {dossier.inscription.candidat.prenom}
+          </InfoRow>
+          <InfoRow label="Email">{dossier.inscription.candidat.email}</InfoRow>
+          <InfoRow label="ANIP">{dossier.inscription.candidat.anip}</InfoRow>
+          <InfoRow label="Série">{dossier.inscription.candidat.serie}</InfoRow>
+          <InfoRow label="Concours">{dossier.inscription.concours.libelle}</InfoRow>
+          <InfoRow label="Établissement">{dossier.inscription.concours.etablissement}</InfoRow>
         </div>
-      </div>
+      </BentoCard>
 
-      {/* Pièces du dossier */}
-      <div className="academic-bento-card">
-        <h2 className="academic-card-title">Pièces du dossier</h2>
-        
-        <h3 className="academic-subtitle" style={{ marginTop: '1rem' }}>Pièces de base</h3>
-        <div className="academic-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+      <BentoCard className="p-5 bg-white">
+        <h2 className="text-base font-semibold text-slate-800 mb-4">Pièces du dossier</h2>
+
+        <h3 className="text-sm font-medium text-gray-600 mt-2 mb-3">Pièces de base</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
           {Object.entries(dossier.piecesBase).map(([key, piece]) => (
-            <div key={key} className="academic-info-row">
-              <span className="academic-label">{key} :</span>
+            <InfoRow key={key} label={key}>
               {piece.url ? (
                 <a
                   href={piece.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="academic-link"
+                  className="text-sm text-blue-700 hover:underline"
                 >
                   Voir la pièce
                 </a>
               ) : (
-                <span className="academic-badge academic-badge-warning">Manquante</span>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                  Manquante
+                </span>
               )}
-            </div>
+            </InfoRow>
           ))}
         </div>
 
-        <h3 className="academic-subtitle" style={{ marginTop: '1.5rem' }}>Pièces spécifiques</h3>
-        <div className="academic-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+        <h3 className="text-sm font-medium text-gray-600 mt-6 mb-3">Pièces spécifiques</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
           {Object.entries(dossier.piecesSpecifiques).map(([key, piece]) => (
-            <div key={key} className="academic-info-row">
-              <span className="academic-label">{key} :</span>
+            <InfoRow key={key} label={key}>
               {piece.url ? (
                 <a
                   href={piece.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="academic-link"
+                  className="text-sm text-blue-700 hover:underline"
                 >
                   Voir la pièce
                 </a>
               ) : (
-                <span className="academic-badge academic-badge-warning">Manquante</span>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                  Manquante
+                </span>
               )}
-            </div>
+            </InfoRow>
           ))}
         </div>
-      </div>
+      </BentoCard>
 
-      {/* Statut de l'évaluation */}
       {dossier.autreVerdictRendu && !lectureSeule && (
-        <div className="academic-alert academic-alert-info">
-          <span className="academic-alert-icon">ℹ️</span>
+        <ControleurAlert type="info">
+          <span>ℹ️</span>
           <span>
-            Un autre examinateur a déjà rendu son verdict. Vous ne pouvez pas modifier son verdict, seulement
-            rendre le vôtre ou corriger le vôtre (une fois).
+            Un autre examinateur a déjà rendu son verdict. Vous ne pouvez pas modifier son verdict,
+            seulement rendre le vôtre ou corriger le vôtre (une fois).
           </span>
-        </div>
+        </ControleurAlert>
+      )}
+
+      {dossier.retourArbitrage && (
+        <ControleurAlert type="warning">
+          <span>⚠️</span>
+          <div>
+            <p className="font-semibold">Retour du contrôleur — arbitrage divergent</p>
+            <p className="mt-2">
+              Vous aviez arbitré « {dossier.retourArbitrage.verdictExaminateurLabel} », le contrôleur
+              a rendu « {dossier.retourArbitrage.decisionControleurLabel} ».
+            </p>
+            {dossier.retourArbitrage.motif && (
+              <p className="mt-3 whitespace-pre-wrap">
+                <strong>Motif :</strong> {dossier.retourArbitrage.motif}
+              </p>
+            )}
+            <p className="mt-3 text-sm opacity-90">
+              Tenez compte de ce retour pour vos prochaines évaluations.
+            </p>
+          </div>
+        </ControleurAlert>
       )}
 
       {dossier.messageLectureSeule && (
-        <div className="academic-alert academic-alert-warning">
-          <span className="academic-alert-icon">🔒</span>
+        <ControleurAlert type="warning">
+          <span>🔒</span>
           <span>{dossier.messageLectureSeule}</span>
-        </div>
+        </ControleurAlert>
       )}
 
-      {/* Formulaire de verdict */}
-      <div className="academic-bento-card">
-        <h2 className="academic-card-title">
+      <BentoCard className="p-5 bg-white">
+        <h2 className="text-base font-semibold text-slate-800 mb-4">
           {lectureSeule
             ? dossier.monVerdict.rendu
               ? 'Mon verdict (lecture seule)'
@@ -272,67 +276,48 @@ const DetailDossierExaminateur = () => {
         </h2>
 
         {dossier.monVerdict.rendu && peutAgir && (
-          <div className="academic-alert academic-alert-warning">
-            <span className="academic-alert-icon">⚠️</span>
+          <ControleurAlert type="warning">
+            <span>⚠️</span>
             <span>
-              Modifications restantes : {dossier.monVerdict.modificationsPossibles} (seul le contrôleur peut
-              corriger le verdict d&apos;un autre examinateur)
+              Modifications restantes : {dossier.monVerdict.modificationsPossibles} (seul le
+              contrôleur peut corriger le verdict d&apos;un autre examinateur)
             </span>
-          </div>
+          </ControleurAlert>
         )}
 
         {validationError && (
-          <div className="academic-alert academic-alert-error">
-            <span className="academic-alert-icon">⚠️</span>
+          <ControleurAlert type="error">
+            <span>⚠️</span>
             <span>{validationError}</span>
-          </div>
+          </ControleurAlert>
         )}
 
-        <div className="academic-form-group">
-          <label className="academic-label">Verdict *</label>
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-            <label className="academic-radio-label">
-              <input
-                type="radio"
-                name="verdict"
-                value="VALIDE"
-                checked={verdict === 'VALIDE'}
-                onChange={(e) => setVerdict(e.target.value)}
-                disabled={submitting || success || lectureSeule || !peutAgir}
-              />
-              <span className="academic-badge academic-badge-success">Validé</span>
-            </label>
-            <label className="academic-radio-label">
-              <input
-                type="radio"
-                name="verdict"
-                value="REJETE"
-                checked={verdict === 'REJETE'}
-                onChange={(e) => setVerdict(e.target.value)}
-                disabled={submitting || success || lectureSeule || !peutAgir}
-              />
-              <span className="academic-badge academic-badge-error">Rejeté</span>
-            </label>
-            <label className="academic-radio-label">
-              <input
-                type="radio"
-                name="verdict"
-                value="SOUS_RESERVE"
-                checked={verdict === 'SOUS_RESERVE'}
-                onChange={(e) => setVerdict(e.target.value)}
-                disabled={submitting || success || lectureSeule || !peutAgir}
-              />
-              <span className="academic-badge academic-badge-warning">Sous réserve</span>
-            </label>
+        <div className="mt-4">
+          <label className="block text-xs font-medium text-gray-500 mb-2">Verdict *</label>
+          <div className="flex gap-4 flex-wrap">
+            {VERDICT_OPTIONS.map((v) => (
+              <label key={v} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="verdict"
+                  value={v}
+                  checked={verdict === v}
+                  onChange={(e) => setVerdict(e.target.value)}
+                  disabled={submitting || success || lectureSeule || !peutAgir}
+                  className="text-slate-700"
+                />
+                <VerdictBadge verdict={v} />
+              </label>
+            ))}
           </div>
         </div>
 
-        <div className="academic-form-group">
-          <label className="academic-label">
+        <div className="mt-4">
+          <label className="block text-xs font-medium text-gray-500 mb-2">
             Motif {(verdict === 'REJETE' || verdict === 'SOUS_RESERVE') && '*'}
           </label>
           <textarea
-            className="academic-input"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
             rows="6"
             value={motif}
             onChange={(e) => setMotif(e.target.value)}
@@ -343,15 +328,14 @@ const DetailDossierExaminateur = () => {
             }
             disabled={submitting || success || lectureSeule || !peutAgir}
           />
-          <small className="academic-text-muted">
-            {motif.trim().length} / 1000 caractères
-          </small>
+          <p className="text-xs text-gray-400 mt-1">{motif.trim().length} / 1000 caractères</p>
         </div>
 
         {peutAgir && (
-          <div className="academic-card-footer">
+          <div className="mt-6 pt-4 border-t border-gray-100">
             <button
-              className="academic-btn academic-btn-primary"
+              type="button"
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-50 transition"
               onClick={soumettreVerdict}
               disabled={submitting || success}
             >
@@ -363,9 +347,8 @@ const DetailDossierExaminateur = () => {
             </button>
           </div>
         )}
-      </div>
-    </div>
-    </CommissionLayout>
+      </BentoCard>
+    </ControleurPage>
   );
 };
 

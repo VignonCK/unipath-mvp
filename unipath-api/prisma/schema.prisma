@@ -22,7 +22,7 @@ model Candidat {
   telephone                    String?
   dateNaiss                    DateTime?
   lieuNaiss                    String?
-  role                         Role                          @default(CANDIDAT)
+  role                         Role                          @default(ETUDIANT)
   createdAt                    DateTime                      @default(now())
   updatedAt                    DateTime                      @updatedAt
   diplome                      Diplome?
@@ -30,6 +30,7 @@ model Candidat {
   inscriptions                 Inscription[]
   InscriptionAcademique        InscriptionAcademique[]
   preinscriptionsEtablissement PreinscriptionEtablissement[]
+  applications                 Application[]
 
   @@index([anip])
 }
@@ -43,7 +44,7 @@ model MembreCommission {
   role      Role               @default(COMMISSION)
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
-  sousRole  SousRoleCommission
+  sousRole  SousRoleCommission @default(MEMBRE)
 
   @@index([sousRole])
 }
@@ -82,6 +83,7 @@ model Concours {
   seriesAcceptees      String[]      @default([])
   matieres             String[]      @default([])
   piecesRequises       Json?
+  centresComposition   Json?
   dateDebutDepot       DateTime?
   dateFinDepot         DateTime?
   dateDebutComposition DateTime?
@@ -306,6 +308,10 @@ model Etablissement {
   filieres        Filiere[]
   inscriptions    InscriptionAcademique[]
   preinscriptions PreinscriptionEtablissement[]
+  admins          AdminEtablissement[]
+  applications    Application[]
+  campagnes       CampagneInscription[]
+  requirements    SchoolRequirement[]
 
   @@index([type])
   @@index([ville])
@@ -323,6 +329,8 @@ model Filiere {
   etablissement   Etablissement                 @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
   inscriptions    InscriptionAcademique[]
   preinscriptions PreinscriptionEtablissement[]
+  applications    Application[]
+  campagneFilieres CampagneFiliere[]
 
   @@index([etablissementId])
   @@index([niveau])
@@ -369,6 +377,7 @@ model PreinscriptionEtablissement {
   etablissement         Etablissement                     @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
   filiere               Filiere                           @relation(fields: [filiereId], references: [id], onDelete: Cascade)
   inscriptionAcademique InscriptionAcademique?            @relation(fields: [inscriptionAcadId], references: [id])
+  applicationSource     Application?
 
   @@unique([candidatId, filiereId, anneeAcademique])
   @@index([candidatId])
@@ -432,9 +441,12 @@ enum Role {
   COMMISSION
   CONTROLEUR
   DGES
+  ADMIN_ETABLISSEMENT
+  ETUDIANT
 }
 
 enum SousRoleCommission {
+  MEMBRE
   EXAMINATEUR
   CONTROLEUR
 }
@@ -535,4 +547,211 @@ enum StatutPreinscriptionEtablissement {
 enum TypeDiplome {
   LICENCE
   MASTER
+}
+
+model AdminEtablissement {
+  id              String        @id @default(uuid())
+  nom             String
+  prenom          String
+  email           String        @unique
+  telephone       String?
+  role            Role          @default(ADMIN_ETABLISSEMENT)
+  etablissementId String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+
+  @@index([etablissementId])
+}
+
+model Application {
+  id                String                       @id @default(uuid())
+  numeroApplication String                       @unique
+  candidatId        String
+  etablissementId   String
+  filiereId         String
+  anneeAcademique   String
+  niveau            Int
+  status            ApplicationStatus            @default(DRAFT)
+  preinscriptionId  String?                      @unique
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  candidat          Candidat                     @relation(fields: [candidatId], references: [id], onDelete: Cascade)
+  etablissement     Etablissement                @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  filiere           Filiere                      @relation(fields: [filiereId], references: [id], onDelete: Cascade)
+  preinscription    PreinscriptionEtablissement? @relation(fields: [preinscriptionId], references: [id])
+  documents         ApplicationDocument[]
+  payments          Payment[]
+  receipts          Receipt[]
+
+  @@unique([candidatId, filiereId, anneeAcademique])
+  @@index([candidatId])
+  @@index([createdAt])
+  @@index([etablissementId, status])
+}
+
+model ApplicationDocument {
+  id                  String               @id @default(uuid())
+  applicationId       String
+  schoolRequirementId String?
+  code                String
+  label               String
+  source              ApplicationDocSource
+  documentUrl         String?
+  status              ApplicationDocStatus @default(PENDING)
+  metadata            Json?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  application         Application          @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  schoolRequirement   SchoolRequirement?   @relation(fields: [schoolRequirementId], references: [id])
+
+  @@unique([applicationId, code])
+  @@index([applicationId])
+}
+
+model SchoolRequirement {
+  id              String                @id @default(uuid())
+  etablissementId String
+  code            String
+  label           String
+  requirementType RequirementType
+  profileFieldKey String?
+  isRequired      Boolean               @default(true)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  etablissement   Etablissement         @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  documents       ApplicationDocument[]
+
+  @@unique([etablissementId, code])
+  @@index([etablissementId])
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  applicationId   String
+  paymentType     PaymentType
+  amount          Int
+  currency        String        @default("XOF")
+  paymentProvider String?
+  paymentMethod   PaymentMethod
+  status          PaymentStatus @default(PENDING)
+  externalRef     String?
+  providerPayload Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  application     Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  receipt         Receipt?
+
+  @@index([applicationId, paymentType])
+  @@index([status])
+}
+
+model Receipt {
+  id            String      @id @default(uuid())
+  paymentId     String?     @unique
+  applicationId String
+  receiptNumber String      @unique
+  receiptType   ReceiptType
+  receiptUrl    String?
+  issuedAt      DateTime    @default(now())
+  metadata      Json?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  payment       Payment?    @relation(fields: [paymentId], references: [id])
+
+  @@index([applicationId, receiptType])
+}
+
+model CampagneInscription {
+  id              String            @id @default(uuid())
+  etablissementId String
+  titre           String
+  anneeAcademique String
+  dateOuverture   DateTime
+  dateCloture     DateTime
+  description     String?
+  statut          StatutCampagne    @default(BROUILLON)
+  createdBy       String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  etablissement   Etablissement     @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  filieres        CampagneFiliere[]
+
+  @@index([dateCloture])
+  @@index([dateOuverture])
+  @@index([etablissementId, statut])
+}
+
+model CampagneFiliere {
+  id                String              @id @default(uuid())
+  campagneId        String
+  filiereId         String
+  fraisDossier      Int
+  placesDisponibles Int?
+  criteresSelection String?
+  seriesAcceptees   String[]            @default([])
+  niveauMinBac      String?
+  autresCriteres    Json?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  campagne          CampagneInscription @relation(fields: [campagneId], references: [id], onDelete: Cascade)
+  filiere           Filiere             @relation(fields: [filiereId], references: [id], onDelete: Cascade)
+
+  @@unique([campagneId, filiereId])
+  @@index([campagneId])
+  @@index([filiereId])
+}
+
+enum ApplicationStatus {
+  DRAFT
+  DOSSIER_FEES_PAID
+  PENDING_DOCUMENTS
+  READY_FOR_PREINSCRIPTION
+  FICHE_GENERATED
+}
+
+enum ApplicationDocSource {
+  PROFILE_AUTO
+  STUDENT_UPLOAD
+  SYSTEM_GENERATED
+}
+
+enum ApplicationDocStatus {
+  PENDING
+  PROVIDED
+}
+
+enum RequirementType {
+  PROFILE_FIELD
+  DOCUMENT_UPLOAD
+}
+
+enum PaymentType {
+  DOSSIER_FEES
+  DROITS_INSCRIPTION
+}
+
+enum PaymentMethod {
+  PLATFORM_GATEWAY
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+enum ReceiptType {
+  DOSSIER_FEES_RECEIPT
+  BANK_RECEIPT
+  PREINSCRIPTION_FICHE
+}
+
+enum StatutCampagne {
+  BROUILLON
+  PUBLIEE
+  CLOTUREE
+  ANNULEE
 }

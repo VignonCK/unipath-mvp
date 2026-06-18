@@ -149,6 +149,39 @@ const validateAndSanitizeVerdict = (verdict, motif) => {
   };
 };
 
+const { isArbitrageDivergent } = require('./verdict-workflow.helper');
+
+/**
+ * Valide une décision du contrôleur (verdict + motif, y compris arbitrage divergent).
+ */
+const validateDecisionControleur = (dossier, decision, motif) => {
+  const base = validateAndSanitizeVerdict(decision, motif);
+  if (!base.valid) {
+    return base;
+  }
+
+  if (isArbitrageDivergent(dossier?.verdict1, decision)) {
+    const motifTrimmed = (motif || '').trim();
+    if (motifTrimmed.length < 10) {
+      return {
+        valid: false,
+        error:
+          'Lorsque votre décision diffère de celle de l\'examinateur, un motif d\'au moins 10 caractères est obligatoire pour lui expliquer votre arbitrage.',
+        sanitizedMotif: null,
+      };
+    }
+    if (motifTrimmed.length > 1000) {
+      return {
+        valid: false,
+        error: `Le motif ne peut pas dépasser 1000 caractères (actuellement: ${motifTrimmed.length})`,
+        sanitizedMotif: null,
+      };
+    }
+  }
+
+  return base;
+};
+
 module.exports = {
   validateVerdict,
   validateMotif,
@@ -157,4 +190,5 @@ module.exports = {
   validateEmail,
   validateParams,
   validateAndSanitizeVerdict,
+  validateDecisionControleur,
 };

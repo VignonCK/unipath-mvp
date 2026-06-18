@@ -6,6 +6,7 @@ const {
   assertExaminateurPeutRendreVerdict,
   assertExaminateurPeutModifierSonVerdict,
 } = require('../utils/verdict-examinateur.helper');
+const { isArbitrageDivergent, VERDICT_LABELS } = require('../utils/verdict-workflow.helper');
 
 /**
  * Liste des dossiers à évaluer par l'examinateur connecté
@@ -18,22 +19,7 @@ exports.getDossiersAEvaluer = async (req, res) => {
 
     const whereClause = {
       decisionControleurPar: null,
-      // Dossiers avec au moins une place disponible
-      OR: [
-        // Cas 1 : Aucun verdict rendu
-        { verdict1Par: null, verdict2Par: null },
-        // Cas 2 : verdict1 rendu par un autre, verdict2 libre
-        { verdict1Par: { not: examinateurId }, verdict2Par: null },
-        // Cas 3 : verdict2 rendu par un autre, verdict1 libre
-        { verdict1Par: null, verdict2Par: { not: examinateurId } },
-      ],
-      // Exclure les dossiers où l'examinateur a déjà rendu son verdict
-      NOT: {
-        OR: [
-          { verdict1Par: examinateurId },
-          { verdict2Par: examinateurId },
-        ],
-      },
+      verdict1Par: null,
     };
 
     if (concoursId) {
@@ -66,8 +52,7 @@ exports.getDossiersAEvaluer = async (req, res) => {
         concours: d.inscription.concours,
       },
       dateCreation: d.createdAt,
-      autreVerdictRendu: !!(d.verdict1Par || d.verdict2Par),
-      nombreVerdictsRendus: (d.verdict1Par ? 1 : 0) + (d.verdict2Par ? 1 : 0),
+      nombreVerdictsRendus: d.verdict1Par ? 1 : 0,
     }));
 
     res.json({
@@ -117,33 +102,23 @@ exports.getDetailDossier = async (req, res) => {
     }
 
     // Déterminer si l'examinateur a déjà rendu son verdict
-    const monVerdictRendu =
-      dossier.verdict1Par === examinateurId || dossier.verdict2Par === examinateurId;
+    const monVerdictRendu = dossier.verdict1Par === examinateurId;
     let monVerdict = null;
     let modificationsPossibles = 1;
 
-    if (dossier.verdict1Par === examinateurId) {
+    if (monVerdictRendu) {
       monVerdict = {
         verdict: dossier.verdict1,
         motif: dossier.verdict1Motif,
         date: dossier.verdict1Date,
       };
       modificationsPossibles = 1 - dossier.verdict1ModifieCount;
-    } else if (dossier.verdict2Par === examinateurId) {
-      monVerdict = {
-        verdict: dossier.verdict2,
-        motif: dossier.verdict2Motif,
-        date: dossier.verdict2Date,
-      };
-      modificationsPossibles = 1 - dossier.verdict2ModifieCount;
     }
 
     const verrouille = dossierVerrouilleParControleur(dossier);
-    const peutRendreVerdict =
-      !verrouille && !monVerdictRendu && (!dossier.verdict1Par || !dossier.verdict2Par);
+    const peutRendreVerdict = !verrouille && !monVerdictRendu && !dossier.verdict1Par;
     const peutModifierMonVerdict =
       !verrouille && monVerdictRendu && modificationsPossibles > 0;
-    const deuxVerdictsComplets = !!(dossier.verdict1Par && dossier.verdict2Par);
     const lectureSeule =
       verrouille || (!peutRendreVerdict && !peutModifierMonVerdict);
 
@@ -151,13 +126,28 @@ exports.getDetailDossier = async (req, res) => {
     if (verrouille) {
       messageLectureSeule =
         'Décision du contrôleur rendue : les verdicts ne peuvent plus être modifiés par les examinateurs.';
-    } else if (!monVerdictRendu && deuxVerdictsComplets) {
+    } else if (!monVerdictRendu && dossier.verdict1Par) {
       messageLectureSeule =
-        'Les deux verdicts ont déjà été rendus. Seul le contrôleur peut modifier un verdict existant.';
+        'Ce dossier a déjà été évalué par un examinateur. Seul le contrôleur peut intervenir.';
     } else if (monVerdictRendu && modificationsPossibles === 0) {
       messageLectureSeule =
         'Vous avez déjà utilisé votre unique modification. Contactez le contrôleur pour toute correction.';
     }
+
+    const arbitrageDivergent =
+      monVerdictRendu &&
+      isArbitrageDivergent(dossier.verdict1, dossier.decisionControleur);
+    const retourArbitrage = arbitrageDivergent
+      ? {
+          verdictExaminateur: dossier.verdict1,
+          verdictExaminateurLabel: VERDICT_LABELS[dossier.verdict1] || dossier.verdict1,
+          decisionControleur: dossier.decisionControleur,
+          decisionControleurLabel:
+            VERDICT_LABELS[dossier.decisionControleur] || dossier.decisionControleur,
+          motif: dossier.decisionControleurMotif,
+          date: dossier.decisionControleurDate,
+        }
+      : null;
 
     // Construire la réponse (sans révéler les verdicts des autres)
     res.json({
@@ -208,9 +198,8 @@ exports.getDetailDossier = async (req, res) => {
         date: monVerdict?.date || null,
         modificationsPossibles,
       },
-      autreVerdictRendu:
-        (dossier.verdict1Par && dossier.verdict1Par !== examinateurId) ||
-        (dossier.verdict2Par && dossier.verdict2Par !== examinateurId),
+      decisionControleurRendue: !!dossier.decisionControleur,
+      retourArbitrage,
       permissions: {
         verrouille,
         peutRendreVerdict,
@@ -259,23 +248,13 @@ exports.rendreVerdict = async (req, res) => {
       return res.status(403).json({ error: check.error });
     }
 
-    const numeroVerdict = check.slot;
-    const updateData =
-      numeroVerdict === 1
-        ? {
-            verdict1Par: examinateurId,
-            verdict1: verdict,
-            verdict1Motif: validation.sanitizedMotif,
-            verdict1Date: new Date(),
-            verdict1ModifieCount: 0,
-          }
-        : {
-            verdict2Par: examinateurId,
-            verdict2: verdict,
-            verdict2Motif: validation.sanitizedMotif,
-            verdict2Date: new Date(),
-            verdict2ModifieCount: 0,
-          };
+    const updateData = {
+      verdict1Par: examinateurId,
+      verdict1: verdict,
+      verdict1Motif: validation.sanitizedMotif,
+      verdict1Date: new Date(),
+      verdict1ModifieCount: 0,
+    };
 
     // Transaction : mettre à jour le dossier + enregistrer l'action
     const result = await prisma.$transaction(async (tx) => {
@@ -289,7 +268,7 @@ exports.rendreVerdict = async (req, res) => {
           utilisateurId: examinateurId,
           dossierInscriptionId,
           typeAction: 'VERDICT_EXAMINATEUR_RENDU',
-          details: { numeroVerdict, verdict, motif: validation.sanitizedMotif },
+          details: { numeroVerdict: 1, verdict, motif: validation.sanitizedMotif },
           ipAddress: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
           userAgent: req.headers['user-agent'],
         },
@@ -304,52 +283,33 @@ exports.rendreVerdict = async (req, res) => {
     });
 
     if (controleur) {
-      const nombreVerdictsRendus = (result.verdict1Par ? 1 : 0) + (result.verdict2Par ? 1 : 0);
       await prisma.notification.create({
         data: {
           userId: controleur.id,
           type: 'NOUVEAU_DOSSIER',
           priority: 'NORMAL',
-          title: `Nouveau verdict rendu (${nombreVerdictsRendus}/2)`,
-          message: `Un examinateur a rendu son verdict sur le dossier ${dossier.inscription.numeroInscription} (${dossier.inscription.candidat.nom} ${dossier.inscription.candidat.prenom})`,
+          title: 'Verdict examinateur — arbitrage requis',
+          message: `Un examinateur a rendu son verdict (${verdict}) sur le dossier ${dossier.inscription.numeroInscription} (${dossier.inscription.candidat.nom} ${dossier.inscription.candidat.prenom}). Arbitrage du contrôleur attendu.`,
           data: {
             dossierInscriptionId,
             numeroInscription: dossier.inscription.numeroInscription,
-            nombreVerdictsRendus,
+            verdictExaminateur: verdict,
           },
         },
       });
-
-      // Si 2 verdicts et divergents, créer une alerte HIGH
-      if (result.verdict1 && result.verdict2 && result.verdict1 !== result.verdict2) {
-        await prisma.notification.create({
-          data: {
-            userId: controleur.id,
-            type: 'ALERTE',
-            priority: 'HIGH',
-            title: '⚠️ Verdicts divergents détectés',
-            message: `Le dossier ${dossier.inscription.numeroInscription} a des verdicts divergents : Examinateur 1 = ${result.verdict1}, Examinateur 2 = ${result.verdict2}`,
-            data: {
-              dossierInscriptionId,
-              verdict1: result.verdict1,
-              verdict2: result.verdict2,
-            },
-          },
-        });
-      }
     }
 
     res.status(201).json({
       message: 'Verdict enregistré avec succès',
       verdict: {
-        numeroVerdict,
+        numeroVerdict: 1,
         verdict,
         motif: validation.sanitizedMotif,
-        date: numeroVerdict === 1 ? result.verdict1Date : result.verdict2Date,
+        date: result.verdict1Date,
       },
       dossierInscription: {
         id: result.id,
-        nombreVerdictsRendus: (result.verdict1Par ? 1 : 0) + (result.verdict2Par ? 1 : 0),
+        nombreVerdictsRendus: result.verdict1Par ? 1 : 0,
         decisionControleurRendue: !!result.decisionControleur,
       },
     });
@@ -392,24 +352,14 @@ exports.modifierVerdict = async (req, res) => {
       return res.status(403).json({ error: check.error });
     }
 
-    const numeroVerdict = check.numeroVerdict;
-    const modifieCount = numeroVerdict === 1 ? dossier.verdict1ModifieCount : dossier.verdict2ModifieCount;
+    const modifieCount = dossier.verdict1ModifieCount;
 
-    // Mettre à jour le verdict
-    const updateData =
-      numeroVerdict === 1
-        ? {
-            verdict1: verdict,
-            verdict1Motif: validation.sanitizedMotif,
-            verdict1Date: new Date(),
-            verdict1ModifieCount: modifieCount + 1,
-          }
-        : {
-            verdict2: verdict,
-            verdict2Motif: validation.sanitizedMotif,
-            verdict2Date: new Date(),
-            verdict2ModifieCount: modifieCount + 1,
-          };
+    const updateData = {
+      verdict1: verdict,
+      verdict1Motif: validation.sanitizedMotif,
+      verdict1Date: new Date(),
+      verdict1ModifieCount: modifieCount + 1,
+    };
 
     const result = await prisma.$transaction(async (tx) => {
       const dossierMisAJour = await tx.dossierInscription.update({
@@ -423,8 +373,8 @@ exports.modifierVerdict = async (req, res) => {
           dossierInscriptionId,
           typeAction: 'VERDICT_EXAMINATEUR_MODIFIE',
           details: {
-            numeroVerdict,
-            ancienVerdict: numeroVerdict === 1 ? dossier.verdict1 : dossier.verdict2,
+            numeroVerdict: 1,
+            ancienVerdict: dossier.verdict1,
             nouveauVerdict: verdict,
             motif: validation.sanitizedMotif,
           },
@@ -439,10 +389,10 @@ exports.modifierVerdict = async (req, res) => {
     res.json({
       message: 'Verdict modifié avec succès',
       verdict: {
-        numeroVerdict,
+        numeroVerdict: 1,
         verdict,
         motif: validation.sanitizedMotif,
-        date: numeroVerdict === 1 ? result.verdict1Date : result.verdict2Date,
+        date: result.verdict1Date,
         modificationsPossibles: 0,
       },
     });

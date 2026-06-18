@@ -30,16 +30,15 @@ async function alignCandidatIdToAuth(authUserId, email) {
   const oldId = candidat.id;
   console.warn(`🔧 Réalignement Candidat ${email}: ${oldId} → ${authUserId}`);
 
-  await prisma.$transaction(async (tx) => {
-    for (const { table, column } of CANDIDAT_CHILD_UPDATES) {
-      await tx.$executeRawUnsafe(
-        `UPDATE "${table}" SET "${column}" = $1 WHERE "${column}" = $2`,
-        authUserId,
-        oldId
-      );
-    }
-    await tx.$executeRawUnsafe(`UPDATE "Candidat" SET id = $1 WHERE id = $2`, authUserId, oldId);
-  });
+  // Hors transaction : le pooler Supabase (port 5432) peut invalider les transactions longues
+  for (const { table, column } of CANDIDAT_CHILD_UPDATES) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "${table}" SET "${column}" = $1 WHERE "${column}" = $2`,
+      authUserId,
+      oldId
+    );
+  }
+  await prisma.$executeRawUnsafe(`UPDATE "Candidat" SET id = $1 WHERE id = $2`, authUserId, oldId);
 
   return prisma.candidat.findUnique({
     where: { id: authUserId },

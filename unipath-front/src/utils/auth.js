@@ -149,6 +149,17 @@ export function clearAuth() {
 }
 
 /**
+ * Redirection globale sur 401 (équivalent intercepteur Axios).
+ * @returns {boolean} true si une redirection a été déclenchée
+ */
+export function redirectToLoginOn401(status) {
+  if (status !== 401) return false;
+  clearAuth();
+  window.location.href = '/login';
+  return true;
+}
+
+/**
  * Déconnecte l'utilisateur
  */
 export function logout() {
@@ -263,9 +274,8 @@ export async function ensureValidToken() {
  */
 export function handleApiAuthError(err, { onSessionExpired, onForbidden, onOther } = {}) {
   if (err?.status === 401) {
-    clearAuth();
+    redirectToLoginOn401(401);
     if (onSessionExpired) onSessionExpired(err);
-    else window.location.href = '/login';
     return true;
   }
   if (err?.status === 403) {
@@ -277,15 +287,11 @@ export function handleApiAuthError(err, { onSessionExpired, onForbidden, onOther
 }
 
 /**
- * Gère une erreur API de session (ex. après login, chargement du dashboard).
- * - 401 : session invalide → déconnexion + redirection login
- * - 403 / 5xx : ne pas renvoyer au login (évite la boucle login ↔ dashboard)
- * @param {Error} err - Erreur enrichie par api.js (status, message)
- * @param {Function} navigate - react-router navigate
- * @returns {boolean} true si redirection login effectuée
+ * Gère une erreur API de session (profil incomplet, etc.).
+ * Le 401 est géré globalement par request() / apiFetch().
  */
 export function handleSessionError(err, navigate) {
-  if (err?.status === 401 || (err?.status === 403 && err?.data?.profileIncomplete)) {
+  if (err?.status === 403 && err?.data?.profileIncomplete) {
     clearAuth();
     navigate('/login', {
       replace: true,
@@ -306,10 +312,7 @@ export function handleSessionError(err, navigate) {
  * @returns {boolean} True si erreur d'authentification
  */
 export function handleAuthError(response) {
-  if (response.status === 401) {
-    console.warn('Non authentifié - redirection vers login');
-    clearAuth();
-    window.location.href = '/login';
+  if (redirectToLoginOn401(response.status)) {
     return true;
   }
 

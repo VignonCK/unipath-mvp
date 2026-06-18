@@ -1,30 +1,14 @@
 /**
- * Règles métier : verdicts examinateurs immuables entre pairs.
- * Seul le contrôleur peut modifier le verdict d'un autre examinateur.
+ * Règles métier : un seul examinateur par dossier (verdict1).
+ * Seul le contrôleur arbitre ensuite via decisionControleur.
  */
 
 function dossierVerrouilleParControleur(dossier) {
   return !!(dossier.decisionControleurPar || dossier.decisionControleur);
 }
 
-function getSlotExaminateur(dossier, numeroVerdict) {
-  return numeroVerdict === 1 ? dossier.verdict1Par : dossier.verdict2Par;
-}
-
-function slotOccupeParAutre(dossier, examinateurId, numeroVerdict) {
-  const auteur = getSlotExaminateur(dossier, numeroVerdict);
-  return auteur != null && auteur !== examinateurId;
-}
-
 function getMonNumeroVerdict(dossier, examinateurId) {
   if (dossier.verdict1Par === examinateurId) return 1;
-  if (dossier.verdict2Par === examinateurId) return 2;
-  return null;
-}
-
-function getProchainSlotLibre(dossier) {
-  if (!dossier.verdict1Par) return 1;
-  if (!dossier.verdict2Par) return 2;
   return null;
 }
 
@@ -35,39 +19,37 @@ function assertExaminateurPeutRendreVerdict(dossier, examinateurId) {
   if (getMonNumeroVerdict(dossier, examinateurId)) {
     return { ok: false, error: 'Vous avez déjà rendu votre verdict sur ce dossier.' };
   }
-  const slot = getProchainSlotLibre(dossier);
-  if (!slot) {
-    return { ok: false, error: 'Les 2 verdicts ont déjà été rendus sur ce dossier.' };
+  if (dossier.verdict1Par) {
+    return {
+      ok: false,
+      error: 'Ce dossier a déjà été évalué par un examinateur. Seul le contrôleur peut intervenir.',
+    };
   }
-  if (slotOccupeParAutre(dossier, examinateurId, slot)) {
-    return { ok: false, error: 'Ce verdict a déjà été rendu par un autre examinateur et ne peut pas être modifié.' };
-  }
-  return { ok: true, slot };
+  return { ok: true, slot: 1 };
 }
 
 function assertExaminateurPeutModifierSonVerdict(dossier, examinateurId) {
   if (dossierVerrouilleParControleur(dossier)) {
     return { ok: false, error: 'Ce dossier est verrouillé : seul le contrôleur peut modifier les verdicts.' };
   }
-  const numeroVerdict = getMonNumeroVerdict(dossier, examinateurId);
-  if (!numeroVerdict) {
-    return { ok: false, error: "Vous n'avez pas rendu de verdict sur ce dossier. Vous ne pouvez pas modifier le verdict d'un autre examinateur." };
-  }
-  const modifieCount = numeroVerdict === 1 ? dossier.verdict1ModifieCount : dossier.verdict2ModifieCount;
-  if (modifieCount >= 1) {
+  if (dossier.verdict1Par !== examinateurId) {
     return {
       ok: false,
-      error: "Vous avez déjà modifié votre verdict une fois. Contactez le contrôleur pour toute correction.",
+      error: "Vous n'avez pas rendu de verdict sur ce dossier.",
     };
   }
-  return { ok: true, numeroVerdict };
+  if (dossier.verdict1ModifieCount >= 1) {
+    return {
+      ok: false,
+      error: 'Vous avez déjà modifié votre verdict une fois. Contactez le contrôleur pour toute correction.',
+    };
+  }
+  return { ok: true, numeroVerdict: 1 };
 }
 
 module.exports = {
   dossierVerrouilleParControleur,
-  slotOccupeParAutre,
   getMonNumeroVerdict,
-  getProchainSlotLibre,
   assertExaminateurPeutRendreVerdict,
   assertExaminateurPeutModifierSonVerdict,
 };

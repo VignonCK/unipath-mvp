@@ -34,10 +34,16 @@ exports.creerAdmin = async (req, res) => {
 
     const etablissement = await prisma.etablissement.findUnique({
       where: { id: etablissementId },
-      select: { id: true, nom: true },
+      select: { id: true, nom: true, type: true },
     });
     if (!etablissement) {
       return res.status(404).json({ error: 'Établissement non trouvé' });
+    }
+
+    if (etablissement.type !== 'PRIVE') {
+      return res.status(400).json({
+        error: "Un administrateur d'établissement ne peut être attaché qu'à un établissement privé.",
+      });
     }
 
     const emailExistant = await prisma.adminEtablissement.findUnique({

@@ -2,7 +2,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../utils/apiConfig';
-import CommissionLayout from '../components/CommissionLayout';
+import { BentoCard } from '../components/AcademicLayout';
+import { filterBtnClass } from '../constants/controleurStyles';
+import {
+  ControleurLoading,
+  ControleurPage,
+  ControleurAlert,
+  ControleurPagination,
+  InfoRow,
+  VerdictBadge,
+} from '../components/controleur/ControleurShell';
 
 const ListeDossiersControleur = () => {
   const navigate = useNavigate();
@@ -50,215 +59,173 @@ const ListeDossiersControleur = () => {
   const changerFiltre = (nouveauFiltre) => {
     setFiltreActif(nouveauFiltre);
     setSearchParams(nouveauFiltre ? { filtre: nouveauFiltre } : {});
-    setPagination(prev => ({ ...prev, offset: 0 }));
+    setPagination((prev) => ({ ...prev, offset: 0 }));
   };
 
   const handlePageChange = (newOffset) => {
-    setPagination(prev => ({ ...prev, offset: newOffset }));
-  };
-
-  const getBadgeVerdict = (verdict) => {
-    switch (verdict) {
-      case 'VALIDE':
-        return <span className="academic-badge academic-badge-success">Validé</span>;
-      case 'REJETE':
-        return <span className="academic-badge academic-badge-error">Rejeté</span>;
-      case 'SOUS_RESERVE':
-        return <span className="academic-badge academic-badge-warning">Sous réserve</span>;
-      default:
-        return <span className="academic-badge">-</span>;
-    }
+    setPagination((prev) => ({ ...prev, offset: newOffset }));
   };
 
   if (loading) {
-    return (
-      <div className="academic-container">
-        <div className="academic-bento-card">
-          <p className="academic-text-muted">Chargement des dossiers...</p>
-        </div>
-      </div>
-    );
+    return <ControleurLoading message="Chargement des dossiers..." />;
   }
 
   return (
-    <CommissionLayout>
-    <div className="academic-container">
-      <div className="academic-header">
-        <h1 className="academic-title">Dossiers à examiner</h1>
-        <p className="academic-subtitle">
+    <ControleurPage>
+      <div>
+        <h1 className="text-2xl font-bold text-slate-800">Dossiers à examiner</h1>
+        <p className="text-sm text-gray-500 mt-1">
           {pagination.total} dossier{pagination.total > 1 ? 's' : ''} avec au moins 1 verdict
         </p>
       </div>
 
       {error && (
-        <div className="academic-alert academic-alert-error">
-          <span className="academic-alert-icon">⚠️</span>
+        <ControleurAlert type="error">
+          <span>⚠️</span>
           <span>{error}</span>
-        </div>
+        </ControleurAlert>
       )}
 
-      {/* Filtres */}
-      <div className="academic-bento-card" style={{ marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+      <BentoCard className="p-4 bg-white">
+        <div className="flex gap-2 flex-wrap">
           <button
-            className={`academic-btn ${!filtreActif ? 'academic-btn-primary' : 'academic-btn-secondary'}`}
+            type="button"
+            className={filterBtnClass(!filtreActif)}
             onClick={() => changerFiltre('')}
           >
             Tous
           </button>
           <button
-            className={`academic-btn ${filtreActif === '1_verdict' ? 'academic-btn-primary' : 'academic-btn-secondary'}`}
+            type="button"
+            className={filterBtnClass(filtreActif === '1_verdict')}
             onClick={() => changerFiltre('1_verdict')}
           >
-            1 verdict
+            1 verdict (examinateur)
           </button>
           <button
-            className={`academic-btn ${filtreActif === '2_verdicts' ? 'academic-btn-primary' : 'academic-btn-secondary'}`}
+            type="button"
+            className={filterBtnClass(filtreActif === '2_verdicts')}
             onClick={() => changerFiltre('2_verdicts')}
           >
-            2 verdicts
+            Arbitrés
           </button>
           <button
-            className={`academic-btn ${filtreActif === 'divergents' ? 'academic-btn-warning' : 'academic-btn-secondary'}`}
+            type="button"
+            className={filterBtnClass(filtreActif === 'divergents', 'warning')}
             onClick={() => changerFiltre('divergents')}
           >
-            ⚠️ Divergents
+            Divergents
           </button>
           <button
-            className={`academic-btn ${filtreActif === 'sans_decision' ? 'academic-btn-primary' : 'academic-btn-secondary'}`}
+            type="button"
+            className={filterBtnClass(filtreActif === 'sans_decision')}
             onClick={() => changerFiltre('sans_decision')}
           >
             Sans décision
           </button>
         </div>
-      </div>
+      </BentoCard>
 
-      {/* Liste des dossiers */}
       {dossiers.length === 0 ? (
-        <div className="academic-bento-card">
-          <p className="academic-text-muted">Aucun dossier trouvé avec ce filtre.</p>
-        </div>
+        <BentoCard className="p-6 bg-white text-center">
+          <p className="text-sm text-gray-500">Aucun dossier trouvé avec ce filtre.</p>
+        </BentoCard>
       ) : (
-        <div className="academic-grid">
+        <div className="space-y-4">
           {dossiers.map((dossier) => (
-            <div
+            <BentoCard
               key={dossier.dossierInscriptionId}
-              className={`academic-bento-card academic-card-hover ${
-                dossier.verdictsDivergents ? 'academic-card-warning' : ''
+              className={`p-0 overflow-hidden bg-white hover:shadow-lg transition-shadow ${
+                dossier.verdictsDivergents ? 'border border-orange-200' : ''
               }`}
             >
-              <div className="academic-card-header">
-                <h3 className="academic-card-title">
-                  {dossier.inscription.candidat.nom} {dossier.inscription.candidat.prenom}
-                </h3>
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <span className="academic-badge academic-badge-info">
-                    {dossier.statutVerdicts}
-                  </span>
-                  {dossier.verdictsDivergents && (
-                    <span className="academic-badge academic-badge-warning">
-                      ⚠️ Divergents
+              <div className={`h-1 ${dossier.verdictsDivergents ? 'bg-orange-500' : 'bg-slate-300'}`} />
+              <div className="p-5">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">
+                      {dossier.inscription.candidat.nom} {dossier.inscription.candidat.prenom}
+                    </h3>
+                    <p className="text-xs text-gray-500 font-mono mt-0.5">
+                      {dossier.inscription.numeroInscription}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                      {dossier.statutVerdicts}
                     </span>
-                  )}
-                  {dossier.decisionFinale && (
-                    <span className="academic-badge academic-badge-success">
-                      ✓ Décision rendue
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="academic-card-content">
-                <div className="academic-info-row">
-                  <span className="academic-label">Concours :</span>
-                  <span className="academic-text">
-                    {dossier.inscription.concours.libelle}
-                  </span>
-                </div>
-
-                <div className="academic-info-row">
-                  <span className="academic-label">N° Inscription :</span>
-                  <span className="academic-text">
-                    {dossier.inscription.numeroInscription}
-                  </span>
-                </div>
-
-                {/* Verdicts */}
-                <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: 'var(--academic-bg-secondary)', borderRadius: '8px' }}>
-                  <div className="academic-info-row">
-                    <span className="academic-label">Verdict 1 :</span>
-                    {dossier.verdicts.verdict1 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                        {getBadgeVerdict(dossier.verdicts.verdict1.verdict)}
-                        <small className="academic-text-muted">
-                          par {dossier.verdicts.verdict1.nomExaminateur}
-                        </small>
-                      </div>
-                    ) : (
-                      <span className="academic-badge">En attente</span>
+                    {dossier.verdictsDivergents && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                        Divergents
+                      </span>
+                    )}
+                    {dossier.decisionFinale && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                        Décision rendue
+                      </span>
                     )}
                   </div>
+                </div>
 
-                  <div className="academic-info-row" style={{ marginTop: '0.5rem' }}>
-                    <span className="academic-label">Verdict 2 :</span>
-                    {dossier.verdicts.verdict2 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                        {getBadgeVerdict(dossier.verdicts.verdict2.verdict)}
-                        <small className="academic-text-muted">
-                          par {dossier.verdicts.verdict2.nomExaminateur}
-                        </small>
+                <InfoRow label="Concours">{dossier.inscription.concours.libelle}</InfoRow>
+
+                <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <span className="text-xs font-medium text-gray-500">Verdict examinateur</span>
+                    {dossier.verdicts.verdict1 ? (
+                      <div className="flex flex-col items-start sm:items-end gap-1">
+                        <VerdictBadge verdict={dossier.verdicts.verdict1.verdict} />
+                        <span className="text-xs text-gray-400">
+                          par {dossier.verdicts.verdict1.nomExaminateur}
+                        </span>
                       </div>
                     ) : (
-                      <span className="academic-badge">En attente</span>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                        En attente
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <span className="text-xs font-medium text-gray-500">Arbitrage contrôleur</span>
+                    {dossier.verdicts.verdict2 ? (
+                      <div className="flex flex-col items-start sm:items-end gap-1">
+                        <VerdictBadge verdict={dossier.verdicts.verdict2.verdict} />
+                        <span className="text-xs text-gray-400">
+                          par {dossier.verdicts.verdict2.nomControleur || dossier.verdicts.verdict2.nomExaminateur}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                        En attente arbitrage
+                      </span>
                     )}
                   </div>
                 </div>
 
                 {dossier.verdictsDivergents && (
-                  <div className="academic-alert academic-alert-warning" style={{ marginTop: '1rem' }}>
-                    <span className="academic-alert-icon">⚠️</span>
-                    <span>Les verdicts sont divergents - Votre décision est requise</span>
-                  </div>
+                  <ControleurAlert type="warning">
+                    <span>⚠️</span>
+                    <span>Arbitrage divergent — l&apos;examinateur et le contrôleur ne sont pas d&apos;accord.</span>
+                  </ControleurAlert>
                 )}
-              </div>
 
-              <div className="academic-card-footer">
-                <button
-                  className="academic-btn academic-btn-primary"
-                  onClick={() => navigate(`/controleur-commission/dossiers/${dossier.dossierInscriptionId}`)}
-                >
-                  Examiner ce dossier
-                </button>
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-700 text-white hover:bg-slate-800 transition"
+                    onClick={() => navigate(`/controleur-commission/dossiers/${dossier.dossierInscriptionId}`)}
+                  >
+                    Examiner ce dossier
+                  </button>
+                </div>
               </div>
-            </div>
+            </BentoCard>
           ))}
         </div>
       )}
 
-      {/* Pagination */}
-      {pagination.pages > 1 && (
-        <div className="academic-pagination">
-          <button
-            className="academic-btn academic-btn-secondary"
-            disabled={pagination.offset === 0}
-            onClick={() => handlePageChange(pagination.offset - pagination.limite)}
-          >
-            ← Précédent
-          </button>
-          <span className="academic-text">
-            Page {Math.floor(pagination.offset / pagination.limite) + 1} sur {pagination.pages}
-          </span>
-          <button
-            className="academic-btn academic-btn-secondary"
-            disabled={pagination.offset + pagination.limite >= pagination.total}
-            onClick={() => handlePageChange(pagination.offset + pagination.limite)}
-          >
-            Suivant →
-          </button>
-        </div>
-      )}
-    </div>
-    </CommissionLayout>
+      <ControleurPagination pagination={pagination} onPageChange={handlePageChange} />
+    </ControleurPage>
   );
 };
 

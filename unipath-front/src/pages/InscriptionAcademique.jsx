@@ -58,7 +58,7 @@ function InscriptionAcademique() {
   useEffect(() => {
     const bootstrap = async () => {
       try {
-        const data = await etablissementService.getAll();
+        const data = await etablissementService.getPrives();
         setEtablissements((data.etablissements || []).filter((e) => e.type === 'PRIVE'));
         const appId = await loadApplications();
         if (appId) await loadApplicationDetails(appId);

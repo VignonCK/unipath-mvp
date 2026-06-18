@@ -669,6 +669,64 @@ class EmailService {
       emailType: 'SYSTEME',
     });
   }
+
+  /**
+   * Email à l'examinateur lorsque le contrôleur arbitre différemment de son verdict.
+   */
+  async envoyerEmailArbitrageDivergentExaminateur(data) {
+    validateParams(data, [
+      'examinateurEmail',
+      'examinateurNom',
+      'examinateurPrenom',
+      'numeroInscription',
+      'concours',
+      'verdictExaminateur',
+      'decisionControleur',
+      'motif',
+    ]);
+
+    const frontendUrl = getFrontendUrl();
+    const subject = `[UniPath] Retour sur votre évaluation — arbitrage divergent (${data.numeroInscription})`;
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); padding: 30px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">Arbitrage divergent</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb;">
+          <p style="font-size: 16px; color: #374151;">Bonjour <strong>${data.examinateurPrenom} ${data.examinateurNom}</strong>,</p>
+          <p style="font-size: 14px; color: #6b7280; line-height: 1.6;">
+            Le contrôleur a rendu une décision différente de la vôtre sur le dossier
+            <strong>${data.numeroInscription}</strong> (${data.concours}).
+          </p>
+          <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0; font-size: 14px;">
+            <p style="margin: 0 0 8px 0;"><strong>Votre verdict :</strong> ${data.verdictExaminateur}</p>
+            <p style="margin: 0;"><strong>Décision du contrôleur :</strong> ${data.decisionControleur}</p>
+          </div>
+          <div style="background: #fff7ed; border-left: 4px solid #f97316; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; color: #9a3412; font-size: 14px;"><strong>Motif du contrôleur :</strong></p>
+            <p style="margin: 10px 0 0 0; color: #9a3412; font-size: 13px; white-space: pre-wrap;">${data.motif}</p>
+          </div>
+          <p style="font-size: 14px; color: #6b7280; line-height: 1.6;">
+            Ce retour vous est transmis pour que vous puissiez en tenir compte dans vos prochaines évaluations.
+          </p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${frontendUrl}/examinateur/dossiers"
+               style="background: #1e3a8a; color: white; padding: 12px 32px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold;">
+              Accéder à mes dossiers
+            </a>
+          </div>
+        </div>
+      </div>
+    `;
+
+    return this.createEmail({
+      userId: data.examinateurId,
+      recipient: data.examinateurEmail,
+      subject,
+      htmlBody,
+      emailType: 'ARBITRAGE_DIVERGENT_EXAMINATEUR',
+    });
+  }
 }
 
 // Export singleton instance

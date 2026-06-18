@@ -2,7 +2,7 @@
 // Ce fichier centralise TOUS les appels vers le backend (API de Harry)
 // Chaque page importe uniquement ce dont elle a besoin depuis ce fichier
 
-import { saveAuth, clearAuth } from '../utils/auth';
+import { saveAuth, clearAuth, redirectToLoginOn401 } from '../utils/auth';
 
 // ── URL de base ──────────────────────────────────────────────────
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -20,6 +20,11 @@ async function request(endpoint, options = {}) {
   };
 
   const response = await fetch(`${BASE_URL}${endpoint}`, config);
+
+  if (redirectToLoginOn401(response.status)) {
+    return new Promise(() => {});
+  }
+
   const data = await response.json();
 
   if (!response.ok) {
@@ -34,6 +39,17 @@ async function request(endpoint, options = {}) {
     throw error;
   }
 
+  return data;
+}
+
+async function handleMultipartResponse(response, fallbackMessage) {
+  if (redirectToLoginOn401(response.status)) {
+    return new Promise(() => {});
+  }
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || fallbackMessage);
+  }
   return data;
 }
 
@@ -153,9 +169,7 @@ export const inscriptionService = {
       body: formData,
     });
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error);
-    return data;
+    return handleMultipartResponse(response, 'Erreur upload quittance');
   },
 
   // ✅ NOUVEAU - Upload pièce extra (endpoint mis à jour)
@@ -169,9 +183,7 @@ export const inscriptionService = {
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error);
-    return data;
+    return handleMultipartResponse(response, 'Erreur upload pièce');
   },
 };
 
@@ -195,9 +207,7 @@ export const dossierService = {
       body: formData,
     });
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error);
-    return data;
+    return handleMultipartResponse(response, 'Erreur upload document');
   },
 
   // ⚠️ DEPRECATED - Utiliser getDossierPersonnel à la place
@@ -247,6 +257,17 @@ export const dgesService = {
     request(`/dges/etablissements/${etablissementId}/admins/${adminId}`, {
       method: 'DELETE',
     }),
+
+  creerEtablissement: (data) =>
+    request('/dges/etablissements', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  supprimerEtablissement: (etablissementId) =>
+    request(`/dges/etablissements/${etablissementId}`, {
+      method: 'DELETE',
+    }),
 };
 
 export const campagneAdminService = {
@@ -290,6 +311,7 @@ export const completionService = {
 
 export const etablissementService = {
   getAll: () => request('/etablissements'),
+  getPrives: () => request('/etablissements/prives'),
   getById: (id) => request(`/etablissements/${id}`),
   rechercherParFilieres: (choix) =>
     request('/etablissements/recherche-filieres', {
@@ -322,9 +344,7 @@ export const etablissementService = {
       body: formData,
     });
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Erreur upload logo');
-    return data;
+    return handleMultipartResponse(response, 'Erreur upload logo');
   },
 };
 
@@ -382,9 +402,7 @@ export const applicationService = {
       headers: { ...(token && { Authorization: `Bearer ${token}` }) },
       body: formData,
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Erreur upload quittance bancaire');
-    return data;
+    return handleMultipartResponse(response, 'Erreur upload quittance bancaire');
   },
   uploadDocument: async (id, code, fichier) => {
     const token = localStorage.getItem('token');
@@ -396,9 +414,7 @@ export const applicationService = {
       headers: { ...(token && { Authorization: `Bearer ${token}` }) },
       body: formData,
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Erreur upload document');
-    return data;
+    return handleMultipartResponse(response, 'Erreur upload document');
   },
   finaliser: (id) =>
     request(`/applications/${id}/finalize`, {
@@ -440,6 +456,9 @@ export const parcoursService = {
 const telechargerPDF = async (url, filename) => {
   const token = localStorage.getItem('token');
   const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (redirectToLoginOn401(response.status)) {
+    return new Promise(() => {});
+  }
   if (!response.ok) {
     const err = await response.json();
     throw new Error(err.error || 'Erreur téléchargement');

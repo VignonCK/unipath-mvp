@@ -219,7 +219,11 @@ export default function DetailConcours() {
         const inscriptionUpdated = updated.inscriptions?.find(i => i.concoursId === updatedConcours.id);
         if (inscriptionUpdated) setInscription(inscriptionUpdated);
       } catch (err) {
-        showMessage(err.message || "Erreur lors de l'inscription.", 'error');
+        if (err.response?.status === 409) {
+          showMessage(err.response.data?.error || err.message, 'error');
+        } else {
+          showMessage(err.message || "Une erreur est survenue lors de l'inscription.", 'error');
+        }
       } finally {
         setSubmitting(false);
       }

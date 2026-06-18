@@ -46,7 +46,6 @@ const dossiersSansVerdictJob = cron.schedule(
       const dossiersSansVerdict = await prisma.dossierInscription.findMany({
         where: {
           verdict1Par: null,
-          verdict2Par: null,
           createdAt: { lte: dateLimite },
         },
         include: {

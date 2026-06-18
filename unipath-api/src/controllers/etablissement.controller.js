@@ -1,6 +1,7 @@
 const prisma = require('../prisma');
 const fs = require('fs');
 const path = require('path');
+const { supabaseAdmin } = require('../supabase');
 
 const LOGO_DIR = path.join(__dirname, '../../uploads/etablissements');
 
@@ -93,6 +94,46 @@ exports.getAllEtablissements = async (req, res) => {
     });
   } catch (error) {
     console.error('Erreur getAllEtablissements:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+exports.getEtablissementsPrives = async (req, res) => {
+  try {
+    const now = new Date();
+
+    const etablissements = await prisma.etablissement.findMany({
+      where: { type: 'PRIVE' },
+      include: {
+        filieres: { orderBy: { nom: 'asc' } },
+        campagnes: {
+          where: {
+            statut: 'PUBLIEE',
+            dateOuverture: { lte: now },
+            dateCloture: { gte: now },
+          },
+          include: {
+            filieres: {
+              include: {
+                filiere: {
+                  select: { id: true, nom: true, code: true, niveau: true, dureeAnnees: true },
+                },
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+          orderBy: { dateCloture: 'asc' },
+        },
+      },
+      orderBy: { nom: 'asc' },
+    });
+
+    return res.json({
+      message: 'Etablissements prives recuperes avec succes',
+      etablissements,
+    });
+  } catch (error) {
+    console.error('Erreur getEtablissementsPrives:', error);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 };
@@ -326,6 +367,97 @@ exports.uploadMonLogoEtablissement = async (req, res) => {
     }
     console.error('Erreur uploadMonLogoEtablissement:', error);
     return res.status(500).json({ error: 'Erreur serveur lors du telechargement du logo' });
+  }
+};
+
+exports.createEtablissementDges = async (req, res) => {
+  try {
+    const { nom, type, ville, adresse, email } = req.body;
+
+    if (!nom?.trim() || !type || !ville?.trim()) {
+      return res.status(400).json({ error: 'nom, type et ville sont obligatoires' });
+    }
+
+    const typeUpper = String(type).toUpperCase();
+    if (!['PUBLIC', 'PRIVE'].includes(typeUpper)) {
+      return res.status(400).json({ error: 'Le type doit etre PUBLIC ou PRIVE' });
+    }
+
+    const emailNormalise = email?.trim() ? email.trim().toLowerCase() : null;
+    if (emailNormalise) {
+      const existant = await prisma.etablissement.findUnique({ where: { email: emailNormalise } });
+      if (existant) {
+        return res.status(409).json({ error: 'Un etablissement avec cet email existe deja' });
+      }
+    }
+
+    const etablissement = await prisma.etablissement.create({
+      data: {
+        nom: nom.trim(),
+        type: typeUpper,
+        ville: ville.trim(),
+        adresse: adresse?.trim() || null,
+        email: emailNormalise,
+      },
+    });
+
+    return res.status(201).json({
+      message: 'Etablissement cree avec succes',
+      etablissement,
+    });
+  } catch (error) {
+    if (error?.code === 'P2002') {
+      return res.status(409).json({ error: 'Cet email est deja utilise' });
+    }
+    console.error('Erreur createEtablissementDges:', error);
+    return res.status(500).json({ error: 'Erreur serveur lors de la creation' });
+  }
+};
+
+exports.deleteEtablissementDges = async (req, res) => {
+  try {
+    const { etablissementId } = req.params;
+
+    const etablissement = await prisma.etablissement.findUnique({
+      where: { id: etablissementId },
+      include: {
+        admins: { select: { id: true } },
+      },
+    });
+
+    if (!etablissement) {
+      return res.status(404).json({ error: 'Etablissement non trouve' });
+    }
+
+    for (const admin of etablissement.admins) {
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(admin.id);
+      } catch (err) {
+        console.error('Suppression compte admin Supabase:', admin.id, err.message);
+      }
+    }
+
+    if (etablissement.email) {
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(etablissementId);
+      } catch {
+        // L'id peut ne pas correspondre a un compte Supabase
+      }
+    }
+
+    ensureLogoDir();
+    const logos = fs.readdirSync(LOGO_DIR).filter((name) => name.startsWith(`logo-${etablissementId}.`));
+    logos.forEach((name) => {
+      const logoPath = path.join(LOGO_DIR, name);
+      if (fs.existsSync(logoPath)) fs.unlinkSync(logoPath);
+    });
+
+    await prisma.etablissement.delete({ where: { id: etablissementId } });
+
+    return res.json({ message: 'Etablissement supprime avec succes' });
+  } catch (error) {
+    console.error('Erreur deleteEtablissementDges:', error);
+    return res.status(500).json({ error: 'Erreur serveur lors de la suppression' });
   }
 };
 

@@ -2,9 +2,19 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../services/api';
+import NotificationCenter from './NotificationCenter';
 
 function initiales(prenom, nom) {
   return `${(prenom || '?')[0]}${(nom || '?')[0]}`.toUpperCase();
+}
+
+const ESPACE_LABELS = {
+  EXAMINATEUR: 'Examinateur',
+  CONTROLEUR: 'Contrôleur',
+};
+
+function getEspaceLabel(sousRole) {
+  return ESPACE_LABELS[sousRole] || 'Commission';
 }
 
 export default function CommissionLayout({ children }) {
@@ -14,6 +24,7 @@ export default function CommissionLayout({ children }) {
   const user = authService.getCurrentUser();
 
   const sousRole = user?.sousRole;
+  const espaceLabel = getEspaceLabel(sousRole);
 
   const menuItems = [];
 
@@ -86,7 +97,7 @@ export default function CommissionLayout({ children }) {
           {sidebarOpen && (
             <div className='flex items-center gap-2'>
               <span className='text-lg font-semibold'>UniPath</span>
-              <span className='text-xs text-slate-400'>Commission</span>
+              <span className='text-xs text-slate-400'>{espaceLabel}</span>
             </div>
           )}
           <button
@@ -136,7 +147,7 @@ export default function CommissionLayout({ children }) {
                 <p className='text-sm font-medium truncate'>
                   {user?.prenom ? `${user.prenom} ${user.nom}` : user?.email}
                 </p>
-                <p className='text-slate-400 text-xs'>Commission</p>
+                <p className='text-slate-400 text-xs'>{espaceLabel}</p>
               </div>
             )}
           </div>
@@ -159,6 +170,9 @@ export default function CommissionLayout({ children }) {
           sidebarOpen ? 'ml-64' : 'ml-20'
         }`}
       >
+        <header className="sticky top-0 z-40 flex items-center justify-end gap-4 border-b border-gray-200 bg-white px-6 py-3">
+          <NotificationCenter />
+        </header>
         {children}
       </main>
     </div>

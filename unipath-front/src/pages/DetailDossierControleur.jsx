@@ -2,7 +2,77 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../utils/apiConfig';
-import CommissionLayout from '../components/CommissionLayout';
+import { BentoCard } from '../components/AcademicLayout';
+import {
+  ControleurLoading,
+  ControleurPage,
+  ControleurAlert,
+  InfoRow,
+  VerdictBadge,
+} from '../components/controleur/ControleurShell';
+
+const VERDICT_OPTIONS = ['VALIDE', 'REJETE', 'SOUS_RESERVE'];
+
+const VERDICT_LABELS = {
+  VALIDE: 'Validé',
+  REJETE: 'Rejeté',
+  SOUS_RESERVE: 'Sous réserve',
+};
+
+function motifRequis(decision, verdictExaminateur) {
+  if (!decision) return false;
+  if (decision === 'REJETE' || decision === 'SOUS_RESERVE') return true;
+  return Boolean(verdictExaminateur && decision !== verdictExaminateur);
+}
+
+function VerdictPanel({ titre, verdictData, divergent, onCorriger, allowCorrection = false }) {
+  const hasVerdict = Boolean(verdictData);
+  const panelClass = hasVerdict
+    ? 'bg-slate-50 border border-slate-200 rounded-xl p-5'
+    : 'bg-gray-50 border border-dashed border-gray-200 rounded-xl p-5';
+  const divergentClass = divergent ? 'border-2 border-orange-300' : '';
+  const auteur = verdictData?.examinateur || verdictData?.controleur;
+
+  return (
+    <div className={`${panelClass} ${divergentClass}`}>
+      <h3 className="text-sm font-semibold text-slate-700">{titre}</h3>
+      {hasVerdict ? (
+        <div className="mt-4 space-y-2">
+          <InfoRow label="Verdict">
+            <VerdictBadge verdict={verdictData.verdict} />
+          </InfoRow>
+          {auteur && (
+            <InfoRow label="Par">
+              {auteur.nom} {auteur.prenom}
+            </InfoRow>
+          )}
+          <InfoRow label="Date">
+            {new Date(verdictData.date).toLocaleDateString('fr-FR')}
+          </InfoRow>
+          {verdictData.motif && (
+            <div className="pt-2">
+              <p className="text-xs font-medium text-gray-500 mb-1">Motif</p>
+              <p className="text-sm text-slate-800 whitespace-pre-wrap">{verdictData.motif}</p>
+            </div>
+          )}
+          {allowCorrection && onCorriger && (
+            <button
+              type="button"
+              className="mt-3 px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
+              onClick={() => onCorriger(verdictData)}
+            >
+              Corriger ce verdict
+            </button>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm text-gray-400 mt-4">
+          {titre === 'Contrôleur' ? 'En attente de l\'arbitrage du contrôleur' : 'En attente du verdict examinateur'}
+        </p>
+      )}
+    </div>
+  );
+}
 
 const DetailDossierControleur = () => {
   const { dossierInscriptionId } = useParams();
@@ -13,7 +83,6 @@ const DetailDossierControleur = () => {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  // Formulaire de décision
   const [decision, setDecision] = useState('');
   const [motif, setMotif] = useState('');
   const [validationError, setValidationError] = useState('');
@@ -39,7 +108,6 @@ const DetailDossierControleur = () => {
       const data = await response.json();
       setDossier(data);
 
-      // Pré-remplir le formulaire si une décision existe déjà
       if (data.decisionControleur) {
         setDecision(data.decisionControleur.decision);
         setMotif(data.decisionControleur.motif || '');
@@ -61,8 +129,15 @@ const DetailDossierControleur = () => {
       return false;
     }
 
-    if ((decision === 'REJETE' || decision === 'SOUS_RESERVE') && (!motif || motif.trim().length < 10)) {
-      setValidationError('Le motif est obligatoire et doit contenir au moins 10 caractères pour un rejet ou une validation sous réserve');
+    const verdictExaminateur = dossier?.verdicts?.verdict1?.verdict;
+    const divergent = verdictExaminateur && decision !== verdictExaminateur;
+
+    if (motifRequis(decision, verdictExaminateur) && (!motif || motif.trim().length < 10)) {
+      setValidationError(
+        divergent
+          ? 'Un motif d\'au moins 10 caractères est obligatoire pour expliquer votre arbitrage à l\'examinateur.'
+          : 'Le motif est obligatoire et doit contenir au moins 10 caractères pour un rejet ou une validation sous réserve.'
+      );
       return false;
     }
 
@@ -94,7 +169,6 @@ const DetailDossierControleur = () => {
       }
 
       setSuccess(true);
-      // Recharger le dossier pour afficher la décision mise à jour
       setTimeout(() => {
         chargerDossier();
         setSuccess(false);
@@ -158,244 +232,122 @@ const DetailDossierControleur = () => {
     }
   };
 
-  const getBadgeVerdict = (verdict) => {
-    switch (verdict) {
-      case 'VALIDE':
-        return <span className="academic-badge academic-badge-success">Validé</span>;
-      case 'REJETE':
-        return <span className="academic-badge academic-badge-error">Rejeté</span>;
-      case 'SOUS_RESERVE':
-        return <span className="academic-badge academic-badge-warning">Sous réserve</span>;
-      default:
-        return <span className="academic-badge">-</span>;
-    }
-  };
-
   if (loading) {
-    return (
-      <div className="academic-container">
-        <div className="academic-bento-card">
-          <p className="academic-text-muted">Chargement du dossier...</p>
-        </div>
-      </div>
-    );
+    return <ControleurLoading message="Chargement du dossier..." />;
   }
 
   if (error && !dossier) {
     return (
-      <div className="academic-container">
-        <div className="academic-alert academic-alert-error">
-          <span className="academic-alert-icon">⚠️</span>
+      <ControleurPage>
+        <ControleurAlert type="error">
+          <span>⚠️</span>
           <span>{error}</span>
-        </div>
+        </ControleurAlert>
         <button
-          className="academic-btn academic-btn-secondary"
+          type="button"
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
           onClick={() => navigate('/controleur-commission/dossiers')}
         >
           ← Retour à la liste
         </button>
-      </div>
+      </ControleurPage>
     );
   }
 
+  const verdictExaminateur = dossier?.verdicts?.verdict1?.verdict;
+  const arbitrageDivergent = Boolean(
+    verdictExaminateur && decision && decision !== verdictExaminateur
+  );
+  const motifObligatoire = motifRequis(decision, verdictExaminateur);
+
   return (
-    <CommissionLayout>
-    <div className="academic-container">
-      <div className="academic-header">
+    <ControleurPage>
+      <div>
         <button
-          className="academic-btn academic-btn-secondary"
+          type="button"
+          className="mb-4 px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
           onClick={() => navigate('/controleur-commission/dossiers')}
-          style={{ marginBottom: '1rem' }}
         >
           ← Retour à la liste
         </button>
-        <h1 className="academic-title">Examen du dossier</h1>
-        <p className="academic-subtitle">
+        <h1 className="text-2xl font-bold text-slate-800">Examen du dossier</h1>
+        <p className="text-sm text-gray-500 mt-1">
           {dossier.inscription.candidat.nom} {dossier.inscription.candidat.prenom}
         </p>
       </div>
 
       {success && (
-        <div className="academic-alert academic-alert-success">
-          <span className="academic-alert-icon">✓</span>
+        <ControleurAlert type="success">
+          <span>✓</span>
           <span>Décision enregistrée avec succès !</span>
-        </div>
+        </ControleurAlert>
       )}
 
       {error && (
-        <div className="academic-alert academic-alert-error">
-          <span className="academic-alert-icon">⚠️</span>
+        <ControleurAlert type="error">
+          <span>⚠️</span>
           <span>{error}</span>
-        </div>
+        </ControleurAlert>
       )}
 
-      {/* Alerte verdicts divergents */}
       {dossier.verdictsDivergents && (
-        <div className="academic-alert academic-alert-warning">
-          <span className="academic-alert-icon">⚠️</span>
-          <span><strong>Verdicts divergents détectés !</strong> Les deux examinateurs ont rendu des verdicts différents. Votre décision est requise.</span>
-        </div>
+        <ControleurAlert type="warning">
+          <span>⚠️</span>
+          <span>
+            <strong>Arbitrage divergent !</strong> Votre décision diffère de celle de l&apos;examinateur.
+          </span>
+        </ControleurAlert>
       )}
 
-      {/* Informations candidat */}
-      <div className="academic-bento-card">
-        <h2 className="academic-card-title">Informations du candidat</h2>
-        <div className="academic-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))' }}>
-          <div className="academic-info-row">
-            <span className="academic-label">Nom complet :</span>
-            <span className="academic-text">
-              {dossier.inscription.candidat.nom} {dossier.inscription.candidat.prenom}
-            </span>
-          </div>
-          <div className="academic-info-row">
-            <span className="academic-label">Email :</span>
-            <span className="academic-text">{dossier.inscription.candidat.email}</span>
-          </div>
-          <div className="academic-info-row">
-            <span className="academic-label">ANIP :</span>
-            <span className="academic-text">{dossier.inscription.candidat.anip}</span>
-          </div>
-          <div className="academic-info-row">
-            <span className="academic-label">Série :</span>
-            <span className="academic-text">{dossier.inscription.candidat.serie}</span>
-          </div>
-          <div className="academic-info-row">
-            <span className="academic-label">Sexe :</span>
-            <span className="academic-text">{dossier.inscription.candidat.sexe}</span>
-          </div>
-          <div className="academic-info-row">
-            <span className="academic-label">Nationalité :</span>
-            <span className="academic-text">{dossier.inscription.candidat.nationalite}</span>
-          </div>
-          <div className="academic-info-row">
-            <span className="academic-label">Concours :</span>
-            <span className="academic-text">{dossier.inscription.concours.libelle}</span>
-          </div>
-          <div className="academic-info-row">
-            <span className="academic-label">Établissement :</span>
-            <span className="academic-text">{dossier.inscription.concours.etablissement}</span>
-          </div>
+      <BentoCard className="p-5 bg-white">
+        <h2 className="text-base font-semibold text-slate-800 mb-4">Informations du candidat</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+          <InfoRow label="Nom complet">
+            {dossier.inscription.candidat.nom} {dossier.inscription.candidat.prenom}
+          </InfoRow>
+          <InfoRow label="Email">{dossier.inscription.candidat.email}</InfoRow>
+          <InfoRow label="ANIP">{dossier.inscription.candidat.anip}</InfoRow>
+          <InfoRow label="Série">{dossier.inscription.candidat.serie}</InfoRow>
+          <InfoRow label="Sexe">{dossier.inscription.candidat.sexe}</InfoRow>
+          <InfoRow label="Nationalité">{dossier.inscription.candidat.nationalite}</InfoRow>
+          <InfoRow label="Concours">{dossier.inscription.concours.libelle}</InfoRow>
+          <InfoRow label="Établissement">{dossier.inscription.concours.etablissement}</InfoRow>
         </div>
-      </div>
+      </BentoCard>
 
-      {/* Verdicts des examinateurs */}
-      <div className="academic-bento-card">
-        <h2 className="academic-card-title">Verdicts des examinateurs</h2>
-        
-        <div className="academic-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
-          {/* Verdict 1 */}
-          <div style={{ 
-            padding: '1.5rem', 
-            backgroundColor: dossier.verdicts.verdict1 ? 'var(--academic-bg-secondary)' : 'var(--academic-bg-muted)', 
-            borderRadius: '12px',
-            border: dossier.verdictsDivergents ? '2px solid var(--academic-warning)' : 'none'
-          }}>
-            <h3 className="academic-subtitle">Examinateur 1</h3>
-            {dossier.verdicts.verdict1 ? (
-              <>
-                <div className="academic-info-row" style={{ marginTop: '1rem' }}>
-                  <span className="academic-label">Verdict :</span>
-                  {getBadgeVerdict(dossier.verdicts.verdict1.verdict)}
-                </div>
-                <div className="academic-info-row">
-                  <span className="academic-label">Par :</span>
-                  <span className="academic-text">
-                    {dossier.verdicts.verdict1.examinateur.nom} {dossier.verdicts.verdict1.examinateur.prenom}
-                  </span>
-                </div>
-                <div className="academic-info-row">
-                  <span className="academic-label">Date :</span>
-                  <span className="academic-text">
-                    {new Date(dossier.verdicts.verdict1.date).toLocaleDateString('fr-FR')}
-                  </span>
-                </div>
-                {dossier.verdicts.verdict1.motif && (
-                  <div style={{ marginTop: '1rem' }}>
-                    <span className="academic-label">Motif :</span>
-                    <p className="academic-text" style={{ marginTop: '0.5rem', whiteSpace: 'pre-wrap' }}>
-                      {dossier.verdicts.verdict1.motif}
-                    </p>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  className="academic-btn academic-btn-secondary"
-                  style={{ marginTop: '1rem' }}
-                  onClick={() => ouvrirCorrectionVerdict(1, dossier.verdicts.verdict1)}
-                >
-                  Corriger ce verdict
-                </button>
-              </>
-            ) : (
-              <p className="academic-text-muted" style={{ marginTop: '1rem' }}>En attente du verdict</p>
-            )}
-          </div>
-
-          {/* Verdict 2 */}
-          <div style={{ 
-            padding: '1.5rem', 
-            backgroundColor: dossier.verdicts.verdict2 ? 'var(--academic-bg-secondary)' : 'var(--academic-bg-muted)', 
-            borderRadius: '12px',
-            border: dossier.verdictsDivergents ? '2px solid var(--academic-warning)' : 'none'
-          }}>
-            <h3 className="academic-subtitle">Examinateur 2</h3>
-            {dossier.verdicts.verdict2 ? (
-              <>
-                <div className="academic-info-row" style={{ marginTop: '1rem' }}>
-                  <span className="academic-label">Verdict :</span>
-                  {getBadgeVerdict(dossier.verdicts.verdict2.verdict)}
-                </div>
-                <div className="academic-info-row">
-                  <span className="academic-label">Par :</span>
-                  <span className="academic-text">
-                    {dossier.verdicts.verdict2.examinateur.nom} {dossier.verdicts.verdict2.examinateur.prenom}
-                  </span>
-                </div>
-                <div className="academic-info-row">
-                  <span className="academic-label">Date :</span>
-                  <span className="academic-text">
-                    {new Date(dossier.verdicts.verdict2.date).toLocaleDateString('fr-FR')}
-                  </span>
-                </div>
-                {dossier.verdicts.verdict2.motif && (
-                  <div style={{ marginTop: '1rem' }}>
-                    <span className="academic-label">Motif :</span>
-                    <p className="academic-text" style={{ marginTop: '0.5rem', whiteSpace: 'pre-wrap' }}>
-                      {dossier.verdicts.verdict2.motif}
-                    </p>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  className="academic-btn academic-btn-secondary"
-                  style={{ marginTop: '1rem' }}
-                  onClick={() => ouvrirCorrectionVerdict(2, dossier.verdicts.verdict2)}
-                >
-                  Corriger ce verdict
-                </button>
-              </>
-            ) : (
-              <p className="academic-text-muted" style={{ marginTop: '1rem' }}>En attente du verdict</p>
-            )}
-          </div>
+      <BentoCard className="p-5 bg-white">
+        <h2 className="text-base font-semibold text-slate-800 mb-4">Examinateur et arbitrage contrôleur</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <VerdictPanel
+            titre="Examinateur"
+            verdictData={dossier.verdicts.verdict1}
+            divergent={dossier.verdictsDivergents}
+            allowCorrection
+            onCorriger={(v) => ouvrirCorrectionVerdict(1, v)}
+          />
+          <VerdictPanel
+            titre="Contrôleur"
+            verdictData={dossier.verdicts.verdict2}
+            divergent={dossier.verdictsDivergents}
+          />
         </div>
 
         {correctionSlot && (
-          <div className="academic-alert academic-alert-info" style={{ marginTop: '1.5rem' }}>
-            <p className="academic-text" style={{ marginBottom: '1rem' }}>
-              <strong>Correction du verdict examinateur {correctionSlot}</strong> — seul le contrôleur peut
-              modifier le verdict d&apos;un examinateur.
+          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-4">
+            <p className="text-sm text-blue-900">
+              <strong>Correction du verdict examinateur</strong> — vous pouvez corriger le verdict
+              de l&apos;examinateur avant ou après votre arbitrage.
             </p>
             {correctionError && (
-              <div className="academic-alert academic-alert-error" style={{ marginBottom: '1rem' }}>
+              <ControleurAlert type="error">
                 <span>{correctionError}</span>
-              </div>
+              </ControleurAlert>
             )}
-            <div className="academic-form-group">
-              <label className="academic-label">Nouveau verdict *</label>
-              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                {['VALIDE', 'REJETE', 'SOUS_RESERVE'].map((v) => (
-                  <label key={v} className="academic-radio-label">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-2">Nouveau verdict *</label>
+              <div className="flex gap-4 flex-wrap">
+                {VERDICT_OPTIONS.map((v) => (
+                  <label key={v} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
                       name="correctionVerdict"
@@ -403,26 +355,27 @@ const DetailDossierControleur = () => {
                       checked={correctionVerdict === v}
                       onChange={(e) => setCorrectionVerdict(e.target.value)}
                       disabled={correctionSubmitting}
+                      className="text-slate-700"
                     />
-                    {getBadgeVerdict(v)}
+                    <VerdictBadge verdict={v} />
                   </label>
                 ))}
               </div>
             </div>
-            <div className="academic-form-group">
-              <label className="academic-label">Motif</label>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-2">Motif</label>
               <textarea
-                className="academic-input"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                 rows="4"
                 value={correctionMotif}
                 onChange={(e) => setCorrectionMotif(e.target.value)}
                 disabled={correctionSubmitting}
               />
             </div>
-            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <div className="flex gap-3 flex-wrap">
               <button
                 type="button"
-                className="academic-btn academic-btn-primary"
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-50 transition"
                 onClick={soumettreCorrectionVerdict}
                 disabled={correctionSubmitting}
               >
@@ -430,7 +383,7 @@ const DetailDossierControleur = () => {
               </button>
               <button
                 type="button"
-                className="academic-btn academic-btn-secondary"
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50 transition"
                 onClick={() => setCorrectionSlot(null)}
                 disabled={correctionSubmitting}
               >
@@ -439,149 +392,145 @@ const DetailDossierControleur = () => {
             </div>
           </div>
         )}
-      </div>
+      </BentoCard>
 
-      {/* Pièces du dossier */}
-      <div className="academic-bento-card">
-        <h2 className="academic-card-title">Pièces du dossier</h2>
-        
-        <h3 className="academic-subtitle" style={{ marginTop: '1rem' }}>Pièces de base</h3>
-        <div className="academic-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+      <BentoCard className="p-5 bg-white">
+        <h2 className="text-base font-semibold text-slate-800 mb-4">Pièces du dossier</h2>
+
+        <h3 className="text-sm font-medium text-slate-600 mb-3">Pièces de base</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 mb-6">
           {Object.entries(dossier.piecesBase).map(([key, piece]) => (
-            <div key={key} className="academic-info-row">
-              <span className="academic-label">{key} :</span>
+            <InfoRow key={key} label={key}>
               {piece.url ? (
                 <a
                   href={piece.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="academic-link"
+                  className="text-sm text-blue-700 hover:underline"
                 >
                   Voir la pièce
                 </a>
               ) : (
-                <span className="academic-badge academic-badge-warning">Manquante</span>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                  Manquante
+                </span>
               )}
-            </div>
+            </InfoRow>
           ))}
         </div>
 
-        <h3 className="academic-subtitle" style={{ marginTop: '1.5rem' }}>Pièces spécifiques</h3>
-        <div className="academic-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+        <h3 className="text-sm font-medium text-slate-600 mb-3">Pièces spécifiques</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
           {Object.entries(dossier.piecesSpecifiques).map(([key, piece]) => (
-            <div key={key} className="academic-info-row">
-              <span className="academic-label">{key} :</span>
+            <InfoRow key={key} label={key}>
               {piece.url ? (
                 <a
                   href={piece.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="academic-link"
+                  className="text-sm text-blue-700 hover:underline"
                 >
                   Voir la pièce
                 </a>
               ) : (
-                <span className="academic-badge academic-badge-warning">Manquante</span>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                  Manquante
+                </span>
               )}
-            </div>
+            </InfoRow>
           ))}
         </div>
-      </div>
+      </BentoCard>
 
-      {/* Formulaire de décision */}
-      <div className="academic-bento-card">
-        <h2 className="academic-card-title">
+      <BentoCard className="p-5 bg-white">
+        <h2 className="text-base font-semibold text-slate-800 mb-4">
           {dossier.decisionControleur ? 'Modifier ma décision' : 'Rendre ma décision'}
         </h2>
 
         {dossier.decisionControleur && (
-          <div className="academic-alert academic-alert-info">
-            <span className="academic-alert-icon">ℹ️</span>
+          <ControleurAlert type="info">
+            <span>ℹ️</span>
             <span>
               Vous avez déjà rendu votre décision. Vous pouvez la modifier autant de fois que nécessaire.
             </span>
-          </div>
+          </ControleurAlert>
         )}
 
         {validationError && (
-          <div className="academic-alert academic-alert-error">
-            <span className="academic-alert-icon">⚠️</span>
+          <ControleurAlert type="error">
+            <span>⚠️</span>
             <span>{validationError}</span>
-          </div>
+          </ControleurAlert>
         )}
 
-        <div className="academic-form-group">
-          <label className="academic-label">Décision finale *</label>
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-            <label className="academic-radio-label">
-              <input
-                type="radio"
-                name="decision"
-                value="VALIDE"
-                checked={decision === 'VALIDE'}
-                onChange={(e) => setDecision(e.target.value)}
-                disabled={submitting || success}
-              />
-              <span className="academic-badge academic-badge-success">Validé</span>
-            </label>
-            <label className="academic-radio-label">
-              <input
-                type="radio"
-                name="decision"
-                value="REJETE"
-                checked={decision === 'REJETE'}
-                onChange={(e) => setDecision(e.target.value)}
-                disabled={submitting || success}
-              />
-              <span className="academic-badge academic-badge-error">Rejeté</span>
-            </label>
-            <label className="academic-radio-label">
-              <input
-                type="radio"
-                name="decision"
-                value="SOUS_RESERVE"
-                checked={decision === 'SOUS_RESERVE'}
-                onChange={(e) => setDecision(e.target.value)}
-                disabled={submitting || success}
-              />
-              <span className="academic-badge academic-badge-warning">Sous réserve</span>
-            </label>
+        {arbitrageDivergent && (
+          <ControleurAlert type="warning">
+            <span>⚠️</span>
+            <span>
+              Votre décision ({VERDICT_LABELS[decision]}) diffère de celle de l&apos;examinateur (
+              {VERDICT_LABELS[verdictExaminateur]}). Un motif est obligatoire : il sera transmis à
+              l&apos;examinateur pour ses prochaines évaluations.
+            </span>
+          </ControleurAlert>
+        )}
+
+        <div className="mt-4">
+          <label className="block text-xs font-medium text-gray-500 mb-2">Décision finale *</label>
+          <div className="flex gap-4 flex-wrap">
+            {VERDICT_OPTIONS.map((v) => (
+              <label key={v} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="decision"
+                  value={v}
+                  checked={decision === v}
+                  onChange={(e) => setDecision(e.target.value)}
+                  disabled={submitting || success}
+                  className="text-slate-700"
+                />
+                <VerdictBadge verdict={v} />
+              </label>
+            ))}
           </div>
         </div>
 
-        <div className="academic-form-group">
-          <label className="academic-label">
-            Motif {(decision === 'REJETE' || decision === 'SOUS_RESERVE') && '*'}
+        <div className="mt-4">
+          <label className="block text-xs font-medium text-gray-500 mb-2">
+            Motif {motifObligatoire && '*'}
           </label>
           <textarea
-            className="academic-input"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
             rows="6"
             value={motif}
             onChange={(e) => setMotif(e.target.value)}
             placeholder={
-              decision === 'REJETE' || decision === 'SOUS_RESERVE'
-                ? 'Motif obligatoire (minimum 10 caractères)'
-                : 'Motif optionnel'
+              arbitrageDivergent
+                ? 'Expliquez pourquoi vous arbitrez différemment de l\'examinateur (min. 10 caractères, envoyé à l\'examinateur)'
+                : decision === 'REJETE' || decision === 'SOUS_RESERVE'
+                  ? 'Motif obligatoire (minimum 10 caractères)'
+                  : 'Motif optionnel'
             }
             disabled={submitting || success}
           />
-          <small className="academic-text-muted">
-            {motif.trim().length} / 1000 caractères
-          </small>
+          <p className="text-xs text-gray-400 mt-1">{motif.trim().length} / 1000 caractères</p>
         </div>
 
-        <div className="academic-card-footer">
+        <div className="mt-6 pt-4 border-t border-gray-100">
           <button
-            className="academic-btn academic-btn-primary"
+            type="button"
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-50 transition"
             onClick={soumettreDecision}
             disabled={submitting || success}
           >
-            {submitting ? 'Envoi en cours...' : dossier.decisionControleur ? 'Modifier ma décision' : 'Soumettre ma décision'}
+            {submitting
+              ? 'Envoi en cours...'
+              : dossier.decisionControleur
+                ? 'Modifier ma décision'
+                : 'Soumettre ma décision'}
           </button>
         </div>
-      </div>
-    </div>
-    </CommissionLayout>
+      </BentoCard>
+    </ControleurPage>
   );
 };
 

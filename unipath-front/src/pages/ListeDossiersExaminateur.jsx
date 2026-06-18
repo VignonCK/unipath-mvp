@@ -3,7 +3,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { concoursService } from '../services/api';
 import { apiFetch } from '../utils/apiConfig';
-import CommissionLayout from '../components/CommissionLayout';
+import { BentoCard } from '../components/AcademicLayout';
+import {
+  ControleurLoading,
+  ControleurPage,
+  ControleurAlert,
+  ControleurPagination,
+  InfoRow,
+} from '../components/controleur/ControleurShell';
 
 const ListeDossiersExaminateur = () => {
   const navigate = useNavigate();
@@ -52,9 +59,7 @@ const ListeDossiersExaminateur = () => {
       setDossiers(data.dossiers || []);
       setPagination((prev) => data.pagination || prev);
     } catch (err) {
-      if (err.message !== 'Session expirée') {
-        setError(err.message);
-      }
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -68,117 +73,96 @@ const ListeDossiersExaminateur = () => {
     setPagination((prev) => ({ ...prev, offset: newOffset }));
   };
 
-  const content = loading ? (
-    <div className="academic-container">
-      <div className="academic-bento-card">
-        <p className="academic-text-muted">Chargement des dossiers...</p>
-      </div>
-    </div>
-  ) : (
-    <div className="academic-container">
-      <div className="academic-header">
-        <h1 className="academic-title">Mes dossiers à évaluer</h1>
-        <p className="academic-subtitle">
-          {pagination.total} dossier{pagination.total > 1 ? 's' : ''} en attente d'évaluation
+  if (loading) {
+    return <ControleurLoading message="Chargement des dossiers..." />;
+  }
+
+  return (
+    <ControleurPage>
+      <div>
+        <h1 className="text-2xl font-bold text-slate-800">Mes dossiers à évaluer</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          {pagination.total} dossier{pagination.total > 1 ? 's' : ''} en attente d&apos;évaluation
         </p>
       </div>
 
       {error && (
-        <div className="academic-alert academic-alert-error">
-          <span className="academic-alert-icon">⚠️</span>
+        <ControleurAlert type="error">
+          <span>⚠️</span>
           <span>{error}</span>
-        </div>
+        </ControleurAlert>
       )}
 
-      <div className="academic-bento-card" style={{ marginBottom: '2rem' }}>
-        <div className="academic-form-group">
-          <label className="academic-label">Filtrer par concours</label>
-          <select
-            className="academic-input"
-            value={filtreConcoursId}
-            onChange={(e) => {
-              setFiltreConcoursId(e.target.value);
-              setPagination((prev) => ({ ...prev, offset: 0 }));
-            }}
-          >
-            <option value="">Tous les concours</option>
-            {concours.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.libelle} - {c.etablissement}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+      <BentoCard className="p-4 bg-white">
+        <label className="block text-xs font-medium text-gray-500 mb-2">Filtrer par concours</label>
+        <select
+          className="w-full sm:max-w-md px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 bg-white"
+          value={filtreConcoursId}
+          onChange={(e) => {
+            setFiltreConcoursId(e.target.value);
+            setPagination((prev) => ({ ...prev, offset: 0 }));
+          }}
+        >
+          <option value="">Tous les concours</option>
+          {concours.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.libelle} - {c.etablissement}
+            </option>
+          ))}
+        </select>
+      </BentoCard>
 
       {dossiers.length === 0 ? (
-        <div className="academic-bento-card">
-          <p className="academic-text-muted">Aucun dossier à évaluer pour le moment.</p>
-        </div>
+        <BentoCard className="p-6 bg-white text-center">
+          <p className="text-sm text-gray-500">Aucun dossier à évaluer pour le moment.</p>
+        </BentoCard>
       ) : (
-        <div className="academic-grid">
+        <div className="space-y-4">
           {dossiers.map((dossier) => (
-            <div key={dossier.dossierInscriptionId} className="academic-bento-card academic-card-hover">
-              <div className="academic-card-header">
-                <h3 className="academic-card-title">
-                  {dossier.inscription.candidat.nom} {dossier.inscription.candidat.prenom}
-                </h3>
-                {dossier.autreVerdictRendu && (
-                  <span className="academic-badge academic-badge-info">
-                    {dossier.nombreVerdictsRendus}/2 verdict{dossier.nombreVerdictsRendus > 1 ? 's' : ''}
-                  </span>
-                )}
-              </div>
-
-              <div className="academic-card-content">
-                <div className="academic-info-row">
-                  <span className="academic-label">Concours :</span>
-                  <span className="academic-text">{dossier.inscription.concours.libelle}</span>
+            <BentoCard
+              key={dossier.dossierInscriptionId}
+              className="p-0 overflow-hidden bg-white hover:shadow-lg transition-shadow"
+            >
+              <div className="h-1 bg-slate-300" />
+              <div className="p-5">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">
+                      {dossier.inscription.candidat.nom} {dossier.inscription.candidat.prenom}
+                    </h3>
+                    <p className="text-xs text-gray-500 font-mono mt-0.5">
+                      {dossier.inscription.numeroInscription || '—'}
+                    </p>
+                  </div>
+                  {dossier.autreVerdictRendu && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                      {dossier.nombreVerdictsRendus}/2 verdict
+                      {dossier.nombreVerdictsRendus > 1 ? 's' : ''}
+                    </span>
+                  )}
                 </div>
-                <div className="academic-info-row">
-                  <span className="academic-label">N° Inscription :</span>
-                  <span className="academic-text">{dossier.inscription.numeroInscription || '—'}</span>
+
+                <InfoRow label="Concours">{dossier.inscription.concours.libelle}</InfoRow>
+                <InfoRow label="Établissement">{dossier.inscription.concours.etablissement}</InfoRow>
+
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-700 text-white hover:bg-slate-800 transition"
+                    onClick={() => navigate(`/examinateur/dossiers/${dossier.dossierInscriptionId}`)}
+                  >
+                    Évaluer ce dossier
+                  </button>
                 </div>
               </div>
-
-              <div className="academic-card-footer">
-                <button
-                  className="academic-btn academic-btn-primary"
-                  onClick={() => navigate(`/examinateur/dossiers/${dossier.dossierInscriptionId}`)}
-                >
-                  Évaluer ce dossier
-                </button>
-              </div>
-            </div>
+            </BentoCard>
           ))}
         </div>
       )}
 
-      {pagination.pages > 1 && (
-        <div className="academic-pagination">
-          <button
-            className="academic-btn academic-btn-secondary"
-            disabled={pagination.offset === 0}
-            onClick={() => handlePageChange(pagination.offset - pagination.limite)}
-          >
-            ← Précédent
-          </button>
-          <span className="academic-text">
-            Page {Math.floor(pagination.offset / pagination.limite) + 1} sur {pagination.pages}
-          </span>
-          <button
-            className="academic-btn academic-btn-secondary"
-            disabled={pagination.offset + pagination.limite >= pagination.total}
-            onClick={() => handlePageChange(pagination.offset + pagination.limite)}
-          >
-            Suivant →
-          </button>
-        </div>
-      )}
-    </div>
+      <ControleurPagination pagination={pagination} onPageChange={handlePageChange} />
+    </ControleurPage>
   );
-
-  return <CommissionLayout>{content}</CommissionLayout>;
 };
 
 export default ListeDossiersExaminateur;

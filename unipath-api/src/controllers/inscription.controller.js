@@ -58,6 +58,51 @@ exports.creerInscription = async (req, res) => {
       return res.status(400).json({ error: 'Vous êtes déjà inscrit à ce concours' });
     }
 
+    const MARGE_JOURS = 2;
+
+    if (concours.dateDebutComposition && concours.dateFinComposition) {
+      const inscriptionsExistantes = await prisma.inscription.findMany({
+        where: { candidatId },
+        include: {
+          concours: {
+            select: {
+              libelle: true,
+              dateDebutComposition: true,
+              dateFinComposition: true,
+            },
+          },
+        },
+      });
+
+      const margeMs = MARGE_JOURS * 24 * 60 * 60 * 1000;
+      const nouveauDebut = new Date(concours.dateDebutComposition).getTime();
+      const nouveauFin = new Date(concours.dateFinComposition).getTime();
+
+      const conflit = inscriptionsExistantes.find((ins) => {
+        if (!ins.concours.dateDebutComposition || !ins.concours.dateFinComposition) {
+          return false;
+        }
+
+        const existantDebut = new Date(ins.concours.dateDebutComposition).getTime();
+        const existantFin = new Date(ins.concours.dateFinComposition).getTime();
+
+        if (Number.isNaN(nouveauDebut) || Number.isNaN(nouveauFin) || Number.isNaN(existantDebut) || Number.isNaN(existantFin)) {
+          return false;
+        }
+
+        return (
+          nouveauDebut <= existantFin + margeMs &&
+          nouveauFin >= existantDebut - margeMs
+        );
+      });
+
+      if (conflit) {
+        return res.status(409).json({
+          error: `Conflit de dates détecté avec le concours "${conflit.concours.libelle}". Les périodes de composition sont trop proches (moins de ${MARGE_JOURS} jours d'écart). Veuillez choisir un autre concours.`,
+        });
+      }
+    }
+
     // Vérifier si le candidat a un Dossier, sinon le créer
     let dossier = await prisma.dossier.findUnique({
       where: { candidatId }

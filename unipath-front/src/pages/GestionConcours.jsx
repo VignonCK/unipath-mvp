@@ -1,9 +1,10 @@
 // src/pages/GestionConcours.jsx
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { concoursService } from '../services/api';
-import PiecesConfiguration from '../components/PiecesConfiguration';
+import { PiecesConfiguration } from '../components/PiecesConfiguration';
 import DGESLayout from '../components/DGESLayout';
-import { getDefaultPiecesRequises, validatePiecesConfiguration } from '../constants/pieces';
+import { getDefaultPiecesRequises, validatePiecesConfiguration, convertLegacyId } from '../constants/pieces';
 
 export default function GestionConcours() {
   const [concours, setConcours] = useState([]);
@@ -203,17 +204,26 @@ export default function GestionConcours() {
       return;
     }
 
+    const payload = {
+      ...formData,
+      piecesRequises: formData.piecesRequises.map((piece) => ({
+        ...piece,
+        id: convertLegacyId(piece.id),
+        formats: (piece.formats || []).map((f) => (f === 'JPG' ? 'JPEG' : f)),
+      })),
+    };
+
     setSubmitting(true);
 
     try {
       if (editingConcours) {
-        const response = await concoursService.update(editingConcours.id, formData);
+        const response = await concoursService.update(editingConcours.id, payload);
         // Afficher un avertissement si présent
         if (response.warning) {
           alert(response.warning);
         }
       } else {
-        await concoursService.create(formData);
+        await concoursService.create(payload);
       }
       setShowModal(false);
       loadConcours();
@@ -366,17 +376,19 @@ export default function GestionConcours() {
           </div>
         </div>
 
-        {/* MODAL CRÉATION/ÉDITION */}
-        {showModal && (
-          <div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4'>
-            <div className='bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto'>
-            <div className='sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between'>
+        {/* MODAL CRÉATION/ÉDITION — portail vers body pour éviter le double sidebar */}
+        {showModal && createPortal(
+          <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4'>
+            <div className='relative bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto'>
+            <div className='sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between z-10'>
               <h2 className='text-lg font-bold text-gray-800'>
                 {editingConcours ? 'Modifier le concours' : 'Nouveau concours'}
               </h2>
               <button
+                type='button'
                 onClick={() => setShowModal(false)}
                 className='p-1 hover:bg-gray-100 rounded-lg transition'
+                aria-label='Fermer'
               >
                 <svg className='w-5 h-5 text-gray-500' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                   <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
@@ -678,7 +690,8 @@ export default function GestionConcours() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+          document.body
         )}
       </div>
     </DGESLayout>

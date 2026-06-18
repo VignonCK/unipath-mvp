@@ -1,11 +1,12 @@
+const { etapesCompletees, verdictsDivergents } = require('./verdict-workflow.helper');
+
 /**
  * Aplatit DossierInscription + Inscription pour compatibilité front legacy.
  */
 function mapDossierInscriptionToInscription(dossier) {
   const ins = dossier.inscription;
-  const nombreVerdicts = (dossier.verdict1Par ? 1 : 0) + (dossier.verdict2Par ? 1 : 0);
-  const verdictsDivergents =
-    dossier.verdict1 && dossier.verdict2 && dossier.verdict1 !== dossier.verdict2;
+  const nombreVerdicts = etapesCompletees(dossier);
+  const divergent = verdictsDivergents(dossier);
 
   return {
     ...ins,
@@ -22,11 +23,11 @@ function mapDossierInscriptionToInscription(dossier) {
     piecesExtras: dossier.piecesExtras,
     doubleVerdict: {
       verdict1: dossier.verdict1,
-      verdict2: dossier.verdict2,
+      verdict2: dossier.decisionControleur,
       verdict1Par: dossier.verdict1Par,
-      verdict2Par: dossier.verdict2Par,
+      verdict2Par: dossier.decisionControleurPar,
       nombreVerdicts,
-      verdictsDivergents,
+      verdictsDivergents: divergent,
       decisionControleur: dossier.decisionControleur,
       decisionControleurDate: dossier.decisionControleurDate,
     },
