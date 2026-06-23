@@ -69,6 +69,7 @@ async function fixSeed() {
               prenom: 'Commission',
               telephone: '+22997000002',
               role: 'COMMISSION',
+              sousRole: 'MEMBRE',
             },
           });
           console.log('✅ COMMISSION créé:', email);

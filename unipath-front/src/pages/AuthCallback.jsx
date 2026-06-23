@@ -10,7 +10,6 @@ export default function AuthCallback() {
     const handleEmailConfirmation = async () => {
       try {
         const params = new URLSearchParams(window.location.search);
-        const token = params.get('token');
         const type = params.get('type');
         const error = params.get('error');
         const errorDescription = params.get('error_description');

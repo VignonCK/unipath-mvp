@@ -2,6 +2,8 @@
 // Ce fichier centralise TOUS les appels vers le backend (API de Harry)
 // Chaque page importe uniquement ce dont elle a besoin depuis ce fichier
 
+import { saveAuth, clearAuth, redirectToLoginOn401 } from '../utils/auth';
+
 // ── URL de base ──────────────────────────────────────────────────
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -18,10 +20,36 @@ async function request(endpoint, options = {}) {
   };
 
   const response = await fetch(`${BASE_URL}${endpoint}`, config);
+
+  if (redirectToLoginOn401(response.status)) {
+    return new Promise(() => {});
+  }
+
   const data = await response.json();
 
-  if (!response.ok) throw new Error(data.error || 'Erreur API');
+  if (!response.ok) {
+    const error = new Error(data.error || 'Erreur API');
+    error.status = response.status;
+    error.data = data;
+    // Compatibilite avec les appels existants qui attendent err.response (style axios)
+    error.response = {
+      status: response.status,
+      data,
+    };
+    throw error;
+  }
 
+  return data;
+}
+
+async function handleMultipartResponse(response, fallbackMessage) {
+  if (redirectToLoginOn401(response.status)) {
+    return new Promise(() => {});
+  }
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || fallbackMessage);
+  }
   return data;
 }
 
@@ -33,12 +61,10 @@ export const authService = {
       body: JSON.stringify({ email, password }),
     });
     
-    // Stocker le token ET les infos utilisateur (incluant le rôle)
-    if (data.token) {
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+    if (data.token && data.user) {
+      saveAuth(data.token, data.user);
     }
-    
+
     return data;
   },
 
@@ -48,9 +74,14 @@ export const authService = {
       body: JSON.stringify(userData),
     }),
 
+  registerEtablissement: (data) =>
+    request('/auth/register-etablissement', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    clearAuth();
   },
 
   resetPassword: (email) =>
@@ -85,9 +116,29 @@ export const candidatService = {
 export const concoursService = {
   getAll: () => request('/concours'),
   getById: (id) => request(`/concours/${id}`),
+  getClassement: (id) => request(`/concours/${id}/classement`),
+  
+  // CRUD pour DGES
+  create: (data) =>
+    request('/concours', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  update: (id, data) =>
+    request(`/concours/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  delete: (id) =>
+    request(`/concours/${id}`, {
+      method: 'DELETE',
+    }),
 };
 
 // ── Inscriptions ─────────────────────────────────────────────────
+// ✅ REFONTE - Documents spécifiques au concours (Dossier Concours)
 export const inscriptionService = {
   creer: (concoursId) =>
     request('/inscriptions', {
@@ -95,29 +146,71 @@ export const inscriptionService = {
       body: JSON.stringify({ concoursId }),
     }),
 
-  getMesInscriptions: () => request('/inscriptions/mes-inscriptions'),
-};
+  soumettre: (inscriptionId) =>
+    request(`/inscriptions/${inscriptionId}/soumettre`, {
+      method: 'POST',
+    }),
 
-// ── Dossier ──────────────────────────────────────────────────────
-export const dossierService = {
-  uploadPiece: async (typePiece, fichier) => {
+  getMesInscriptions: () => request('/inscriptions/mes-inscriptions'),
+
+  // ✅ NOUVEAU - Récupérer le dossier complet d'une inscription (base + spécifique)
+  getDossierComplet: (inscriptionId) => request(`/completion/inscriptions/${inscriptionId}/dossier-complet`),
+
+  // ✅ NOUVEAU - Upload quittance (endpoint mis à jour)
+  uploadQuittance: async (inscriptionId, fichier) => {
     const token = localStorage.getItem('token');
 
     const formData = new FormData();
-    formData.append('fichier', fichier);
-    formData.append('typePiece', typePiece);
+    formData.append('file', fichier);
 
-    const response = await fetch(`${BASE_URL}/dossier/upload`, {
+    const response = await fetch(`${BASE_URL}/inscriptions/${inscriptionId}/dossier-concours/quittance`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
     });
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error);
-    return data;
+    return handleMultipartResponse(response, 'Erreur upload quittance');
   },
 
+  // ✅ NOUVEAU - Upload pièce extra (endpoint mis à jour)
+  uploadPieceExtra: async (inscriptionId, typePiece, fichier) => {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('file', fichier);
+    formData.append('typePiece', typePiece);
+    const response = await fetch(`${BASE_URL}/inscriptions/${inscriptionId}/dossier-concours/pieces-extras`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    return handleMultipartResponse(response, 'Erreur upload pièce');
+  },
+};
+
+// ── Dossier ──────────────────────────────────────────────────────
+// ✅ REFONTE - Documents de base (Dossier Personnel)
+export const dossierService = {
+  // ✅ NOUVEAU - Récupérer le dossier personnel d'un candidat
+  getDossierPersonnel: (candidatId) => request(`/dossier/candidats/${candidatId}/dossier-personnel`),
+
+  // ✅ NOUVEAU - Upload document de base (acteNaissance, carteIdentite, photo, releve)
+  uploadPiece: async (candidatId, typePiece, fichier) => {
+    const token = localStorage.getItem('token');
+
+    const formData = new FormData();
+    formData.append('file', fichier);
+    formData.append('typePiece', typePiece);
+
+    const response = await fetch(`${BASE_URL}/dossier/candidats/${candidatId}/dossier-personnel/pieces`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+
+    return handleMultipartResponse(response, 'Erreur upload document');
+  },
+
+  // ⚠️ DEPRECATED - Utiliser getDossierPersonnel à la place
   getDossier: () => request('/dossier'),
 };
 
@@ -126,10 +219,19 @@ export const commissionService = {
   getDossiers: (statut) =>
     request(`/commission/dossiers${statut ? `?statut=${statut}` : ''}`),
 
-  updateStatut: (inscriptionId, statut) =>
+  updateStatut: (inscriptionId, payload) =>
     request(`/commission/dossiers/${inscriptionId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ statut }),
+      body: JSON.stringify(payload),
+    }),
+
+  // Nouvelles méthodes pour la gestion des notes
+  getConcours: () => request('/commission/concours'),
+
+  updateNote: (inscriptionId, note) =>
+    request(`/commission/notes/${inscriptionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ note }),
     }),
 };
 
@@ -141,12 +243,222 @@ export const dgesService = {
 
   // Récupère les statistiques d'UN seul concours par son ID
   getStatistiquesConcours: (id) => request(`/dges/statistiques/${id}`),
+
+  listerAdminsEtablissement: (etablissementId) =>
+    request(`/dges/etablissements/${etablissementId}/admins`),
+
+  creerAdminEtablissement: (etablissementId, data) =>
+    request(`/dges/etablissements/${etablissementId}/admins`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  supprimerAdminEtablissement: (etablissementId, adminId) =>
+    request(`/dges/etablissements/${etablissementId}/admins/${adminId}`, {
+      method: 'DELETE',
+    }),
+
+  creerEtablissement: (data) =>
+    request('/dges/etablissements', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  supprimerEtablissement: (etablissementId) =>
+    request(`/dges/etablissements/${etablissementId}`, {
+      method: 'DELETE',
+    }),
+};
+
+export const campagneAdminService = {
+  getAll: (statut = '') =>
+    request(`/etablissement/campagnes${statut ? `?statut=${statut}` : ''}`),
+  getById: (id) => request(`/etablissement/campagnes/${id}`),
+  creer: (data) =>
+    request('/etablissement/campagnes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  modifier: (id, data) =>
+    request(`/etablissement/campagnes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  supprimer: (id) =>
+    request(`/etablissement/campagnes/${id}`, { method: 'DELETE' }),
+  publier: (id) =>
+    request(`/etablissement/campagnes/${id}/publier`, { method: 'PATCH' }),
+  cloturer: (id) =>
+    request(`/etablissement/campagnes/${id}/cloturer`, { method: 'PATCH' }),
+};
+
+export const campagneService = {
+  getAll: (params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.ville) searchParams.set('ville', params.ville);
+    if (params.anneeAcademique) searchParams.set('anneeAcademique', params.anneeAcademique);
+    if (params.filiereId) searchParams.set('filiereId', params.filiereId);
+    const query = searchParams.toString();
+    return request(`/campagnes${query ? `?${query}` : ''}`);
+  },
+  getById: (id) => request(`/campagnes/${id}`),
+};
+
+// ── Module 2 - Parcours Academique ───────────────────────────────
+export const completionService = {
+  getCompletion: (candidatId) => request(`/completion/${candidatId}`),
+};
+
+export const etablissementService = {
+  getAll: () => request('/etablissements'),
+  getPrives: () => request('/etablissements/prives'),
+  getById: (id) => request(`/etablissements/${id}`),
+  rechercherParFilieres: (choix) =>
+    request('/etablissements/recherche-filieres', {
+      method: 'POST',
+      body: JSON.stringify(choix),
+    }),
+  getEtudiants: (id, params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.filiere) searchParams.set('filiere', params.filiere);
+    if (params.annee) searchParams.set('annee', params.annee);
+    const query = searchParams.toString();
+    return request(`/etablissements/${id}/etudiants${query ? `?${query}` : ''}`);
+  },
+  getMonProfil: () => request('/etablissements/mon/profil'),
+  updateMonProfil: (data) =>
+    request('/etablissements/mon/profil', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  uploadMonLogo: async (file) => {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('logo', file);
+
+    const response = await fetch(`${BASE_URL}/etablissements/mon/logo`, {
+      method: 'POST',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+
+    return handleMultipartResponse(response, 'Erreur upload logo');
+  },
+};
+
+export const filiereService = {
+  getAll: () => request('/filieres'),
+  getByEtablissement: (etablissementId) => request(`/filieres?etablissementId=${etablissementId}`),
+};
+
+export const inscriptionAcadService = {
+  creer: (data) =>
+    request('/inscriptions-academiques', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getMesInscriptions: () => request('/inscriptions-academiques/mes-inscriptions'),
+};
+
+export const preinscriptionEtablissementService = {
+  creer: (data) =>
+    request('/preinscriptions-etablissement', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getMesPreinscriptions: () => request('/preinscriptions-etablissement/mes-preinscriptions'),
+  telechargerFiche: (id) =>
+    telechargerPDF(`${BASE_URL}/preinscriptions-etablissement/${id}/pdf`, `fiche_preinscription_${id}.pdf`),
+  getDemandesEtablissement: (statut = '') =>
+    request(`/preinscriptions-etablissement/etablissement/demandes${statut ? `?statut=${statut}` : ''}`),
+  decider: (id, payload) =>
+    request(`/preinscriptions-etablissement/${id}/decision`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+};
+
+export const applicationService = {
+  creer: (data) =>
+    request('/applications', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getMesDemandes: () => request('/applications/mine'),
+  getById: (id) => request(`/applications/${id}`),
+  getRequirements: (id) => request(`/applications/${id}/requirements`),
+  payerFraisDossierMock: (id) =>
+    request(`/applications/${id}/payments/dossier-fees/mock-confirm`, {
+      method: 'POST',
+    }),
+  uploadQuittanceBancaire: async (id, fichier) => {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('fichier', fichier);
+    const response = await fetch(`${BASE_URL}/applications/${id}/payments/droits-inscription/receipt`, {
+      method: 'POST',
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      body: formData,
+    });
+    return handleMultipartResponse(response, 'Erreur upload quittance bancaire');
+  },
+  uploadDocument: async (id, code, fichier) => {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('code', code);
+    formData.append('fichier', fichier);
+    const response = await fetch(`${BASE_URL}/applications/${id}/documents`, {
+      method: 'POST',
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      body: formData,
+    });
+    return handleMultipartResponse(response, 'Erreur upload document');
+  },
+  finaliser: (id) =>
+    request(`/applications/${id}/finalize`, {
+      method: 'POST',
+    }),
+  telechargerFiche: (id) =>
+    telechargerPDF(`${BASE_URL}/applications/${id}/fiche-preinscription`, `fiche_preinscription_${id}.pdf`),
+  getDemandesEtablissement: () => request('/applications/etablissement/applications'),
+  getMyRequirementsEtablissement: () => request('/applications/etablissement/requirements'),
+  upsertRequirementEtablissement: (payload) =>
+    request('/applications/etablissement/requirements', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  deleteRequirementEtablissement: (id) =>
+    request(`/applications/etablissement/requirements/${id}`, {
+      method: 'DELETE',
+    }),
+  getRequirementsByEtablissement: (etablissementId) =>
+    request(`/applications/requirements/etablissement/${etablissementId}`),
+};
+
+export const notesService = {
+  ajouter: (data) =>
+    request('/notes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getByInscription: (id) => request(`/notes/inscription/${id}`),
+};
+
+export const parcoursService = {
+  getMonParcours: () => request('/parcours/mon-parcours'),
+  getMonReleve: () => request('/parcours/mon-releve'),
+  telechargerMonReleve: () => telechargerPDF(`${BASE_URL}/parcours/mon-releve/pdf`, 'releve_academique.pdf'),
 };
 
 // ── Convocation PDF ───────────────────────────────────────────────
 const telechargerPDF = async (url, filename) => {
   const token = localStorage.getItem('token');
   const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (redirectToLoginOn401(response.status)) {
+    return new Promise(() => {});
+  }
   if (!response.ok) {
     const err = await response.json();
     throw new Error(err.error || 'Erreur téléchargement');
@@ -168,4 +480,25 @@ export const convocationService = {
 
   telechargerPreinscription: (inscriptionId) =>
     telechargerPDF(`${BASE_URL}/candidats/preinscription/${inscriptionId}`, `preinscription_${inscriptionId}.pdf`),
+};
+
+// ── History ───────────────────────────────────────────────────────
+// ✅ REFONTE - Historique des actions (utilise dossierInscriptionId)
+export const historyService = {
+  // ✅ NOUVEAU - Enregistrer une action (avec dossierInscriptionId)
+  enregistrerAction: (dossierInscriptionId, typeAction, details = null) =>
+    request('/history/action', {
+      method: 'POST',
+      body: JSON.stringify({
+        dossierInscriptionId,
+        typeAction,
+        details,
+      }),
+    }),
+
+  // ✅ NOUVEAU - Récupérer l'historique d'un dossier d'inscription
+  getHistorique: (dossierInscriptionId, params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/history/dossiers-inscription/${dossierInscriptionId}?${query}`);
+  },
 };

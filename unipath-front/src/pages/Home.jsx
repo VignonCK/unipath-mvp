@@ -1,6 +1,7 @@
 // src/pages/Home.jsx
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { BentoCard, BentoGrid, GlassBadge, AcademicButton } from '../components/AcademicLayout';
 
 // Import de toutes les images pour le carrousel
 import examEleves from '../assets/examen-eleves.jpg';
@@ -107,7 +108,7 @@ export default function Home() {
     {
       numero: '02',
       titre: 'Choisissez vos concours',
-      desc: 'Consultez les concours disponibles et inscrivez-vous. Le système vérifie automatiquement les conflits de dates.',
+      desc: 'Consultez les concours disponibles et inscrivez-vous. Le système détecte automatiquement les conflits de dates de composition entre concours.',
       icon: '',
     },
     {
@@ -131,17 +132,29 @@ export default function Home() {
       desc: 'Plus besoin de se déplacer au campus. Tout se fait en ligne depuis votre téléphone ou ordinateur, 24h/24.',
     },
     {
-      icon: '🔒',
+      icon: (
+        <svg className='w-12 h-12 text-blue-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' />
+        </svg>
+      ),
       titre: 'Sécurisé',
       desc: 'Vos données personnelles sont protégées. L\'accès est sécurisé par authentification JWT et chiffrement.',
     },
     {
-      icon: '📡',
+      icon: (
+        <svg className='w-12 h-12 text-blue-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' />
+        </svg>
+      ),
       titre: 'Suivi en temps réel',
       desc: 'Consultez l\'état de votre dossier à tout moment. Soyez notifié par email dès qu\'une décision est prise.',
     },
     {
-      icon: '📄',
+      icon: (
+        <svg className='w-12 h-12 text-blue-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' />
+        </svg>
+      ),
       titre: 'Convocation instantanée',
       desc: 'Votre convocation PDF est générée automatiquement et disponible au téléchargement dès validation.',
     },
@@ -165,38 +178,44 @@ export default function Home() {
   };
 
   return (
-    <div className='min-h-screen bg-white'>
+    <div className='min-h-screen academic-bg custom-scrollbar'>
 
       {/* NAVBAR */}
-      <nav className='bg-blue-900 text-white px-6 py-4 flex justify-between items-center sticky top-0 z-50'>
-        <div className='flex items-center gap-3'>
-          <span className='text-2xl font-black tracking-tight'>UniPath</span>
-          <span className='hidden sm:block text-orange-300 text-sm'>Plateforme universitaire numérique</span>
+      <nav className='bg-white/80 backdrop-blur-md border-b border-white/20 shadow-sm sticky top-0 z-50 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center'>
+        <div className='flex items-center gap-2 sm:gap-3'>
+          <span className='text-xl sm:text-2xl font-black text-blue-900 tracking-tight'>UniPath</span>
+          <span className='hidden md:block text-orange-500 text-xs sm:text-sm font-semibold'>Plateforme universitaire numérique</span>
         </div>
-        <div className='flex gap-3'>
-          <button onClick={() => navigate('/login')} className='text-sm border-2 border-orange-400 px-4 py-2 rounded-lg hover:bg-orange-400 hover:text-blue-900 transition'>
-            Se connecter
+        <div className='flex gap-2 sm:gap-3'>
+          <button 
+            onClick={() => navigate('/login')} 
+            className='bg-blue-900 text-white font-bold text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg hover:bg-blue-800 transition'
+          >
+            Connexion
           </button>
-          <button onClick={() => navigate('/register')} className='text-sm bg-orange-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition'>
+          <button 
+            onClick={() => navigate('/register')} 
+            className='bg-orange-500 text-white font-bold text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg hover:bg-orange-600 transition'
+          >
             Créer un compte
           </button>
         </div>
       </nav>
 
       {/* HERO */}
-      <section className='relative text-white px-6' style={{minHeight: '450px', paddingTop: '6rem', paddingBottom: '6rem'}}>
+      <section className='relative text-white px-4 sm:px-6' style={{minHeight: '600px', paddingTop: '6rem', paddingBottom: '6rem'}}>
         {/* Carrousel d'images avec effet de glissement */}
-        <div className='absolute inset-0 overflow-hidden'>
+        <div className='absolute inset-0 overflow-hidden z-0'>
           <div 
             className='flex h-full transition-transform duration-1000 ease-in-out'
             style={{ 
-              transform: `translateX(-${currentImageIndex * 100}vw)`,
+              transform: `translateX(-${currentImageIndex * 100}%)`,
             }}
           >
             {images.map((image, index) => (
               <div
                 key={index}
-                className='relative flex-shrink-0 w-screen h-full'
+                className='relative flex-shrink-0 w-full h-full'
               >
                 <img
                   src={image.src}
@@ -212,10 +231,10 @@ export default function Home() {
         </div>
         
         {/* Overlay léger pour meilleure visibilité des images */}
-        <div className='absolute inset-0' style={{backgroundColor: 'rgba(30, 58, 138, 0.3)'}} />
+        <div className='absolute inset-0 z-[1]' style={{backgroundColor: 'rgba(30, 58, 138, 0.3)'}} />
         
         {/* Indicateurs du carrousel */}
-        <div className='absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-2 z-10'>
+        <div className='absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-2 z-20'>
           {images.map((_, index) => (
             <button
               key={index}
@@ -231,54 +250,91 @@ export default function Home() {
         </div>
         
         {/* Contenu du hero */}
-        <div className='relative max-w-4xl mx-auto text-center z-10'>
-          <h1 className='text-3xl md:text-6xl font-black mb-4 leading-tight' style={{textShadow: '0 2px 10px rgba(0,0,0,0.5)'}}>
+        <div className='relative max-w-4xl mx-auto text-center z-10 px-2'>
+          <h1 className='text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-black mb-4 leading-tight' style={{textShadow: '0 2px 10px rgba(0,0,0,0.5)'}}>
             Gérez votre parcours
             <span className='text-orange-400'> universitaire</span>
-            <br />en toute simplicité
+            <br className='hidden sm:block' />
+            <span className='sm:hidden'> </span>en toute simplicité
           </h1>
-          <p className='text-base md:text-xl text-blue-100 max-w-2xl mx-auto mb-8' style={{textShadow: '0 1px 8px rgba(0,0,0,0.5)'}}>
+          <p className='text-sm sm:text-base md:text-xl text-blue-100 max-w-2xl mx-auto mb-6 sm:mb-8 px-2' style={{textShadow: '0 1px 8px rgba(0,0,0,0.5)'}}>
             UniPath digitalise les inscriptions aux concours universitaires.
             De la candidature à la convocation, tout se fait en ligne.
           </p>
-          <div className='flex flex-col sm:flex-row gap-3 justify-center'>
-            <button onClick={() => navigate('/register')} className='bg-orange-500 text-white px-4 py-2.5 sm:px-6 sm:py-3 rounded-xl font-bold text-sm sm:text-base hover:bg-orange-600 transition'>
+          <div className='flex flex-col sm:flex-row gap-3 justify-center px-4'>
+            <AcademicButton onClick={() => navigate('/register')} className='px-6 py-3 text-sm sm:text-base w-full sm:w-auto'>
               Créer mon compte →
-            </button>
-            <button onClick={() => navigate('/login')} className='border-2 border-orange-400 text-white px-4 py-2.5 sm:px-6 sm:py-3 rounded-xl font-bold text-sm sm:text-base hover:bg-orange-400 hover:text-blue-900 transition'>
+            </AcademicButton>
+            <button onClick={() => navigate('/login')} className='btn-glass px-6 py-3 text-sm sm:text-base w-full sm:w-auto'>
               Se connecter
             </button>
           </div>
         </div>
       </section>
 
+      {/* ORIENTATION DES COMPTES */}
+      <section className='py-10 sm:py-12 px-4 sm:px-6'>
+        <div className='max-w-4xl mx-auto'>
+          <BentoCard className='p-6 sm:p-8 border-l-4 border-orange-500'>
+            <div className='text-center mb-6'>
+              <h2 className='text-xl sm:text-2xl font-black text-blue-900 mb-2'>Choisissez votre espace</h2>
+              <p className='text-sm sm:text-base text-gray-600'>
+                Candidat ou etablissement, accedez au formulaire adapte a votre profil.
+              </p>
+            </div>
+
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+              <button
+                onClick={() => navigate('/register')}
+                className='text-left rounded-xl border border-blue-200 bg-blue-50 p-4 hover:bg-blue-100 transition'
+              >
+                <p className='text-sm font-bold text-blue-900 mb-1'>Je suis candidat</p>
+                <p className='text-xs text-blue-800'>
+                  Inscription aux concours, suivi du dossier et telechargement des convocations.
+                </p>
+              </button>
+
+              <button
+                onClick={() => navigate('/register-etablissement')}
+                className='text-left rounded-xl border border-orange-200 bg-orange-50 p-4 hover:bg-orange-100 transition'
+              >
+                <p className='text-sm font-bold text-orange-700 mb-1'>Je suis etablissement</p>
+                <p className='text-xs text-orange-700'>
+                  Creation du compte institutionnel, gestion du profil et logo officiel.
+                </p>
+              </button>
+            </div>
+          </BentoCard>
+        </div>
+      </section>
+
       {/* FONCTIONNALITÉS */}
-      <section className='py-16 px-6 bg-gray-50'>
-        <div className='max-w-5xl mx-auto'>
-          <h2 className='text-3xl font-black text-center text-blue-900 mb-4'>Ce que fait UniPath</h2>
-          <p className='text-center text-gray-500 mb-12'>Trois fonctionnalités au cœur du Module 1</p>
+      <section className='py-12 sm:py-16 px-4 sm:px-6'>
+        <div className='max-w-5xl mx-auto animate-slide-in'>
+          <h2 className='text-2xl sm:text-3xl font-black text-center text-blue-900 mb-3 sm:mb-4'>Ce que fait UniPath</h2>
+          <p className='text-center text-gray-500 text-sm sm:text-base mb-8 sm:mb-12'>Trois fonctionnalités au cœur du Module 1</p>
 
           {/* Desktop : grille */}
-          <div className='hidden md:grid grid-cols-3 gap-8'>
+          <BentoGrid columns='auto-fit' className='hidden md:grid'>
             {fonctionnalites.map((f) => (
-              <div key={f.titre} className='bg-white p-8 border-l-4 border-orange-500 hover:border-orange-600 transition'>
-                <div className='text-5xl mb-4'>{f.icon}</div>
+              <BentoCard key={f.titre} className='p-8 border-l-4 border-orange-500 hover:border-orange-600 transition'>
+                <div className='mb-4'>{f.icon}</div>
                 <h3 className='text-xl font-bold text-blue-900 mb-3'>{f.titre}</h3>
                 <p className='text-gray-600 leading-relaxed'>{f.desc}</p>
-              </div>
+              </BentoCard>
             ))}
-          </div>
+          </BentoGrid>
 
           {/* Mobile : carousel */}
           <div className='md:hidden'>
             <MobileCarousel
               items={fonctionnalites}
               renderItem={(f) => (
-                <div className='bg-white p-8 border-l-4 border-orange-500 mx-1'>
-                  <div className='text-5xl mb-4'>{f.icon}</div>
+                <BentoCard className='p-8 border-l-4 border-orange-500 mx-1'>
+                  <div className='mb-4'>{f.icon}</div>
                   <h3 className='text-xl font-bold text-blue-900 mb-3'>{f.titre}</h3>
                   <p className='text-gray-600 leading-relaxed'>{f.desc}</p>
-                </div>
+                </BentoCard>
               )}
             />
           </div>
@@ -286,38 +342,37 @@ export default function Home() {
       </section>
 
       {/* COMMENT ÇA MARCHE */}
-      <section className='py-16 px-6 bg-white'>
-        <div className='max-w-5xl mx-auto'>
-          <h2 className='text-3xl font-black text-center text-blue-900 mb-4'>Comment ça marche ?</h2>
-          <p className='text-center text-gray-500 mb-12'>4 étapes simples pour compléter votre inscription</p>
+      <section className='py-12 sm:py-16 px-4 sm:px-6'>
+        <div className='max-w-5xl mx-auto animate-slide-in'>
+          <h2 className='text-2xl sm:text-3xl font-black text-center text-blue-900 mb-3 sm:mb-4'>Comment ça marche ?</h2>
+          <p className='text-center text-gray-500 text-sm sm:text-base mb-8 sm:mb-12'>4 étapes simples pour compléter votre inscription</p>
           <div className='grid grid-cols-1 md:grid-cols-4 gap-6'>
             {etapes.map((e, i) => (
               <div key={e.numero} className='relative text-center'>
                 {i < etapes.length - 1 && (
                   <div className='hidden md:block absolute top-10 left-3/4 w-1/2 h-1 bg-orange-200 z-0' />
                 )}
-                <div className='relative z-10 w-20 h-20 bg-orange-500 flex items-center justify-center text-3xl mx-auto mb-4 text-white'>
-                  {e.icon}
+                <div className='relative z-10 w-20 h-20 bg-orange-500 rounded-full flex items-center justify-center text-3xl font-black mx-auto mb-4 text-white shadow-lg'>
+                  {e.numero}
                 </div>
-                <span className='text-xs font-black text-orange-600 tracking-widest'>{e.numero}</span>
                 <h3 className='text-base font-bold text-blue-900 mt-1 mb-2'>{e.titre}</h3>
                 <p className='text-gray-500 text-sm leading-relaxed'>{e.desc}</p>
               </div>
             ))}
           </div>
           <div className='text-center mt-10'>
-            <button onClick={() => navigate('/register')} className='bg-orange-500 text-white px-6 py-3 sm:px-8 sm:py-4 rounded-xl font-bold text-sm sm:text-base hover:bg-orange-600 transition'>
+            <AcademicButton onClick={() => navigate('/register')} className='px-6 py-3 sm:px-8 sm:py-4 text-sm sm:text-base'>
               Commencer maintenant →
-            </button>
+            </AcademicButton>
           </div>
         </div>
       </section>
 
       {/* FAQ - QUESTIONS FRÉQUENTES */}
-      <section className='py-16 px-6 bg-gray-50'>
-        <div className='max-w-4xl mx-auto'>
-          <h2 className='text-3xl font-black text-center text-blue-900 mb-4'>Questions fréquentes</h2>
-          <p className='text-center text-gray-500 mb-12'>Tout ce que vous devez savoir sur UniPath</p>
+      <section className='py-12 sm:py-16 px-4 sm:px-6'>
+        <div className='max-w-4xl mx-auto animate-slide-in'>
+          <h2 className='text-2xl sm:text-3xl font-black text-center text-blue-900 mb-3 sm:mb-4'>Questions fréquentes</h2>
+          <p className='text-center text-gray-500 text-sm sm:text-base mb-8 sm:mb-12'>Tout ce que vous devez savoir sur UniPath</p>
           <div className='space-y-4'>
             {[
               {
@@ -330,7 +385,7 @@ export default function Home() {
               },
               {
                 question: 'Puis-je m\'inscrire à plusieurs concours ?',
-                reponse: 'Oui ! Vous pouvez vous inscrire à autant de concours que vous le souhaitez. Le système vérifie automatiquement les conflits de dates pour éviter les chevauchements.',
+                reponse: 'Oui ! Vous pouvez vous inscrire à plusieurs concours, à condition que leurs périodes de composition ne se chevauchent pas et soient espacées d\'au moins 2 jours. Le système détecte automatiquement les conflits de dates de composition entre concours.',
               },
               {
                 question: 'Comment savoir si mon dossier est validé ?',
@@ -345,7 +400,7 @@ export default function Home() {
                 reponse: 'Cliquez sur "Mot de passe oublié" sur la page de connexion. Vous recevrez un email avec un lien pour réinitialiser votre mot de passe en toute sécurité.',
               },
             ].map((faq, index) => (
-              <details key={index} className='bg-white border-l-4 border-gray-200 rounded-lg p-6 cursor-pointer hover:border-orange-500 transition group'>
+              <details key={index} className='glass-card-subtle p-6 cursor-pointer hover:shadow-lg transition group border-l-4 border-gray-200 hover:border-orange-500'>
                 <summary className='font-bold text-blue-900 flex justify-between items-center'>
                   <span>{faq.question}</span>
                   <span className='text-orange-500 text-xl group-open:rotate-180 transition-transform'>▼</span>
@@ -364,15 +419,15 @@ export default function Home() {
       </section>
 
       {/* POURQUOI UNIPATH */}
-      <section className='py-16 px-6 bg-blue-900 text-white'>
-        <div className='max-w-5xl mx-auto'>
-          <h2 className='text-3xl font-black text-center mb-4'>Pourquoi UniPath ?</h2>
-          <p className='text-center text-orange-300 mb-12'>Une plateforme pensée pour simplifier la vie des étudiants béninois</p>
+      <section className='py-12 sm:py-16 px-4 sm:px-6 bg-gradient-to-br from-blue-900 to-blue-800 text-white'>
+        <div className='max-w-5xl mx-auto animate-slide-in'>
+          <h2 className='text-2xl sm:text-3xl font-black text-center mb-3 sm:mb-4'>Pourquoi UniPath ?</h2>
+          <p className='text-center text-orange-300 text-sm sm:text-base mb-8 sm:mb-12'>Une plateforme pensée pour simplifier la vie des étudiants béninois</p>
 
           {/* Desktop : grille */}
           <div className='hidden md:grid grid-cols-2 gap-8'>
             {avantages.map((a) => (
-              <div key={a.titre} className='bg-blue-800 p-8 flex gap-5 items-start hover:bg-blue-700 transition'>
+              <div key={a.titre} className='bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-8 flex gap-5 items-start hover:bg-white/15 transition-all duration-300'>
                 <div className='text-4xl flex-shrink-0'>{a.icon}</div>
                 <div>
                   <h3 className='text-lg font-bold text-orange-400 mb-2'>{a.titre}</h3>
@@ -387,7 +442,7 @@ export default function Home() {
             <MobileCarousel
               items={avantages}
               renderItem={(a) => (
-                <div className='bg-blue-800 p-8 flex gap-5 items-start mx-1'>
+                <div className='bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-8 flex gap-5 items-start mx-1'>
                   <div className='text-4xl flex-shrink-0'>{a.icon}</div>
                   <div>
                     <h3 className='text-lg font-bold text-orange-400 mb-2'>{a.titre}</h3>
@@ -401,24 +456,26 @@ export default function Home() {
       </section>
 
       {/* ÉQUIPE */}
-      <section className='py-16 px-6 bg-white'>
-        <div className='max-w-4xl mx-auto'>
-          <h2 className='text-3xl font-black text-center text-blue-900 mb-4'>Notre équipe</h2>
-          <p className='text-center text-gray-500 mb-12'>Groupe 2 — Département Génie Informatique et Télécommunications</p>
-          <div className='grid grid-cols-2 md:grid-cols-3 gap-8'>
+      <section className='py-12 sm:py-16 px-4 sm:px-6'>
+        <div className='max-w-4xl mx-auto animate-slide-in'>
+          <h2 className='text-2xl sm:text-3xl font-black text-center text-blue-900 mb-3 sm:mb-4'>Notre équipe</h2>
+          <p className='text-center text-gray-500 text-sm sm:text-base mb-8 sm:mb-12'>Groupe 2 — Département Génie Informatique et Télécommunications</p>
+          <BentoGrid columns='auto-fit'>
             {equipe.map((m) => (
-              <div key={m.nom} className='text-center bg-gray-50 p-8 border-b-4 border-blue-900'>
+              <BentoCard key={m.nom} className='text-center p-8 border-b-4 border-blue-900'>
                 {m.photo ? (
                   <img src={m.photo} alt={m.nom} className='w-24 h-24 object-cover mx-auto mb-4 border-4 border-blue-100' />
                 ) : (
-                  <div className='w-24 h-24 bg-blue-100 flex items-center justify-center text-4xl mx-auto mb-4 border-4 border-blue-200'>
-                    👨‍💻
+                  <div className='w-24 h-24 bg-blue-100 flex items-center justify-center mx-auto mb-4 border-4 border-blue-200 rounded-full'>
+                    <svg className='w-12 h-12 text-blue-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' />
+                    </svg>
                   </div>
                 )}
                 <h3 className='font-bold text-blue-900 text-sm'>{m.nom}</h3>
-              </div>
+              </BentoCard>
             ))}
-          </div>
+          </BentoGrid>
           <div className='text-center mt-10 text-gray-500 text-sm'>
             <p>Sous la supervision du <strong>Professeur DJARA Tahirou</strong></p>
             <p>Sous l'encadrement du <strong>Dr ASSOUMA Abdoul Kamal</strong></p>
@@ -427,11 +484,11 @@ export default function Home() {
       </section>
 
       {/* CONTACT SUPPORT */}
-      <section id='contact-section' className='py-16 px-6 bg-gray-50'>
+      <section id='contact-section' className='py-12 sm:py-16 px-4 sm:px-6 bg-gray-50'>
         <div className='max-w-2xl mx-auto'>
-          <h2 className='text-3xl font-black text-center text-blue-900 mb-4'>Contacter le support</h2>
-          <p className='text-center text-gray-500 mb-10'>Une question ou un problème technique ? Notre équipe vous répond dans les plus brefs délais.</p>
-          <div className='bg-white border-l-4 border-orange-500 p-8 rounded-lg'>
+          <h2 className='text-2xl sm:text-3xl font-black text-center text-blue-900 mb-3 sm:mb-4'>Contacter le support</h2>
+          <p className='text-center text-gray-500 text-sm sm:text-base mb-8 sm:mb-10'>Une question ou un problème technique ? Notre équipe vous répond dans les plus brefs délais.</p>
+          <BentoCard className='p-8 border-l-4 border-orange-500'>
             <form onSubmit={handleContactSubmit} className='space-y-5'>
               <div>
                 <label className='block text-sm font-medium text-gray-700 mb-1'>Nom complet</label>
@@ -440,7 +497,7 @@ export default function Home() {
                   type='text'
                   required
                   placeholder='Ex: AGOSSOU Kofi'
-                  className='w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:border-orange-500 text-sm'
+                  className='input-glass w-full px-4 py-3 text-sm'
                 />
               </div>
               <div>
@@ -450,7 +507,7 @@ export default function Home() {
                   type='email'
                   required
                   placeholder='votre@email.com'
-                  className='w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:border-orange-500 text-sm'
+                  className='input-glass w-full px-4 py-3 text-sm'
                 />
               </div>
               <div>
@@ -460,15 +517,15 @@ export default function Home() {
                   required
                   rows={5}
                   placeholder='Décrivez votre problème ou votre question...'
-                  className='w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:border-orange-500 text-sm resize-none'
+                  className='input-glass w-full px-4 py-3 text-sm resize-none'
                 />
               </div>
-              <button
+              <AcademicButton
                 type='submit'
-                className='w-full bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600 transition'
+                className='w-full py-3'
               >
                 Envoyer le message →
-              </button>
+              </AcademicButton>
             </form>
             <div className='mt-6 pt-6 border-t border-gray-100 text-center'>
               <p className='text-gray-500 text-sm'>Ou contactez-nous directement par email :</p>
@@ -476,17 +533,17 @@ export default function Home() {
                 support.unipath@gmail.com
               </a>
             </div>
-          </div>
+          </BentoCard>
         </div>
       </section>
 
       {/* FOOTER */}
-      <footer className='bg-blue-900 text-white py-10 px-6'>
+      <footer className='glass-card-intense py-10 px-6'>
         <div className='max-w-4xl mx-auto text-center'>
-          <p className='text-2xl font-black mb-2 text-orange-400'>UniPath</p>
-          <p className='text-blue-200 text-sm mb-4'>Plateforme numérique de gestion du parcours universitaire</p>
-          <div className='border-t border-blue-700 pt-6 mt-6'>
-            <p className='text-blue-300 text-xs'>
+          <p className='text-2xl font-black mb-2 gradient-text'>UniPath</p>
+          <p className='text-gray-600 text-sm mb-4'>Plateforme numérique de gestion du parcours universitaire</p>
+          <div className='border-t border-gray-200 pt-6 mt-6'>
+            <p className='text-gray-500 text-xs'>
               EPAC — École Polytechnique d'Abomey-Calavi · Université d'Abomey-Calavi<br />
               Groupe 2 · Année académique 2025–2026 · Tous droits réservés
             </p>

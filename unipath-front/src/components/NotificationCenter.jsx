@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Bell, X } from 'lucide-react';
+import { getAuthHeaders } from '../utils/auth';
+
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function NotificationCenter() {
   const [notifications, setNotifications] = useState([]);
@@ -17,13 +20,13 @@ export default function NotificationCenter() {
   const fetchNotifications = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/notifications', {
-        headers: {
-          'x-user-id': localStorage.getItem('userId') // Temporaire
-        }
+      const response = await fetch(`${BASE_URL}/notifications`, {
+        headers: getAuthHeaders(), // ✅ Utilise Bearer token
       });
-      const data = await response.json();
-      setNotifications(data);
+      if (response.ok) {
+        const data = await response.json();
+        setNotifications(data.notifications || data);
+      }
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -33,13 +36,13 @@ export default function NotificationCenter() {
 
   const fetchUnreadCount = async () => {
     try {
-      const response = await fetch('/api/notifications/unread-count', {
-        headers: {
-          'x-user-id': localStorage.getItem('userId')
-        }
+      const response = await fetch(`${BASE_URL}/notifications/unread-count`, {
+        headers: getAuthHeaders(), // ✅ Utilise Bearer token
       });
-      const data = await response.json();
-      setUnreadCount(data.count);
+      if (response.ok) {
+        const data = await response.json();
+        setUnreadCount(data.count);
+      }
     } catch (error) {
       console.error('Error fetching unread count:', error);
     }
@@ -47,16 +50,16 @@ export default function NotificationCenter() {
 
   const markAsRead = async (id) => {
     try {
-      await fetch(`/api/notifications/${id}/read`, {
+      const response = await fetch(`${BASE_URL}/notifications/${id}/read`, {
         method: 'PATCH',
-        headers: {
-          'x-user-id': localStorage.getItem('userId')
-        }
+        headers: getAuthHeaders(), // ✅ Utilise Bearer token
       });
-      setNotifications(notifications.map(n => 
-        n.id === id ? { ...n, read: true } : n
-      ));
-      setUnreadCount(Math.max(0, unreadCount - 1));
+      if (response.ok) {
+        setNotifications(notifications.map(n => 
+          n.id === id ? { ...n, read: true } : n
+        ));
+        setUnreadCount(Math.max(0, unreadCount - 1));
+      }
     } catch (error) {
       console.error('Error marking as read:', error);
     }
@@ -64,14 +67,14 @@ export default function NotificationCenter() {
 
   const markAllAsRead = async () => {
     try {
-      await fetch('/api/notifications/read-all', {
+      const response = await fetch(`${BASE_URL}/notifications/read-all`, {
         method: 'PATCH',
-        headers: {
-          'x-user-id': localStorage.getItem('userId')
-        }
+        headers: getAuthHeaders(), // ✅ Utilise Bearer token
       });
-      setNotifications(notifications.map(n => ({ ...n, read: true })));
-      setUnreadCount(0);
+      if (response.ok) {
+        setNotifications(notifications.map(n => ({ ...n, read: true })));
+        setUnreadCount(0);
+      }
     } catch (error) {
       console.error('Error marking all as read:', error);
     }

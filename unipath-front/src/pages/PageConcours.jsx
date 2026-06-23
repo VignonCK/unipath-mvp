@@ -1,29 +1,11 @@
 // src/pages/PageConcours.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { candidatService, concoursService, inscriptionService } from '../services/api';
+import { candidatService, concoursService } from '../services/api';
+import { handleSessionError } from '../utils/auth';
 import CandidatLayout from '../components/CandidatLayout';
-
-const CHAMPS_REQUIS = ['telephone', 'dateNaiss', 'lieuNaiss'];
-
-const PIECES_LABELS = {
-  acteNaissance: 'Acte de naissance',
-  carteIdentite: "Carte d'identité",
-  photo:         "Photo d'identité",
-  releve:        'Relevé de notes Bac',
-  quittance:     "Quittance d'inscription",
-};
-
-function profilIncomplet(candidat) {
-  if (!candidat) return false;
-  return CHAMPS_REQUIS.some(c => !candidat[c]);
-}
-
-function dossierIncomplet(candidat) {
-  if (!candidat?.dossier) return true;
-  const pieces = Object.keys(PIECES_LABELS);
-  return pieces.some(piece => !candidat.dossier[piece]);
-}
+import PiecesRequisesCandidats from '../components/PiecesRequisesCandidats';
+import { BentoCard, BentoGrid, GlassBadge } from '../components/AcademicLayout';
 
 function statutConcours(concours) {
   const now = new Date();
@@ -36,33 +18,30 @@ function statutConcours(concours) {
 
 export default function PageConcours() {
   const navigate = useNavigate();
-  const [candidat, setCandidат]   = useState(null);
+  const [candidat, setCandidat]   = useState(null);
   const [concours, setConcours]   = useState([]);
   const [loading, setLoading]     = useState(true);
-  const [message, setMessage]     = useState({ text: '', type: 'info' });
   const [photoUrl, setPhotoUrl]   = useState(null);
-  const [inscLoading, setInscLoading] = useState({});
   const [recherche, setRecherche] = useState('');
   const [tri, setTri]             = useState('recent'); // 'recent' | 'ancien'
+  const [error, setError]         = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { navigate('/login'); return; }
     Promise.all([candidatService.getProfil(), concoursService.getAll()])
       .then(([p, c]) => {
-        setCandidат(p);
+        setCandidat(p);
         setConcours(c);
         const saved = localStorage.getItem('photoProfil_' + p.id);
         if (saved) setPhotoUrl(saved);
       })
-      .catch(() => navigate('/login'))
+      .catch((err) => {
+        if (handleSessionError(err, navigate)) return;
+        setError(err?.message || 'Erreur de chargement des concours');
+      })
       .finally(() => setLoading(false));
-  }, []);
-
-  const showMessage = (text, type = 'info') => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage({ text: '' }), 4000);
-  };
+  }, [navigate]);
 
   const handleVoirConcours = (concoursId) => {
     navigate(`/concours/${concoursId}`);
@@ -76,70 +55,65 @@ export default function PageConcours() {
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
-      <div className='max-w-5xl mx-auto space-y-6'>
+      <div className='max-w-5xl mx-auto space-y-4 sm:space-y-6 px-3 sm:px-0 animate-slide-in'>
 
-        {/* Toast */}
-        {message.text && (
-          <div className={`px-4 py-3 rounded-lg text-sm flex items-center justify-between ${
-            message.type === 'success' ? 'bg-green-50 border border-green-200 text-green-700' :
-            message.type === 'error'   ? 'bg-red-50 border border-red-200 text-red-700' :
-            message.type === 'warning' ? 'bg-orange-50 border border-orange-200 text-orange-700' :
-                                         'bg-blue-50 border border-blue-200 text-blue-700'
-          }`}>
-            <span>{message.text}</span>
-            <button onClick={() => setMessage({ text: '' })} className='ml-4 opacity-60 hover:opacity-100 text-lg leading-none'>&times;</button>
+        {error && (
+          <div className='rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700'>
+            {error}
           </div>
         )}
 
         {/* En-tête */}
-        <div>
-          <h1 className='text-2xl font-black text-gray-900'>Concours disponibles</h1>
-          <p className='text-gray-500 text-sm mt-1'>
+        <BentoCard>
+          <h1 className='text-xl sm:text-2xl font-black gradient-text'>Concours disponibles</h1>
+          <p className='text-gray-500 text-xs sm:text-sm mt-1'>
             {concours.length} concours — Inscrivez-vous avant la date limite de dépôt
           </p>
-        </div>
+        </BentoCard>
 
         {/* Barre de recherche + tri */}
-        <div className='flex flex-col sm:flex-row gap-3'>
-          <div className='flex-1 relative'>
-            <svg className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
-            </svg>
-            <input
-              type='text'
-              placeholder='Rechercher un concours...'
-              value={recherche}
-              onChange={e => setRecherche(e.target.value)}
-              className='w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-orange-500 bg-white'
-            />
-            {recherche && (
+        <BentoCard className='p-4'>
+          <div className='flex flex-col sm:flex-row gap-3'>
+            <div className='flex-1 relative'>
+              <svg className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
+              </svg>
+              <input
+                type='text'
+                placeholder='Rechercher un concours...'
+                value={recherche}
+                onChange={e => setRecherche(e.target.value)}
+                className='input-glass w-full pl-10 pr-4 py-2.5 text-sm'
+              />
+              {recherche && (
+                <button
+                  onClick={() => setRecherche('')}
+                  className='absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none'
+                >
+                  &times;
+                </button>
+              )}
+            </div>
+            <div className='flex gap-2'>
               <button
-                onClick={() => setRecherche('')}
-                className='absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none'
+                onClick={() => setTri('recent')}
+                className={`px-4 py-2.5 rounded-xl text-xs font-semibold transition ${
+                  tri === 'recent' ? 'btn-academic' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
               >
-                &times;
+                Plus récents
               </button>
-            )}
+              <button
+                onClick={() => setTri('ancien')}
+                className={`px-4 py-2.5 rounded-xl text-xs font-semibold transition ${
+                  tri === 'ancien' ? 'btn-academic' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                Plus anciens
+              </button>
+            </div>
           </div>
-          <div className='flex gap-2'>
-            <button
-              onClick={() => setTri('recent')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-semibold transition ${
-                tri === 'recent' ? 'bg-blue-900 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              Plus récents
-            </button>
-            <button
-              onClick={() => setTri('ancien')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-semibold transition ${
-                tri === 'ancien' ? 'bg-blue-900 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              Plus anciens
-            </button>
-          </div>
-        </div>
+        </BentoCard>
 
         {/* Liste des concours */}
         {(() => {
@@ -154,15 +128,15 @@ export default function PageConcours() {
           });
 
           if (liste.length === 0) return (
-            <div className='bg-white rounded-2xl border border-gray-100 p-12 text-center'>
+            <BentoCard className='p-12 text-center'>
               <p className='text-gray-400 text-sm'>
                 {recherche ? `Aucun concours trouvé pour "${recherche}"` : 'Aucun concours disponible pour le moment.'}
               </p>
-            </div>
+            </BentoCard>
           );
 
           return (
-            <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>
+            <BentoGrid columns='auto-fit'>
               {liste.map((c, index) => {
                 const statut      = statutConcours(c);
                 const dejaInscrit = candidat?.inscriptions?.some(i => i.concoursId === c.id);
@@ -179,9 +153,9 @@ export default function PageConcours() {
                   : 'bg-blue-900';
 
                 return (
-                  <div
+                  <BentoCard
                     key={c.id}
-                    className='bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition p-5 flex flex-col gap-3 cursor-pointer'
+                    className='p-5 flex flex-col gap-3 cursor-pointer'
                     onClick={() => handleVoirConcours(c.id)}
                   >
                     {/* Titre + badge numéro */}
@@ -201,7 +175,7 @@ export default function PageConcours() {
                         <svg className='w-3.5 h-3.5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                           <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' />
                         </svg>
-                        <span>EPAC — Université d'Abomey-Calavi</span>
+                        <span className='line-clamp-1'>{c.etablissement || 'Etablissement non precise'}</span>
                       </div>
 
                       {/* Dates */}
@@ -226,12 +200,38 @@ export default function PageConcours() {
                           <span className='truncate'>{c.description}</span>
                         </div>
                       )}
+
+                      {/* Pièces requises */}
+                      {c.piecesRequises && (
+                        <div className='flex items-center gap-2 text-xs text-gray-500'>
+                          <PiecesRequisesCandidats pieces={c.piecesRequises} compact={true} />
+                        </div>
+                      )}
+
+                      {/* Dates de dépôt */}
+                      {c.dateDebutDepot && c.dateFinDepot && (
+                        <div className='flex items-center gap-2 text-xs text-gray-500'>
+                          <svg className='w-3.5 h-3.5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' />
+                          </svg>
+                          <span>
+                            Dépôt : {new Date(c.dateDebutDepot).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                            {' → '}
+                            {new Date(c.dateFinDepot).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Statut / bouton */}
                     <div className='mt-auto pt-2 border-t border-gray-50'>
                       {dejaInscrit ? (
-                        <span className='text-xs text-green-600 font-semibold'>✓ Inscrit</span>
+                        <GlassBadge variant='success' className='w-full justify-center'>
+                          <svg className='w-3 h-3' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
+                          </svg>
+                          Inscrit
+                        </GlassBadge>
                       ) : termine ? (
                         <span className='text-xs text-gray-400'>Inscriptions closes</span>
                       ) : (
@@ -243,10 +243,10 @@ export default function PageConcours() {
                         </button>
                       )}
                     </div>
-                  </div>
+                  </BentoCard>
                 );
               })}
-            </div>
+            </BentoGrid>
           );
         })()}
       </div>

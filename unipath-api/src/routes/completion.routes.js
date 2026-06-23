@@ -5,18 +5,14 @@ const { protect } = require('../middleware/auth.middleware');
 const { checkRole } = require('../middleware/role.middleware');
 const completionController = require('../controllers/completion.controller');
 
-// Routes pour la complétude des dossiers
+// Route statique AVANT la route dynamique
+// ✅ CONTROLEUR ajouté - Besoin des stats pour prendre des décisions
+router.get('/stats/global', protect, checkRole(['COMMISSION', 'DGES', 'CONTROLEUR']), completionController.getStatistiquesGlobales);
 
-// GET /api/completion/:candidatId - Obtenir le pourcentage de complétude
-// Accessible aux candidats (pour leur propre dossier) et à la commission/DGES
-router.get('/:candidatId', protect, completionController.getCompletion);
+router.get('/:candidatId', protect, checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DGES']), completionController.getCompletion);
+router.get('/:candidatId/pieces', protect, checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DGES']), completionController.getPiecesManquantes);
 
-// GET /api/completion/:candidatId/pieces - Obtenir les pièces manquantes
-// Accessible aux candidats (pour leur propre dossier) et à la commission/DGES
-router.get('/:candidatId/pieces', protect, completionController.getPiecesManquantes);
-
-// GET /api/completion/stats/global - Obtenir les statistiques globales de complétude
-// Accessible uniquement à la commission et DGES
-router.get('/stats/global', protect, checkRole(['COMMISSION', 'DGES']), completionController.getStatistiquesGlobales);
+// 🔒 Route pour Dossier Complet - Accessible par CANDIDAT (owner only), COMMISSION, CONTROLEUR, DGES
+router.get('/inscriptions/:inscriptionId/dossier-complet', protect, checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DGES']), completionController.getDossierComplet);
 
 module.exports = router;

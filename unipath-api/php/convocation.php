@@ -1,5 +1,6 @@
 <?php
 require(__DIR__ . '/fpdf.php');
+require(__DIR__ . '/pdf-common.php');
 
 // ── VALIDATION DES ARGUMENTS ──────────────────────────────────
 if ($argc < 3) {
@@ -33,6 +34,20 @@ if (!isset($data['candidat']) || !isset($data['concours'])) {
 $candidat = $data['candidat'];
 $concours = $data['concours'];
 
+function ensureSpaceConvocation($pdf, $minYNeeded, $leftMargin, $rightMargin, $contentWidth) {
+    if ($pdf->GetY() + $minYNeeded > 270) {
+        $pdf->AddPage();
+        renderOfficialHeader(
+            $pdf,
+            $leftMargin,
+            $rightMargin,
+            $contentWidth,
+            'Convocation officielle',
+            'Concours d\'entree a l\'universite'
+        );
+    }
+}
+
 // Vérifier les champs obligatoires du candidat
 $requiredFields = ['matricule', 'nom', 'prenom', 'email'];
 foreach ($requiredFields as $field) {
@@ -41,15 +56,11 @@ foreach ($requiredFields as $field) {
     }
 }
 
-// Fonction pour convertir les caractères accentués
-function cleanText($text) {
-    if (!$text) return '';
-    return iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text);
-}
-
 // ── CRÉATION DU PDF ───────────────────────────────────────────
 try {
     $pdf = new FPDF('P', 'mm', 'A4');
+    $pdf->SetMargins(20, 15, 20);
+    $pdf->SetAutoPageBreak(true, 18);
     $pdf->AddPage();
     
     // Marges
@@ -58,189 +69,166 @@ try {
     $pageWidth = 210;
     $contentWidth = $pageWidth - $leftMargin - $rightMargin;
 
-    // ── EN-TETE AVEC LOGOS ────────────────────────────────────
-    $drapeau = __DIR__ . '/../src/assets/drapeau_du_benin.png';
-    $logo = __DIR__ . '/../src/assets/logo_mesrs.png';
+    renderOfficialHeader(
+        $pdf,
+        $leftMargin,
+        $rightMargin,
+        $contentWidth,
+        'Convocation officielle',
+        'Concours d\'entree a l\'universite'
+    );
 
-    // Logo gauche (Drapeau)
-    if (file_exists($drapeau)) {
-        $pdf->Image($drapeau, $leftMargin, 15, 30, 22);
-    }
-    
-    // Logo droit (MESRS)
-    if (file_exists($logo)) {
-        $pdf->Image($logo, $pageWidth - $rightMargin - 30, 15, 30, 22);
-    }
-
-    // ── TITRE CENTRÉ ──────────────────────────────────────────
-    $pdf->SetY(20);
-    $pdf->SetFont('Helvetica', 'B', 11);
-    $pdf->SetTextColor(0, 0, 0);
-    $pdf->Cell(0, 5, 'REPUBLIQUE DU BENIN', 0, 1, 'C');
-    $pdf->SetFont('Helvetica', '', 9);
-    $pdf->Cell(0, 4, cleanText('Ministere de l\'Enseignement Superieur'), 0, 1, 'C');
-    $pdf->Cell(0, 4, cleanText('et de la Recherche Scientifique'), 0, 1, 'C');
-    $pdf->SetFont('Helvetica', 'B', 10);
-    $pdf->Cell(0, 5, cleanText('Universite d\'Abomey-Calavi'), 0, 1, 'C');
-    
-    $pdf->Ln(5);
-    
-    // ── CADRE TITRE DOCUMENT ──────────────────────────────────
-    $pdf->SetDrawColor(0, 0, 0);
-    $pdf->SetLineWidth(0.5);
-    $pdf->Rect($leftMargin + 30, $pdf->GetY(), $contentWidth - 60, 12);
-    
-    $pdf->SetFont('Helvetica', 'B', 14);
-    $pdf->Cell(0, 12, 'CONVOCATION', 0, 1, 'C');
-    
-    $pdf->Ln(3);
-    
-    // ── SOUS-TITRE ────────────────────────────────────────────
-    $pdf->SetFont('Helvetica', '', 10);
-    $pdf->Cell(0, 6, cleanText('Concours d\'entree a l\'universite - Annee 2025-2026'), 0, 1, 'C');
-
-    
-    $pdf->Ln(5);
-    
-    // ── INFORMATIONS CANDIDAT ─────────────────────────────────
-    $y = $pdf->GetY();
-    
-    $pdf->SetFont('Helvetica', '', 10);
-    $pdf->SetTextColor(0, 0, 0);
-    
-    // Nom
-    $pdf->SetXY($leftMargin, $y);
-    $pdf->Cell(40, 7, 'NOM :', 0, 0, 'L');
-    $pdf->SetFont('Helvetica', 'B', 10);
-    $pdf->Cell(0, 7, strtoupper(cleanText($candidat['nom'])), 0, 1, 'L');
-    
-    // Prénom
-    $pdf->SetFont('Helvetica', '', 10);
-    $pdf->SetX($leftMargin);
-    $pdf->Cell(40, 7, cleanText('PRENOM :'), 0, 0, 'L');
-    $pdf->SetFont('Helvetica', 'B', 10);
-    $pdf->Cell(0, 7, strtoupper(cleanText($candidat['prenom'])), 0, 1, 'L');
-    
-    // Sexe
-    if (isset($candidat['sexe']) && $candidat['sexe']) {
-        $pdf->SetFont('Helvetica', '', 10);
-        $pdf->SetX($leftMargin);
-        $pdf->Cell(40, 7, 'SEXE :', 0, 0, 'L');
-        $pdf->SetFont('Helvetica', 'B', 10);
-        $sexe = strtoupper($candidat['sexe']) === 'M' ? 'MASCULIN' : 'FEMININ';
-        $pdf->Cell(0, 7, $sexe, 0, 1, 'L');
-    }
-    
-    // Matricule
-    $pdf->SetFont('Helvetica', '', 10);
-    $pdf->SetX($leftMargin);
-    $pdf->Cell(40, 7, 'MATRICULE :', 0, 0, 'L');
-    $pdf->SetFont('Helvetica', 'B', 10);
-    $pdf->Cell(0, 7, strtoupper(cleanText($candidat['matricule'])), 0, 1, 'L');
-    
-    // Email
-    $pdf->SetFont('Helvetica', '', 10);
-    $pdf->SetX($leftMargin);
-    $pdf->Cell(40, 7, 'EMAIL :', 0, 0, 'L');
-    $pdf->SetFont('Helvetica', '', 10);
-    $pdf->Cell(0, 7, $candidat['email'], 0, 1, 'L');
-    
-    // Téléphone
-    if (isset($candidat['telephone']) && $candidat['telephone']) {
-        $pdf->SetFont('Helvetica', '', 10);
-        $pdf->SetX($leftMargin);
-        $pdf->Cell(40, 7, cleanText('TELEPHONE :'), 0, 0, 'L');
-        $pdf->SetFont('Helvetica', '', 10);
-        $pdf->Cell(0, 7, cleanText($candidat['telephone']), 0, 1, 'L');
-    }
-    
-    $pdf->Ln(5);
-    
-    // ── CONCOURS ──────────────────────────────────────────────
-    $pdf->SetFont('Helvetica', 'B', 11);
-    $pdf->SetX($leftMargin);
-    $pdf->Cell(0, 7, 'CONCOURS :', 0, 1, 'L');
-    
-    $pdf->SetFont('Helvetica', '', 10);
-    $pdf->SetX($leftMargin);
-    $pdf->MultiCell(0, 6, strtoupper(cleanText($concours['libelle'])), 0, 'L');
-    
-    $pdf->Ln(2);
-    
-    // Période
-    $dateDebut = date('d/m/Y', strtotime($concours['dateDebut']));
-    $dateFin = date('d/m/Y', strtotime($concours['dateFin']));
-    
-    $pdf->SetFont('Helvetica', '', 10);
-    $pdf->SetX($leftMargin);
-    $pdf->Cell(60, 6, cleanText('Periode du concours :'), 0, 0, 'L');
-    $pdf->SetFont('Helvetica', 'B', 10);
-    $pdf->Cell(0, 6, 'Du ' . $dateDebut . ' au ' . $dateFin, 0, 1, 'L');
-    
-    $pdf->Ln(3);
-    
-    // ── LIEU DE COMPOSITION ───────────────────────────────────
-    if (isset($concours['lieuComposition']) && $concours['lieuComposition']) {
-        $pdf->SetFont('Helvetica', 'B', 11);
-        $pdf->SetX($leftMargin);
-        $pdf->Cell(0, 7, 'LIEU DE COMPOSITION :', 0, 1, 'L');
-        
-        $pdf->SetFont('Helvetica', '', 10);
-        $pdf->SetX($leftMargin);
-        $pdf->MultiCell(0, 6, strtoupper(cleanText($concours['lieuComposition'])), 0, 'L');
-        
-        $pdf->Ln(2);
-    }
-    
-    // Date et heure de composition (si disponibles)
-    if (isset($concours['dateComposition']) && $concours['dateComposition']) {
-        $pdf->SetFont('Helvetica', '', 10);
-        $pdf->SetX($leftMargin);
-        $pdf->Cell(60, 6, 'Date de composition :', 0, 0, 'L');
-        $pdf->SetFont('Helvetica', 'B', 10);
-        $pdf->Cell(0, 6, date('d/m/Y', strtotime($concours['dateComposition'])), 0, 1, 'L');
-    }
-    
-    if (isset($concours['heureComposition']) && $concours['heureComposition']) {
-        $pdf->SetFont('Helvetica', '', 10);
-        $pdf->SetX($leftMargin);
-        $pdf->Cell(60, 6, 'Heure de composition :', 0, 0, 'L');
-        $pdf->SetFont('Helvetica', 'B', 10);
-        $pdf->Cell(0, 6, cleanText($concours['heureComposition']), 0, 1, 'L');
-    }
-    
-    $pdf->Ln(5);
-    
-    // ── AVERTISSEMENT IMPORTANT ───────────────────────────────
-    $pdf->SetDrawColor(0, 0, 0);
-    $pdf->SetLineWidth(0.5);
-    $yBox = $pdf->GetY();
-    $pdf->Rect($leftMargin, $yBox, $contentWidth, 25);
-    
-    $pdf->SetFont('Helvetica', 'B', 10);
-    $pdf->SetXY($leftMargin + 2, $yBox + 2);
-    $pdf->Cell(0, 6, 'IMPORTANT :', 0, 1, 'L');
-    
-    $pdf->SetFont('Helvetica', '', 9);
+    $numeroConvocation = strtoupper(cleanText($concours['id'] ?? 'N/A')) . '-' . strtoupper(cleanText($candidat['matricule']));
+    $pdf->SetFillColor(245, 247, 250);
+    $pdf->SetDrawColor(200, 210, 220);
+    $pdf->Rect($leftMargin, $pdf->GetY(), $contentWidth, 9, 'FD');
+    $pdf->SetFont('Helvetica', 'B', 12);
     $pdf->SetX($leftMargin + 2);
-    $pdf->MultiCell($contentWidth - 4, 5, cleanText('Le candidat est prie de se presenter muni de cette convocation et d\'une piece d\'identite valide. Tout retard ou absence non justifiee entraine l\'annulation de l\'inscription.'), 0, 'L');
-    
-    $pdf->Ln(10);
-    
-    // ── SIGNATURE ─────────────────────────────────────────────
-    $pdf->SetFont('Helvetica', '', 9);
-    $pdf->Cell(0, 5, cleanText('Fait a Abomey-Calavi, le ') . date('d/m/Y'), 0, 1, 'R');
+    $pdf->Cell($contentWidth - 4, 9, cleanText('Numero convocation : ') . $numeroConvocation, 0, 1, 'L');
+    $pdf->Ln(3);
+
+    renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Identification du candidat', 'blue');
+    $photoPath = resolveImagePath($candidat['photoPath'] ?? ($candidat['photo'] ?? ''));
+    $rowStartY = $pdf->GetY();
+
+    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(42, 6, 'Nom et prenom :', 0, 0, 'L');
+    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->Cell(95, 6, strtoupper(cleanText(($candidat['nom'] ?? '') . ' ' . ($candidat['prenom'] ?? ''))), 0, 1, 'L');
+
+    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(42, 6, 'Matricule :', 0, 0, 'L');
+    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->Cell(95, 6, strtoupper(cleanText($candidat['matricule'] ?? 'N/A')), 0, 1, 'L');
+
+    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(42, 6, 'Email :', 0, 0, 'L');
+    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->Cell(95, 6, cleanText($candidat['email'] ?? 'N/A'), 0, 1, 'L');
+
+    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(42, 6, 'Telephone :', 0, 0, 'L');
+    $pdf->Cell(95, 6, cleanText($candidat['telephone'] ?? 'Non renseigne'), 0, 1, 'L');
+
+    $photoX = $leftMargin + $contentWidth - 35;
+    $photoY = $rowStartY + 1;
+    if ($photoPath) {
+        $pdf->Image($photoPath, $photoX, $photoY, 28, 34);
+    } else {
+        $pdf->SetXY($photoX, $photoY);
+        $pdf->SetDrawColor(120, 120, 120);
+        $pdf->Rect($photoX, $photoY, 28, 34);
+        $pdf->SetFont('Helvetica', '', 12);
+        $pdf->SetXY($photoX, $photoY + 14);
+        $pdf->Cell(28, 6, 'PHOTO', 0, 0, 'C');
+    }
+
+    $pdf->Ln(3);
+    ensureSpaceConvocation($pdf, 55, $leftMargin, $rightMargin, $contentWidth);
+    renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Details du concours', 'blue');
+    $dateDebut = !empty($concours['dateDebut']) ? date('d/m/Y', strtotime($concours['dateDebut'])) : 'N/A';
+    $dateFin = !empty($concours['dateFin']) ? date('d/m/Y', strtotime($concours['dateFin'])) : 'N/A';
+    $dateComposition = !empty($concours['dateComposition']) ? date('d/m/Y', strtotime($concours['dateComposition'])) : 'A definir';
+    $heureComposition = !empty($concours['heureComposition']) ? cleanText($concours['heureComposition']) : 'A definir';
+    $lieuComposition = !empty($concours['lieuComposition']) ? cleanText($concours['lieuComposition']) : 'Centre de composition a confirmer';
+
+    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetX($leftMargin + 2);
+    $pdf->MultiCell($contentWidth - 4, 6, strtoupper(cleanText($concours['libelle'] ?? 'Concours non renseigne')), 0, 'L');
+
+    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(50, 6, 'Periode officielle :', 0, 0, 'L');
+    $pdf->Cell(0, 6, cleanText('Du ') . $dateDebut . cleanText(' au ') . $dateFin, 0, 1, 'L');
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(50, 6, 'Date de composition :', 0, 0, 'L');
+    $pdf->Cell(0, 6, $dateComposition, 0, 1, 'L');
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(50, 6, 'Heure de convocation :', 0, 0, 'L');
+    $pdf->Cell(0, 6, $heureComposition, 0, 1, 'L');
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(50, 6, 'Centre / Salle :', 0, 0, 'L');
+    $pdf->MultiCell($contentWidth - 54, 6, strtoupper($lieuComposition), 0, 'L');
+
     $pdf->Ln(2);
-    $pdf->SetFont('Helvetica', 'B', 9);
-    $pdf->Cell(0, 5, cleanText('Le Directeur General'), 0, 1, 'R');
-    $pdf->SetFont('Helvetica', '', 9);
-    $pdf->Cell(0, 5, cleanText('de l\'Enseignement Superieur'), 0, 1, 'R');
+    ensureSpaceConvocation($pdf, 28, $leftMargin, $rightMargin, $contentWidth);
+    renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Matieres / epreuves', 'green');
+    $matieres = [];
+    if (isset($concours['matieres']) && is_array($concours['matieres'])) {
+        $matieres = $concours['matieres'];
+    }
+    if (empty($matieres)) {
+        $matieres = ['Culture generale', 'Discipline principale du concours'];
+    }
+
+    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetFillColor(239, 239, 239);
+    $pdf->SetX($leftMargin);
+    $pdf->Cell(12, 7, 'N', 1, 0, 'C', true);
+    $pdf->Cell($contentWidth - 12, 7, cleanText('Epreuve'), 1, 1, 'L', true);
+    $pdf->SetFont('Helvetica', '', 12);
+    foreach ($matieres as $idx => $matiere) {
+        if ($pdf->GetY() + 8 > 270) {
+            $pdf->AddPage();
+            renderOfficialHeader(
+                $pdf,
+                $leftMargin,
+                $rightMargin,
+                $contentWidth,
+                'Convocation officielle',
+                'Concours d\'entree a l\'universite'
+            );
+            renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Matieres / epreuves', 'green');
+            $pdf->SetFont('Helvetica', 'B', 12);
+            $pdf->SetFillColor(239, 239, 239);
+            $pdf->SetX($leftMargin);
+            $pdf->Cell(12, 7, 'N', 1, 0, 'C', true);
+            $pdf->Cell($contentWidth - 12, 7, cleanText('Epreuve'), 1, 1, 'L', true);
+            $pdf->SetFont('Helvetica', '', 12);
+        }
+        $pdf->SetX($leftMargin);
+        $pdf->Cell(12, 7, strval($idx + 1), 1, 0, 'C');
+        $pdf->Cell($contentWidth - 12, 7, cleanText($matiere), 1, 1, 'L');
+    }
+
+    $pdf->Ln(2);
+    ensureSpaceConvocation($pdf, 42, $leftMargin, $rightMargin, $contentWidth);
+    renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Consignes obligatoires', 'red');
+    $consignes = [
+        'Se presenter au moins 60 minutes avant le debut de la premiere epreuve.',
+        'Apporter cette convocation imprimee et une piece d identite valide.',
+        'Utiliser uniquement le materiel autorise par le jury.',
+        'Les telephones et appareils connectes sont strictement interdits en salle.',
+        'Tout retard majeur ou fraude entraine l annulation de la participation.',
+    ];
+    $pdf->SetFont('Helvetica', '', 12);
+    foreach ($consignes as $consigne) {
+        if ($pdf->GetY() + 8 > 270) {
+            $pdf->AddPage();
+            renderOfficialHeader(
+                $pdf,
+                $leftMargin,
+                $rightMargin,
+                $contentWidth,
+                'Convocation officielle',
+                'Concours d\'entree a l\'universite'
+            );
+            renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Consignes obligatoires', 'red');
+            $pdf->SetFont('Helvetica', '', 12);
+        }
+        $pdf->SetX($leftMargin + 2);
+        $pdf->MultiCell($contentWidth - 4, 5, cleanText('- ') . cleanText($consigne), 0, 'L');
+    }
+
+    ensureSpaceConvocation($pdf, 20, $leftMargin, $rightMargin, $contentWidth);
+    renderSignatureBlock($pdf, 'Le Directeur General de l Enseignement Superieur');
     
     // ── PIED DE PAGE ──────────────────────────────────────────
-    $pdf->SetY(-20);
-    $pdf->SetFont('Helvetica', '', 7);
-    $pdf->SetTextColor(128, 128, 128);
-    $pdf->Cell(0, 4, cleanText('Document genere automatiquement par UniPath - ') . date('d/m/Y H:i'), 0, 1, 'C');
+    renderDocumentFooter($pdf);
 
     // ── SAUVEGARDE DU PDF ─────────────────────────────────────
     $pdf->Output('F', $outputFile);

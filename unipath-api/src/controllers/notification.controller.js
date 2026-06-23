@@ -94,9 +94,60 @@ const sendRejetNotification = async (req, res) => {
   }
 };
 
+// ✅ Méthodes déplacées depuis notifications.routes.js pour cohérence
+const getUnreadCount = async (req, res) => {
+  try {
+    const count = await notificationService.getUnreadCount(req.user.id);
+    res.json({ count });
+  } catch (error) {
+    console.error('Erreur getUnreadCount:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const markAllAsRead = async (req, res) => {
+  try {
+    await notificationService.markAllAsRead(req.user.id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Erreur markAllAsRead:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const getNotifications = async (req, res) => {
+  try {
+    const { page, limit, type, read } = req.query;
+    const notifications = await notificationService.getNotifications(req.user.id, {
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 20,
+      type,
+      read: read === 'true' ? true : read === 'false' ? false : undefined
+    });
+    res.json(notifications);
+  } catch (error) {
+    console.error('Erreur getNotifications:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const markAsRead = async (req, res) => {
+  try {
+    const notification = await notificationService.markAsRead(req.params.id);
+    res.json(notification);
+  } catch (error) {
+    console.error('Erreur markAsRead:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   sendNotification,
   sendPreInscriptionNotification,
   sendValidationNotification,
-  sendRejetNotification
+  sendRejetNotification,
+  getUnreadCount,
+  markAllAsRead,
+  getNotifications,
+  markAsRead
 };

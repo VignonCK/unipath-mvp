@@ -1,5 +1,6 @@
 <?php
 require(__DIR__ . '/fpdf.php');
+require(__DIR__ . '/pdf-common.php');
 
 // ── VALIDATION DES ARGUMENTS ──────────────────────────────────
 if ($argc < 3) {
@@ -33,16 +34,27 @@ if (!isset($data['candidat']) || !isset($data['concours'])) {
 $candidat = $data['candidat'];
 $concours = $data['concours'];
 $numeroDossier = $data['numeroDossier'] ?? 'N/A';
+$inscription = $data['inscription'] ?? [];
 
-// Fonction pour convertir les caractères accentués
-function cleanText($text) {
-    if (!$text) return '';
-    return iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text);
+function ensureSpacePreinscription($pdf, $minYNeeded, $leftMargin, $rightMargin, $contentWidth) {
+    if ($pdf->GetY() + $minYNeeded > 270) {
+        $pdf->AddPage();
+        renderOfficialHeader(
+            $pdf,
+            $leftMargin,
+            $rightMargin,
+            $contentWidth,
+            'Fiche de pre-inscription',
+            'Plateforme nationale UniPath'
+        );
+    }
 }
 
 // ── CRÉATION DU PDF ───────────────────────────────────────────
 try {
     $pdf = new FPDF('P', 'mm', 'A4');
+    $pdf->SetMargins(20, 15, 20);
+    $pdf->SetAutoPageBreak(true, 18);
     $pdf->AddPage();
     
     // Marges
@@ -51,178 +63,154 @@ try {
     $pageWidth = 210;
     $contentWidth = $pageWidth - $leftMargin - $rightMargin;
 
-    // ── EN-TETE AVEC LOGOS ────────────────────────────────────
-    $drapeau = __DIR__ . '/../src/assets/drapeau_du_benin.png';
-    $logo = __DIR__ . '/../src/assets/logo_mesrs.png';
+    renderOfficialHeader(
+        $pdf,
+        $leftMargin,
+        $rightMargin,
+        $contentWidth,
+        'Fiche de pre-inscription',
+        'Plateforme nationale UniPath'
+    );
 
-    // Logo gauche (Drapeau)
-    if (file_exists($drapeau)) {
-        $pdf->Image($drapeau, $leftMargin, 15, 30, 22);
-    }
-    
-    // Logo droit (MESRS)
-    if (file_exists($logo)) {
-        $pdf->Image($logo, $pageWidth - $rightMargin - 30, 15, 30, 22);
-    }
-
-    // ── TITRE CENTRÉ ──────────────────────────────────────────
-    $pdf->SetY(20);
-    $pdf->SetFont('Helvetica', 'B', 11);
-    $pdf->SetTextColor(0, 0, 0);
-    $pdf->Cell(0, 5, 'REPUBLIQUE DU BENIN', 0, 1, 'C');
-    $pdf->SetFont('Helvetica', '', 9);
-    $pdf->Cell(0, 4, cleanText('Ministere de l\'Enseignement Superieur'), 0, 1, 'C');
-    $pdf->Cell(0, 4, cleanText('et de la Recherche Scientifique'), 0, 1, 'C');
-    $pdf->SetFont('Helvetica', 'B', 10);
-    $pdf->Cell(0, 5, cleanText('Universite d\'Abomey-Calavi'), 0, 1, 'C');
-    
-    $pdf->Ln(5);
-    
-    // ── CADRE TITRE DOCUMENT ──────────────────────────────────
-    $pdf->SetDrawColor(0, 0, 0);
-    $pdf->SetLineWidth(0.5);
-    $pdf->Rect($leftMargin + 30, $pdf->GetY(), $contentWidth - 60, 12);
-    
-    $pdf->SetFont('Helvetica', 'B', 14);
-    $pdf->Cell(0, 12, 'FICHE DE PRE-INSCRIPTION', 0, 1, 'C');
-    
+    $numeroDossierFinal = strtoupper(cleanText($numeroDossier ?: ($inscription['numeroInscription'] ?? 'N/A')));
+    $pdf->SetFillColor(245, 247, 251);
+    $pdf->SetDrawColor(200, 210, 220);
+    $pdf->Rect($leftMargin, $pdf->GetY(), $contentWidth, 9, 'FD');
+    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell($contentWidth - 4, 9, cleanText('Numero de dossier : ') . $numeroDossierFinal, 0, 1, 'L');
     $pdf->Ln(3);
-    
-    // ── NUMÉRO DE DOSSIER ─────────────────────────────────────
-    $pdf->SetFont('Helvetica', 'B', 11);
-    $pdf->Cell(0, 6, 'N' . cleanText('°') . ' DOSSIER : ' . strtoupper(cleanText($numeroDossier)), 0, 1, 'C');
 
-    
-    $pdf->Ln(5);
-    
-    // ── INFORMATIONS CANDIDAT ─────────────────────────────────
-    $y = $pdf->GetY();
-    
-    // Cadre principal
-    $pdf->SetDrawColor(0, 0, 0);
-    $pdf->SetLineWidth(0.3);
-    
-    $pdf->SetFont('Helvetica', '', 10);
-    $pdf->SetTextColor(0, 0, 0);
-    
-    // Nom
-    $pdf->SetXY($leftMargin, $y);
-    $pdf->Cell(40, 7, 'NOM :', 0, 0, 'L');
-    $pdf->SetFont('Helvetica', 'B', 10);
-    $pdf->Cell(0, 7, strtoupper(cleanText($candidat['nom'])), 0, 1, 'L');
-    
-    // Prénom
-    $pdf->SetFont('Helvetica', '', 10);
-    $pdf->SetX($leftMargin);
-    $pdf->Cell(40, 7, cleanText('PRENOM :'), 0, 0, 'L');
-    $pdf->SetFont('Helvetica', 'B', 10);
-    $pdf->Cell(0, 7, strtoupper(cleanText($candidat['prenom'])), 0, 1, 'L');
-    
-    // Date de naissance
-    if (isset($candidat['dateNaiss']) && $candidat['dateNaiss']) {
-        $pdf->SetFont('Helvetica', '', 10);
-        $pdf->SetX($leftMargin);
-        $pdf->Cell(40, 7, cleanText('NE(E) LE :'), 0, 0, 'L');
-        $pdf->SetFont('Helvetica', 'B', 10);
-        $pdf->Cell(0, 7, date('d/m/Y', strtotime($candidat['dateNaiss'])), 0, 1, 'L');
+    renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Informations du candidat', 'blue');
+    $photoPath = resolveImagePath($candidat['photoPath'] ?? ($candidat['photo'] ?? ''));
+    $photoX = $leftMargin + $contentWidth - 35;
+    $photoY = $pdf->GetY() + 1;
+
+    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(42, 6, 'Nom et prenom :', 0, 0, 'L');
+    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->Cell(95, 6, strtoupper(cleanText(($candidat['nom'] ?? '') . ' ' . ($candidat['prenom'] ?? ''))), 0, 1, 'L');
+
+    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(42, 6, 'Matricule :', 0, 0, 'L');
+    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->Cell(95, 6, strtoupper(cleanText($candidat['matricule'] ?? 'EN ATTENTE')), 0, 1, 'L');
+
+    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(42, 6, 'Date / lieu naiss. :', 0, 0, 'L');
+    $dateNaiss = !empty($candidat['dateNaiss']) ? date('d/m/Y', strtotime($candidat['dateNaiss'])) : 'N/A';
+    $lieuNaiss = cleanText($candidat['lieuNaiss'] ?? 'N/A');
+    $pdf->Cell(95, 6, $dateNaiss . ' / ' . $lieuNaiss, 0, 1, 'L');
+
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(42, 6, 'Email :', 0, 0, 'L');
+    $pdf->Cell(95, 6, cleanText($candidat['email'] ?? 'N/A'), 0, 1, 'L');
+
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(42, 6, 'Telephone :', 0, 0, 'L');
+    $pdf->Cell(95, 6, cleanText($candidat['telephone'] ?? 'Non renseigne'), 0, 1, 'L');
+
+    if ($photoPath) {
+        $pdf->Image($photoPath, $photoX, $photoY, 28, 34);
+    } else {
+        $pdf->SetXY($photoX, $photoY);
+        $pdf->Rect($photoX, $photoY, 28, 34);
+        $pdf->SetFont('Helvetica', '', 12);
+        $pdf->SetXY($photoX, $photoY + 14);
+        $pdf->Cell(28, 6, 'PHOTO', 0, 0, 'C');
     }
-    
-    // Lieu de naissance
-    if (isset($candidat['lieuNaiss']) && $candidat['lieuNaiss']) {
-        $pdf->SetFont('Helvetica', '', 10);
-        $pdf->SetX($leftMargin);
-        $pdf->Cell(40, 7, cleanText('A :'), 0, 0, 'L');
-        $pdf->SetFont('Helvetica', 'B', 10);
-        $pdf->Cell(0, 7, strtoupper(cleanText($candidat['lieuNaiss'])), 0, 1, 'L');
-    }
-    
-    // Email
-    $pdf->SetFont('Helvetica', '', 10);
-    $pdf->SetX($leftMargin);
-    $pdf->Cell(40, 7, 'EMAIL :', 0, 0, 'L');
-    $pdf->SetFont('Helvetica', '', 10);
-    $pdf->Cell(0, 7, $candidat['email'], 0, 1, 'L');
-    
-    // Téléphone
-    if (isset($candidat['telephone']) && $candidat['telephone']) {
-        $pdf->SetFont('Helvetica', '', 10);
-        $pdf->SetX($leftMargin);
-        $pdf->Cell(40, 7, cleanText('TELEPHONE :'), 0, 0, 'L');
-        $pdf->SetFont('Helvetica', '', 10);
-        $pdf->Cell(0, 7, cleanText($candidat['telephone']), 0, 1, 'L');
-    }
-    
-    // Matricule
-    if (isset($candidat['matricule']) && $candidat['matricule']) {
-        $pdf->SetFont('Helvetica', '', 10);
-        $pdf->SetX($leftMargin);
-        $pdf->Cell(40, 7, 'MATRICULE :', 0, 0, 'L');
-        $pdf->SetFont('Helvetica', 'B', 10);
-        $pdf->Cell(0, 7, strtoupper(cleanText($candidat['matricule'])), 0, 1, 'L');
-    }
-    
-    $pdf->Ln(5);
-    
-    // ── CONCOURS ──────────────────────────────────────────────
-    $pdf->SetFont('Helvetica', 'B', 11);
-    $pdf->SetX($leftMargin);
-    $pdf->Cell(0, 7, 'CONCOURS :', 0, 1, 'L');
-    
-    $pdf->SetFont('Helvetica', '', 10);
-    $pdf->SetX($leftMargin);
-    $pdf->MultiCell(0, 6, strtoupper(cleanText($concours['libelle'])), 0, 'L');
-    
+
+    $pdf->Ln(3);
+    ensureSpacePreinscription($pdf, 40, $leftMargin, $rightMargin, $contentWidth);
+    renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Informations du concours', 'green');
+    $dateDebut = !empty($concours['dateDebut']) ? date('d/m/Y', strtotime($concours['dateDebut'])) : 'N/A';
+    $dateFin = !empty($concours['dateFin']) ? date('d/m/Y', strtotime($concours['dateFin'])) : 'N/A';
+
+    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetX($leftMargin + 2);
+    $pdf->MultiCell($contentWidth - 4, 6, strtoupper(cleanText($concours['libelle'] ?? 'Concours non renseigne')), 0, 'L');
+    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(55, 6, 'Periode d inscription :', 0, 0, 'L');
+    $pdf->Cell(0, 6, cleanText('Du ') . $dateDebut . cleanText(' au ') . $dateFin, 0, 1, 'L');
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(55, 6, 'Lieu de composition :', 0, 0, 'L');
+    $pdf->Cell(0, 6, cleanText($concours['lieuComposition'] ?? 'A communiquer'), 0, 1, 'L');
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(55, 6, 'Date de composition :', 0, 0, 'L');
+    $pdf->Cell(0, 6, !empty($concours['dateComposition']) ? date('d/m/Y', strtotime($concours['dateComposition'])) : 'A definir', 0, 1, 'L');
+
     $pdf->Ln(2);
-    
-    // Période
-    $dateDebut = date('d/m/Y', strtotime($concours['dateDebut']));
-    $dateFin = date('d/m/Y', strtotime($concours['dateFin']));
-    
-    $pdf->SetFont('Helvetica', '', 10);
-    $pdf->SetX($leftMargin);
-    $pdf->Cell(60, 6, cleanText('Periode d\'inscription :'), 0, 0, 'L');
-    $pdf->SetFont('Helvetica', 'B', 10);
-    $pdf->Cell(0, 6, 'Du ' . $dateDebut . ' au ' . $dateFin, 0, 1, 'L');
-    
-    $pdf->Ln(5);
-    
-    // ── STATUT ────────────────────────────────────────────────
-    $pdf->SetDrawColor(0, 0, 0);
-    $pdf->SetLineWidth(0.5);
-    $pdf->Rect($leftMargin, $pdf->GetY(), $contentWidth, 10);
-    
-    $pdf->SetFont('Helvetica', 'B', 11);
-    $pdf->Cell(0, 10, 'STATUT : EN ATTENTE DE VALIDATION', 0, 1, 'C');
-    
-    $pdf->Ln(5);
-    
-    // ── INFORMATIONS IMPORTANTES ──────────────────────────────
-    $pdf->SetFont('Helvetica', 'B', 10);
-    $pdf->SetX($leftMargin);
-    $pdf->Cell(0, 6, 'INFORMATIONS IMPORTANTES :', 0, 1, 'L');
-    
-    $pdf->SetFont('Helvetica', '', 9);
-    $pdf->SetX($leftMargin);
-    $pdf->MultiCell(0, 5, cleanText('- Completez votre dossier en deposant toutes les pieces justificatives requises'), 0, 'L');
-    $pdf->SetX($leftMargin);
-    $pdf->MultiCell(0, 5, cleanText('- La commission examinera votre dossier dans les prochains jours'), 0, 'L');
-    $pdf->SetX($leftMargin);
-    $pdf->MultiCell(0, 5, cleanText('- Vous recevrez un email de notification concernant la decision'), 0, 'L');
-    $pdf->SetX($leftMargin);
-    $pdf->MultiCell(0, 5, cleanText('- En cas de validation, une convocation vous sera envoyee par email'), 0, 'L');
-    
-    $pdf->Ln(10);
-    
-    // ── SIGNATURE ─────────────────────────────────────────────
-    $pdf->SetFont('Helvetica', '', 9);
-    $pdf->Cell(0, 5, cleanText('Fait a Abomey-Calavi, le ') . date('d/m/Y'), 0, 1, 'R');
-    $pdf->Cell(0, 5, cleanText('Le Service des Inscriptions'), 0, 1, 'R');
+    ensureSpacePreinscription($pdf, 35, $leftMargin, $rightMargin, $contentWidth);
+    renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Etat du dossier', 'blue');
+    $statut = cleanText($inscription['dossierInscription']['statut'] ?? 'EN_ATTENTE');
+    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(52, 7, 'Statut actuel :', 0, 0, 'L');
+    $pdf->Cell(0, 7, strtoupper($statut), 0, 1, 'L');
+
+    $piecesChecklist = [
+        'Acte de naissance',
+        'Carte d identite',
+        'Photo d identite',
+        'Releve de notes',
+        'Quittance / preuve de paiement',
+    ];
+    $pdf->SetFont('Helvetica', '', 12);
+    foreach ($piecesChecklist as $piece) {
+        if ($pdf->GetY() + 7 > 270) {
+            $pdf->AddPage();
+            renderOfficialHeader(
+                $pdf,
+                $leftMargin,
+                $rightMargin,
+                $contentWidth,
+                'Fiche de pre-inscription',
+                'Plateforme nationale UniPath'
+            );
+            renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Etat du dossier', 'blue');
+            $pdf->SetFont('Helvetica', '', 12);
+        }
+        $pdf->SetX($leftMargin + 4);
+        $pdf->Cell(4, 5, chr(149), 0, 0, 'C');
+        $pdf->Cell($contentWidth - 8, 5, cleanText($piece), 0, 1, 'L');
+    }
+
+    $pdf->Ln(2);
+    ensureSpacePreinscription($pdf, 32, $leftMargin, $rightMargin, $contentWidth);
+    renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Mentions importantes', 'red');
+    $mentions = [
+        'Completer votre dossier dans les delais fixes par l administration.',
+        'Verifier regulierement votre espace UniPath pour suivre la decision de la commission.',
+        'En cas de validation, votre convocation officielle sera generee automatiquement.',
+    ];
+    $pdf->SetFont('Helvetica', '', 12);
+    foreach ($mentions as $mention) {
+        if ($pdf->GetY() + 8 > 270) {
+            $pdf->AddPage();
+            renderOfficialHeader(
+                $pdf,
+                $leftMargin,
+                $rightMargin,
+                $contentWidth,
+                'Fiche de pre-inscription',
+                'Plateforme nationale UniPath'
+            );
+            renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Mentions importantes', 'red');
+            $pdf->SetFont('Helvetica', '', 12);
+        }
+        $pdf->SetX($leftMargin + 2);
+        $pdf->MultiCell($contentWidth - 4, 5, cleanText('- ') . cleanText($mention), 0, 'L');
+    }
+
+    ensureSpacePreinscription($pdf, 20, $leftMargin, $rightMargin, $contentWidth);
+    renderSignatureBlock($pdf, 'Le Service des Inscriptions');
     
     // ── PIED DE PAGE ──────────────────────────────────────────
-    $pdf->SetY(-20);
-    $pdf->SetFont('Helvetica', '', 7);
-    $pdf->SetTextColor(128, 128, 128);
-    $pdf->Cell(0, 4, cleanText('Document genere automatiquement par UniPath - ') . date('d/m/Y H:i'), 0, 1, 'C');
+    renderDocumentFooter($pdf);
 
     // ── SAUVEGARDE DU PDF ─────────────────────────────────────
     $pdf->Output('F', $outputFile);

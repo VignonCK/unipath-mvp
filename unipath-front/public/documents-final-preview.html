@@ -1,0 +1,228 @@
+﻿<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UniPath - Preview final des 3 documents</title>
+  <style>
+    :root{
+      --navy:#0b1f3a; --blue:#1d4ed8; --teal:#0f766e; --orange:#ea580c;
+      --line:#cbd5e1; --bg:#eef2f7; --text:#0f172a; --muted:#475569;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,Arial,sans-serif;background:linear-gradient(180deg,#dbe7f5,#f8fbff);color:var(--text)}
+    .wrap{max-width:1580px;margin:0 auto;padding:24px}
+    .head{background:#ffffffcc;border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:16px;backdrop-filter:blur(4px)}
+    .head h1{margin:0 0 6px;font-size:22px}
+    .head p{margin:0;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(340px,1fr));gap:16px}
+    .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px;box-shadow:0 10px 24px rgba(2,12,27,.1)}
+    .label{font-size:13px;font-weight:700;color:#334155;margin:2px 0 10px}
+    .doc{aspect-ratio:1/1.414;border:1px solid #dbe5f2;border-radius:10px;overflow:hidden;position:relative}
+    .top{padding:12px 14px;color:#fff}
+    .top h3{margin:0;font-size:13px;letter-spacing:.3px}
+    .top small{font-size:10px;opacity:.92}
+    .body{padding:10px 12px;font-size:9.4px;color:#1e293b;line-height:1.35}
+    .block{border:1px solid #dbeafe;background:#f8fbff;border-radius:8px;padding:7px;margin-bottom:7px}
+    .warn{border-color:#fecaca;background:#fff1f2;color:#7f1d1d}
+    .ok{border-color:#bbf7d0;background:#f0fdf4;color:#14532d}
+    .row{display:flex;gap:7px}
+    .col{flex:1}
+    .title{font-weight:700;color:#0f172a}
+    .muted{color:#64748b}
+    .line{height:1px;background:#d6e0ef;margin:7px 0}
+    .table{width:100%;border-collapse:collapse;font-size:8.7px}
+    .table th,.table td{border:1px solid #dbeafe;padding:3px;text-align:left}
+    .table th{background:#eaf2ff}
+    .photo{
+      width:56px;height:68px;border:1px dashed #94a3b8;border-radius:6px;
+      display:flex;align-items:center;justify-content:center;color:#64748b;font-size:8px;background:#fff
+    }
+    .logo{
+      width:26px;height:26px;border-radius:50%;background:#fff2;display:inline-flex;align-items:center;justify-content:center;
+      border:1px solid #ffffff66;font-size:10px;margin-right:6px
+    }
+    .wm{position:absolute;right:8px;top:110px;font-size:30px;font-weight:800;color:rgba(15,23,42,.05);transform:rotate(-90deg)}
+    .footer-row{display:flex;justify-content:space-between;font-size:8.4px;color:#475569;margin-top:7px}
+    @media(max-width:1200px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <h1>Prévisualisation finale des 3 documents</h1>
+      <p>Style final visé: officiel détaillé + branding fort (Bénin + Ministère), avec informations complètes et zones de validation.</p>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="label">1) Convocation officielle (version détaillée)</div>
+        <div class="doc">
+          <div class="top" style="background:linear-gradient(135deg,var(--navy),var(--blue))">
+            <h3>
+              <span class="logo">🇧🇯</span>
+              <span class="logo">🏛️</span>
+              CONVOCATION OFFICIELLE
+            </h3>
+            <small>République du Bénin • Ministère • Organisme émetteur: Direction des Examens</small>
+          </div>
+          <div class="body">
+            <div class="row">
+              <div class="block col">
+                <div class="title">Informations administratives</div>
+                Nom: AKAKPO Kevin<br>
+                N° inscription: UAC-2026-01452<br>
+                Date de naissance: 12/05/2004<br>
+                Intitulé: Concours d'entrée Génie Informatique
+              </div>
+              <div class="photo">PHOTO<br>CANDIDAT</div>
+            </div>
+
+            <div class="block">
+              <div class="title">Détails logistiques</div>
+              Dates épreuves: 17/08/2026 et 18/08/2026<br>
+              Heure début: 08:00 • <b>Fermeture portes: 07:45</b><br>
+              Centre: Campus EPAC, Cotonou<br>
+              Bâtiment B • Salle 204 • Place 17
+            </div>
+
+            <div class="block">
+              <div class="title">Liste des épreuves</div>
+              <table class="table">
+                <thead><tr><th>Matière</th><th>Date</th><th>Heure</th><th>Durée</th></tr></thead>
+                <tbody>
+                  <tr><td>Mathématiques</td><td>17/08</td><td>08:00</td><td>2h</td></tr>
+                  <tr><td>Physique</td><td>17/08</td><td>11:00</td><td>2h</td></tr>
+                  <tr><td>Français</td><td>18/08</td><td>08:00</td><td>1h30</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="block warn">
+              <div class="title">Consignes et pièces à fournir</div>
+              Convocation imprimée + pièce d'identité photo obligatoires.<br>
+              Téléphones/montres connectées interdits.<br>
+              Matériel autorisé selon matière (stylo, géométrie, calculatrice conforme).<br>
+              En cas de retard après fermeture des portes: accès refusé.
+            </div>
+
+            <div class="line"></div>
+            <div class="footer-row">
+              <span>Ref: CONV-2026-00984 • QR vérification</span>
+              <span>Signature & cachet</span>
+            </div>
+          </div>
+          <div class="wm">OFFICIEL</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="label">2) Fiche de préinscription (version détaillée)</div>
+        <div class="doc">
+          <div class="top" style="background:linear-gradient(135deg,var(--teal),var(--orange))">
+            <h3>
+              <span class="logo">🇧🇯</span>
+              <span class="logo">🏛️</span>
+              FICHE DE PRÉINSCRIPTION
+            </h3>
+            <small>République du Bénin • Ministère • Plateforme UniPath</small>
+          </div>
+          <div class="body">
+            <div class="row">
+              <div class="block col">
+                <div class="title">Identité candidat</div>
+                AGBODJAN Mireille<br>
+                ANIP: 123456789012<br>
+                Matricule: UAC-2026-00891<br>
+                Contact: 97 00 00 00
+              </div>
+              <div class="photo">PHOTO<br>CANDIDAT</div>
+            </div>
+
+            <div class="block">
+              <div class="title">Concours et session</div>
+              Concours: Médecine L1<br>
+              Session: 2026<br>
+              Centre demandé: Cotonou
+            </div>
+
+            <div class="block">
+              <div class="title">Dossier et pièces</div>
+              Acte de naissance: Reçu<br>
+              Carte d'identité: Reçue<br>
+              Relevé: Reçu<br>
+              Photo: Reçue<br>
+              Quittance: Reçue
+            </div>
+
+            <div class="block ok">
+              <div class="title">Statut</div>
+              Dossier complet — prêt pour vérification commission.
+            </div>
+
+            <div class="line"></div>
+            <div class="footer-row">
+              <span>Ref: PRE-2026-88421</span>
+              <span>Date émission: 27/05/2026</span>
+            </div>
+          </div>
+          <div class="wm">PRÉINSCRIPTION</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="label">3) Relevé/Bulletin (version détaillée)</div>
+        <div class="doc">
+          <div class="top" style="background:linear-gradient(135deg,#0f172a,#0f766e)">
+            <h3>RELEVÉ ACADÉMIQUE OFFICIEL</h3>
+            <small>Etablissement: Institut Supérieur Exemple • Adresse • Tél • Email</small>
+          </div>
+          <div class="body">
+            <div class="row">
+              <div class="block col">
+                <div class="title">Infos étudiant</div>
+                KIKI Nadia<br>
+                Matricule: ETU-2026-00127<br>
+                Filière: Génie Informatique<br>
+                Niveau: Licence 2
+              </div>
+              <div class="photo">PHOTO<br>ÉTUDIANT</div>
+            </div>
+
+            <div class="block">
+              <div class="title">Détail des notes (Semestre 1)</div>
+              <table class="table">
+                <thead><tr><th>Matière</th><th>CC</th><th>Exam</th><th>Moy.</th><th>Crédits</th></tr></thead>
+                <tbody>
+                  <tr><td>Algorithmique</td><td>14</td><td>16</td><td>15.20</td><td>4</td></tr>
+                  <tr><td>Base de données</td><td>13</td><td>15</td><td>14.20</td><td>5</td></tr>
+                  <tr><td>Réseaux</td><td>11</td><td>13</td><td>12.20</td><td>4</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="block">
+              <div class="title">Synthèse</div>
+              Moyenne semestrielle: 13.86 / 20<br>
+              Moyenne générale: <b>13.42 / 20</b><br>
+              Total crédits validés: 84 ECTS
+            </div>
+
+            <div class="block ok">
+              <div class="title">Décision du jury</div>
+              Admis en niveau supérieur (Décision N° JURY-2026-117)
+            </div>
+
+            <div class="line"></div>
+            <div class="footer-row">
+              <span>Ref: REL-2026-00984 • QR vérification</span>
+              <span>Signature jury & cachet</span>
+            </div>
+          </div>
+          <div class="wm">BULLETIN</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

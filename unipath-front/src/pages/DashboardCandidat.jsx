@@ -2,11 +2,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  authService, candidatService, concoursService,
-  inscriptionService, dossierService, convocationService
+  candidatService, concoursService,
+  inscriptionService, dossierService
 } from '../services/api';
+import { handleSessionError } from '../utils/auth';
 import DossierCompletion from '../components/DossierCompletion';
 import CandidatLayout from '../components/CandidatLayout';
+import { BentoCard, GlassBadge, ProgressBar } from '../components/AcademicLayout';
 
 function initiales(prenom, nom) {
   return `${(prenom || '?')[0]}${(nom || '?')[0]}`.toUpperCase();
@@ -23,7 +25,6 @@ const PIECES_LABELS = {
   carteIdentite: "Carte d'identité",
   photo:         "Photo d'identité",
   releve:        'Relevé de notes Bac',
-  quittance:     "Quittance d'inscription",
 };
 
 // Formats acceptés par type de pièce
@@ -45,12 +46,11 @@ function profilIncomplet(candidat) {
 
 export default function DashboardCandidat() {
   const navigate = useNavigate();
-  const [candidat, setCandidат]       = useState(null);
+  const [candidat, setCandidat]       = useState(null);
   const [concours, setConcours]       = useState([]);
   const [loading, setLoading]         = useState(true);
   const [uploadStatus, setUploadStatus] = useState({});
   const [message, setMessage]         = useState({ text: '', type: 'info' });
-  const [telechargement, setTelechargement] = useState({});
 
   // Modale édition profil
   const [editOpen, setEditOpen]       = useState(false);
@@ -59,18 +59,20 @@ export default function DashboardCandidat() {
 
   // Photo de profil
   const [photoUrl, setPhotoUrl]       = useState(null);
-  const [photoLoading, setPhotoLoading] = useState(false);
+  const [, setPhotoLoading] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { navigate('/login'); return; }
     Promise.all([candidatService.getProfil(), concoursService.getAll()])
       .then(([p, c]) => {
-        setCandidат(p);
+        setCandidat(p);
         setConcours(c);
         setEditForm({
           nom:       p.nom       || '',
           prenom:    p.prenom    || '',
+          sexe:      p.sexe      || '',
+          nationalite: p.nationalite || '',
           telephone: p.telephone || '',
           dateNaiss: p.dateNaiss ? p.dateNaiss.split('T')[0] : '',
           lieuNaiss: p.lieuNaiss || '',
@@ -79,9 +81,13 @@ export default function DashboardCandidat() {
         // On utilise un champ séparé si disponible, sinon null
         if (p.photoProfilUrl) setPhotoUrl(p.photoProfilUrl);
       })
-      .catch(() => navigate('/login'))
+      .catch((err) => {
+        if (!handleSessionError(err, navigate)) {
+          setMessage({ text: err?.message || 'Erreur de chargement', type: 'error' });
+        }
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [navigate]);
 
   const showMessage = (text, type = 'info') => {
     setMessage({ text, type });
@@ -90,11 +96,24 @@ export default function DashboardCandidat() {
 
   // ── Mise à jour du profil ──────────────────────────────────
   const handleSaveProfil = async () => {
+    if (!editForm.telephone?.trim()) {
+      showMessage('Le téléphone est obligatoire.', 'error');
+      return;
+    }
+    if (!editForm.dateNaiss) {
+      showMessage('La date de naissance est obligatoire.', 'error');
+      return;
+    }
+    if (!editForm.lieuNaiss?.trim()) {
+      showMessage('Le lieu de naissance est obligatoire.', 'error');
+      return;
+    }
+
     setEditLoading(true);
     try {
       await candidatService.updateProfil(editForm);
       const updated = await candidatService.getProfil();
-      setCandidат(updated);
+      setCandidat(updated);
       setEditOpen(false);
       showMessage('Profil mis à jour avec succès.', 'success');
     } catch (err) {
@@ -118,7 +137,7 @@ export default function DashboardCandidat() {
         localStorage.setItem('photoProfil_' + candidat?.id, ev.target.result);
       };
       reader.readAsDataURL(fichier);
-    } catch (err) {
+    } catch {
       showMessage('Erreur upload photo.', 'error');
     } finally {
       setPhotoLoading(false);
@@ -160,10 +179,10 @@ export default function DashboardCandidat() {
     }
     
     try {
-      const response = await inscriptionService.creer(concoursId);
+      await inscriptionService.creer(concoursId);
       showMessage('Inscription réussie ! Une fiche de pré-inscription vous a été envoyée par email.', 'success');
       const updated = await candidatService.getProfil();
-      setCandidат(updated);
+      setCandidat(updated);
     } catch (err) {
       // Si le dossier est incomplet (vérification backend)
       if (err.message.includes('Dossier incomplet') || err.message.includes('pièces manquantes')) {
@@ -190,23 +209,8 @@ export default function DashboardCandidat() {
       await dossierService.uploadPiece(typePiece, fichier);
       setUploadStatus(prev => ({ ...prev, [typePiece]: 'ok' }));
       const updated = await candidatService.getProfil();
-      setCandidат(updated);
+      setCandidat(updated);
     } catch { setUploadStatus(prev => ({ ...prev, [typePiece]: 'error' })); }
-  };
-
-  // ── Téléchargements PDF ───────────────────────────────────
-  const handleConvocation = async (inscriptionId) => {
-    setTelechargement(prev => ({ ...prev, [`conv_${inscriptionId}`]: true }));
-    try { await convocationService.telecharger(inscriptionId); }
-    catch (err) { showMessage('Erreur : ' + err.message, 'error'); }
-    finally { setTelechargement(prev => ({ ...prev, [`conv_${inscriptionId}`]: false })); }
-  };
-
-  const handlePreinscription = async (inscriptionId) => {
-    setTelechargement(prev => ({ ...prev, [`preinsc_${inscriptionId}`]: true }));
-    try { await convocationService.telechargerPreinscription(inscriptionId); }
-    catch (err) { showMessage('Erreur : ' + err.message, 'error'); }
-    finally { setTelechargement(prev => ({ ...prev, [`preinsc_${inscriptionId}`]: false })); }
   };
 
   if (loading) return (
@@ -228,20 +232,20 @@ export default function DashboardCandidat() {
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
-      <div className='max-w-3xl mx-auto space-y-4 sm:space-y-6'>
+      <div className='max-w-3xl mx-auto space-y-4 sm:space-y-6 px-3 sm:px-0'>
 
         {/* Alerte profil incomplet */}
         {incomplet && (
-          <div className='bg-orange-50 border-l-4 border-orange-500 px-5 py-4 rounded-xl flex items-start justify-between gap-4'>
+          <div className='bg-orange-50 border-l-4 border-orange-500 px-4 sm:px-5 py-3 sm:py-4 rounded-xl flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4'>
             <div>
-              <p className='font-semibold text-orange-800 text-sm'>Profil incomplet</p>
+              <p className='font-semibold text-orange-800 text-xs sm:text-sm'>Profil incomplet</p>
               <p className='text-orange-700 text-xs mt-0.5'>
                 Veuillez renseigner votre téléphone, date et lieu de naissance pour pouvoir vous inscrire aux concours.
               </p>
             </div>
             <button
               onClick={() => setEditOpen(true)}
-              className='flex-shrink-0 text-xs bg-orange-500 text-white px-3 py-1.5 rounded-lg hover:bg-orange-600 transition font-medium'
+              className='flex-shrink-0 text-xs bg-orange-500 text-white px-3 py-1.5 rounded-lg hover:bg-orange-600 transition font-medium w-full sm:w-auto'
             >
               Compléter
             </button>
@@ -250,16 +254,16 @@ export default function DashboardCandidat() {
 
         {/* Alerte dossier incomplet */}
         {!incomplet && dossierIncomplet && (
-          <div className='bg-red-50 border-l-4 border-red-500 px-5 py-4 rounded-xl flex items-start justify-between gap-4'>
+          <div className='bg-red-50 border-l-4 border-red-500 px-4 sm:px-5 py-3 sm:py-4 rounded-xl flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4'>
             <div>
-              <p className='font-semibold text-red-800 text-sm'>Dossier incomplet ({nbPiecesDeposees}/{pieces.length} pièces)</p>
+              <p className='font-semibold text-red-800 text-xs sm:text-sm'>Dossier incomplet ({nbPiecesDeposees}/{pieces.length} pièces)</p>
               <p className='text-red-700 text-xs mt-0.5'>
                 Vous devez déposer toutes les pièces justificatives avant de pouvoir vous inscrire à un concours.
               </p>
             </div>
             <button
               onClick={() => document.querySelector('#pieces-justificatives')?.scrollIntoView({ behavior: 'smooth' })}
-              className='flex-shrink-0 text-xs bg-red-500 text-white px-3 py-1.5 rounded-lg hover:bg-red-600 transition font-medium'
+              className='flex-shrink-0 text-xs bg-red-500 text-white px-3 py-1.5 rounded-lg hover:bg-red-600 transition font-medium w-full sm:w-auto'
             >
               Voir les pièces
             </button>
@@ -280,14 +284,14 @@ export default function DashboardCandidat() {
         )}
 
         {/* CARTE PROFIL */}
-        <div id='profil' className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
-          <div className='h-16 bg-gradient-to-r from-blue-900 to-blue-800' />
-          <div className='px-6 pb-6'>
-            <div className='flex items-end justify-between gap-2 -mt-8 mb-4 flex-wrap'>
+        <BentoCard className='p-0 overflow-hidden animate-slide-in'>
+          <div className='h-12 sm:h-16 bg-gradient-to-r from-blue-900 to-blue-800' />
+          <div className='px-4 sm:px-6 pb-4 sm:pb-6'>
+            <div className='flex items-end justify-between gap-2 -mt-6 sm:-mt-8 mb-4 flex-wrap'>
               {/* Avatar cliquable pour changer la photo */}
-              <div className='flex items-end gap-4'>
+              <div className='flex items-end gap-3 sm:gap-4'>
                 <label className='cursor-pointer group relative flex-shrink-0'>
-                  <div className='w-16 h-16 rounded-2xl overflow-hidden bg-orange-500 flex items-center justify-center text-2xl font-black text-white shadow-lg border-4 border-white'>
+                  <div className='w-12 h-12 sm:w-16 sm:h-16 rounded-2xl overflow-hidden bg-orange-500 flex items-center justify-center text-xl sm:text-2xl font-black text-white shadow-lg border-4 border-white'>
                     {photoUrl
                       ? <img src={photoUrl} alt='profil' className='w-full h-full object-cover' />
                       : initiales(candidat?.prenom, candidat?.nom)
@@ -300,7 +304,7 @@ export default function DashboardCandidat() {
                   <input type='file' accept='image/*' onChange={handlePhotoProfil} className='hidden' />
                 </label>
                 <div className='pb-1'>
-                  <h2 className='text-lg font-bold text-gray-900'>{nom}</h2>
+                  <h2 className='text-base sm:text-lg font-bold text-gray-900'>{nom}</h2>
                   <span className='inline-block bg-blue-900 text-orange-300 text-xs font-mono px-2 py-0.5 rounded-md'>
                     {candidat?.matricule}
                   </span>
@@ -309,7 +313,7 @@ export default function DashboardCandidat() {
               {/* Bouton modifier */}
               <button
                 onClick={() => setEditOpen(true)}
-                className='pb-1 text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition flex-shrink-0'
+                className='pb-1 text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition flex-shrink-0 w-full sm:w-auto'
               >
                 Modifier le profil
               </button>
@@ -318,18 +322,20 @@ export default function DashboardCandidat() {
             <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
               {[
                 { label: 'Email',      value: candidat?.email },
+                { label: 'Sexe',       value: candidat?.sexe === 'M' ? 'Masculin' : candidat?.sexe === 'F' ? 'Féminin' : <span className='text-orange-500 text-xs'>Non renseigné</span> },
+                { label: 'Nationalité', value: candidat?.nationalite || <span className='text-orange-500 text-xs'>Non renseigné</span> },
                 { label: 'Téléphone', value: candidat?.telephone || <span className='text-orange-500 text-xs'>Non renseigné</span> },
                 { label: 'Naissance', value: candidat?.dateNaiss ? new Date(candidat.dateNaiss).toLocaleDateString('fr-FR') : <span className='text-orange-500 text-xs'>Non renseigné</span> },
                 { label: 'Lieu',      value: candidat?.lieuNaiss || <span className='text-orange-500 text-xs'>Non renseigné</span> },
               ].map(({ label, value }) => (
-                <div key={label} className='bg-gray-50 rounded-xl px-4 py-3'>
+                <div key={label} className='glass-card-subtle px-4 py-3'>
                   <p className='text-xs text-gray-400 mb-0.5'>{label}</p>
                   <p className='text-sm font-medium text-gray-800'>{value}</p>
                 </div>
               ))}
             </div>
           </div>
-        </div>
+        </BentoCard>
 
         {/* COMPLÉTUDE DU DOSSIER */}
         <DossierCompletion
@@ -338,17 +344,17 @@ export default function DashboardCandidat() {
           onSoumettre={async () => {
             showMessage('Dossier soumis. La commission va étudier votre candidature.', 'success');
             const updated = await candidatService.getProfil();
-            setCandidат(updated);
+            setCandidat(updated);
           }}
         />
 
         {/* MES INSCRIPTIONS */}
-        <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
+        <BentoCard className='p-6 animate-slide-in'>
           <div className='flex items-center justify-between mb-4'>
             <h2 className='text-base font-bold text-gray-800'>Mes inscriptions</h2>
-            <span className='text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium'>
+            <GlassBadge variant='default' className='font-medium'>
               {candidat?.inscriptions?.length || 0}
-            </span>
+            </GlassBadge>
           </div>
 
           {!candidat?.inscriptions?.length ? (
@@ -360,17 +366,22 @@ export default function DashboardCandidat() {
                 return (
                   <div 
                     key={ins.id} 
-                    className='flex overflow-hidden rounded-xl border border-gray-100 hover:shadow-sm transition cursor-pointer'
+                    className='flex overflow-hidden glass-card-subtle hover:shadow-lg transition cursor-pointer'
                     onClick={() => navigate(`/inscription/${ins.id}`)}
                   >
                     <div className={`w-1.5 flex-shrink-0 ${cfg.bar}`} />
                     <div className='flex-1 flex items-center justify-between gap-3 px-4 py-3 flex-wrap'>
                       <div>
                         <p className='font-semibold text-gray-800 text-sm'>{ins.concours?.libelle}</p>
-                        <div className='flex items-center gap-2 mt-1'>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cfg.badge}`}>
+                        <div className='flex items-center gap-2 mt-1 flex-wrap'>
+                          <GlassBadge variant={ins.statut === 'VALIDE' ? 'success' : ins.statut === 'REJETE' ? 'error' : 'warning'}>
                             {cfg.label}
-                          </span>
+                          </GlassBadge>
+                          {ins.numeroInscription && (
+                            <GlassBadge variant='info' className='font-mono'>
+                              {ins.numeroInscription}
+                            </GlassBadge>
+                          )}
                           <span className='text-xs text-gray-400'>
                             {new Date(ins.createdAt).toLocaleDateString('fr-FR')}
                           </span>
@@ -379,7 +390,7 @@ export default function DashboardCandidat() {
                       <div className='flex items-center gap-2'>
                         <button
                           onClick={(e) => { e.stopPropagation(); navigate(`/inscription/${ins.id}`); }}
-                          className='text-xs border border-gray-200 text-gray-600 px-3 py-2 rounded-lg hover:bg-gray-50 transition'
+                          className='btn-glass text-xs px-3 py-2'
                         >
                           Voir détails
                         </button>
@@ -390,26 +401,26 @@ export default function DashboardCandidat() {
               })}
             </div>
           )}
-        </div>
+        </BentoCard>
 
         {/* CONCOURS DISPONIBLES */}
-        <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
+        <BentoCard className='p-6 animate-slide-in'>
           <div className='flex items-center justify-between mb-4'>
             <h2 className='text-base font-bold text-gray-800'>Concours disponibles</h2>
-            <span className='text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium'>
+            <GlassBadge variant='warning' className='font-medium'>
               {concours.length}
-            </span>
+            </GlassBadge>
           </div>
 
           {!concours.length ? (
             <p className='text-center text-gray-400 text-sm py-6'>Aucun concours disponible.</p>
           ) : (
-            <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
+            <BentoGrid columns='auto-fit'>
               {concours.map((c) => {
                 const dejaInscrit = candidat?.inscriptions?.some(i => i.concoursId === c.id);
                 const peutInscrire = !incomplet && !dossierIncomplet;
                 return (
-                  <div key={c.id} className='border border-gray-100 rounded-xl p-4 hover:shadow-sm transition flex flex-col gap-3'>
+                  <div key={c.id} className='glass-card-subtle p-4 hover:shadow-lg transition flex flex-col gap-3'>
                     <div>
                       <p className='font-semibold text-gray-800 text-sm'>{c.libelle}</p>
                       <p className='text-xs text-gray-400 mt-1'>
@@ -417,9 +428,9 @@ export default function DashboardCandidat() {
                       </p>
                     </div>
                     {dejaInscrit ? (
-                      <span className='text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg text-center font-medium'>
+                      <GlassBadge variant='success' className='text-center w-full justify-center'>
                         Inscrit
-                      </span>
+                      </GlassBadge>
                     ) : (
                       <button
                         onClick={() => handleInscription(c.id)}
@@ -437,12 +448,12 @@ export default function DashboardCandidat() {
                   </div>
                 );
               })}
-            </div>
+            </BentoGrid>
           )}
-        </div>
+        </BentoCard>
 
         {/* PIÈCES JUSTIFICATIVES */}
-        <div id='pieces-justificatives' className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
+        <BentoCard id='pieces-justificatives' className='p-6 animate-slide-in'>
           <h2 className='text-base font-bold text-gray-800 mb-4'>Pièces justificatives</h2>
           <div className='space-y-2'>
             {Object.entries(PIECES_LABELS).map(([key, label]) => {
@@ -451,8 +462,8 @@ export default function DashboardCandidat() {
               const isLoading = status === 'loading';
               const isOk = estDepose || status === 'ok';
               return (
-                <div key={key} className={`flex items-center justify-between px-4 py-3 rounded-xl border transition ${
-                  isOk ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
+                <div key={key} className={`flex items-center justify-between px-4 py-3 glass-card-subtle transition ${
+                  isOk ? 'border-l-4 border-green-500' : 'border-l-4 border-gray-300'
                 }`}>
                   <div className='flex items-center gap-3'>
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isOk ? 'bg-green-500' : 'bg-gray-300'}`} />
@@ -472,14 +483,14 @@ export default function DashboardCandidat() {
               );
             })}
           </div>
-        </div>
+        </BentoCard>
 
       </div>
 
       {/* MODALE ÉDITION PROFIL */}
       {editOpen && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40'>
-          <div className='bg-white rounded-2xl shadow-2xl w-full max-w-md'>
+        <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm'>
+          <div className='glass-card-intense w-full max-w-md animate-slide-in'>
             <div className='px-6 py-4 border-b border-gray-100 flex items-center justify-between'>
               <h3 className='font-bold text-gray-900'>Modifier le profil</h3>
               <button onClick={() => setEditOpen(false)} className='text-gray-400 hover:text-gray-600 text-xl leading-none'>&times;</button>
@@ -488,28 +499,42 @@ export default function DashboardCandidat() {
               {[
                 { key: 'prenom',    label: 'Prénom',           type: 'text' },
                 { key: 'nom',       label: 'Nom',              type: 'text' },
+                { key: 'sexe',      label: 'Sexe',             type: 'select', options: [{ value: '', label: 'Sélectionner' }, { value: 'M', label: 'Masculin' }, { value: 'F', label: 'Féminin' }] },
+                { key: 'nationalite', label: 'Nationalité',    type: 'text' },
                 { key: 'telephone', label: 'Téléphone',        type: 'tel',  required: true },
                 { key: 'dateNaiss', label: 'Date de naissance',type: 'date', required: true },
                 { key: 'lieuNaiss', label: 'Lieu de naissance',type: 'text', required: true },
-              ].map(({ key, label, type, required }) => (
+              ].map(({ key, label, type, required, options }) => (
                 <div key={key}>
                   <label className='block text-xs text-gray-500 mb-1'>
                     {label} {required && <span className='text-orange-500'>*</span>}
                   </label>
-                  <input
-                    type={type}
-                    value={editForm[key] || ''}
-                    onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
-                    className='w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500'
-                  />
+                  {type === 'select' ? (
+                    <select
+                      value={editForm[key] || ''}
+                      onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
+                      className='input-glass w-full px-4 py-2.5 text-sm'
+                    >
+                      {options.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type={type}
+                      value={editForm[key] || ''}
+                      onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
+                      className='input-glass w-full px-4 py-2.5 text-sm'
+                    />
+                  )}
                 </div>
               ))}
             </div>
             <div className='px-6 py-4 border-t border-gray-100 flex gap-3 justify-end'>
-              <button onClick={() => setEditOpen(false)} className='text-sm border border-gray-200 text-gray-600 px-4 py-2 rounded-xl hover:bg-gray-50 transition'>
+              <button onClick={() => setEditOpen(false)} className='btn-glass text-sm px-4 py-2'>
                 Annuler
               </button>
-              <button onClick={handleSaveProfil} disabled={editLoading} className='text-sm bg-blue-900 text-white px-5 py-2 rounded-xl hover:bg-blue-800 transition disabled:opacity-50 font-medium'>
+              <button onClick={handleSaveProfil} disabled={editLoading} className='btn-academic text-sm px-5 py-2 disabled:opacity-50'>
                 {editLoading ? 'Enregistrement...' : 'Enregistrer'}
               </button>
             </div>

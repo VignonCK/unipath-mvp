@@ -1,311 +1,394 @@
 // src/controllers/completion.controller.js
-const { PrismaClient } = require('@prisma/client');
-const { exec } = require('child_process');
-const path = require('path');
+const prisma = require('../prisma');
+const { getPiecesExtrasConfig } = require('../utils/completude.helper');
+const { isEtudiantRole } = require('../constants/roles.constants');
 
-const prisma = new PrismaClient();
+const PIECES_DOSSIER = ['acteNaissance', 'carteIdentite', 'photo', 'releve']; // ✅ sans quittance
 
-/**
- * Exécute un script PHP et retourne le résultat
- * @param {string} scriptPath Chemin vers le script PHP
- * @param {Array} args Arguments à passer au script
- * @returns {Promise<Object>} Résultat du script PHP
- */
-const executePHPScript = (scriptPath, args = []) => {
-  return new Promise((resolve, reject) => {
-    const argsString = args.map(arg => `"${arg}"`).join(' ');
-    const command = `php "${scriptPath}" ${argsString}`;
-    
-    exec(command, { cwd: path.join(__dirname, '../../') }, (error, stdout, stderr) => {
-      if (error) {
-        console.error('Erreur exécution PHP:', error);
-        reject(new Error(`Erreur PHP: ${error.message}`));
-        return;
-      }
-      
-      if (stderr) {
-        console.warn('Avertissement PHP:', stderr);
-      }
-      
-      try {
-        const result = JSON.parse(stdout.trim());
-        resolve(result);
-      } catch (parseError) {
-        console.error('Erreur parsing JSON:', parseError);
-        console.error('Sortie PHP:', stdout);
-        reject(new Error('Erreur de format de réponse PHP'));
-      }
-    });
-  });
-};
-
-/**
- * GET /api/completion/:candidatId
- * Obtient le pourcentage de complétude d'un dossier candidat
- */
 exports.getCompletion = async (req, res) => {
   try {
     const { candidatId } = req.params;
     const userId = req.user.id;
-    const userRole = req.userRole;
-    
-    // Vérifier les permissions
-    // Un candidat ne peut voir que son propre dossier
-    if (userRole === 'CANDIDAT' && userId !== candidatId) {
-      return res.status(403).json({
-        error: 'Accès refusé. Vous ne pouvez consulter que votre propre dossier.',
-      });
+    const userRole = req.userRole || req.user?.role;
+
+    if (isEtudiantRole(userRole) && userId !== candidatId) {
+      return res.status(403).json({ error: 'Accès refusé. Vous ne pouvez consulter que votre propre dossier.' });
     }
-    
-    // Vérifier que le candidat existe
+
     const candidat = await prisma.candidat.findUnique({
       where: { id: candidatId },
       select: { id: true, nom: true, prenom: true, email: true }
     });
-    
-    if (!candidat) {
-      return res.status(404).json({
-        error: 'Candidat non trouvé',
-      });
-    }
-    
-    // Appeler le module PHP SystemeCompletion
-    try {
-      const scriptPath = path.join(__dirname, '../../php-scripts/completion-wrapper.php');
-      const result = await executePHPScript(scriptPath, ['calculerPourcentage', candidatId]);
-      
-      // Enrichir avec les informations candidat
-      const response = {
-        ...result,
-        candidat: {
-          id: candidat.id,
-          nom: candidat.nom,
-          prenom: candidat.prenom,
-          email: candidat.email
-        },
-        permissions: {
-          peutModifier: userRole === 'CANDIDAT' && userId === candidatId,
-          peutVoirDetails: ['COMMISSION', 'DGES'].includes(userRole)
-        }
-      };
-      
-      res.json(response);
-      
-    } catch (phpError) {
-      console.error('Erreur module PHP:', phpError);
-      
-      // Fallback: calcul basique avec Prisma
-      const dossier = await prisma.dossier.findUnique({
-        where: { candidatId },
-        select: {
-          acteNaissance: true,
-          carteIdentite: true,
-          photo: true,
-          releve: true,
-          quittance: true,
-          updatedAt: true
-        }
-      });
-      
-      const piecesRequises = ['acteNaissance', 'carteIdentite', 'photo', 'releve', 'quittance'];
-      const piecesPresentes = dossier ? piecesRequises.filter(piece => dossier[piece]).length : 0;
-      const pourcentage = Math.round((piecesPresentes / piecesRequises.length) * 100);
-      
-      const fallbackResult = {
-        candidatId,
-        pourcentage,
-        piecesPresentes,
-        piecesRequises: piecesRequises.length,
-        piecesManquantes: dossier ? piecesRequises.filter(piece => !dossier[piece]) : piecesRequises,
-        estComplet: pourcentage === 100,
-        timestamp: new Date().toISOString(),
-        candidat: {
-          id: candidat.id,
-          nom: candidat.nom,
-          prenom: candidat.prenom,
-          email: candidat.email
-        },
-        permissions: {
-          peutModifier: userRole === 'CANDIDAT' && userId === candidatId,
-          peutVoirDetails: ['COMMISSION', 'DGES'].includes(userRole)
-        },
-        source: 'fallback'
-      };
-      
-      res.json(fallbackResult);
-    }
-    
+
+    if (!candidat) return res.status(404).json({ error: 'Candidat non trouvé' });
+
+    const dossier = await prisma.dossier.findUnique({
+      where: { candidatId },
+      select: { acteNaissance: true, carteIdentite: true, photo: true, releve: true, updatedAt: true }
+    });
+
+    const piecesPresentes = dossier ? PIECES_DOSSIER.filter(p => dossier[p]).length : 0;
+    const pourcentage = Math.round((piecesPresentes / PIECES_DOSSIER.length) * 100);
+
+    res.json({
+      candidatId,
+      pourcentage,
+      piecesPresentes,
+      piecesRequises: PIECES_DOSSIER.length,
+      piecesManquantes: dossier ? PIECES_DOSSIER.filter(p => !dossier[p]) : PIECES_DOSSIER,
+      estComplet: pourcentage === 100,
+      timestamp: new Date().toISOString(),
+      candidat: { id: candidat.id, nom: candidat.nom, prenom: candidat.prenom, email: candidat.email },
+      permissions: {
+        peutModifier: isEtudiantRole(userRole) && userId === candidatId,
+        peutVoirDetails: ['COMMISSION', 'CONTROLEUR', 'DGES'].includes(userRole)
+      }
+    });
+
   } catch (error) {
     console.error('Erreur getCompletion:', error);
-    res.status(500).json({
-      error: 'Erreur serveur lors du calcul de complétude',
-    });
+    res.status(500).json({ error: 'Erreur serveur lors du calcul de complétude' });
   }
 };
 
-/**
- * GET /api/completion/:candidatId/pieces
- * Obtient la liste des pièces manquantes pour un candidat
- */
 exports.getPiecesManquantes = async (req, res) => {
   try {
     const { candidatId } = req.params;
     const userId = req.user.id;
-    const userRole = req.userRole;
-    
-    // Vérifier les permissions
-    if (userRole === 'CANDIDAT' && userId !== candidatId) {
-      return res.status(403).json({
-        error: 'Accès refusé. Vous ne pouvez consulter que votre propre dossier.',
-      });
+    const userRole = req.userRole || req.user?.role;
+
+    if (isEtudiantRole(userRole) && userId !== candidatId) {
+      return res.status(403).json({ error: 'Accès refusé. Vous ne pouvez consulter que votre propre dossier.' });
     }
-    
-    // Vérifier que le candidat existe
+
     const candidat = await prisma.candidat.findUnique({
       where: { id: candidatId },
       select: { id: true, nom: true, prenom: true }
     });
-    
-    if (!candidat) {
-      return res.status(404).json({
-        error: 'Candidat non trouvé',
-      });
-    }
-    
-    // Appeler le module PHP
-    try {
-      const scriptPath = path.join(__dirname, '../../php-scripts/completion-wrapper.php');
-      const result = await executePHPScript(scriptPath, ['obtenirPiecesManquantes', candidatId]);
-      
-      res.json({
-        candidatId,
-        candidat: {
-          nom: candidat.nom,
-          prenom: candidat.prenom
-        },
-        piecesManquantes: result,
-        timestamp: new Date().toISOString()
-      });
-      
-    } catch (phpError) {
-      console.error('Erreur module PHP:', phpError);
-      
-      // Fallback avec Prisma
-      const dossier = await prisma.dossier.findUnique({
-        where: { candidatId },
-        select: {
-          acteNaissance: true,
-          carteIdentite: true,
-          photo: true,
-          releve: true,
-          quittance: true
-        }
-      });
-      
-      const piecesRequises = ['acteNaissance', 'carteIdentite', 'photo', 'releve', 'quittance'];
-      const piecesManquantes = dossier ? piecesRequises.filter(piece => !dossier[piece]) : piecesRequises;
-      
-      res.json({
-        candidatId,
-        candidat: {
-          nom: candidat.nom,
-          prenom: candidat.prenom
-        },
-        piecesManquantes,
-        timestamp: new Date().toISOString(),
-        source: 'fallback'
-      });
-    }
-    
+
+    if (!candidat) return res.status(404).json({ error: 'Candidat non trouvé' });
+
+    const dossier = await prisma.dossier.findUnique({
+      where: { candidatId },
+      select: { acteNaissance: true, carteIdentite: true, photo: true, releve: true }
+    });
+
+    const piecesManquantes = dossier ? PIECES_DOSSIER.filter(p => !dossier[p]) : PIECES_DOSSIER;
+
+    res.json({
+      candidatId,
+      candidat: { nom: candidat.nom, prenom: candidat.prenom },
+      piecesManquantes,
+      timestamp: new Date().toISOString()
+    });
+
   } catch (error) {
     console.error('Erreur getPiecesManquantes:', error);
-    res.status(500).json({
-      error: 'Erreur serveur lors de la récupération des pièces manquantes',
-    });
+    res.status(500).json({ error: 'Erreur serveur lors de la récupération des pièces manquantes' });
   }
 };
 
-/**
- * GET /api/completion/stats/global
- * Obtient les statistiques globales de complétude (COMMISSION/DGES uniquement)
- */
 exports.getStatistiquesGlobales = async (req, res) => {
   try {
-    const { concours, periode } = req.query;
-    
-    // Construire les critères de filtrage
-    let candidatIds = [];
-    
+    const { concours } = req.query;
+
+    let candidatIds = null;
     if (concours) {
-      // Filtrer par concours
       const inscriptions = await prisma.inscription.findMany({
         where: { concoursId: concours },
         select: { candidatId: true }
       });
       candidatIds = inscriptions.map(i => i.candidatId);
     }
-    
-    if (periode) {
-      // Filtrer par période (à implémenter selon les besoins)
-      // Pour l'instant, on prend tous les candidats
-    }
-    
-    // Appeler le module PHP
-    try {
-      const scriptPath = path.join(__dirname, '../../php-scripts/completion-wrapper.php');
-      const args = candidatIds.length > 0 ? ['obtenirStatistiques', JSON.stringify(candidatIds)] : ['obtenirStatistiques'];
-      const result = await executePHPScript(scriptPath, args);
-      
-      res.json({
-        ...result,
-        filtres: {
-          concours,
-          periode
-        },
-        timestamp: new Date().toISOString()
-      });
-      
-    } catch (phpError) {
-      console.error('Erreur module PHP:', phpError);
-      
-      // Fallback basique
-      const totalCandidats = await prisma.candidat.count();
-      const dossiersAvecPieces = await prisma.dossier.count({
-        where: {
-          OR: [
-            { acteNaissance: { not: null } },
-            { carteIdentite: { not: null } },
-            { photo: { not: null } },
-            { releve: { not: null } },
-            { quittance: { not: null } }
-          ]
-        }
-      });
-      
-      const fallbackStats = {
-        totalCandidats,
-        dossiersComplets: 0, // Nécessiterait un calcul plus complexe
-        dossiersPartiels: dossiersAvecPieces,
-        dossiersVides: totalCandidats - dossiersAvecPieces,
-        pourcentageMoyen: 0,
-        repartition: {
-          '0%': totalCandidats - dossiersAvecPieces,
-          '1-25%': 0,
-          '26-50%': 0,
-          '51-75%': 0,
-          '76-99%': 0,
-          '100%': 0
-        },
-        source: 'fallback'
-      };
-      
-      res.json(fallbackStats);
-    }
-    
+
+    const whereClause = candidatIds ? { candidatId: { in: candidatIds } } : {};
+
+    const dossiers = await prisma.dossier.findMany({
+      where: whereClause,
+      select: { acteNaissance: true, carteIdentite: true, photo: true, releve: true }
+    });
+
+    const totalCandidats = await prisma.candidat.count();
+
+    let complets = 0, partiels = 0, vides = 0;
+    dossiers.forEach(d => {
+      const nb = PIECES_DOSSIER.filter(p => d[p]).length;
+      if (nb === PIECES_DOSSIER.length) complets++;
+      else if (nb > 0) partiels++;
+      else vides++;
+    });
+
+    res.json({
+      totalCandidats,
+      dossiersComplets: complets,
+      dossiersPartiels: partiels,
+      dossiersVides: totalCandidats - dossiers.length,
+      pourcentageMoyen: dossiers.length > 0
+        ? Math.round(dossiers.reduce((acc, d) => acc + PIECES_DOSSIER.filter(p => d[p]).length, 0) / (dossiers.length * PIECES_DOSSIER.length) * 100)
+        : 0,
+      filtres: { concours },
+      timestamp: new Date().toISOString()
+    });
+
   } catch (error) {
     console.error('Erreur getStatistiquesGlobales:', error);
-    res.status(500).json({
-      error: 'Erreur serveur lors du calcul des statistiques',
-    });
+    res.status(500).json({ error: 'Erreur serveur lors du calcul des statistiques' });
   }
 };
+
+/**
+ * Calculer la complétude d'une inscription avec référence implicite
+ */
+exports.getCompletionInscription = async (req, res) => {
+  try {
+    const { inscriptionId } = req.params;
+    const userId = req.user.id;
+    const userRole = req.userRole || req.user?.role;
+
+    // Récupérer l'inscription avec référence implicite
+    const inscription = await prisma.inscription.findUnique({
+      where: { id: inscriptionId },
+      include: {
+        candidat: {
+          include: { dossier: true }
+        },
+        concours: {
+          select: {
+            id: true,
+            libelle: true,
+            piecesRequises: true
+          }
+        },
+        dossierInscription: true
+      }
+    });
+
+    if (!inscription) {
+      return res.status(404).json({ error: 'Inscription non trouvée' });
+    }
+
+    // Vérification des permissions
+    if (isEtudiantRole(userRole) && userId !== inscription.candidatId) {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+
+    // Extraire les 4 pièces de base (référence implicite)
+    const dossier = inscription.candidat.dossier;
+    const piecesBase = ['acteNaissance', 'carteIdentite', 'photo', 'releve'];
+    const piecesBasesPresentes = dossier 
+      ? piecesBase.filter(p => dossier[p]).length 
+      : 0;
+
+    // Extraire la quittance
+    const quittancePresente = inscription.dossierInscription?.quittanceUrl ? 1 : 0;
+
+    // Extraire les pièces extras (indexées par id dans piecesExtras)
+    const piecesExtrasConfig = getPiecesExtrasConfig(inscription.concours);
+    const piecesExtrasPresentes = piecesExtrasConfig.filter(
+      p => inscription.dossierInscription?.piecesExtras?.[p.id]
+    ).length;
+
+    // Calculer le pourcentage global
+    const total = piecesBase.length + 1 + piecesExtrasConfig.length;
+    const presentes = piecesBasesPresentes + quittancePresente + piecesExtrasPresentes;
+    const pourcentage = Math.round((presentes / total) * 100);
+
+    // Structurer la réponse avec indicateurs de source
+    const response = {
+      inscriptionId: inscription.id,
+      candidat: {
+        id: inscription.candidat.id,
+        nom: inscription.candidat.nom,
+        prenom: inscription.candidat.prenom
+      },
+      concours: {
+        id: inscription.concours.id,
+        libelle: inscription.concours.libelle
+      },
+      piecesBase: piecesBase.map(p => ({
+        nom: p,
+        statut: dossier?.[p] ? 'fournie' : 'manquante',
+        source: 'dossier_personnel',
+        url: dossier?.[p],
+        uploadedAt: dossier?.[p] ? dossier.updatedAt : null
+      })),
+      piecesSpecifiques: [
+        {
+          nom: 'quittance',
+          statut: quittancePresente ? 'fournie' : 'manquante',
+          source: 'dossier_concours',
+          url: inscription.dossierInscription?.quittanceUrl,
+          uploadedAt: inscription.dossierInscription?.quittanceUrl ? inscription.dossierInscription.updatedAt : null,
+          obligatoire: true
+        },
+        ...piecesExtrasConfig.map(p => ({
+          nom: p.nom || p.id,
+          statut: inscription.dossierInscription?.piecesExtras?.[p.id] ? 'fournie' : 'manquante',
+          source: 'dossier_concours',
+          url: inscription.dossierInscription?.piecesExtras?.[p.id],
+          uploadedAt: inscription.dossierInscription?.piecesExtras?.[p.id] ? inscription.dossierInscription.updatedAt : null,
+          obligatoire: p.obligatoire || false
+        }))
+      ],
+      completudeGlobale: {
+        pourcentage,
+        piecesPresentes: presentes,
+        piecesRequises: total,
+        estComplet: pourcentage === 100
+      },
+      dossierInscription: {
+        id: inscription.dossierInscription?.id,
+        statut: inscription.dossierInscription?.statut,
+        createdAt: inscription.dossierInscription?.createdAt,
+        updatedAt: inscription.dossierInscription?.updatedAt
+      },
+      permissions: {
+        peutModifier: isEtudiantRole(userRole) && userId === inscription.candidatId,
+        peutVoirDetails: ['COMMISSION', 'CONTROLEUR', 'DGES'].includes(userRole)
+      }
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error('Erreur getCompletionInscription:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+/**
+ * Récupérer le dossier complet (vue agrégée pour commission)
+ */
+exports.getDossierComplet = async (req, res) => {
+  try {
+    const { inscriptionId } = req.params;
+    const userId = req.user.id;
+    const userRole = req.userRole || req.user?.role;
+
+    // Vérifier les permissions (COMMISSION, CONTROLEUR, DGES uniquement)
+    if (!['COMMISSION', 'CONTROLEUR', 'DGES'].includes(userRole)) {
+      return res.status(403).json({ error: 'Accès refusé. Réservé à la commission.' });
+    }
+
+    // Récupérer l'inscription avec toutes les relations
+    const inscription = await prisma.inscription.findUnique({
+      where: { id: inscriptionId },
+      include: {
+        candidat: {
+          include: { dossier: true },
+          select: {
+            id: true,
+            matricule: true,
+            nom: true,
+            prenom: true,
+            email: true,
+            telephone: true,
+            dateNaiss: true,
+            lieuNaiss: true,
+            dossier: true
+          }
+        },
+        concours: {
+          select: {
+            id: true,
+            libelle: true,
+            etablissement: true,
+            piecesRequises: true
+          }
+        },
+        dossierInscription: true
+      }
+    });
+
+    if (!inscription) {
+      return res.status(404).json({ error: 'Inscription non trouvée' });
+    }
+
+    // Utiliser la même logique que getCompletionInscription
+    const dossier = inscription.candidat.dossier;
+    const piecesBase = ['acteNaissance', 'carteIdentite', 'photo', 'releve'];
+    const piecesBasesPresentes = dossier 
+      ? piecesBase.filter(p => dossier[p]).length 
+      : 0;
+
+    const quittancePresente = inscription.dossierInscription?.quittanceUrl ? 1 : 0;
+    const piecesExtrasConfig = getPiecesExtrasConfig(inscription.concours);
+    const piecesExtrasPresentes = piecesExtrasConfig.filter(
+      p => inscription.dossierInscription?.piecesExtras?.[p.id]
+    ).length;
+
+    const total = piecesBase.length + 1 + piecesExtrasConfig.length;
+    const presentes = piecesBasesPresentes + quittancePresente + piecesExtrasPresentes;
+    const pourcentage = Math.round((presentes / total) * 100);
+
+    // Structurer la réponse avec informations de décision
+    const response = {
+      inscription: {
+        id: inscription.id,
+        numeroInscription: inscription.numeroInscription,
+        note: inscription.note,
+        createdAt: inscription.createdAt
+      },
+      candidat: inscription.candidat,
+      concours: inscription.concours,
+      piecesBase: piecesBase.map(p => ({
+        nom: p,
+        statut: dossier?.[p] ? 'fournie' : 'manquante',
+        source: 'dossier_personnel',
+        url: dossier?.[p],
+        uploadedAt: dossier?.[p] ? dossier.updatedAt : null
+      })),
+      piecesSpecifiques: [
+        {
+          nom: 'quittance',
+          statut: quittancePresente ? 'fournie' : 'manquante',
+          source: 'dossier_concours',
+          url: inscription.dossierInscription?.quittanceUrl,
+          uploadedAt: inscription.dossierInscription?.quittanceUrl ? inscription.dossierInscription.updatedAt : null,
+          obligatoire: true
+        },
+        ...piecesExtrasConfig.map(p => ({
+          nom: p.nom || p.id,
+          statut: inscription.dossierInscription?.piecesExtras?.[p.id] ? 'fournie' : 'manquante',
+          source: 'dossier_concours',
+          url: inscription.dossierInscription?.piecesExtras?.[p.id],
+          uploadedAt: inscription.dossierInscription?.piecesExtras?.[p.id] ? inscription.dossierInscription.updatedAt : null,
+          obligatoire: p.obligatoire || false
+        }))
+      ],
+      completude: {
+        pourcentage,
+        piecesPresentes: presentes,
+        piecesRequises: total,
+        estComplet: pourcentage === 100
+      },
+      dossierInscription: {
+        id: inscription.dossierInscription?.id,
+        statut: inscription.dossierInscription?.statut,
+        commentaireRejet: inscription.dossierInscription?.commentaireRejet,
+        commentaireSousReserve: inscription.dossierInscription?.commentaireSousReserve,
+        decisionCommission: {
+          par: inscription.dossierInscription?.decisionCommissionPar,
+          date: inscription.dossierInscription?.decisionCommissionDate,
+          commentaires: {
+            rejet: inscription.dossierInscription?.commentaireRejet,
+            sousReserve: inscription.dossierInscription?.commentaireSousReserve
+          }
+        },
+        decisionControleur: {
+          par: inscription.dossierInscription?.decisionControleurPar,
+          date: inscription.dossierInscription?.decisionControleurDate,
+          commentaire: inscription.dossierInscription?.commentaireControleur
+        },
+        createdAt: inscription.dossierInscription?.createdAt,
+        updatedAt: inscription.dossierInscription?.updatedAt
+      }
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error('Erreur getDossierComplet:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+module.exports = exports;

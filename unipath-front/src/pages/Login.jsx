@@ -1,7 +1,8 @@
 // src/pages/Login.jsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../services/api';
+import { getDefaultRoute, isAuthenticated, getUser } from '../utils/auth';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -31,27 +32,75 @@ export default function Login() {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSent, setResetSent]   = useState(false);
   const [resetError, setResetError] = useState('');
+  
+  const [emailNotConfirmed, setEmailNotConfirmed] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
 
   const successMessage = location.state?.message;
   const messageType    = location.state?.type;
   const premiereFois   = estPremiereVisite();
 
+  useEffect(() => {
+    if (!isAuthenticated()) return;
+    const user = getUser();
+    const route = getDefaultRoute(user?.role, user?.sousRole);
+    if (route && route !== '/login') {
+      navigate(route, { replace: true });
+    }
+  }, [navigate]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setEmailNotConfirmed(false);
     try {
       const data = await authService.login(email, password);
-      switch (data.user?.role) {
-        case 'CANDIDAT':   navigate('/dashboard');  break;
-        case 'COMMISSION': navigate('/commission'); break;
-        case 'DGES':       navigate('/dges');       break;
-        default:           navigate('/dashboard');
+      if (!data?.token || !data?.user?.role) {
+        throw new Error('Réponse de connexion incomplète. Réessayez.');
       }
+      const { role, sousRole } = data.user;
+      if (role === 'COMMISSION') {
+        if (sousRole === 'EXAMINATEUR') navigate('/examinateur/dossiers');
+        else if (sousRole === 'CONTROLEUR') navigate('/controleur-commission/tableau-de-bord');
+        else navigate('/commission');
+      } else if (role === 'ETUDIANT' || role === 'CANDIDAT') navigate('/dashboard');
+      else if (role === 'DGES') navigate('/dashboard-dges');
+      else if (role === 'CONTROLEUR') navigate('/controleur-commission/tableau-de-bord');
+      else if (role === 'ETABLISSEMENT') navigate('/etablissement');
+      else if (role === 'ADMIN_ETABLISSEMENT') navigate('/admin-etablissement/campagnes');
+      else navigate('/dashboard');
     } catch (err) {
-      setError(err.message || 'Email ou mot de passe incorrect');
+      // Vérifier si l'erreur est due à un email non confirmé
+      if (err.response?.status === 403 && err.response?.data?.emailConfirmationRequired) {
+        setEmailNotConfirmed(true);
+        setError('Votre email n\'a pas encore été confirmé. Veuillez vérifier votre boîte mail.');
+      } else {
+        setError(err.message || 'Email ou mot de passe incorrect');
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    setResendLoading(true);
+    setResendSuccess(false);
+    try {
+      const res = await fetch(`${BASE_URL}/auth/resend-confirmation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur lors de l\'envoi');
+      setResendSuccess(true);
+      setTimeout(() => setResendSuccess(false), 5000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -76,21 +125,21 @@ export default function Login() {
   };
 
   return (
-    <div className='min-h-screen bg-gray-50 flex items-center justify-center p-4'>
-      <div className='w-full max-w-4xl flex rounded-2xl overflow-hidden shadow-2xl' style={{ minHeight: 560 }}>
+    <div className='min-h-screen academic-bg custom-scrollbar flex items-center justify-center p-3 sm:p-4 animate-slide-in'>
+      <div className='w-full max-w-4xl flex flex-col md:flex-row glass-card-intense overflow-hidden' style={{ minHeight: 560 }}>
 
         {/* ── GAUCHE : Formulaire ── */}
-        <div className='flex-1 bg-white flex flex-col justify-center px-8 py-10 sm:px-12'>
+        <div className='flex-1 bg-white/95 backdrop-blur-sm flex flex-col justify-center px-6 py-8 sm:px-8 sm:py-10 md:px-12'>
 
-          <div className='flex items-center gap-2 mb-8'>
+          <div className='flex items-center gap-2 mb-6 sm:mb-8'>
             <div className='w-8 h-8 bg-blue-900 rounded-lg flex items-center justify-center text-white text-xs font-black'>U</div>
             <span className='text-base font-black text-blue-900 tracking-tight'>UniPath</span>
           </div>
 
-          <h1 className='text-2xl font-black text-gray-900 mb-1'>
+          <h1 className='text-xl sm:text-2xl font-black text-gray-900 mb-1'>
             {resetMode ? 'Mot de passe oublié' : (premiereFois ? 'Bienvenue sur UniPath' : 'Bon retour !')}
           </h1>
-          <p className='text-gray-500 text-sm mb-6'>
+          <p className='text-gray-500 text-xs sm:text-sm mb-4 sm:mb-6'>
             {resetMode
               ? 'Entrez votre email pour recevoir un lien de réinitialisation.'
               : premiereFois
@@ -133,7 +182,7 @@ export default function Login() {
                     type='email'
                     value={resetEmail}
                     onChange={e => setResetEmail(e.target.value)}
-                    className='w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500'
+                    className='input-glass w-full px-4 py-2.5 text-sm'
                     placeholder='votre@email.com'
                     required
                   />
@@ -141,7 +190,7 @@ export default function Login() {
                 <button
                   type='submit'
                   disabled={resetLoading}
-                  className='w-full bg-orange-500 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-orange-600 transition disabled:opacity-50'
+                  className='btn-academic w-full py-2.5 text-sm disabled:opacity-50'
                 >
                   {resetLoading ? 'Envoi...' : 'Envoyer le lien de réinitialisation'}
                 </button>
@@ -159,6 +208,24 @@ export default function Login() {
               {error && (
                 <div className='bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm'>
                   {error}
+                  {emailNotConfirmed && (
+                    <div className='mt-3'>
+                      <button
+                        type='button'
+                        onClick={handleResendConfirmation}
+                        disabled={resendLoading}
+                        className='text-red-700 font-semibold hover:underline text-xs disabled:opacity-50'
+                      >
+                        {resendLoading ? 'Envoi en cours...' : '📧 Renvoyer l\'email de confirmation'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {resendSuccess && (
+                <div className='bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm'>
+                  ✅ Email de confirmation renvoyé avec succès ! Vérifiez votre boîte mail.
                 </div>
               )}
 
@@ -168,7 +235,7 @@ export default function Login() {
                   type='email'
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  className='w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500'
+                  className='input-glass w-full px-4 py-2.5 text-sm'
                   placeholder='votre@email.com'
                   required
                 />
@@ -190,7 +257,7 @@ export default function Login() {
                     type={showPwd ? 'text' : 'password'}
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    className='w-full border border-gray-200 rounded-xl px-4 py-2.5 pr-10 text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500'
+                    className='input-glass w-full px-4 py-2.5 pr-10 text-sm'
                     placeholder='••••••••'
                     required
                   />
@@ -212,7 +279,7 @@ export default function Login() {
               <button
                 type='submit'
                 disabled={loading}
-                className='w-full bg-orange-500 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-orange-600 transition disabled:opacity-50'
+                className='btn-academic w-full py-2.5 text-sm disabled:opacity-50'
               >
                 {loading ? 'Connexion...' : 'Se connecter'}
               </button>
@@ -221,12 +288,12 @@ export default function Login() {
 
           <p className='text-center text-xs text-gray-400 mt-6'>
             Pas encore de compte ?{' '}
-            <a href='/register' className='text-orange-500 font-semibold hover:underline'>Créer un compte</a>
+            <a href='/register' className='text-orange-500 font-semibold hover:underline'>Compte candidat</a>
           </p>
         </div>
 
         {/* ── DROITE : Message + Lottie ── */}
-        <div className='hidden md:flex w-5/12 bg-blue-900 flex-col justify-center px-10 py-10 relative overflow-hidden'>
+        <div className='hidden lg:flex w-5/12 bg-gradient-to-br from-blue-900 to-blue-800 flex-col justify-center px-8 py-8 md:px-10 md:py-10 relative overflow-hidden'>
           <div className='absolute top-[-60px] right-[-60px] w-48 h-48 rounded-full bg-orange-500/10' />
           <div className='absolute bottom-[-40px] left-[-30px] w-32 h-32 rounded-full bg-orange-500/8' />
 
@@ -238,19 +305,19 @@ export default function Login() {
                 src="https://lottie.host/b2baaa96-a00b-4288-a7c7-26119042edb5/PxuulpDn7B.lottie"
                 loop
                 autoplay
-                style={{ width: '220px', height: '220px' }}
+                style={{ width: '200px', height: '200px' }}
               />
             </div>
 
-            <div className='text-orange-400 text-6xl font-black leading-none mb-4 opacity-60'>"</div>
+            <div className='text-orange-400 text-5xl md:text-6xl font-black leading-none mb-4 opacity-60'>"</div>
 
-            <h2 className='text-white text-xl font-bold leading-snug mb-4'>
+            <h2 className='text-white text-lg md:text-xl font-bold leading-snug mb-4'>
               {premiereFois
                 ? 'Bienvenue sur la plateforme officielle des concours universitaires du Bénin.'
                 : 'Bon retour ! Vos concours et votre dossier vous attendent.'}
             </h2>
 
-            <p className='text-blue-200 text-sm leading-relaxed mb-8'>
+            <p className='text-blue-200 text-xs md:text-sm leading-relaxed mb-6 md:mb-8'>
               {premiereFois
                 ? MSG.texte
                 : "Consultez l'état de vos inscriptions, déposez vos pièces manquantes et téléchargez votre convocation en quelques clics."}

@@ -1,6 +1,5 @@
 // src/controllers/pdf.controller.js
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../prisma');
 const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -13,8 +12,17 @@ exports.telechargerConvocation = async (req, res) => {
     const inscription = await prisma.inscription.findUnique({
       where: { id: inscriptionId },
       include: {
-        candidat: true,
+        candidat: {
+          include: {
+            dossier: {
+              select: {
+                photo: true,
+              },
+            },
+          },
+        },
         concours: true,
+        dossierInscription: true,
       },
     });
 
@@ -26,7 +34,8 @@ exports.telechargerConvocation = async (req, res) => {
       return res.status(403).json({ error: 'Acces refuse' });
     }
 
-    if (inscription.statut !== 'VALIDE') {
+    const statutDossier = inscription.dossierInscription?.statut;
+    if (statutDossier !== 'VALIDE') {
       return res.status(400).json({ error: 'La convocation n\'est disponible que pour les dossiers valides' });
     }
 
@@ -42,7 +51,10 @@ exports.telechargerConvocation = async (req, res) => {
     }
 
     const data = JSON.stringify({
-      candidat: inscription.candidat,
+      candidat: {
+        ...inscription.candidat,
+        photoPath: inscription.candidat?.dossier?.photo || '',
+      },
       concours: inscription.concours,
     });
 
@@ -87,7 +99,19 @@ exports.telechargerPreinscription = async (req, res) => {
 
     const inscription = await prisma.inscription.findUnique({
       where: { id: inscriptionId },
-      include: { candidat: true, concours: true },
+      include: {
+        candidat: {
+          include: {
+            dossier: {
+              select: {
+                photo: true,
+              },
+            },
+          },
+        },
+        concours: true,
+        dossierInscription: true,
+      },
     });
 
     if (!inscription) {
@@ -110,12 +134,20 @@ exports.telechargerPreinscription = async (req, res) => {
     }
 
     fs.writeFileSync(tmpInput, JSON.stringify({
-      candidat:    inscription.candidat,
-      concours:    inscription.concours,
-      inscription: inscription,
+      candidat: {
+        ...inscription.candidat,
+        photoPath: inscription.candidat?.dossier?.photo || '',
+      },
+      concours: inscription.concours,
+      numeroDossier: inscription.numeroInscription || inscription.id.substring(0, 8).toUpperCase(),
+      inscription: {
+        id: inscription.id,
+        numeroInscription: inscription.numeroInscription,
+        dossierInscription: inscription.dossierInscription || null,
+      },
     }), 'utf8');
 
-    const phpScript = path.join(__dirname, '../../php/preinscription.php');
+    const phpScript = path.join(__dirname, '../../php/fiche-preinscription.php');
     // Utiliser des guillemets doubles et normaliser les chemins
     const cmd = `php "${phpScript.replace(/\\/g, '/')}" "${tmpInput.replace(/\\/g, '/')}" "${tmpOutput.replace(/\\/g, '/')}"`;
 
@@ -150,3 +182,5 @@ exports.telechargerPreinscription = async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
+
+module.exports = exports;

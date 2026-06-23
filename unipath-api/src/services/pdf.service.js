@@ -134,6 +134,105 @@ class PDFService {
   }
 
   /**
+   * Génère un relevé académique en PDF (Module 2)
+   */
+  async genererReleveAcademique(data) {
+    const { candidat, releve, moyenneGlobale, decisionJury, etablissement } = data;
+
+    const safeId = candidat?.matricule || candidat?.id || Date.now();
+    const inputFile = path.join(this.tempDir, `input-releve-${Date.now()}.json`);
+    const outputFile = path.join(this.tempDir, `releve-academique-${safeId}.pdf`);
+
+    try {
+      await writeFileAsync(inputFile, JSON.stringify({
+        candidat,
+        releve,
+        moyenneGlobale,
+        decisionJury,
+        etablissement,
+      }));
+
+      const phpScript = path.join(__dirname, '../../php/releve-academique.php');
+      const command = `${this.phpPath} "${phpScript}" "${inputFile}" "${outputFile}"`;
+
+      console.log('📄 Génération relevé académique PDF...');
+      const { stderr } = await execAsync(command);
+
+      if (stderr && !stderr.includes('Succes') && !stderr.includes('Succès')) {
+        console.error('Erreur PHP:', stderr);
+        throw new Error('Erreur lors de la génération du relevé PDF');
+      }
+
+      if (!fs.existsSync(outputFile)) {
+        throw new Error('Le fichier relevé PDF n\'a pas été créé');
+      }
+
+      return {
+        success: true,
+        filePath: outputFile,
+        fileName: `releve-academique-${safeId}.pdf`,
+      };
+    } catch (error) {
+      console.error('❌ Erreur génération relevé académique:', error);
+      throw error;
+    } finally {
+      try {
+        if (fs.existsSync(inputFile)) {
+          await unlinkAsync(inputFile);
+        }
+      } catch (err) {
+        console.error('Erreur nettoyage fichier temporaire:', err);
+      }
+    }
+  }
+
+  /**
+   * Génère une fiche de pré-inscription établissement (Module 2)
+   */
+  async genererFichePreinscriptionEtablissement(data) {
+    const { candidat, preinscription } = data;
+    const safeNum = preinscription?.numeroPreinscription || Date.now();
+    const inputFile = path.join(this.tempDir, `input-preinscription-etab-${Date.now()}.json`);
+    const outputFile = path.join(this.tempDir, `fiche-preinscription-etab-${safeNum}.pdf`);
+
+    try {
+      await writeFileAsync(inputFile, JSON.stringify({ candidat, preinscription }));
+
+      const phpScript = path.join(__dirname, '../../php/fiche-preinscription-etablissement.php');
+      const command = `${this.phpPath} "${phpScript}" "${inputFile}" "${outputFile}"`;
+
+      console.log('📄 Génération fiche de pré-inscription établissement PDF...');
+      const { stderr } = await execAsync(command);
+
+      if (stderr && !stderr.includes('Succes') && !stderr.includes('Succès')) {
+        console.error('Erreur PHP:', stderr);
+        throw new Error('Erreur lors de la génération de la fiche de pré-inscription établissement');
+      }
+
+      if (!fs.existsSync(outputFile)) {
+        throw new Error('Le fichier PDF de pré-inscription établissement n\'a pas été créé');
+      }
+
+      return {
+        success: true,
+        filePath: outputFile,
+        fileName: `fiche-preinscription-etablissement-${safeNum}.pdf`,
+      };
+    } catch (error) {
+      console.error('❌ Erreur génération fiche pré-inscription établissement:', error);
+      throw error;
+    } finally {
+      try {
+        if (fs.existsSync(inputFile)) {
+          await unlinkAsync(inputFile);
+        }
+      } catch (err) {
+        console.error('Erreur nettoyage fichier temporaire:', err);
+      }
+    }
+  }
+
+  /**
    * Nettoie un fichier PDF temporaire
    */
   async nettoyerPDF(filePath) {

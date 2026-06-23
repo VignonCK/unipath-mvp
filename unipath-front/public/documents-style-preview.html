@@ -1,0 +1,44 @@
+﻿<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UniPath - Preview Documents</title>
+  <style>
+    body{margin:0;font-family:Inter,Arial,sans-serif;background:#eef2f7;color:#0f172a}
+    .wrap{max-width:1500px;margin:0 auto;padding:24px}
+    .head{background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:16px;margin-bottom:16px}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(320px,1fr));gap:16px}
+    .card{background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:10px;box-shadow:0 8px 18px rgba(15,23,42,.08)}
+    .title{font-size:13px;font-weight:700;color:#475569;margin:2px 0 10px}
+    .doc{aspect-ratio:1/1.414;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;position:relative}
+    .hdr{padding:14px;color:#fff}
+    .hdr h3{margin:0;font-size:14px}
+    .hdr small{font-size:10px;opacity:.9}
+    .body{padding:12px;font-size:10px;color:#1e293b}
+    .b{border:1px solid #dbeafe;background:#f8fafc;border-radius:8px;padding:8px;margin-bottom:8px}
+    .warn{border-color:#fecaca;background:#fef2f2;color:#7f1d1d}
+    .ok{border-color:#bbf7d0;background:#f0fdf4;color:#14532d}
+    .row{display:flex;gap:8px}.col{flex:1}
+    .line{height:1px;background:#cbd5e1;margin:8px 0}
+    table{width:100%;border-collapse:collapse;font-size:9px}
+    th,td{border:1px solid #dbeafe;padding:4px;text-align:left}
+    th{background:#eff6ff}
+    .wm{position:absolute;right:8px;top:120px;font-size:32px;font-weight:800;color:rgba(15,23,42,.06);transform:rotate(-90deg)}
+    @media(max-width:1200px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <h2 style="margin:0 0 6px">Proposition visuelle (hybride + branding fort)</h2>
+      <p style="margin:0;color:#475569">Convocation officielle premium • Préinscription moderne • Relevé détaillé</p>
+    </div>
+    <div class="grid">
+      <div class="card"><div class="title">Convocation — Officiel premium</div><div class="doc"><div class="hdr" style="background:linear-gradient(135deg,#0f172a,#1d4ed8)"><h3>CONVOCATION OFFICIELLE</h3><small>Universite d Abomey-Calavi | Session 2026</small></div><div class="body"><div class="b"><b>Candidat:</b> AKAKPO Kevin<br><b>Matricule:</b> UAC-2026-01452<br><b>Concours:</b> Genie Informatique</div><div class="row"><div class="b col"><b>Date</b><br>17/08/2026</div><div class="b col"><b>Heure</b><br>08:00</div><div class="b col"><b>Salle</b><br>B-204</div></div><div class="b warn"><b>Consignes obligatoires</b><br>Piece d identite, convocation imprimee, arrivee 45 min avant.</div><div class="row"><div class="col"><div class="line"></div>Signature</div><div class="col"><div class="line"></div>Cachet</div></div></div><div class="wm">OFFICIEL</div></div></div>
+      <div class="card"><div class="title">Fiche préinscription — Moderne administratif</div><div class="doc"><div class="hdr" style="background:linear-gradient(135deg,#0f766e,#ea580c)"><h3>FICHE DE PREINSCRIPTION</h3><small>UniPath | Dossier concours</small></div><div class="body"><div class="b ok"><b>Statut dossier:</b> Complet (pret pour soumission)</div><div class="row"><div class="b col"><b>Identite</b><br>AGBODJAN Mireille<br>ANIP: 123456789012</div><div class="b col"><b>Concours</b><br>Medecine L1<br>Session 2026</div></div><div class="b"><b>Pieces:</b> Acte | Carte ID | Releve | Photo | Quittance</div><div class="b"><b>Progression</b><div style="height:8px;border:1px solid #bae6fd;border-radius:999px;overflow:hidden;margin-top:6px"><div style="width:100%;height:100%;background:linear-gradient(90deg,#0f766e,#22c55e)"></div></div></div></div></div></div>
+      <div class="card"><div class="title">Relevé académique — Détaillé multi-sections</div><div class="doc"><div class="hdr" style="background:linear-gradient(135deg,#0f172a,#0f766e)"><h3>RELEVE ACADEMIQUE DETAILLE</h3><small>UniPath | Edition officielle</small></div><div class="body"><div class="b"><b>Etudiant:</b> KIKI Nadia<br><b>Moyenne globale:</b> 13.42/20<br><b>Credits:</b> 84 ECTS</div><div class="b"><b>Annee 2025-2026 - Niveau 2</b><table style="margin-top:6px"><thead><tr><th>Matiere</th><th>CC</th><th>Exam</th><th>Moy.</th><th>Cr.</th></tr></thead><tbody><tr><td>Algorithmique</td><td>14</td><td>16</td><td>15.2</td><td>4</td></tr><tr><td>Bases de donnees</td><td>13</td><td>15</td><td>14.2</td><td>5</td></tr><tr><td>Reseaux</td><td>11</td><td>13</td><td>12.2</td><td>4</td></tr></tbody></table></div><div class="b"><b>Validation administrative</b><br>Signature + cachet + QR verification</div></div><div class="wm">UNIPATH</div></div></div>
+    </div>
+  </div>
+</body>
+</html>

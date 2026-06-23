@@ -1,26 +1,17 @@
 // src/pages/DashboardDGES.jsx
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
-import { dgesService, authService } from '../services/api';
-
-function initiales(str) {
-  if (!str) return 'D';
-  const parts = str.trim().split(' ');
-  return parts.length >= 2
-    ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
-    : str.slice(0, 2).toUpperCase();
-}
+import { dgesService } from '../services/api';
+import DGESLayout from '../components/DGESLayout';
+import { BentoCard } from '../components/AcademicLayout';
 
 export default function DashboardDGES() {
-  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const user = authService.getCurrentUser();
 
   useEffect(() => {
     dgesService.getStatistiques()
@@ -30,85 +21,76 @@ export default function DashboardDGES() {
   }, []);
 
   if (loading) return (
-    <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
-      <div className='text-center'>
-        <div className='w-10 h-10 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin mx-auto mb-3' />
-        <p className='text-gray-500 text-sm'>Chargement des statistiques...</p>
+    <DGESLayout>
+      <div className='flex items-center justify-center min-h-[60vh]'>
+        <div className='text-center'>
+          <div className='w-10 h-10 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin mx-auto mb-3' />
+          <p className='text-gray-500 text-sm'>Chargement des statistiques...</p>
+        </div>
       </div>
-    </div>
+    </DGESLayout>
   );
 
   if (error) return (
-    <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
-      <div className='text-center'>
-        <p className='text-red-500 text-sm mb-3'>{error}</p>
-        <button onClick={() => window.location.reload()} className='text-sm text-orange-500 hover:underline'>
-          Réessayer
-        </button>
+    <DGESLayout>
+      <div className='flex items-center justify-center min-h-[60vh]'>
+        <div className='text-center'>
+          <p className='text-red-500 text-sm mb-3'>{error}</p>
+          <button onClick={() => window.location.reload()} className='text-sm text-orange-500 hover:underline'>
+            Réessayer
+          </button>
+        </div>
       </div>
-    </div>
+    </DGESLayout>
   );
 
-  const chartData = data?.statistiques?.map(s => ({
-    name: s.concours.length > 18 ? s.concours.substring(0, 18) + '…' : s.concours,
-    'En attente': Number(s.en_attente),
-    'Validés':    Number(s.dossiers_valides),
-    'Rejetés':    Number(s.dossiers_rejetes),
-  })) || [];
+  const chartData = data?.statistiques
+    ?.filter(s => Number(s.total_inscrits) > 0)
+    .map(s => ({
+      name: s.concours.length > 18 ? s.concours.substring(0, 18) + '…' : s.concours,
+      'En attente': Number(s.en_attente),
+      'Validés':    Number(s.dossiers_valides),
+      'Rejetés':    Number(s.dossiers_rejetes),
+    })) || [];
 
-  const nomUser = user?.prenom ? `${user.prenom} ${user.nom || ''}`.trim() : user?.email || 'DGES';
+  const hasInscriptions = (data?.totaux?.total_inscrits ?? 0) > 0;
+
   const tauxGlobal = data?.totaux?.total_inscrits > 0
     ? Math.round((data.totaux.total_valides / data.totaux.total_inscrits) * 100)
     : 0;
 
   return (
-    <div className='min-h-screen bg-gray-50'>
+    <DGESLayout>
+      <div className='max-w-6xl mx-auto px-4 py-4 sm:p-6 space-y-4 sm:space-y-6 animate-slide-in'>
 
-      {/* HEADER */}
-      <header className='bg-blue-900 text-white px-6 py-3 flex items-center justify-between sticky top-0 z-40 shadow-lg'>
-        <div className='flex items-center gap-3'>
-          <span className='text-xl font-black tracking-tight'>UniPath</span>
-          <span className='hidden sm:block text-blue-300 text-xs'>Tableau de bord DGES</span>
-        </div>
-        <div className='flex items-center gap-3'>
-          <div className='flex items-center gap-2'>
-            <div className='w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center text-sm font-bold text-white flex-shrink-0'>
-              {initiales(nomUser)}
-            </div>
-            <div className='hidden sm:block'>
-              <p className='text-sm font-semibold leading-tight'>{nomUser}</p>
-              <p className='text-orange-300 text-xs'>DGES</p>
-            </div>
-          </div>
-          <button
-            onClick={() => { authService.logout(); navigate('/login'); }}
-            className='text-xs border border-orange-400 text-orange-300 px-3 py-1.5 rounded-lg hover:bg-orange-500 hover:text-white transition'
-          >
-            Déconnexion
-          </button>
-        </div>
-      </header>
-
-      <main className='max-w-6xl mx-auto px-4 py-4 sm:p-6 space-y-4 sm:space-y-6'>
-
-        {/* KPI CARDS */}
+        {/* KPI CARDS — fonds opaques (BentoCard/glass-card masquait le texte blanc) */}
         <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
           {[
-            { label: 'Concours actifs', value: data?.totaux?.total_concours ?? 0,  color: 'bg-blue-900',   text: 'text-white', sub: 'text-blue-300' },
-            { label: 'Total inscrits',  value: data?.totaux?.total_inscrits ?? 0,   color: 'bg-orange-500', text: 'text-white', sub: 'text-orange-100' },
-            { label: 'Dossiers validés',value: data?.totaux?.total_valides ?? 0,    color: 'bg-green-600',  text: 'text-white', sub: 'text-green-100' },
-            { label: 'En attente',      value: data?.totaux?.total_attente ?? 0,    color: 'bg-yellow-500', text: 'text-white', sub: 'text-yellow-100' },
+            { label: 'Concours actifs', value: data?.totaux?.total_concours ?? 0,  color: 'bg-blue-900',   sub: 'text-blue-200' },
+            { label: 'Total inscrits',  value: data?.totaux?.total_inscrits ?? 0,   color: 'bg-orange-500', sub: 'text-orange-100' },
+            { label: 'Dossiers validés',value: data?.totaux?.total_valides ?? 0,    color: 'bg-green-600',  sub: 'text-green-100' },
+            { label: 'En attente',      value: data?.totaux?.total_attente ?? 0,    color: 'bg-yellow-500', sub: 'text-yellow-900' },
           ].map(card => (
-            <div key={card.label} className={`rounded-2xl ${card.color} p-5 shadow-sm`}>
-              <p className={`text-3xl font-black ${card.text}`}>{card.value}</p>
+            <div key={card.label} className={`${card.color} p-5 rounded-2xl shadow-lg`}>
+              <p className='text-3xl font-black text-white'>{card.value}</p>
               <p className={`text-xs font-medium mt-1 ${card.sub}`}>{card.label}</p>
             </div>
           ))}
         </div>
 
+        {!hasInscriptions && (
+          <div className='rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-900'>
+            <p className='font-semibold'>Aucune inscription enregistrée pour le moment</p>
+            <p className='mt-1 text-blue-700'>
+              Les {data?.totaux?.total_concours ?? 0} concours sont bien chargés, mais aucun candidat ne s&apos;est encore inscrit.
+              Les statistiques d&apos;inscriptions apparaîtront dès qu&apos;un dossier sera déposé.
+            </p>
+          </div>
+        )}
+
         {/* TAUX GLOBAL */}
         {data?.totaux?.total_inscrits > 0 && (
-          <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
+          <BentoCard className='p-6'>
             <div className='flex items-center justify-between mb-3'>
               <h2 className='text-base font-bold text-gray-800'>Taux de validation global</h2>
               <span className='text-2xl font-black text-green-600'>{tauxGlobal}%</span>
@@ -123,14 +105,18 @@ export default function DashboardDGES() {
               <span>{data.totaux.total_valides} validés</span>
               <span>{data.totaux.total_inscrits} inscrits au total</span>
             </div>
-          </div>
+          </BentoCard>
         )}
 
         {/* GRAPHIQUE */}
-        <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
+        <BentoCard className='p-6'>
           <h2 className='text-base font-bold text-gray-800 mb-6'>Inscriptions par concours</h2>
           {chartData.length === 0 ? (
-            <p className='text-center text-gray-400 text-sm py-10'>Aucune donnée disponible.</p>
+            <p className='text-center text-gray-400 text-sm py-10'>
+              {hasInscriptions
+                ? 'Aucun concours avec inscriptions à afficher.'
+                : 'Le graphique s\'affichera lorsque des candidats commenceront à s\'inscrire.'}
+            </p>
           ) : (
             <ResponsiveContainer width='100%' height={280}>
               <BarChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 60 }}>
@@ -145,10 +131,10 @@ export default function DashboardDGES() {
               </BarChart>
             </ResponsiveContainer>
           )}
-        </div>
+        </BentoCard>
 
         {/* TABLEAU DÉTAILLÉ */}
-        <div className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
+        <BentoCard className='p-0 overflow-hidden'>
           <div className='px-6 py-4 border-b border-gray-100 flex items-center justify-between'>
             <h2 className='text-base font-bold text-gray-800'>Détail par concours</h2>
             <span className='text-xs text-gray-400'>{data?.statistiques?.length || 0} concours</span>
@@ -196,9 +182,9 @@ export default function DashboardDGES() {
               </tbody>
             </table>
           </div>
-        </div>
+        </BentoCard>
 
-      </main>
-    </div>
+      </div>
+    </DGESLayout>
   );
 }

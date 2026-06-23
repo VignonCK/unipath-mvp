@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/api';
 import etudiantsImage from '../assets/etudiants.jpg';
+import { AcademicButton } from '../components/AcademicLayout';
 
 // Hook responsive
 function useIsMobile() {
@@ -24,7 +25,7 @@ const MODULES = [
     desc: "De la candidature à la convocation, tout se fait en ligne. Plus de déplacements, plus de files d'attente.",
     tab: "Concours",
     steps: [
-      { name: "Créez votre compte candidat", sub: "Vérification via l'ANIP ou saisie manuelle" },
+      { name: "Créez votre compte candidat", sub: "Enregistrement avec votre identifiant ANIP" },
       { name: "Soumettez votre dossier", sub: "Pièces justificatives & choix des concours" },
       { name: "Commission valide", sub: "Traitement en ligne, notification par email" },
       { name: "Téléchargez votre convocation", sub: "PDF généré automatiquement avec date et salle" },
@@ -131,27 +132,34 @@ const S = {
 function Logo() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 28 }}>
-      <div style={{
-        background: "rgb(30, 58, 138)", borderRadius: 6, width: 30, height: 30, // blue-900
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 13, fontWeight: 600, color: "#fff",
-      }}>
+      <div className='w-8 h-8 bg-gradient-to-br from-blue-900 to-orange-500 rounded-lg flex items-center justify-center text-white text-sm font-black shadow-lg'>
         U
       </div>
-      <span style={{ fontSize: 15, fontWeight: 600, color: "rgb(30, 58, 138)" }}>UniPath</span>
+      <span className='text-base font-black gradient-text'>UniPath</span>
     </div>
   );
 }
 
 function ProgressBar({ step }) {
   return (
-    <div style={{ display: "flex", gap: 6, marginBottom: 24 }}>
+    <div style={{ 
+      display: "flex", 
+      gap: 6, 
+      marginBottom: 24 
+    }}>
       {[1, 2].map((s) => (
-        <div key={s} style={{
-          flex: 1, height: 4, borderRadius: 2,
-          background: s <= step ? "rgb(249, 115, 22)" : "#e5e7eb", // orange-500
-          transition: "background 0.4s",
-        }} />
+        <div key={s} className='progress-glass' style={{
+          flex: 1, 
+          height: 4,
+        }}>
+          <div 
+            className='progress-fill'
+            style={{
+              width: s <= step ? '100%' : '0%',
+              transition: "width 0.4s",
+            }}
+          />
+        </div>
       ))}
     </div>
   );
@@ -169,15 +177,17 @@ function Field({ label, required, children }) {
 }
 
 const inputStyle = {
-  border: "1px solid #d1d5db",
+  border: "1px solid rgba(209, 213, 219, 0.3)",
   borderRadius: 8,
   padding: "9px 12px",
   fontSize: 14,
   color: "#111827",
   fontFamily: "inherit",
   outline: "none",
-  transition: "border-color 0.2s",
+  transition: "all 0.2s",
   width: "100%",
+  background: "rgba(255, 255, 255, 0.9)",
+  backdropFilter: "blur(10px)",
 };
 
 function Input({ style, ...props }) {
@@ -185,7 +195,12 @@ function Input({ style, ...props }) {
   return (
     <input
       {...props}
-      style={{ ...inputStyle, borderColor: focused ? "rgb(249, 115, 22)" : "#d1d5db", ...style }} // orange-500
+      className='input-glass'
+      style={{ 
+        ...inputStyle, 
+        borderColor: focused ? "rgb(249, 115, 22)" : "rgba(209, 213, 219, 0.3)", 
+        ...style 
+      }}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
     />
@@ -198,7 +213,12 @@ function Select({ value, onChange, children }) {
     <select
       value={value}
       onChange={onChange}
-      style={{ ...inputStyle, borderColor: focused ? "rgb(249, 115, 22)" : "#d1d5db", background: "#fff", cursor: "pointer" }} // orange-500
+      className='input-glass'
+      style={{ 
+        ...inputStyle, 
+        borderColor: focused ? "rgb(249, 115, 22)" : "rgba(209, 213, 219, 0.3)", 
+        cursor: "pointer" 
+      }}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
     >
@@ -208,53 +228,29 @@ function Select({ value, onChange, children }) {
 }
 
 function BtnPrimary({ children, onClick, style, disabled }) {
-  const [hovered, setHovered] = useState(false);
   return (
-    <button
+    <AcademicButton
       onClick={onClick}
       disabled={disabled}
-      style={{
-        padding: "12px 16px",
-        background: disabled ? "#9ca3af" : (hovered ? "rgb(234, 88, 12)" : "rgb(249, 115, 22)"), // orange-600 : orange-500
-        color: "#fff",
-        border: "none",
-        borderRadius: 8,
-        fontSize: 14,
-        fontWeight: 600,
-        cursor: disabled ? "not-allowed" : "pointer",
-        fontFamily: "inherit",
-        transition: "background 0.2s",
-        ...style,
-      }}
-      onMouseEnter={() => !disabled && setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      className='w-full'
+      style={style}
     >
       {children}
-    </button>
+    </AcademicButton>
   );
 }
 
 function BtnSecondary({ children, onClick }) {
-  const [hovered, setHovered] = useState(false);
   return (
     <button
       onClick={onClick}
+      className='btn-glass'
       style={{
         padding: "12px 20px",
-        background: "transparent",
-        color: "rgb(249, 115, 22)", // orange-500
-        border: "1px solid rgb(249, 115, 22)", // orange-500
-        borderRadius: 8,
         fontSize: 14,
         fontWeight: 600,
-        cursor: "pointer",
-        fontFamily: "inherit",
-        transition: "background 0.2s",
         flexShrink: 0,
-        backgroundColor: hovered ? "rgba(249, 115, 22, 0.06)" : "transparent", // orange-500 avec transparence
       }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
       {children}
     </button>
@@ -262,14 +258,19 @@ function BtnSecondary({ children, onClick }) {
 }
 
 // ── FORM ──────────────────────────────────────────────────────────────────────
-function FormLeft({ onSuccess, isMobile }) {
+function FormLeft({ isMobile }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
+  const [accountType, setAccountType] = useState("CANDIDAT");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({
     nom: "", 
     prenom: "", 
+    anip: "",
+    serie: "",
+    sexe: "",
+    nationalite: "",
     telephone: "",
     dateNaiss: "", 
     lieuNaiss: "",
@@ -277,18 +278,45 @@ function FormLeft({ onSuccess, isMobile }) {
     password: "", 
     confirmPassword: "",
   });
+  const [etabForm, setEtabForm] = useState({
+    nom: "",
+    type: "",
+    ville: "",
+    adresse: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
 
   const set = (key) => (e) => {
     setForm((f) => ({ ...f, [key]: e.target.value }));
     setError(''); // Clear error when user types
   };
+  const setEtab = (key) => (e) => {
+    setEtabForm((f) => ({ ...f, [key]: e.target.value }));
+    setError('');
+  };
 
   const handleStep1 = () => {
     // Validation étape 1
-    if (!form.nom || !form.prenom || !form.telephone || !form.dateNaiss || !form.lieuNaiss) {
+    if (!form.nom || !form.prenom || !form.anip || !form.serie || !form.sexe || 
+        !form.nationalite || !form.telephone || !form.dateNaiss || !form.lieuNaiss) {
       setError('Tous les champs sont obligatoires');
       return;
     }
+    
+    // Validation format ANIP (exactement 12 chiffres)
+    if (!/^\d{12}$/.test(form.anip)) {
+      setError('L\'ANIP doit contenir exactement 12 chiffres');
+      return;
+    }
+    
+    // Validation téléphone (format béninois)
+    if (!/^(\+229)?[0-9]{8,10}$/.test(form.telephone.replace(/\s/g, ''))) {
+      setError('Format de téléphone invalide');
+      return;
+    }
+    
     setStep(2);
   };
 
@@ -312,9 +340,13 @@ function FormLeft({ onSuccess, isMobile }) {
     setLoading(true);
     try {
       // Inscription uniquement en tant que CANDIDAT
-      let userData = {
+      const userData = {
         nom: form.nom,
         prenom: form.prenom,
+        anip: form.anip,
+        serie: form.serie,
+        sexe: form.sexe,
+        nationalite: form.nationalite,
         telephone: form.telephone,
         dateNaiss: form.dateNaiss,
         lieuNaiss: form.lieuNaiss,
@@ -328,7 +360,7 @@ function FormLeft({ onSuccess, isMobile }) {
       if (result?.emailConfirmationRequired) {
         navigate('/login', {
           state: {
-            message: '📧 Un email de confirmation a été envoyé à ' + form.email + '. Vérifiez votre boîte mail avant de vous connecter.',
+            message: 'Un email de confirmation a été envoyé à ' + form.email + '. Vérifiez votre boîte mail avant de vous connecter.',
             type: 'warning',
             email: form.email
           }
@@ -351,20 +383,107 @@ function FormLeft({ onSuccess, isMobile }) {
     }
   };
 
+  const handleSubmitEtablissement = async () => {
+    if (!etabForm.nom || !etabForm.type || !etabForm.ville || !etabForm.email || !etabForm.password || !etabForm.confirmPassword) {
+      setError('Tous les champs obligatoires doivent etre renseignes');
+      return;
+    }
+    if (etabForm.password !== etabForm.confirmPassword) {
+      setError('Les mots de passe ne correspondent pas');
+      return;
+    }
+    if (etabForm.password.length < 6) {
+      setError('Le mot de passe doit contenir au moins 6 caracteres');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await authService.registerEtablissement({
+        nom: etabForm.nom,
+        type: etabForm.type,
+        ville: etabForm.ville,
+        adresse: etabForm.adresse || null,
+        email: etabForm.email,
+        password: etabForm.password,
+      });
+
+      navigate('/login', {
+        state: {
+          message: 'Compte etablissement cree avec succes. Vous pouvez maintenant vous connecter.',
+          email: etabForm.email,
+        },
+      });
+    } catch (err) {
+      setError(err.message || 'Erreur lors de la creation du compte etablissement');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div style={{ ...S.left, padding: isMobile ? "32px 24px" : "44px 48px" }}>
+    <div style={{ 
+      ...S.left, 
+      padding: isMobile ? "32px 24px" : "44px 48px",
+      background: "rgba(255, 255, 255, 0.95)",
+      backdropFilter: "blur(10px)",
+    }}>
       <Logo />
+      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+        <button
+          type="button"
+          onClick={() => {
+            setAccountType("CANDIDAT");
+            setStep(1);
+            setError('');
+          }}
+          style={{
+            border: accountType === "CANDIDAT" ? "1px solid rgb(249, 115, 22)" : "1px solid #d1d5db",
+            background: accountType === "CANDIDAT" ? "rgb(249, 115, 22)" : "white",
+            color: accountType === "CANDIDAT" ? "white" : "#374151",
+            borderRadius: 999,
+            padding: "6px 12px",
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          Compte candidat
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setAccountType("ETABLISSEMENT");
+            setStep(1);
+            setError('');
+          }}
+          style={{
+            border: accountType === "ETABLISSEMENT" ? "1px solid rgb(249, 115, 22)" : "1px solid #d1d5db",
+            background: accountType === "ETABLISSEMENT" ? "rgb(249, 115, 22)" : "white",
+            color: accountType === "ETABLISSEMENT" ? "white" : "#374151",
+            borderRadius: 999,
+            padding: "6px 12px",
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          Compte etablissement
+        </button>
+      </div>
       <h1 style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 4 }}>
-        Créer un compte
+        Creer un compte
       </h1>
       <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 18 }}>
-        {step === 1 ? "Étape 1/2 — Informations personnelles" : "Étape 2/2 — Compte & rôle"}
+        {accountType === "CANDIDAT"
+          ? (step === 1 ? "Etape 1/2 - Informations personnelles" : "Etape 2/2 - Compte")
+          : "Creation du compte etablissement"}
       </p>
       
-      <ProgressBar step={step} />
+      {accountType === "CANDIDAT" && <ProgressBar step={step} />}
 
       {error && (
-        <div style={{
+        <div className='glass-card-subtle' style={{
           background: "#fef2f2",
           border: "1px solid #fecaca",
           color: "#dc2626",
@@ -373,11 +492,14 @@ function FormLeft({ onSuccess, isMobile }) {
           fontSize: 13,
           marginBottom: 16,
         }}>
-          ❌ {error}
+          <svg style={{ width: 16, height: 16, display: 'inline-block', marginRight: 8, verticalAlign: 'middle' }} fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
+          </svg>
+          {error}
         </div>
       )}
 
-      {step === 1 && (
+      {accountType === "CANDIDAT" && step === 1 && (
         <div>
           <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
             <Field label="Nom" required>
@@ -392,6 +514,75 @@ function FormLeft({ onSuccess, isMobile }) {
                 value={form.prenom} 
                 onChange={set("prenom")} 
                 placeholder="Harry" 
+              />
+            </Field>
+          </div>
+          
+          <div style={{ marginBottom: 14 }}>
+            <Field label="Identifiant ANIP (Numéro Personnel d'Identification)" required>
+              <Input 
+                value={form.anip} 
+                onChange={set("anip")} 
+                placeholder="123456789012"
+                maxLength="12"
+                pattern="\d{12}"
+                title="L'ANIP doit contenir exactement 12 chiffres"
+              />
+              <div style={{ 
+                fontSize: 11, 
+                color: "#6b7280", 
+                marginTop: 4,
+                display: "flex",
+                alignItems: "center",
+                gap: 4
+              }}>
+                <svg style={{ width: 14, height: 14, flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Code unique à 12 chiffres du Registre National des Personnes Physiques (RNPP)
+              </div>
+            </Field>
+          </div>
+          
+          <div style={{ marginBottom: 14 }}>
+            <Field label="Série du cursus scolaire" required>
+              <Select 
+                value={form.serie} 
+                onChange={set("serie")}
+              >
+                <option value="">Sélectionner votre série</option>
+                <option value="A">Série A (Littéraire)</option>
+                <option value="B">Série B (Sciences Sociales)</option>
+                <option value="C">Série C (Mathématiques)</option>
+                <option value="D">Série D (Sciences Expérimentales)</option>
+                <option value="E">Série E (Technique)</option>
+                <option value="F1">Série F1 (Construction Mécanique)</option>
+                <option value="F2">Série F2 (Électronique)</option>
+                <option value="F3">Série F3 (Électrotechnique)</option>
+                <option value="F4">Série F4 (Génie Civil)</option>
+                <option value="G1">Série G1 (Techniques Administratives)</option>
+                <option value="G2">Série G2 (Comptabilité/Gestion)</option>
+                <option value="G3">Série G3 (Commerce/Marketing)</option>
+              </Select>
+            </Field>
+          </div>
+          
+          <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
+            <Field label="Sexe" required>
+              <Select 
+                value={form.sexe} 
+                onChange={set("sexe")}
+              >
+                <option value="">Sélectionner</option>
+                <option value="M">Masculin</option>
+                <option value="F">Féminin</option>
+              </Select>
+            </Field>
+            <Field label="Nationalité" required>
+              <Input 
+                value={form.nationalite} 
+                onChange={set("nationalite")} 
+                placeholder="Béninoise" 
               />
             </Field>
           </div>
@@ -430,7 +621,7 @@ function FormLeft({ onSuccess, isMobile }) {
         </div>
       )}
 
-      {step === 2 && (
+      {accountType === "CANDIDAT" && step === 2 && (
         <div>
           <div style={{ marginBottom: 14 }}>
             <Field label="Email" required>
@@ -465,7 +656,7 @@ function FormLeft({ onSuccess, isMobile }) {
             </Field>
           </div>
           
-          <div style={{
+          <div className='glass-card-subtle' style={{
             background: "#eff6ff",
             border: "1px solid #bfdbfe",
             borderRadius: 8,
@@ -474,7 +665,7 @@ function FormLeft({ onSuccess, isMobile }) {
             fontSize: 12,
             color: "#1e40af",
           }}>
-            ℹ️ Vous vous inscrivez en tant que <strong>candidat</strong>. Les comptes commission et DGES sont créés par les administrateurs.
+            ℹ️ Vous vous inscrivez en tant que <strong>candidat</strong>. Les comptes commission et DGES sont crees par les administrateurs.
           </div>
           
           <div style={{ display: "flex", gap: 10 }}>
@@ -492,6 +683,85 @@ function FormLeft({ onSuccess, isMobile }) {
         </div>
       )}
 
+      {accountType === "ETABLISSEMENT" && (
+        <div>
+          <div style={{ marginBottom: 14 }}>
+            <Field label="Nom de l etablissement" required>
+              <Input
+                value={etabForm.nom}
+                onChange={setEtab("nom")}
+                placeholder="Institut Superieur Exemple"
+              />
+            </Field>
+          </div>
+
+          <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
+            <Field label="Type" required>
+              <Select value={etabForm.type} onChange={setEtab("type")}>
+                <option value="">Selectionner</option>
+                <option value="PUBLIC">Public</option>
+                <option value="PRIVE">Prive</option>
+              </Select>
+            </Field>
+            <Field label="Ville" required>
+              <Input
+                value={etabForm.ville}
+                onChange={setEtab("ville")}
+                placeholder="Cotonou"
+              />
+            </Field>
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <Field label="Adresse">
+              <Input
+                value={etabForm.adresse}
+                onChange={setEtab("adresse")}
+                placeholder="Quartier, rue, reference"
+              />
+            </Field>
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <Field label="Email" required>
+              <Input
+                value={etabForm.email}
+                onChange={setEtab("email")}
+                type="email"
+                placeholder="contact@etablissement.bj"
+              />
+            </Field>
+          </div>
+
+          <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+            <Field label="Mot de passe" required>
+              <Input
+                value={etabForm.password}
+                onChange={setEtab("password")}
+                type="password"
+                placeholder="••••••••"
+              />
+            </Field>
+            <Field label="Confirmer le mot de passe" required>
+              <Input
+                value={etabForm.confirmPassword}
+                onChange={setEtab("confirmPassword")}
+                type="password"
+                placeholder="••••••••"
+              />
+            </Field>
+          </div>
+
+          <BtnPrimary
+            style={{ width: "100%" }}
+            onClick={handleSubmitEtablissement}
+            disabled={loading}
+          >
+            {loading ? 'Creation...' : 'Creer le compte etablissement ->'}
+          </BtnPrimary>
+        </div>
+      )}
+
       <p style={{ textAlign: "center", fontSize: 12, color: "#9ca3af", marginTop: 18 }}>
         Déjà inscrit ?{" "}
         <a 
@@ -499,6 +769,13 @@ function FormLeft({ onSuccess, isMobile }) {
           style={{ color: "rgb(249, 115, 22)", textDecoration: "none", fontWeight: 600 }} // orange-500
         >
           Se connecter
+        </a>
+        {" · "}
+        <a
+          href="/register-etablissement"
+          style={{ color: "rgb(249, 115, 22)", textDecoration: "none", fontWeight: 600 }}
+        >
+          Compte etablissement
         </a>
         {" · "}
         <a
@@ -725,17 +1002,19 @@ export default function Register() {
   const isMobile = useIsMobile();
 
   return (
-    <div style={S.page}>
+    <div className='min-h-screen academic-bg custom-scrollbar flex items-center justify-center p-4 sm:p-6 animate-slide-in' style={{ position: 'relative' }}>
       <div style={S.backgroundImage} />
       <div style={S.backgroundOverlay} />
       
-      <div style={{
-        ...S.wrap,
-        flexDirection: isMobile ? "column" : "row",
+      <div className='glass-card-intense w-full overflow-hidden' style={{
         maxWidth: isMobile ? 480 : 940,
         minHeight: "auto",
+        display: 'flex',
+        flexDirection: isMobile ? "column" : "row",
+        position: 'relative',
+        zIndex: 2,
       }}>
-        <FormLeft isMobile={isMobile} onSuccess={() => {}} />
+        <FormLeft isMobile={isMobile} />
         <RightPanelContent isMobile={isMobile} />
       </div>
     </div>

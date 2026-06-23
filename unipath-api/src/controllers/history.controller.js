@@ -1,433 +1,328 @@
 // src/controllers/history.controller.js
-const { PrismaClient } = require('@prisma/client');
-const { exec } = require('child_process');
-const path = require('path');
+const prisma = require('../prisma');
 
-const prisma = new PrismaClient();
-
-/**
- * Exécute un script PHP et retourne le résultat
- */
-const executePHPScript = (scriptPath, args = []) => {
-  return new Promise((resolve, reject) => {
-    const argsString = args.map(arg => `"${arg}"`).join(' ');
-    const command = `php "${scriptPath}" ${argsString}`;
-    
-    exec(command, { cwd: path.join(__dirname, '../../') }, (error, stdout, stderr) => {
-      if (error) {
-        console.error('Erreur exécution PHP:', error);
-        reject(new Error(`Erreur PHP: ${error.message}`));
-        return;
-      }
-      
-      if (stderr) {
-        console.warn('Avertissement PHP:', stderr);
-      }
-      
-      try {
-        const result = JSON.parse(stdout.trim());
-        resolve(result);
-      } catch (parseError) {
-        console.error('Erreur parsing JSON:', parseError);
-        console.error('Sortie PHP:', stdout);
-        reject(new Error('Erreur de format de réponse PHP'));
-      }
-    });
-  });
-};
-
-/**
- * GET /api/history/:dossierId
- * Obtient l'historique des actions pour un dossier
- */
 exports.getHistorique = async (req, res) => {
   try {
-    const { dossierId } = req.params;
-    const { 
-      dateDebut, 
-      dateFin, 
-      utilisateur, 
-      typeAction, 
-      limite = 50, 
-      offset = 0 
-    } = req.query;
-    
-    // Vérifier que le dossier existe
-    const dossier = await prisma.dossier.findUnique({
-      where: { id: dossierId },
-      include: {
-        candidat: {
-          select: { nom: true, prenom: true, email: true }
-        }
-      }
-    });
-    
-    if (!dossier) {
-      return res.status(404).json({
-        error: 'Dossier non trouvé',
+    const { dossierInscriptionId } = req.params;
+    const { dateDebut, dateFin, utilisateur, typeAction, limite = 50, offset = 0 } = req.query;
+    const userRole = req.user?.role;
+
+    // Check permissions: COMMISSION, CONTROLEUR, DGES only
+    if (!['COMMISSION', 'CONTROLEUR', 'DGES'].includes(userRole)) {
+      return res.status(403).json({ 
+        error: 'Accès refusé. Seuls les membres de la commission, contrôleurs et DGES peuvent consulter l\'historique.' 
       });
     }
-    
-    // Construire les filtres
-    const filtres = {};
+
+    // Retrieve DossierInscription with inscription details
+    const dossierInscription = await prisma.dossierInscription.findUnique({
+      where: { id: dossierInscriptionId },
+      include: { 
+        inscription: { 
+          include: { 
+            candidat: { select: { nom: true, prenom: true, email: true } },
+            concours: { select: { nom: true, annee: true } }
+          } 
+        } 
+      }
+    });
+
+    if (!dossierInscription) {
+      return res.status(404).json({ error: 'Dossier d\'inscription non trouvé' });
+    }
+
+    // Build WHERE clause with dossierInscriptionId and optional filters
+    const whereClause = { dossierInscriptionId };
     if (dateDebut && dateFin) {
-      filtres.dateDebut = dateDebut;
-      filtres.dateFin = dateFin;
+      whereClause.timestamp = { gte: new Date(dateDebut), lte: new Date(dateFin) };
     }
-    if (utilisateur) {
-      filtres.utilisateur = utilisateur;
-    }
-    if (typeAction) {
-      filtres.typeAction = typeAction;
-    }
-    
-    // Appeler le module PHP
-    try {
-      const scriptPath = path.join(__dirname, '../../php-scripts/history-wrapper.php');
-      const args = [
-        'obtenirHistorique',
-        dossierId,
-        JSON.stringify(filtres),
-        limite.toString(),
-        offset.toString()
-      ];
-      
-      const result = await executePHPScript(scriptPath, args);
-      
-      // Enrichir avec les informations du dossier
-      const response = {
-        ...result,
-        dossier: {
-          id: dossier.id,
-          candidat: dossier.candidat
-        }
-      };
-      
-      res.json(response);
-      
-    } catch (phpError) {
-      console.error('Erreur module PHP:', phpError);
-      
-      // Fallback avec Prisma
-      const whereClause = { dossierId };
-      
-      if (dateDebut && dateFin) {
-        whereClause.timestamp = {
-          gte: new Date(dateDebut),
-          lte: new Date(dateFin)
-        };
+    if (utilisateur) whereClause.utilisateurId = utilisateur;
+    if (typeAction) whereClause.typeAction = typeAction;
+
+    // Retrieve actions with pagination
+    const [actions, total] = await Promise.all([
+      prisma.actionHistory.findMany({
+        where: whereClause,
+        orderBy: { timestamp: 'desc' },
+        take: parseInt(limite),
+        skip: parseInt(offset)
+      }),
+      prisma.actionHistory.count({ where: whereClause })
+    ]);
+
+    // Return actions with inscription details
+    res.json({
+      dossierInscriptionId,
+      inscription: {
+        id: dossierInscription.inscription.id,
+        numeroInscription: dossierInscription.inscription.numeroInscription,
+        candidat: dossierInscription.inscription.candidat,
+        concours: dossierInscription.inscription.concours
+      },
+      actions,
+      pagination: {
+        total,
+        limite: parseInt(limite),
+        offset: parseInt(offset),
+        pages: Math.ceil(total / parseInt(limite))
       }
-      if (utilisateur) {
-        whereClause.utilisateurId = utilisateur;
-      }
-      if (typeAction) {
-        whereClause.typeAction = typeAction;
-      }
-      
-      const [actions, total] = await Promise.all([
-        prisma.actionHistory.findMany({
-          where: whereClause,
-          orderBy: { timestamp: 'desc' },
-          take: parseInt(limite),
-          skip: parseInt(offset)
-        }),
-        prisma.actionHistory.count({ where: whereClause })
-      ]);
-      
-      const fallbackResult = {
-        dossierId,
-        actions,
-        pagination: {
-          total,
-          limite: parseInt(limite),
-          offset: parseInt(offset),
-          pages: Math.ceil(total / parseInt(limite))
-        },
-        filtres,
-        timestamp: new Date().toISOString(),
-        dossier: {
-          id: dossier.id,
-          candidat: dossier.candidat
-        },
-        source: 'fallback'
-      };
-      
-      res.json(fallbackResult);
-    }
-    
+    });
+
   } catch (error) {
     console.error('Erreur getHistorique:', error);
-    res.status(500).json({
-      error: 'Erreur serveur lors de la récupération de l\'historique',
-    });
+    res.status(500).json({ error: 'Erreur serveur lors de la récupération de l\'historique' });
   }
 };
 
-/**
- * POST /api/history/action
- * Enregistre une nouvelle action dans l'historique
- */
 exports.enregistrerAction = async (req, res) => {
   try {
-    const { dossierId, typeAction, details } = req.body;
+    const { dossierInscriptionId, typeAction, details } = req.body;
     const utilisateurId = req.user.id;
-    const userRole = req.userRole;
-    
-    // Validation des données
-    if (!dossierId || !typeAction) {
-      return res.status(400).json({
-        error: 'dossierId et typeAction sont obligatoires',
-      });
+    const userRole = req.userRole || req.user?.role;
+
+    if (!dossierInscriptionId || !typeAction) {
+      return res.status(400).json({ error: 'dossierInscriptionId et typeAction sont obligatoires' });
     }
-    
-    // Types d'actions autorisées selon le rôle
+
+    // Verify DossierInscription exists
+    const dossierInscription = await prisma.dossierInscription.findUnique({
+      where: { id: dossierInscriptionId }
+    });
+
+    if (!dossierInscription) {
+      return res.status(404).json({ error: 'Dossier d\'inscription non trouvé' });
+    }
+
+    // Check role-based permissions for typeAction
     const actionsAutorisees = {
-      'CANDIDAT': ['DOSSIER_CREE', 'PIECE_AJOUTEE', 'PIECE_SUPPRIMEE', 'DOSSIER_SOUMIS', 'DOSSIER_MODIFIE'],
-      'COMMISSION': ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE'],
-      'DGES': ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE']
+      'ETUDIANT':   ['DOSSIER_CONCOURS_CREE', 'PIECE_AJOUTEE', 'PIECE_SUPPRIMEE', 'DOSSIER_SOUMIS', 'DOSSIER_MODIFIE', 'PIECE_BASE_MISE_A_JOUR'],
+      'CANDIDAT':   ['DOSSIER_CONCOURS_CREE', 'PIECE_AJOUTEE', 'PIECE_SUPPRIMEE', 'DOSSIER_SOUMIS', 'DOSSIER_MODIFIE', 'PIECE_BASE_MISE_A_JOUR'],
+      'COMMISSION': ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_COMMISSION'],
+      'DGES':       ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_COMMISSION', 'DECISION_CONTROLEUR'],
+      'CONTROLEUR': ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_CONTROLEUR'],
     };
-    
+
     if (!actionsAutorisees[userRole]?.includes(typeAction)) {
-      return res.status(403).json({
-        error: `Action ${typeAction} non autorisée pour le rôle ${userRole}`,
-      });
+      return res.status(403).json({ error: `Action ${typeAction} non autorisée pour le rôle ${userRole}` });
     }
-    
-    // Obtenir l'adresse IP et User Agent
+
     const ipAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'unknown';
     const userAgent = req.headers['user-agent'] || 'unknown';
-    
-    // Appeler le module PHP
-    try {
-      const scriptPath = path.join(__dirname, '../../php-scripts/history-wrapper.php');
-      const args = [
-        'enregistrerAction',
-        utilisateurId,
-        dossierId,
-        typeAction,
-        JSON.stringify(details || {}),
-        ipAddress,
-        userAgent
-      ];
-      
-      const result = await executePHPScript(scriptPath, args);
-      
-      if (result.success) {
-        res.status(201).json({
-          message: 'Action enregistrée avec succès',
-          actionId: result.actionId,
-          timestamp: result.timestamp
-        });
-      } else {
-        res.status(500).json({
-          error: 'Échec de l\'enregistrement de l\'action',
-          details: result.error
-        });
+
+    // Create ActionHistory with dossierInscriptionId
+    const action = await prisma.actionHistory.create({
+      data: { 
+        utilisateurId, 
+        dossierInscriptionId, 
+        typeAction, 
+        details: details || null, 
+        ipAddress, 
+        userAgent, 
+        timestamp: new Date() 
       }
-      
-    } catch (phpError) {
-      console.error('Erreur module PHP:', phpError);
-      
-      // Fallback avec Prisma
-      const action = await prisma.actionHistory.create({
-        data: {
-          utilisateurId,
-          dossierId,
-          typeAction,
-          details: details ? JSON.stringify(details) : null,
-          ipAddress,
-          userAgent,
-          timestamp: new Date()
-        }
-      });
-      
-      res.status(201).json({
-        message: 'Action enregistrée avec succès (fallback)',
-        actionId: action.id,
-        timestamp: action.timestamp,
-        source: 'fallback'
-      });
-    }
-    
+    });
+
+    res.status(201).json({ 
+      message: 'Action enregistrée avec succès', 
+      actionId: action.id, 
+      timestamp: action.timestamp 
+    });
+
   } catch (error) {
     console.error('Erreur enregistrerAction:', error);
-    res.status(500).json({
-      error: 'Erreur serveur lors de l\'enregistrement de l\'action',
-    });
+    res.status(500).json({ error: 'Erreur serveur lors de l\'enregistrement de l\'action' });
   }
 };
 
-/**
- * GET /api/history/audit/rapport
- * Génère un rapport d'audit des actions
- */
 exports.genererRapportAudit = async (req, res) => {
   try {
-    const { 
-      dateDebut, 
-      dateFin, 
-      utilisateurs, 
-      typesActions 
-    } = req.query;
-    
-    // Construire les critères
-    const criteres = {};
+    const userRole = req.user?.role;
+
+    // Seuls DGES et CONTROLEUR peuvent générer des rapports d'audit globaux
+    if (!['DGES', 'CONTROLEUR'].includes(userRole)) {
+      return res.status(403).json({ 
+        error: 'Accès refusé. Seuls les administrateurs DGES et contrôleurs peuvent générer des rapports d\'audit.' 
+      });
+    }
+
+    const { dateDebut, dateFin, utilisateurs, typesActions } = req.query;
+
+    const whereClause = {};
     if (dateDebut && dateFin) {
-      criteres.dateDebut = dateDebut;
-      criteres.dateFin = dateFin;
+      whereClause.timestamp = { gte: new Date(dateDebut), lte: new Date(dateFin) };
     }
     if (utilisateurs) {
-      criteres.utilisateurs = Array.isArray(utilisateurs) ? utilisateurs : [utilisateurs];
+      whereClause.utilisateurId = { in: Array.isArray(utilisateurs) ? utilisateurs : [utilisateurs] };
     }
     if (typesActions) {
-      criteres.typesActions = Array.isArray(typesActions) ? typesActions : [typesActions];
+      whereClause.typeAction = { in: Array.isArray(typesActions) ? typesActions : [typesActions] };
     }
-    
-    // Appeler le module PHP
-    try {
-      const scriptPath = path.join(__dirname, '../../php-scripts/history-wrapper.php');
-      const args = ['genererRapportAudit', JSON.stringify(criteres)];
-      
-      const result = await executePHPScript(scriptPath, args);
-      
-      res.json(result);
-      
-    } catch (phpError) {
-      console.error('Erreur module PHP:', phpError);
-      
-      // Fallback basique
-      const whereClause = {};
-      
-      if (dateDebut && dateFin) {
-        whereClause.timestamp = {
-          gte: new Date(dateDebut),
-          lte: new Date(dateFin)
-        };
-      }
-      
-      const actions = await prisma.actionHistory.findMany({
-        where: whereClause,
-        orderBy: { timestamp: 'desc' }
-      });
-      
-      const fallbackRapport = {
-        criteres,
-        statistiques: {
-          totalActions: actions.length,
-          parType: {},
-          parUtilisateur: {},
-          tentativesNonAutorisees: 0
-        },
-        actions,
-        totalActions: actions.length,
-        dateGeneration: new Date().toISOString(),
-        source: 'fallback'
-      };
-      
-      res.json(fallbackRapport);
-    }
-    
+
+    const actions = await prisma.actionHistory.findMany({
+      where: whereClause,
+      orderBy: { timestamp: 'desc' }
+    });
+
+    const parType = {};
+    const parUtilisateur = {};
+    actions.forEach(a => {
+      parType[a.typeAction] = (parType[a.typeAction] || 0) + 1;
+      parUtilisateur[a.utilisateurId] = (parUtilisateur[a.utilisateurId] || 0) + 1;
+    });
+
+    res.json({
+      criteres: { dateDebut, dateFin, utilisateurs, typesActions },
+      statistiques: { totalActions: actions.length, parType, parUtilisateur },
+      actions,
+      totalActions: actions.length,
+      dateGeneration: new Date().toISOString()
+    });
+
   } catch (error) {
     console.error('Erreur genererRapportAudit:', error);
-    res.status(500).json({
-      error: 'Erreur serveur lors de la génération du rapport d\'audit',
-    });
+    res.status(500).json({ error: 'Erreur serveur lors de la génération du rapport d\'audit' });
   }
 };
 
-/**
- * GET /api/history/export/csv/:dossierId
- * GET /api/history/export/csv
- * Exporte l'historique au format CSV
- */
 exports.exporterCSV = async (req, res) => {
   try {
-    const { dossierId } = req.params;
-    const { 
-      dateDebut, 
-      dateFin, 
-      utilisateur, 
-      typeAction 
-    } = req.query;
-    
-    // Construire les filtres
-    const filtres = {};
+    const userRole = req.user?.role;
+
+    // Seuls DGES et CONTROLEUR peuvent exporter des données d'audit
+    if (!['DGES', 'CONTROLEUR'].includes(userRole)) {
+      return res.status(403).json({ 
+        error: 'Accès refusé. Seuls les administrateurs DGES et contrôleurs peuvent exporter des données d\'audit.' 
+      });
+    }
+
+    const { dossierInscriptionId } = req.params;
+    const { dateDebut, dateFin, utilisateur, typeAction } = req.query;
+
+    const whereClause = {};
+    if (dossierInscriptionId) whereClause.dossierInscriptionId = dossierInscriptionId;
     if (dateDebut && dateFin) {
-      filtres.dateDebut = dateDebut;
-      filtres.dateFin = dateFin;
+      whereClause.timestamp = { gte: new Date(dateDebut), lte: new Date(dateFin) };
     }
-    if (utilisateur) {
-      filtres.utilisateur = utilisateur;
-    }
-    if (typeAction) {
-      filtres.typeAction = typeAction;
-    }
-    
-    // Appeler le module PHP
-    try {
-      const scriptPath = path.join(__dirname, '../../php-scripts/history-wrapper.php');
-      const args = dossierId 
-        ? ['exporterCSV', dossierId, JSON.stringify(filtres)]
-        : ['exporterCSV', 'null', JSON.stringify(filtres)];
-      
-      const result = await executePHPScript(scriptPath, args);
-      
-      // Configurer les headers pour le téléchargement CSV
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = dossierId 
-        ? `historique_dossier_${dossierId}_${timestamp}.csv`
-        : `historique_global_${timestamp}.csv`;
-      
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.setHeader('Content-Length', Buffer.byteLength(result.contenu, 'utf8'));
-      
-      res.send(result.contenu);
-      
-    } catch (phpError) {
-      console.error('Erreur module PHP:', phpError);
-      
-      // Fallback: export basique
-      const whereClause = {};
-      if (dossierId) {
-        whereClause.dossierId = dossierId;
-      }
-      
-      const actions = await prisma.actionHistory.findMany({
-        where: whereClause,
-        orderBy: { timestamp: 'desc' }
-      });
-      
-      // Générer CSV basique
-      const headers = ['ID', 'Date/Heure', 'Utilisateur', 'Dossier', 'Action', 'Détails', 'IP'];
-      const csvLines = [headers.join(',')];
-      
-      actions.forEach(action => {
-        const line = [
-          action.id,
-          action.timestamp.toISOString(),
-          action.utilisateurId,
-          action.dossierId,
-          action.typeAction,
-          action.details ? JSON.stringify(action.details).replace(/"/g, '""') : '',
-          action.ipAddress || ''
-        ];
-        csvLines.push(line.map(field => `"${field}"`).join(','));
-      });
-      
-      const csvContent = csvLines.join('\n');
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `historique_fallback_${timestamp}.csv`;
-      
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send(csvContent);
-    }
-    
+    if (utilisateur) whereClause.utilisateurId = utilisateur;
+    if (typeAction) whereClause.typeAction = typeAction;
+
+    const actions = await prisma.actionHistory.findMany({
+      where: whereClause,
+      orderBy: { timestamp: 'desc' }
+    });
+
+    const headers = ['ID', 'Date/Heure', 'Utilisateur', 'DossierInscription', 'Action', 'Détails', 'IP'];
+    const csvLines = [headers.join(',')];
+
+    actions.forEach(action => {
+      const line = [
+        action.id,
+        action.timestamp.toISOString(),
+        action.utilisateurId,
+        action.dossierInscriptionId,
+        action.typeAction,
+        action.details ? JSON.stringify(action.details).replace(/"/g, '""') : '',
+        action.ipAddress || ''
+      ];
+      csvLines.push(line.map(f => `"${f}"`).join(','));
+    });
+
+    const csvContent = csvLines.join('\n');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = dossierInscriptionId
+      ? `historique_dossier_inscription_${dossierInscriptionId}_${timestamp}.csv`
+      : `historique_global_${timestamp}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csvContent);
+
   } catch (error) {
     console.error('Erreur exporterCSV:', error);
-    res.status(500).json({
-      error: 'Erreur serveur lors de l\'export CSV',
-    });
+    res.status(500).json({ error: 'Erreur serveur lors de l\'export CSV' });
   }
 };
+
+
+/**
+ * Récupérer uniquement les actions liées aux verdicts et décisions
+ */
+exports.getHistoriqueVerdicts = async (req, res) => {
+  try {
+    const { dossierInscriptionId } = req.params;
+    const userRole = req.user?.role;
+
+    // Check permissions: COMMISSION, CONTROLEUR, DGES only
+    if (!['COMMISSION', 'CONTROLEUR', 'DGES'].includes(userRole)) {
+      return res.status(403).json({ 
+        error: 'Accès refusé. Seuls les membres de la commission, contrôleurs et DGES peuvent consulter l\'historique.' 
+      });
+    }
+
+    // Retrieve DossierInscription with inscription details
+    const dossierInscription = await prisma.dossierInscription.findUnique({
+      where: { id: dossierInscriptionId },
+      include: { 
+        inscription: { 
+          include: { 
+            candidat: { select: { nom: true, prenom: true, email: true } },
+            concours: { select: { libelle: true, etablissement: true } }
+          } 
+        } 
+      }
+    });
+
+    if (!dossierInscription) {
+      return res.status(404).json({ error: 'Dossier d\'inscription non trouvé' });
+    }
+
+    // Récupérer uniquement les actions liées aux verdicts et décisions
+    const actions = await prisma.actionHistory.findMany({
+      where: {
+        dossierInscriptionId,
+        typeAction: {
+          in: [
+            'VERDICT_EXAMINATEUR_RENDU',
+            'VERDICT_EXAMINATEUR_MODIFIE',
+            'DECISION_CONTROLEUR_RENDUE',
+            'DECISION_CONTROLEUR_MODIFIEE'
+          ]
+        }
+      },
+      orderBy: { timestamp: 'desc' }
+    });
+
+    // Récupérer les informations des utilisateurs (examinateurs et contrôleurs)
+    const utilisateurIds = [...new Set(actions.map(a => a.utilisateurId))];
+    const utilisateurs = await prisma.membreCommission.findMany({
+      where: { id: { in: utilisateurIds } },
+      select: { id: true, nom: true, prenom: true, sousRole: true }
+    });
+    const utilisateursMap = Object.fromEntries(
+      utilisateurs.map(u => [u.id, { nom: u.nom, prenom: u.prenom, sousRole: u.sousRole }])
+    );
+
+    // Enrichir les actions avec les informations des utilisateurs
+    const actionsEnrichies = actions.map(action => ({
+      ...action,
+      utilisateur: utilisateursMap[action.utilisateurId] || null
+    }));
+
+    res.json({
+      dossierInscriptionId,
+      inscription: {
+        numeroInscription: dossierInscription.inscription.numeroInscription,
+        candidat: dossierInscription.inscription.candidat,
+        concours: dossierInscription.inscription.concours
+      },
+      actions: actionsEnrichies,
+      total: actionsEnrichies.length
+    });
+
+  } catch (error) {
+    console.error('Erreur getHistoriqueVerdicts:', error);
+    res.status(500).json({ error: 'Erreur serveur lors de la récupération de l\'historique des verdicts' });
+  }
+};
+
+module.exports = exports;

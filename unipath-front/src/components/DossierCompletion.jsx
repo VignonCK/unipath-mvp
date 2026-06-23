@@ -1,17 +1,20 @@
 // src/components/DossierCompletion.jsx
 import { useState, useEffect } from 'react';
+import { PIECE_IDS, PIECES_LABELS, convertLegacyId } from '../constants/pieces';
+import { getAuthHeaders } from '../utils/auth';
+import { inscriptionService } from '../services/api';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
-const PIECES_LABELS = {
-  acteNaissance: 'Acte de naissance',
-  carteIdentite: "Carte d'identité",
-  photo:         "Photo d'identité",
-  releve:        'Relevé de notes Bac',
-  quittance:     "Quittance d'inscription",
-};
+// ✅ Liste des pièces à vérifier (SANS la quittance - gérée séparément dans l'inscription)
+const PIECES_DOSSIER = [
+  PIECE_IDS.ACTE_NAISSANCE,
+  PIECE_IDS.CARTE_IDENTITE,
+  PIECE_IDS.PHOTO,
+  PIECE_IDS.RELEVE_NOTES,
+];
 
-export default function DossierCompletion({ candidatId, dossier, onSoumettre }) {
+export default function DossierCompletion({ candidatId, dossier, onSoumettre, inscriptionId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [soumission, setSoumission] = useState(false);
@@ -20,45 +23,86 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre }) 
 
   useEffect(() => {
     if (!candidatId) return;
-    if (dossier !== undefined) {
-      const pieces = ['acteNaissance', 'carteIdentite', 'photo', 'releve', 'quittance'];
-      const deposees = pieces.filter(p => dossier?.[p]).length;
-      const pourcentage = Math.round((deposees / pieces.length) * 100);
-      const estComplet = pourcentage === 100;
+    
+    // ✅ REFONTE - Utiliser l'API getDossierPersonnel au lieu du calcul manuel
+    fetch(`${BASE_URL}/dossier/candidats/${candidatId}/dossier-personnel`, {
+      headers: getAuthHeaders()
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('Erreur API');
+        return res.json();
+      })
+      .then(apiData => {
+        const pourcentage = apiData.completude.pourcentage;
+        const estComplet = pourcentage === 100;
 
-      if (estComplet && etaitIncomplet) {
-        setNotifVisible(true);
-        setTimeout(() => setNotifVisible(false), 5000);
-      }
-      setEtaitIncomplet(!estComplet);
+        if (estComplet && etaitIncomplet) {
+          setNotifVisible(true);
+          setTimeout(() => setNotifVisible(false), 5000);
+        }
+        setEtaitIncomplet(!estComplet);
 
-      setData({
-        pourcentage,
-        piecesPresentes: deposees,
-        piecesRequises: pieces.length,
-        piecesManquantes: pieces.filter(p => !dossier?.[p]),
-        estComplet,
+        const piecesManquantes = apiData.piecesBase
+          .filter(p => p.statut === 'manquante')
+          .map(p => p.type);
+
+        setData({
+          pourcentage,
+          piecesPresentes: apiData.completude.piecesPresentes,
+          piecesRequises: apiData.completude.piecesRequises,
+          piecesManquantes,
+          estComplet,
+        });
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Erreur getDossierPersonnel:', err);
+        // Fallback sur l'ancien calcul si l'API échoue
+        if (dossier !== undefined) {
+          const deposees = PIECES_DOSSIER.filter(pieceId => {
+            if (dossier?.[pieceId]) return true;
+            const legacyKey = Object.keys(PIECES_LABELS).find(
+              key => convertLegacyId(key) === pieceId
+            );
+            return legacyKey && dossier?.[legacyKey];
+          }).length;
+
+          const pourcentage = Math.round((deposees / PIECES_DOSSIER.length) * 100);
+          const estComplet = pourcentage === 100;
+
+          const piecesManquantes = PIECES_DOSSIER.filter(pieceId => {
+            if (dossier?.[pieceId]) return false;
+            const legacyKey = Object.keys(PIECES_LABELS).find(
+              key => convertLegacyId(key) === pieceId
+            );
+            return !(legacyKey && dossier?.[legacyKey]);
+          });
+
+          setData({
+            pourcentage,
+            piecesPresentes: deposees,
+            piecesRequises: PIECES_DOSSIER.length,
+            piecesManquantes,
+            estComplet,
+          });
+        }
+        setLoading(false);
       });
-      setLoading(false);
-    }
-  }, [candidatId, dossier]);
+  }, [candidatId, dossier, etaitIncomplet]);
 
   const handleSoumettre = async () => {
+    if (!inscriptionId) {
+      console.error('inscriptionId manquant');
+      return;
+    }
+
     setSoumission(true);
     try {
-      const token = localStorage.getItem('token');
-      await fetch(`${BASE_URL}/history/action`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          dossierId: dossier?.id,
-          typeAction: 'DOSSIER_SOUMIS',
-          details: { message: 'Dossier soumis officiellement par le candidat' },
-        }),
-      });
+      await inscriptionService.soumettre(inscriptionId);
       if (onSoumettre) onSoumettre();
     } catch (err) {
       console.error('Erreur soumission:', err);
+      alert(err?.message || 'Erreur lors de la soumission du dossier');
     } finally {
       setSoumission(false);
     }
@@ -82,7 +126,6 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre }) 
   return (
     <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4'>
 
-      {/* Notification dossier complet */}
       {notifVisible && (
         <div className='bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-xl flex items-center justify-between gap-3'>
           <div>
@@ -98,7 +141,6 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre }) 
         <span className={`text-2xl font-black ${couleurTexte}`}>{pourcentage}%</span>
       </div>
 
-      {/* Barre de progression */}
       <div>
         <div className='flex justify-between text-xs text-gray-500 mb-1.5'>
           <span>{piecesPresentes} / {piecesRequises} pièces déposées</span>
@@ -115,13 +157,13 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre }) 
         </div>
       </div>
 
-      {/* Liste des pièces */}
       <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
-        {Object.entries(PIECES_LABELS).map(([key, label]) => {
-          const deposee = !piecesManquantes.includes(key);
+        {PIECES_DOSSIER.map((pieceId) => {
+          const deposee = !piecesManquantes.includes(pieceId);
+          const label = PIECES_LABELS[pieceId];
           return (
             <div
-              key={key}
+              key={pieceId}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm ${
                 deposee
                   ? 'bg-green-50 border-green-200 text-green-700'
@@ -136,12 +178,11 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre }) 
         })}
       </div>
 
-      {/* Bouton de soumission */}
-      {estComplet && dossier?.id && (
+      {estComplet && inscriptionId && (
         <button
           onClick={handleSoumettre}
           disabled={soumission}
-          className='w-full bg-blue-900 text-white py-3 rounded-xl font-semibold hover:bg-blue-800 transition disabled:opacity-50'
+          className='w-full bg-[#0F4C81] text-white py-3 rounded-xl font-semibold hover:bg-[#0F4C81]/90 transition disabled:opacity-50'
         >
           {soumission ? 'Soumission en cours...' : 'Soumettre officiellement mon dossier'}
         </button>
