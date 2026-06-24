@@ -1,0 +1,7 @@
+#!/bin/sh
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+if command -v powershell.exe >/dev/null 2>&1 && [ -n "${WINDIR:-}" ]; then
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$HOOK_DIR/pre-commit.ps1"
+  exit $?
+fi
+exec "$HOOK_DIR/pre-commit.sh"
