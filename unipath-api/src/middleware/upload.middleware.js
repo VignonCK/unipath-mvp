@@ -84,4 +84,35 @@ function handleDossierUpload(fieldName = 'fichier') {
   };
 }
 
-module.exports = { upload, dossierMemoryUpload, handleDossierUpload };
+/** Multipart soumission dossier concours — champs dynamiques piece_<id>. */
+const soumissionMemoryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+    files: 30,
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = ['image/jpeg', 'image/png', 'application/pdf', 'image/jpg'];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Format non supporté. Utilisez JPG, PNG ou PDF.'));
+    }
+  },
+});
+
+function handleSoumissionUpload() {
+  return (req, res, next) => {
+    soumissionMemoryUpload.any()(req, res, (err) => {
+      if (err instanceof multer.MulterError) {
+        return res.status(400).json({ error: `Erreur upload: ${err.message}` });
+      }
+      if (err) {
+        return res.status(400).json({ error: err.message });
+      }
+      next();
+    });
+  };
+}
+
+module.exports = { upload, dossierMemoryUpload, handleDossierUpload, handleSoumissionUpload };

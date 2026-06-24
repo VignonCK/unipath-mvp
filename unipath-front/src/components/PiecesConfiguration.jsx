@@ -11,11 +11,8 @@ import {
 } from '../constants/pieces';
 
 const PIECES_UI = PIECES_PREDEFINIES.map((piece) => ({
-  id: piece.id,
-  nom: piece.nom,
-  formats: [...piece.formatsDefaut],
-  obligatoire: piece.obligatoire ?? false,
-  predefined: true,
+  ...piece,
+  formats: [...(piece.formats || [])],
 }));
 
 const FORMATS_PIECE_PERSO = [

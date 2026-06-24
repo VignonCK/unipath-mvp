@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { concoursService } from '../services/api';
 import { PiecesConfiguration } from '../components/PiecesConfiguration';
 import DGESLayout from '../components/DGESLayout';
-import { getDefaultPiecesRequises, validatePiecesConfiguration, convertLegacyId } from '../constants/pieces';
+import { getDefaultPiecesRequises, validatePiecesConfiguration, convertLegacyId, DOSSIER_PERSONNEL_FIELDS } from '../constants/pieces';
 
 export default function GestionConcours() {
   const [concours, setConcours] = useState([]);
@@ -210,6 +210,7 @@ export default function GestionConcours() {
         ...piece,
         id: convertLegacyId(piece.id),
         formats: (piece.formats || []).map((f) => (f === 'JPG' ? 'JPEG' : f)),
+        sourceDossier: piece.sourceDossier || null,
       })),
     };
 
@@ -258,6 +259,22 @@ export default function GestionConcours() {
       criteresEligibilite: (prev.criteresEligibilite || []).filter((_, i) => i !== index),
     }));
   };
+
+  const updatePiece = (index, field, value) => {
+    setFormData((prev) => {
+      const piece = prev.piecesRequises[index];
+      if (!piece) return prev;
+      if (piece.predefined && (field === 'obligatoire' || field === 'sourceDossier')) {
+        return prev;
+      }
+      const piecesRequises = [...prev.piecesRequises];
+      piecesRequises[index] = { ...piecesRequises[index], [field]: value };
+      return { ...prev, piecesRequises };
+    });
+  };
+
+  const getDossierFieldLabel = (key) =>
+    DOSSIER_PERSONNEL_FIELDS.find((field) => field.key === key)?.label ?? key;
 
   const handleDelete = async (id, libelle) => {
     if (!confirm(`Êtes-vous sûr de vouloir supprimer le concours "${libelle}" ?`)) return;
@@ -615,6 +632,66 @@ export default function GestionConcours() {
                     });
                   }}
                 />
+                {formData.piecesRequises.length > 0 && (
+                  <div className='mt-4 space-y-3'>
+                    <p className='text-xs font-semibold text-gray-600 uppercase tracking-wide'>
+                      Options par pièce
+                    </p>
+                    {formData.piecesRequises.map((piece, index) => (
+                      <div
+                        key={`${piece.id}-${index}`}
+                        className='rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3'
+                      >
+                        <p className='text-sm font-medium text-gray-800'>{piece.nom}</p>
+
+                        <label className='flex items-center gap-2 cursor-pointer'>
+                          <input
+                            type='checkbox'
+                            checked={piece.obligatoire !== false}
+                            disabled={piece.predefined === true}
+                            onChange={(e) => updatePiece(index, 'obligatoire', e.target.checked)}
+                            className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed'
+                          />
+                          <span className={`text-sm ${piece.predefined ? 'text-gray-500' : 'text-gray-700'}`}>
+                            Pièce obligatoire
+                          </span>
+                        </label>
+
+                        {piece.predefined && piece.sourceDossier ? (
+                          <div className='flex flex-wrap items-center gap-2'>
+                            <span className='text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full'>
+                              Auto-rempli depuis le dossier personnel
+                            </span>
+                            <span className='text-xs text-gray-500'>
+                              ({getDossierFieldLabel(piece.sourceDossier)})
+                            </span>
+                          </div>
+                        ) : !piece.predefined ? (
+                          <div className='flex flex-col gap-1'>
+                            <label className='text-sm font-medium text-gray-700'>
+                              Correspond à (dossier personnel)
+                            </label>
+                            <select
+                              value={piece.sourceDossier || ''}
+                              onChange={(e) => updatePiece(index, 'sourceDossier', e.target.value || null)}
+                              className='border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+                            >
+                              <option value=''>— Aucune correspondance (upload requis) —</option>
+                              {DOSSIER_PERSONNEL_FIELDS.map((field) => (
+                                <option key={field.key} value={field.key}>
+                                  {field.label}
+                                </option>
+                              ))}
+                            </select>
+                            <p className='text-xs text-gray-400'>
+                              Si cette pièce existe dans le dossier personnel du candidat, elle sera auto-remplie.
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {validationErrors.piecesRequises && (
                   <p className='mt-2 text-xs text-red-600'>{validationErrors.piecesRequises}</p>
                 )}

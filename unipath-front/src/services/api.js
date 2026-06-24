@@ -151,6 +151,17 @@ export const inscriptionService = {
       method: 'POST',
     }),
 
+  /** Soumission atomique : inscription + fichiers en une requête */
+  soumettreComplet: async (formData) => {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${BASE_URL}/inscriptions/soumettre`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    return handleMultipartResponse(response, 'Erreur lors de la soumission du dossier');
+  },
+
   getMesInscriptions: () => request('/inscriptions/mes-inscriptions'),
 
   // ✅ NOUVEAU - Récupérer le dossier complet d'une inscription (base + spécifique)
@@ -161,7 +172,9 @@ export const inscriptionService = {
     const token = localStorage.getItem('token');
 
     const formData = new FormData();
-    formData.append('fichier', fichier); // ✅ corrigé: 'file' → 'fichier'
+    formData.append('quittance', fichier);
+    formData.append('typePiece', 'quittance');
+    formData.append('inscriptionId', inscriptionId);
 
     const response = await fetch(`${BASE_URL}/inscriptions/${inscriptionId}/dossier-concours/quittance`, {
       method: 'POST',
@@ -176,8 +189,9 @@ export const inscriptionService = {
   uploadPieceExtra: async (inscriptionId, typePiece, fichier) => {
     const token = localStorage.getItem('token');
     const formData = new FormData();
-    formData.append('fichier', fichier); // ✅ corrigé: 'file' → 'fichier'
+    formData.append('fichier', fichier);
     formData.append('typePiece', typePiece);
+    formData.append('inscriptionId', inscriptionId);
     const response = await fetch(`${BASE_URL}/inscriptions/${inscriptionId}/dossier-concours/pieces-extras`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },

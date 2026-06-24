@@ -27,7 +27,9 @@ const PIECES_DOSSIER_BASE = ['acteNaissance', 'carteIdentite', 'photo', 'releve'
 
 exports.uploadPiece = async (req, res) => {
     try {
-      const { typePiece, inscriptionId } = req.body;
+      const inscriptionId = req.params.inscriptionId || req.body.inscriptionId;
+      const typePiece = req.body.typePiece
+        || (String(req.originalUrl || '').includes('/quittance') ? 'quittance' : null);
       const candidatId = req.user.id;
 
       if (!typePiece) {

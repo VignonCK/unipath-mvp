@@ -10,6 +10,31 @@ const {
 } = require('../utils/concours.validation');
 const { candidateSerieMatchesConcours } = require('../utils/series.helper');
 
+/** piece.id → champ Dossier Prisma (fallback si sourceDossier absent). */
+const DOSSIER_FIELD_MAP = {
+  acte_naissance: 'acteNaissance',
+  'acte-naissance': 'acteNaissance',
+  acteNaissance: 'acteNaissance',
+  carte_identite: 'carteIdentite',
+  'carte-identite': 'carteIdentite',
+  carteIdentite: 'carteIdentite',
+  photo_identite: 'photo',
+  photo: 'photo',
+  releve_notes: 'releve',
+  'releve-notes': 'releve',
+  releve_bac: 'releve',
+  releve: 'releve',
+};
+
+const isFournieDepuisDossier = (pieceObj, dossierCandidat) => {
+  if (!dossierCandidat) return false;
+  if (pieceObj.sourceDossier && dossierCandidat[pieceObj.sourceDossier] != null) {
+    return true;
+  }
+  const field = DOSSIER_FIELD_MAP[pieceObj.id];
+  return field ? dossierCandidat[field] != null : false;
+};
+
 const normalizeCriteresEligibilite = (criteresEligibilite) => {
   if (criteresEligibilite === undefined || criteresEligibilite === null) return null;
 
@@ -86,8 +111,21 @@ exports.getConcoursById = async (req, res) => {
     let dossierPersonnelCompletude = null;
 
     if (userId) {
+      let candidatId = userId;
+      const candidatParId = await prisma.candidat.findUnique({
+        where: { id: userId },
+        select: { id: true },
+      });
+      if (!candidatParId && req.user?.email) {
+        const candidatParEmail = await prisma.candidat.findUnique({
+          where: { email: req.user.email },
+          select: { id: true },
+        });
+        if (candidatParEmail) candidatId = candidatParEmail.id;
+      }
+
       dossierCandidat = await prisma.dossier.findUnique({
-        where: { candidatId: userId },
+        where: { candidatId },
       });
 
       // Enrichir les pièces requises avec l'état du dossier personnel
@@ -98,13 +136,19 @@ exports.getConcoursById = async (req, res) => {
 
         piecesEnrichies = piecesData.map(piece => {
           const pieceObj = typeof piece === 'object' ? piece : { id: piece, nom: piece };
-          const sourceDossier = pieceObj.sourceDossier;
-          const fournieDepuisDossier = sourceDossier && dossierCandidat?.[sourceDossier] != null;
+          const sourceDossier = pieceObj.sourceDossier || DOSSIER_FIELD_MAP[pieceObj.id] || null;
+          const fournieDepuisDossier = isFournieDepuisDossier(pieceObj, dossierCandidat);
 
           return {
             ...pieceObj,
-            fournieDepuisDossier: !!fournieDepuisDossier,
-            urlDocument: fournieDepuisDossier ? dossierCandidat[sourceDossier] : null
+            obligatoire: pieceObj.obligatoire !== false,
+            sourceDossier: pieceObj.sourceDossier ?? sourceDossier,
+            fournieDepuisDossier,
+            urlDocument: fournieDepuisDossier && sourceDossier
+              ? dossierCandidat[sourceDossier]
+              : (fournieDepuisDossier && DOSSIER_FIELD_MAP[pieceObj.id]
+                ? dossierCandidat[DOSSIER_FIELD_MAP[pieceObj.id]]
+                : null),
           };
         });
       }

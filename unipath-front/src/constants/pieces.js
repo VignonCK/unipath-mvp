@@ -12,12 +12,22 @@
  * ✅ UNIQUE SOURCE DE VÉRITÉ
  */
 export const PIECE_IDS = {
-  ACTE_NAISSANCE: 'acte-naissance',
-  CARTE_IDENTITE: 'carte-identite',
-  PHOTO: 'photo',
-  RELEVE_NOTES: 'releve-notes',
+  ACTE_NAISSANCE: 'acte_naissance',
+  CARTE_IDENTITE: 'carte_identite',
+  PHOTO_IDENTITE: 'photo_identite',
+  RELEVE_BAC: 'releve_bac',
   QUITTANCE: 'quittance',
 };
+
+/**
+ * Champs du modèle Dossier Prisma — seules valeurs valides pour sourceDossier.
+ */
+export const DOSSIER_PERSONNEL_FIELDS = [
+  { key: 'acteNaissance', label: 'Acte de naissance' },
+  { key: 'carteIdentite', label: "Carte nationale d'identité" },
+  { key: 'photo', label: "Photo d'identité" },
+  { key: 'releve', label: 'Relevé de notes Bac' },
+];
 
 /**
  * Formats de fichiers acceptés
@@ -49,40 +59,46 @@ export const FORMAT_TO_MIME = {
  */
 export const PIECES_PREDEFINIES = [
   {
-    id: PIECE_IDS.ACTE_NAISSANCE,
-    nom: 'Acte de naissance',
-    formatsDefaut: [FORMATS_FICHIERS.PDF],
-    description: 'Acte de naissance original ou copie certifiée',
-    obligatoire: false,
-  },
-  {
-    id: PIECE_IDS.CARTE_IDENTITE,
-    nom: "Carte d'identité",
-    formatsDefaut: [FORMATS_FICHIERS.PDF, FORMATS_FICHIERS.JPEG, FORMATS_FICHIERS.PNG],
-    description: "Carte d'identité nationale valide",
-    obligatoire: false,
-  },
-  {
-    id: PIECE_IDS.PHOTO,
-    nom: "Photo d'identité",
-    formatsDefaut: [FORMATS_FICHIERS.JPEG, FORMATS_FICHIERS.PNG],
-    description: 'Photo récente format identité',
-    obligatoire: false,
-  },
-  {
-    id: PIECE_IDS.RELEVE_NOTES,
-    nom: 'Relevé de notes Bac',
-    formatsDefaut: [FORMATS_FICHIERS.PDF],
-    description: 'Relevé de notes du baccalauréat',
-    obligatoire: false,
-  },
-  {
-    id: PIECE_IDS.QUITTANCE,
+    id: 'quittance',
     nom: 'Quittance de paiement',
-    formatsDefaut: [FORMATS_FICHIERS.PDF],
+    formats: ['PDF'],
+    predefined: true,
+    obligatoire: true,
+    nonSupprimable: true,
+    sourceDossier: null,
     description: 'Reçu de paiement des frais de participation',
-    obligatoire: true, // ✅ Toujours obligatoire
-    nonSupprimable: true, // ✅ Ne peut pas être retirée
+  },
+  {
+    id: 'acte_naissance',
+    nom: 'Acte de naissance',
+    formats: ['PDF'],
+    predefined: true,
+    obligatoire: true,
+    sourceDossier: 'acteNaissance',
+  },
+  {
+    id: 'carte_identite',
+    nom: "Carte d'identité",
+    formats: ['PDF', 'JPEG', 'PNG'],
+    predefined: true,
+    obligatoire: true,
+    sourceDossier: 'carteIdentite',
+  },
+  {
+    id: 'photo_identite',
+    nom: "Photo d'identité",
+    formats: ['JPEG', 'PNG'],
+    predefined: true,
+    obligatoire: true,
+    sourceDossier: 'photo',
+  },
+  {
+    id: 'releve_bac',
+    nom: 'Relevé de notes Bac',
+    formats: ['PDF'],
+    predefined: true,
+    obligatoire: true,
+    sourceDossier: 'releve',
   },
 ];
 
@@ -93,9 +109,14 @@ export const PIECES_PREDEFINIES = [
 export const PIECES_LABELS = {
   [PIECE_IDS.ACTE_NAISSANCE]: 'Acte de naissance',
   [PIECE_IDS.CARTE_IDENTITE]: "Carte d'identité",
-  [PIECE_IDS.PHOTO]: "Photo d'identité",
-  [PIECE_IDS.RELEVE_NOTES]: 'Relevé de notes Bac',
+  [PIECE_IDS.PHOTO_IDENTITE]: "Photo d'identité",
+  [PIECE_IDS.RELEVE_BAC]: 'Relevé de notes Bac',
   [PIECE_IDS.QUITTANCE]: 'Quittance de paiement',
+  // Anciens IDs (compatibilité affichage)
+  'acte-naissance': 'Acte de naissance',
+  'carte-identite': "Carte d'identité",
+  photo: "Photo d'identité",
+  'releve-notes': 'Relevé de notes Bac',
 };
 
 /**
@@ -104,9 +125,13 @@ export const PIECES_LABELS = {
  */
 export const LEGACY_ID_MAPPING = {
   acteNaissance: PIECE_IDS.ACTE_NAISSANCE,
+  'acte-naissance': PIECE_IDS.ACTE_NAISSANCE,
   carteIdentite: PIECE_IDS.CARTE_IDENTITE,
-  photo: PIECE_IDS.PHOTO,
-  releve: PIECE_IDS.RELEVE_NOTES,
+  'carte-identite': PIECE_IDS.CARTE_IDENTITE,
+  photo: PIECE_IDS.PHOTO_IDENTITE,
+  photoIdentite: PIECE_IDS.PHOTO_IDENTITE,
+  releve: PIECE_IDS.RELEVE_BAC,
+  'releve-notes': PIECE_IDS.RELEVE_BAC,
   quittance: PIECE_IDS.QUITTANCE,
 };
 
@@ -134,8 +159,9 @@ export function isFormatValide(format) {
  * @returns {Array<string>} Liste des formats acceptés
  */
 export function getFormatsAcceptes(pieceId) {
-  const piece = PIECES_PREDEFINIES.find(p => p.id === pieceId);
-  return piece?.formatsDefaut || [FORMATS_FICHIERS.PDF];
+  const normalizedId = convertLegacyId(pieceId);
+  const piece = PIECES_PREDEFINIES.find((p) => p.id === normalizedId);
+  return piece?.formats || piece?.formatsDefaut || [FORMATS_FICHIERS.PDF];
 }
 
 /**
@@ -144,8 +170,9 @@ export function getFormatsAcceptes(pieceId) {
  * @returns {boolean}
  */
 export function isPieceObligatoire(pieceId) {
-  const piece = PIECES_PREDEFINIES.find(p => p.id === pieceId);
-  return piece?.obligatoire || false;
+  const normalizedId = convertLegacyId(pieceId);
+  const piece = PIECES_PREDEFINIES.find((p) => p.id === normalizedId);
+  return piece ? piece.obligatoire !== false : false;
 }
 
 /**
@@ -168,15 +195,11 @@ export const FORMATS_DISPONIBLES = Object.values(FORMATS_FICHIERS);
  * ✅ Quittance toujours incluse par défaut
  */
 export function getDefaultPiecesRequises() {
+  const quittance = PIECES_PREDEFINIES.find((p) => p.id === PIECE_IDS.QUITTANCE);
   return [
     {
-      id: PIECE_IDS.QUITTANCE,
-      nom: PIECES_LABELS[PIECE_IDS.QUITTANCE],
-      obligatoire: true,
-      formats: [FORMATS_FICHIERS.PDF],
-      predefined: true,
-      description: 'Reçu de paiement des frais de participation',
-      nonSupprimable: true,
+      ...quittance,
+      formats: [...quittance.formats],
     },
   ];
 }
