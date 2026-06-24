@@ -4,14 +4,31 @@ const router = express.Router();
 const { protect } = require('../middleware/auth.middleware');
 const { checkRole } = require('../middleware/role.middleware');
 const dossierController = require('../controllers/dossier.controller');
-const { upload } = require('../middleware/upload.middleware');
+const { handleDossierUpload } = require('../middleware/upload.middleware');
 
-// 🔒 Routes CANDIDAT uniquement - Gestion du dossier personnel
-router.post('/upload', protect, checkRole(['CANDIDAT']), dossierController.uploadPiece);
+// 🔒 Routes CANDIDAT — dossier personnel (multer une seule fois, mémoire → Supabase)
+router.post(
+  '/upload',
+  protect,
+  checkRole(['CANDIDAT']),
+  handleDossierUpload('fichier'),
+  dossierController.uploadPiece
+);
 router.get('/', protect, dossierController.getDossier);
 
-// 🔒 Routes pour Dossier Personnel - Accessible par CANDIDAT (self only), COMMISSION, CONTROLEUR, DGES
-router.get('/candidats/:candidatId/dossier-personnel', protect, checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DGES']), dossierController.getDossierPersonnel);
-router.put('/candidats/:candidatId/dossier-personnel/pieces', protect, checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DGES']), upload.single('fichier'), dossierController.uploadPiece);
+// 🔒 Dossier personnel — CANDIDAT (self), COMMISSION, CONTROLEUR, DGES
+router.get(
+  '/candidats/:candidatId/dossier-personnel',
+  protect,
+  checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DGES']),
+  dossierController.getDossierPersonnel
+);
+router.put(
+  '/candidats/:candidatId/dossier-personnel/pieces',
+  protect,
+  checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DGES']),
+  handleDossierUpload('fichier'),
+  dossierController.uploadPiece
+);
 
 module.exports = router;

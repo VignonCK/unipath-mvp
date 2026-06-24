@@ -27,16 +27,14 @@ const PIECES_LABELS = {
   releve:        'Relevé de notes Bac',
 };
 
-// Formats acceptés par type de pièce
 const PIECES_FORMATS = {
-  photo: 'image/*',  // JPG, JPEG, PNG
-  carteIdentite: '.pdf,.jpg,.jpeg,.png',  // PDF ou images
-  acteNaissance: '.pdf',  // PDF uniquement
-  releve: '.pdf',  // PDF uniquement
-  quittance: '.pdf',  // PDF uniquement
+  photo: 'image/*',
+  carteIdentite: '.pdf,.jpg,.jpeg,.png',
+  acteNaissance: '.pdf',
+  releve: '.pdf',
+  quittance: '.pdf',
 };
 
-// Champs obligatoires du profil
 const CHAMPS_REQUIS = ['telephone', 'dateNaiss', 'lieuNaiss'];
 
 function profilIncomplet(candidat) {
@@ -52,12 +50,10 @@ export default function DashboardCandidat() {
   const [uploadStatus, setUploadStatus] = useState({});
   const [message, setMessage]         = useState({ text: '', type: 'info' });
 
-  // Modale édition profil
   const [editOpen, setEditOpen]       = useState(false);
   const [editForm, setEditForm]       = useState({});
   const [editLoading, setEditLoading] = useState(false);
 
-  // Photo de profil
   const [photoUrl, setPhotoUrl]       = useState(null);
   const [, setPhotoLoading] = useState(false);
 
@@ -77,8 +73,6 @@ export default function DashboardCandidat() {
           dateNaiss: p.dateNaiss ? p.dateNaiss.split('T')[0] : '',
           lieuNaiss: p.lieuNaiss || '',
         });
-        // Photo stockée dans le dossier (champ "photo" = photo d'identité)
-        // On utilise un champ séparé si disponible, sinon null
         if (p.photoProfilUrl) setPhotoUrl(p.photoProfilUrl);
       })
       .catch((err) => {
@@ -94,7 +88,6 @@ export default function DashboardCandidat() {
     setTimeout(() => setMessage({ text: '', type: 'info' }), 5000);
   };
 
-  // ── Mise à jour du profil ──────────────────────────────────
   const handleSaveProfil = async () => {
     if (!editForm.telephone?.trim()) {
       showMessage('Le téléphone est obligatoire.', 'error');
@@ -123,14 +116,11 @@ export default function DashboardCandidat() {
     }
   };
 
-  // ── Upload photo de profil ─────────────────────────────────
   const handlePhotoProfil = async (e) => {
     const fichier = e.target.files[0];
     if (!fichier) return;
     setPhotoLoading(true);
     try {
-      // On réutilise l'upload de pièce avec un type spécial "photoProfil"
-      // Si le backend ne le supporte pas encore, on stocke localement
       const reader = new FileReader();
       reader.onload = (ev) => {
         setPhotoUrl(ev.target.result);
@@ -144,7 +134,6 @@ export default function DashboardCandidat() {
     }
   };
 
-  // Charger la photo depuis localStorage au montage
   useEffect(() => {
     if (candidat?.id) {
       const saved = localStorage.getItem('photoProfil_' + candidat.id);
@@ -152,16 +141,13 @@ export default function DashboardCandidat() {
     }
   }, [candidat?.id]);
 
-  // ── Inscription ───────────────────────────────────────────
   const handleInscription = async (concoursId) => {
-    // Vérifier d'abord si le profil est complet
     if (profilIncomplet(candidat)) {
       showMessage('Veuillez compléter votre profil avant de vous inscrire.', 'warning');
       setEditOpen(true);
       return;
     }
 
-    // Vérifier si le dossier est complet (toutes les pièces déposées)
     const pieces = Object.keys(PIECES_LABELS);
     const piecesManquantes = pieces.filter(piece => !candidat?.dossier?.[piece]);
     
@@ -171,7 +157,6 @@ export default function DashboardCandidat() {
         `Votre dossier est incomplet. Veuillez déposer les pièces suivantes : ${piecesManquantesLabels}`,
         'warning'
       );
-      // Scroll vers la section des pièces justificatives
       setTimeout(() => {
         document.querySelector('#pieces-justificatives')?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
@@ -184,13 +169,11 @@ export default function DashboardCandidat() {
       const updated = await candidatService.getProfil();
       setCandidat(updated);
     } catch (err) {
-      // Si le dossier est incomplet (vérification backend)
       if (err.message.includes('Dossier incomplet') || err.message.includes('pièces manquantes')) {
         showMessage(
           'Votre dossier est incomplet. Veuillez déposer toutes les pièces justificatives requises avant de vous inscrire.',
           'warning'
         );
-        // Scroll vers la section des pièces justificatives
         setTimeout(() => {
           document.querySelector('#pieces-justificatives')?.scrollIntoView({ behavior: 'smooth' });
         }, 100);
@@ -200,13 +183,12 @@ export default function DashboardCandidat() {
     }
   };
 
-  // ── Upload pièces ─────────────────────────────────────────
   const handleUpload = async (typePiece, e) => {
     const fichier = e.target.files[0];
     if (!fichier) return;
     setUploadStatus(prev => ({ ...prev, [typePiece]: 'loading' }));
     try {
-      await dossierService.uploadPiece(typePiece, fichier);
+      await dossierService.uploadPiece(candidat.id, typePiece, fichier); // ✅ corrigé
       setUploadStatus(prev => ({ ...prev, [typePiece]: 'ok' }));
       const updated = await candidatService.getProfil();
       setCandidat(updated);
@@ -225,7 +207,6 @@ export default function DashboardCandidat() {
   const nom = `${candidat?.prenom || ''} ${candidat?.nom || ''}`.trim();
   const incomplet = profilIncomplet(candidat);
   
-  // Vérifier si le dossier est complet (toutes les pièces déposées)
   const pieces = Object.keys(PIECES_LABELS);
   const dossierIncomplet = pieces.some(piece => !candidat?.dossier?.[piece]);
   const nbPiecesDeposees = pieces.filter(piece => candidat?.dossier?.[piece]).length;
@@ -234,7 +215,6 @@ export default function DashboardCandidat() {
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
       <div className='max-w-3xl mx-auto space-y-4 sm:space-y-6 px-3 sm:px-0'>
 
-        {/* Alerte profil incomplet */}
         {incomplet && (
           <div className='bg-orange-50 border-l-4 border-orange-500 px-4 sm:px-5 py-3 sm:py-4 rounded-xl flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4'>
             <div>
@@ -252,7 +232,6 @@ export default function DashboardCandidat() {
           </div>
         )}
 
-        {/* Alerte dossier incomplet */}
         {!incomplet && dossierIncomplet && (
           <div className='bg-red-50 border-l-4 border-red-500 px-4 sm:px-5 py-3 sm:py-4 rounded-xl flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4'>
             <div>
@@ -270,7 +249,6 @@ export default function DashboardCandidat() {
           </div>
         )}
 
-        {/* Toast */}
         {message.text && (
           <div className={`px-4 py-3 rounded-lg text-sm flex items-center justify-between ${
             message.type === 'success' ? 'bg-green-50 border border-green-200 text-green-700' :
@@ -283,12 +261,10 @@ export default function DashboardCandidat() {
           </div>
         )}
 
-        {/* CARTE PROFIL */}
         <BentoCard className='p-0 overflow-hidden animate-slide-in'>
           <div className='h-12 sm:h-16 bg-gradient-to-r from-blue-900 to-blue-800' />
           <div className='px-4 sm:px-6 pb-4 sm:pb-6'>
             <div className='flex items-end justify-between gap-2 -mt-6 sm:-mt-8 mb-4 flex-wrap'>
-              {/* Avatar cliquable pour changer la photo */}
               <div className='flex items-end gap-3 sm:gap-4'>
                 <label className='cursor-pointer group relative flex-shrink-0'>
                   <div className='w-12 h-12 sm:w-16 sm:h-16 rounded-2xl overflow-hidden bg-orange-500 flex items-center justify-center text-xl sm:text-2xl font-black text-white shadow-lg border-4 border-white'>
@@ -297,7 +273,6 @@ export default function DashboardCandidat() {
                       : initiales(candidat?.prenom, candidat?.nom)
                     }
                   </div>
-                  {/* Overlay au hover */}
                   <div className='absolute inset-0 rounded-2xl bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center'>
                     <span className='text-white text-xs font-medium'>Photo</span>
                   </div>
@@ -310,7 +285,6 @@ export default function DashboardCandidat() {
                   </span>
                 </div>
               </div>
-              {/* Bouton modifier */}
               <button
                 onClick={() => setEditOpen(true)}
                 className='pb-1 text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition flex-shrink-0 w-full sm:w-auto'
@@ -337,7 +311,6 @@ export default function DashboardCandidat() {
           </div>
         </BentoCard>
 
-        {/* COMPLÉTUDE DU DOSSIER */}
         <DossierCompletion
           candidatId={candidat?.id}
           dossier={candidat?.dossier}
@@ -348,7 +321,6 @@ export default function DashboardCandidat() {
           }}
         />
 
-        {/* MES INSCRIPTIONS */}
         <BentoCard className='p-6 animate-slide-in'>
           <div className='flex items-center justify-between mb-4'>
             <h2 className='text-base font-bold text-gray-800'>Mes inscriptions</h2>
@@ -364,8 +336,8 @@ export default function DashboardCandidat() {
               {candidat.inscriptions.map((ins) => {
                 const cfg = STATUT_CONFIG[ins.statut] || STATUT_CONFIG.EN_ATTENTE;
                 return (
-                  <div 
-                    key={ins.id} 
+                  <div
+                    key={ins.id}
                     className='flex overflow-hidden glass-card-subtle hover:shadow-lg transition cursor-pointer'
                     onClick={() => navigate(`/inscription/${ins.id}`)}
                   >
@@ -403,7 +375,6 @@ export default function DashboardCandidat() {
           )}
         </BentoCard>
 
-        {/* CONCOURS DISPONIBLES */}
         <BentoCard className='p-6 animate-slide-in'>
           <div className='flex items-center justify-between mb-4'>
             <h2 className='text-base font-bold text-gray-800'>Concours disponibles</h2>
@@ -452,7 +423,6 @@ export default function DashboardCandidat() {
           )}
         </BentoCard>
 
-        {/* PIÈCES JUSTIFICATIVES */}
         <BentoCard id='pieces-justificatives' className='p-6 animate-slide-in'>
           <h2 className='text-base font-bold text-gray-800 mb-4'>Pièces justificatives</h2>
           <div className='space-y-2'>
@@ -487,7 +457,6 @@ export default function DashboardCandidat() {
 
       </div>
 
-      {/* MODALE ÉDITION PROFIL */}
       {editOpen && (
         <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm'>
           <div className='glass-card-intense w-full max-w-md animate-slide-in'>

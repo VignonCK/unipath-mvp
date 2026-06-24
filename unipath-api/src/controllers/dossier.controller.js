@@ -1,20 +1,6 @@
 const { supabaseAdmin } = require('../supabase');
 const prisma = require('../prisma');
 const { isEtudiantRole } = require('../constants/roles.constants');
-const multer = require('multer');
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Type de fichier non autorise.'));
-    }
-  },
-});
 
 const uploadToSupabase = async (file, candidatId, typePiece) => {
   const ext = file.originalname.split('.').pop();
@@ -39,9 +25,7 @@ const uploadToSupabase = async (file, candidatId, typePiece) => {
 // Pièces de base du dossier candidat
 const PIECES_DOSSIER_BASE = ['acteNaissance', 'carteIdentite', 'photo', 'releve'];
 
-exports.uploadPiece = [
-  upload.single('fichier'),
-  async (req, res) => {
+exports.uploadPiece = async (req, res) => {
     try {
       const { typePiece, inscriptionId } = req.body;
       const candidatId = req.user.id;
@@ -200,8 +184,7 @@ exports.uploadPiece = [
       console.error('Erreur uploadPiece:', error);
       res.status(500).json({ error: error.message || 'Erreur lors de l\'upload' });
     }
-  },
-];
+};
 
 exports.getDossier = async (req, res) => {
   try {

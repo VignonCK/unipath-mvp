@@ -47,6 +47,11 @@ app.use('/api/concours', concoursRoutes);
 app.use('/api/inscriptions', inscriptionRoutes);
 app.use('/api/commission', commissionRoutes);
 app.use('/api/controleur', controleurRoutes);
+app.use('/api/dossier', (req, res, next) => {
+  req.setTimeout(60000);
+  res.setTimeout(60000);
+  next();
+});
 app.use('/api/dossier', dossierRoutes);
 app.use('/api/dges', dgesRoutes);
 app.use('/api/completion', completionRoutes);

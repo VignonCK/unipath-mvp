@@ -1,20 +1,42 @@
 // src/components/DossierCompletion.jsx
 import { useState, useEffect } from 'react';
-import { PIECE_IDS, PIECES_LABELS, convertLegacyId } from '../constants/pieces';
 import { getAuthHeaders } from '../utils/auth';
 import { inscriptionService } from '../services/api';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
-// ✅ Liste des pièces à vérifier (SANS la quittance - gérée séparément dans l'inscription)
 const PIECES_DOSSIER = [
-  PIECE_IDS.ACTE_NAISSANCE,
-  PIECE_IDS.CARTE_IDENTITE,
-  PIECE_IDS.PHOTO,
-  PIECE_IDS.RELEVE_NOTES,
+  { key: 'acteNaissance', label: 'Acte de naissance' },
+  { key: 'carteIdentite', label: "Carte d'identité" },
+  { key: 'photo', label: "Photo d'identité" },
+  { key: 'releve', label: 'Relevé de notes Bac' },
 ];
 
-export default function DossierCompletion({ candidatId, dossier, onSoumettre, inscriptionId }) {
+function buildCompletionFromDossierPersonnel(dossierPersonnel) {
+  const deposees = PIECES_DOSSIER.filter(
+    (p) => dossierPersonnel?.piecesBase?.[p.key]?.url != null
+  ).length;
+  const pourcentage = Math.round((deposees / PIECES_DOSSIER.length) * 100);
+  const piecesManquantes = PIECES_DOSSIER.filter(
+    (p) => dossierPersonnel?.piecesBase?.[p.key]?.url == null
+  ).map((p) => p.key);
+
+  return {
+    pourcentage,
+    piecesPresentes: deposees,
+    piecesRequises: PIECES_DOSSIER.length,
+    piecesManquantes,
+    estComplet: deposees === PIECES_DOSSIER.length,
+  };
+}
+
+export default function DossierCompletion({
+  candidatId,
+  dossier,
+  dossierPersonnel,
+  onSoumettre,
+  inscriptionId,
+}) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [soumission, setSoumission] = useState(false);
@@ -22,73 +44,56 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre, in
   const [etaitIncomplet, setEtaitIncomplet] = useState(true);
 
   useEffect(() => {
+    if (dossierPersonnel) {
+      const completion = buildCompletionFromDossierPersonnel(dossierPersonnel);
+      if (completion.estComplet && etaitIncomplet) {
+        setNotifVisible(true);
+        setTimeout(() => setNotifVisible(false), 5000);
+      }
+      setEtaitIncomplet(!completion.estComplet);
+      setData(completion);
+      setLoading(false);
+      return;
+    }
+
     if (!candidatId) return;
-    
-    // ✅ REFONTE - Utiliser l'API getDossierPersonnel au lieu du calcul manuel
+
     fetch(`${BASE_URL}/dossier/candidats/${candidatId}/dossier-personnel`, {
-      headers: getAuthHeaders()
+      headers: getAuthHeaders(),
     })
-      .then(res => {
+      .then((res) => {
         if (!res.ok) throw new Error('Erreur API');
         return res.json();
       })
-      .then(apiData => {
-        const pourcentage = apiData.completude.pourcentage;
-        const estComplet = pourcentage === 100;
-
-        if (estComplet && etaitIncomplet) {
+      .then((apiData) => {
+        const completion = buildCompletionFromDossierPersonnel(apiData);
+        if (completion.estComplet && etaitIncomplet) {
           setNotifVisible(true);
           setTimeout(() => setNotifVisible(false), 5000);
         }
-        setEtaitIncomplet(!estComplet);
-
-        const piecesManquantes = apiData.piecesBase
-          .filter(p => p.statut === 'manquante')
-          .map(p => p.type);
-
-        setData({
-          pourcentage,
-          piecesPresentes: apiData.completude.piecesPresentes,
-          piecesRequises: apiData.completude.piecesRequises,
-          piecesManquantes,
-          estComplet,
-        });
+        setEtaitIncomplet(!completion.estComplet);
+        setData(completion);
         setLoading(false);
       })
-      .catch(err => {
+      .catch((err) => {
         console.error('Erreur getDossierPersonnel:', err);
-        // Fallback sur l'ancien calcul si l'API échoue
         if (dossier !== undefined) {
-          const deposees = PIECES_DOSSIER.filter(pieceId => {
-            if (dossier?.[pieceId]) return true;
-            const legacyKey = Object.keys(PIECES_LABELS).find(
-              key => convertLegacyId(key) === pieceId
-            );
-            return legacyKey && dossier?.[legacyKey];
-          }).length;
-
+          const deposees = PIECES_DOSSIER.filter((p) => dossier?.[p.key] != null).length;
           const pourcentage = Math.round((deposees / PIECES_DOSSIER.length) * 100);
-          const estComplet = pourcentage === 100;
-
-          const piecesManquantes = PIECES_DOSSIER.filter(pieceId => {
-            if (dossier?.[pieceId]) return false;
-            const legacyKey = Object.keys(PIECES_LABELS).find(
-              key => convertLegacyId(key) === pieceId
-            );
-            return !(legacyKey && dossier?.[legacyKey]);
-          });
-
+          const piecesManquantes = PIECES_DOSSIER.filter((p) => dossier?.[p.key] == null).map(
+            (p) => p.key
+          );
           setData({
             pourcentage,
             piecesPresentes: deposees,
             piecesRequises: PIECES_DOSSIER.length,
             piecesManquantes,
-            estComplet,
+            estComplet: deposees === PIECES_DOSSIER.length,
           });
         }
         setLoading(false);
       });
-  }, [candidatId, dossier, etaitIncomplet]);
+  }, [candidatId, dossier, dossierPersonnel, etaitIncomplet]);
 
   const handleSoumettre = async () => {
     if (!inscriptionId) {
@@ -158,12 +163,11 @@ export default function DossierCompletion({ candidatId, dossier, onSoumettre, in
       </div>
 
       <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
-        {PIECES_DOSSIER.map((pieceId) => {
-          const deposee = !piecesManquantes.includes(pieceId);
-          const label = PIECES_LABELS[pieceId];
+        {PIECES_DOSSIER.map(({ key, label }) => {
+          const deposee = !piecesManquantes.includes(key);
           return (
             <div
-              key={pieceId}
+              key={key}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm ${
                 deposee
                   ? 'bg-green-50 border-green-200 text-green-700'

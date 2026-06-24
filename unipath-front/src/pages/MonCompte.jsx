@@ -11,25 +11,28 @@ function initiales(prenom, nom) {
   return `${(prenom || '?')[0]}${(nom || '?')[0]}`.toUpperCase();
 }
 
-const PIECES_LABELS = {
-  acteNaissance: 'Acte de naissance',
-  carteIdentite: "Carte d'identité",
-  photo:         "Photo d'identité",
-  releve:        'Relevé de notes Bac',
+const PIECES_DOSSIER = [
+  { key: 'acteNaissance', label: 'Acte de naissance' },
+  { key: 'carteIdentite', label: "Carte d'identité" },
+  { key: 'photo', label: "Photo d'identité" },
+  { key: 'releve', label: 'Relevé de notes Bac' },
+];
+
+const PIECES_FORMATS = {
+  photo: 'image/*',
+  carteIdentite: '.pdf,.jpg,.jpeg,.png',
+  acteNaissance: '.pdf',
+  releve: '.pdf',
 };
 
-// Formats acceptés par type de pièce
-const PIECES_FORMATS = {
-  photo: 'image/*',  // JPG, JPEG, PNG
-  carteIdentite: '.pdf,.jpg,.jpeg,.png',  // PDF ou images
-  acteNaissance: '.pdf',  // PDF uniquement
-  releve: '.pdf',  // PDF uniquement
-  quittance: '.pdf',  // PDF uniquement
-};
+function isPieceDeposee(dossierPersonnel, key) {
+  return dossierPersonnel?.piecesBase?.[key]?.url != null;
+}
 
 export default function MonCompte() {
   const navigate = useNavigate();
   const [candidat, setCandidat]   = useState(null);
+  const [dossierPersonnel, setDossierPersonnel] = useState(null);
   const [loading, setLoading]     = useState(true);
   const [uploadStatus, setUploadStatus] = useState({});
   const [message, setMessage]     = useState({ text: '', type: 'info' });
@@ -38,11 +41,17 @@ export default function MonCompte() {
   const [editLoading, setEditLoading] = useState(false);
   const [photoUrl, setPhotoUrl]   = useState(null);
 
+  const fetchDossierPersonnel = async (candidatId) => {
+    const data = await dossierService.getDossierPersonnel(candidatId);
+    setDossierPersonnel(data);
+    return data;
+  };
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { navigate('/login'); return; }
     candidatService.getProfil()
-      .then(p => {
+      .then(async (p) => {
         setCandidat(p);
         setEditForm({
           nom:       p.nom       || '',
@@ -55,6 +64,7 @@ export default function MonCompte() {
         });
         const saved = localStorage.getItem('photoProfil_' + p.id);
         if (saved) setPhotoUrl(saved);
+        await fetchDossierPersonnel(p.id);
       })
       .catch((err) => {
         if (!handleSessionError(err, navigate)) {
@@ -113,12 +123,15 @@ export default function MonCompte() {
     if (!fichier) return;
     setUploadStatus(prev => ({ ...prev, [typePiece]: 'loading' }));
     try {
-      await dossierService.uploadPiece(typePiece, fichier);
-      setUploadStatus(prev => ({ ...prev, [typePiece]: 'ok' }));
-      const updated = await candidatService.getProfil();
-      setCandidat(updated);
-    } catch {
+      await dossierService.uploadPiece(candidat.id, typePiece, fichier);
+      await fetchDossierPersonnel(candidat.id);
+      setUploadStatus(prev => ({ ...prev, [typePiece]: undefined }));
+      showMessage('Pièce déposée avec succès.', 'success');
+    } catch (err) {
       setUploadStatus(prev => ({ ...prev, [typePiece]: 'error' }));
+      showMessage(err?.message || 'Erreur lors du dépôt de la pièce.', 'error');
+    } finally {
+      e.target.value = '';
     }
   };
 
@@ -134,7 +147,6 @@ export default function MonCompte() {
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
       <div className='max-w-3xl mx-auto space-y-6 animate-slide-in'>
 
-        {/* Toast */}
         {message.text && (
           <div className={`px-4 py-3 rounded-lg text-sm flex items-center justify-between ${
             message.type === 'success' ? 'bg-green-50 border border-green-200 text-green-700' :
@@ -146,7 +158,6 @@ export default function MonCompte() {
           </div>
         )}
 
-        {/* CARTE PROFIL */}
         <BentoCard className='p-0 overflow-hidden'>
           <div className='h-16 bg-gradient-to-r from-blue-900 to-blue-800' />
           <div className='px-6 pb-6'>
@@ -196,41 +207,39 @@ export default function MonCompte() {
           </div>
         </BentoCard>
 
-        {/* COMPLÉTUDE */}
         <DossierCompletion
           candidatId={candidat?.id}
-          dossier={candidat?.dossier}
+          dossierPersonnel={dossierPersonnel}
           onSoumettre={async () => {
             showMessage('Dossier soumis. La commission va étudier votre candidature.', 'success');
-            const updated = await candidatService.getProfil();
-            setCandidat(updated);
+            await fetchDossierPersonnel(candidat.id);
           }}
         />
 
-        {/* PIÈCES */}
         <BentoCard className='p-6'>
           <h2 className='text-base font-bold text-gray-800 mb-4'>Pièces justificatives</h2>
           <div className='space-y-2'>
-            {Object.entries(PIECES_LABELS).map(([key, label]) => {
-              const estDepose = candidat?.dossier?.[key];
+            {PIECES_DOSSIER.map(({ key, label }) => {
+              const estDepose = isPieceDeposee(dossierPersonnel, key);
               const status    = uploadStatus[key];
               const isLoading = status === 'loading';
-              const isOk      = estDepose || status === 'ok';
+              const isError   = status === 'error';
               return (
                 <div key={key} className={`flex items-center justify-between px-4 py-3 glass-card-subtle transition ${
-                  isOk ? 'border-l-4 border-green-500' : 'border-l-4 border-gray-300'
+                  estDepose ? 'border-l-4 border-green-500' : 'border-l-4 border-gray-300'
                 }`}>
                   <div className='flex items-center gap-3'>
-                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isOk ? 'bg-green-500' : 'bg-gray-300'}`} />
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${estDepose ? 'bg-green-500' : 'bg-gray-300'}`} />
                     <span className='text-sm font-medium text-gray-700'>{label}</span>
                   </div>
                   <label className='cursor-pointer'>
                     <span className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${
                       isLoading ? 'bg-gray-200 text-gray-500' :
-                      isOk      ? 'bg-green-100 text-green-700 hover:bg-green-200' :
+                      isError   ? 'bg-red-100 text-red-700 hover:bg-red-200' :
+                      estDepose ? 'bg-green-100 text-green-700 hover:bg-green-200' :
                                   'bg-blue-900 text-white hover:bg-blue-800'
                     }`}>
-                      {isLoading ? 'Envoi...' : isOk ? 'Modifier' : 'Déposer'}
+                      {isLoading ? 'Envoi...' : isError ? 'Réessayer' : estDepose ? 'Modifier' : 'Déposer'}
                     </span>
                     <input type='file' accept={PIECES_FORMATS[key]} onChange={(e) => handleUpload(key, e)} className='hidden' />
                   </label>
@@ -242,7 +251,6 @@ export default function MonCompte() {
 
       </div>
 
-      {/* MODALE ÉDITION */}
       {editOpen && (
         <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm'>
           <div className='glass-card-intense w-full max-w-md animate-slide-in'>

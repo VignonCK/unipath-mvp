@@ -41,7 +41,7 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Configuration de multer
+// Configuration de multer (disque — autres routes)
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
@@ -50,4 +50,38 @@ const upload = multer({
   }
 });
 
-module.exports = { upload };
+// Mémoire — dossier personnel (upload Supabase via file.buffer)
+const dossierMemoryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+    files: 1,
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = ['image/jpeg', 'image/png', 'application/pdf'];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Format non supporté. Utilisez JPG, PNG ou PDF.'));
+    }
+  },
+});
+
+/**
+ * Parse un seul fichier multipart avec gestion d'erreur explicite (évite double-parse busboy).
+ */
+function handleDossierUpload(fieldName = 'fichier') {
+  return (req, res, next) => {
+    dossierMemoryUpload.single(fieldName)(req, res, (err) => {
+      if (err instanceof multer.MulterError) {
+        return res.status(400).json({ error: `Erreur upload: ${err.message}` });
+      }
+      if (err) {
+        return res.status(400).json({ error: err.message });
+      }
+      next();
+    });
+  };
+}
+
+module.exports = { upload, dossierMemoryUpload, handleDossierUpload };

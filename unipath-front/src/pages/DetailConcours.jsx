@@ -52,16 +52,18 @@ function depotEstFerme(concours) {
 }
 
 function getPiecesRequisesConcours(concours) {
-  if (!concours?.piecesRequises) return Object.keys(PIECES_DOSSIER_BASE);
+  if (!concours?.piecesRequises) return Object.keys(PIECES_DOSSIER_BASE).map(id => ({ id, fournieDepuisDossier: false }));
   const pr = concours.piecesRequises;
-  if (Array.isArray(pr)) return pr.map(p => typeof p === 'object' ? p.id : p);
-  if (Array.isArray(pr.pieces)) return pr.pieces.map(p => typeof p === 'object' ? p.id : p);
-  return Object.keys(PIECES_DOSSIER_BASE);
+  if (Array.isArray(pr)) return pr.map(p => typeof p === 'object' ? p : { id: p, fournieDepuisDossier: false });
+  if (Array.isArray(pr.pieces)) return pr.pieces.map(p => typeof p === 'object' ? p : { id: p, fournieDepuisDossier: false });
+  return Object.keys(PIECES_DOSSIER_BASE).map(id => ({ id, fournieDepuisDossier: false }));
 }
 
-function getLabelPiece(piece, concours) {
+function getLabelPiece(pieceObj, concours) {
+  const piece = typeof pieceObj === 'object' ? pieceObj.id : pieceObj;
   if (PIECES_DOSSIER_BASE[piece]) return PIECES_DOSSIER_BASE[piece];
   if (piece === 'quittance') return 'Quittance de paiement';
+  if (typeof pieceObj === 'object' && pieceObj.nom) return pieceObj.nom;
   const pr = concours?.piecesRequises;
   const liste = Array.isArray(pr) ? pr : (Array.isArray(pr?.pieces) ? pr.pieces : []);
   const found = liste.find(p => typeof p === 'object' && p.id === piece);
@@ -104,7 +106,15 @@ function getPiecesExtras(inscription) {
   return inscription?.piecesExtras || inscription?.dossierInscription?.piecesExtras || {};
 }
 
-function getPieceStatut(piece, candidat, inscription) {
+function getPieceStatut(pieceObj, candidat, inscription) {
+  const piece = typeof pieceObj === 'object' ? pieceObj.id : pieceObj;
+  
+  // Si la pièce est fournie depuis le dossier personnel (enrichie par le backend)
+  if (typeof pieceObj === 'object' && pieceObj.fournieDepuisDossier) {
+    return true;
+  }
+  
+  // Sinon, vérifier manuellement (fallback)
   if (piece === 'quittance') return !!getQuittanceUrl(inscription);
   if (PIECES_DOSSIER_BASE[piece]) {
     return !!candidat?.dossier?.[piece];
@@ -201,8 +211,8 @@ export default function DetailConcours() {
         showMessage('La période de dépôt pour ce concours est terminée.', 'error');
         return;
       }
-      const piecesDossier = getPiecesRequisesConcours(concours).filter(p => p !== 'quittance');
-      const manquantes = piecesDossier.filter(p => !getPieceStatut(p, candidat, inscription));
+      const piecesDossier = getPiecesRequisesConcours(concours).filter(p => (typeof p === 'object' ? p.id : p) !== 'quittance');
+      const manquantes = piecesDossier.filter(pieceObj => !getPieceStatut(pieceObj, candidat, inscription));
       if (manquantes.length > 0) {
         showMessage(`Pièces manquantes : ${manquantes.map(p => getLabelPiece(p, concours)).join(', ')}`, 'error');
         return;
@@ -232,7 +242,7 @@ export default function DetailConcours() {
     
     // Si déjà inscrit, vérifier que TOUTES les pièces sont complètes (y compris quittance)
     const toutesLesPiecesRequises = getPiecesRequisesConcours(concours);
-    const manquantes = toutesLesPiecesRequises.filter(p => !getPieceStatut(p, candidat, inscription));
+    const manquantes = toutesLesPiecesRequises.filter(pieceObj => !getPieceStatut(pieceObj, candidat, inscription));
     if (manquantes.length > 0) {
       showMessage(`Pièces manquantes : ${manquantes.map(p => getLabelPiece(p, concours)).join(', ')}`, 'error');
       return;
@@ -285,9 +295,9 @@ export default function DetailConcours() {
   const depotFerme = depotEstFerme(concours);
   const inscriptionBloquee = !inscription && (!serieOk || depotFerme);
   // ✅ Toutes les pièces y compris la quittance doivent être fournies avant soumission
-  const nbFournies = toutesLesPieces.filter(p => getPieceStatut(p, candidat, inscription)).length;
+  const nbFournies = toutesLesPieces.filter(pieceObj => getPieceStatut(pieceObj, candidat, inscription)).length;
   const pct = toutesLesPieces.length > 0 ? Math.round((nbFournies / toutesLesPieces.length) * 100) : 100;
-  const dossierComplet = !profilIncomplet(candidat) && toutesLesPieces.every(p => getPieceStatut(p, candidat, inscription));
+  const dossierComplet = !profilIncomplet(candidat) && toutesLesPieces.every(pieceObj => getPieceStatut(pieceObj, candidat, inscription));
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
@@ -410,14 +420,17 @@ export default function DetailConcours() {
             </div>
 
             <div className='space-y-2'>
-              {toutesLesPieces.map(piece => {
-                const fournie = getPieceStatut(piece, candidat, inscription);
-                const label = getLabelPiece(piece, concours);
+              {toutesLesPieces.map(pieceObj => {
+                const piece = typeof pieceObj === 'object' ? pieceObj.id : pieceObj;
+                const fournieDepuisDossier = typeof pieceObj === 'object' && pieceObj.fournieDepuisDossier;
+                const fournie = getPieceStatut(pieceObj, candidat, inscription);
+                const label = getLabelPiece(pieceObj, concours);
                 const isUploading = uploadingPiece[piece];
                 const accept = PIECES_FORMATS[piece] || '.pdf,.jpg,.jpeg,.png';
+                
                 return (
                   <div key={piece} className={`flex items-center justify-between px-4 py-3 rounded-xl border ${fournie ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-                    <div className='flex items-center gap-3'>
+                    <div className='flex items-center gap-3 flex-1'>
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${fournie ? 'bg-green-500' : 'bg-red-400'}`}>
                         {fournie ? (
                           <svg className='w-4 h-4 text-white' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -429,25 +442,38 @@ export default function DetailConcours() {
                           </svg>
                         )}
                       </div>
-                      <span className={`text-sm font-medium ${fournie ? 'text-green-800' : 'text-red-800'}`}>{label}</span>
+                      <div className='flex flex-col flex-1 min-w-0'>
+                        <span className={`text-sm font-medium ${fournie ? 'text-green-800' : 'text-red-800'}`}>{label}</span>
+                        {fournieDepuisDossier && (
+                          <span className='text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full inline-block w-fit mt-1'>
+                            ✓ Depuis votre dossier personnel
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className='flex flex-col items-end gap-1'>
-                      <label className='cursor-pointer'>
-                        <span className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${
-                          isUploading ? 'bg-gray-200 text-gray-500' :
-                          fournie     ? 'bg-green-100 text-green-700 hover:bg-green-200' :
-                                        'bg-blue-900 text-white hover:bg-blue-800'
-                        }`}>
-                          {isUploading ? 'Envoi...' : fournie ? 'Modifier' : 'Déposer'}
+                    <div className='flex flex-col items-end gap-1 flex-shrink-0 ml-3'>
+                      {fournieDepuisDossier ? (
+                        <span className='text-xs text-green-600 font-medium'>
+                          Fournie
                         </span>
-                        <input
-                          type='file'
-                          accept={accept}
-                          className='hidden'
-                          disabled={isUploading}
-                          onChange={e => handleUploadPiece(piece, e.target.files[0])}
-                        />
-                      </label>
+                      ) : (
+                        <label className='cursor-pointer'>
+                          <span className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${
+                            isUploading ? 'bg-gray-200 text-gray-500' :
+                            fournie     ? 'bg-green-100 text-green-700 hover:bg-green-200' :
+                                          'bg-blue-900 text-white hover:bg-blue-800'
+                          }`}>
+                            {isUploading ? 'Envoi...' : fournie ? 'Modifier' : 'Déposer'}
+                          </span>
+                          <input
+                            type='file'
+                            accept={accept}
+                            className='hidden'
+                            disabled={isUploading}
+                            onChange={e => handleUploadPiece(piece, e.target.files[0])}
+                          />
+                        </label>
+                      )}
                       <span className='text-xs text-gray-400'>Max 5 MB</span>
                     </div>
                   </div>

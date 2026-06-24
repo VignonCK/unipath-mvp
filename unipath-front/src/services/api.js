@@ -161,7 +161,7 @@ export const inscriptionService = {
     const token = localStorage.getItem('token');
 
     const formData = new FormData();
-    formData.append('file', fichier);
+    formData.append('fichier', fichier); // ✅ corrigé: 'file' → 'fichier'
 
     const response = await fetch(`${BASE_URL}/inscriptions/${inscriptionId}/dossier-concours/quittance`, {
       method: 'POST',
@@ -176,7 +176,7 @@ export const inscriptionService = {
   uploadPieceExtra: async (inscriptionId, typePiece, fichier) => {
     const token = localStorage.getItem('token');
     const formData = new FormData();
-    formData.append('file', fichier);
+    formData.append('fichier', fichier); // ✅ corrigé: 'file' → 'fichier'
     formData.append('typePiece', typePiece);
     const response = await fetch(`${BASE_URL}/inscriptions/${inscriptionId}/dossier-concours/pieces-extras`, {
       method: 'POST',
@@ -198,7 +198,7 @@ export const dossierService = {
     const token = localStorage.getItem('token');
 
     const formData = new FormData();
-    formData.append('file', fichier);
+    formData.append('fichier', fichier); // ✅ corrigé: 'file' → 'fichier'
     formData.append('typePiece', typePiece);
 
     const response = await fetch(`${BASE_URL}/dossier/candidats/${candidatId}/dossier-personnel/pieces`, {

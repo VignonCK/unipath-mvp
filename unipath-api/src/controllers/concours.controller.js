@@ -82,14 +82,62 @@ exports.getConcoursById = async (req, res) => {
 
     // Récupérer le dossier du candidat si authentifié
     let dossierCandidat = null;
+    let piecesEnrichies = null;
+    let dossierPersonnelCompletude = null;
+
     if (userId) {
       dossierCandidat = await prisma.dossier.findUnique({
         where: { candidatId: userId },
       });
+
+      // Enrichir les pièces requises avec l'état du dossier personnel
+      if (concours.piecesRequises) {
+        const piecesData = Array.isArray(concours.piecesRequises)
+          ? concours.piecesRequises
+          : (concours.piecesRequises.pieces || []);
+
+        piecesEnrichies = piecesData.map(piece => {
+          const pieceObj = typeof piece === 'object' ? piece : { id: piece, nom: piece };
+          const sourceDossier = pieceObj.sourceDossier;
+          const fournieDepuisDossier = sourceDossier && dossierCandidat?.[sourceDossier] != null;
+
+          return {
+            ...pieceObj,
+            fournieDepuisDossier: !!fournieDepuisDossier,
+            urlDocument: fournieDepuisDossier ? dossierCandidat[sourceDossier] : null
+          };
+        });
+      }
+
+      // Complétude du dossier personnel (4 pièces de base)
+      dossierPersonnelCompletude = {
+        acteNaissance: !!dossierCandidat?.acteNaissance,
+        carteIdentite: !!dossierCandidat?.carteIdentite,
+        photo: !!dossierCandidat?.photo,
+        releve: !!dossierCandidat?.releve,
+      };
     }
 
-    res.json({ ...concours, dossierCandidat });
+    const response = {
+      ...concours,
+      dossierCandidat
+    };
+
+    // Ajouter les pièces enrichies si le candidat est authentifié
+    if (piecesEnrichies) {
+      response.piecesRequises = {
+        ...concours.piecesRequises,
+        pieces: piecesEnrichies
+      };
+    }
+
+    if (dossierPersonnelCompletude) {
+      response.dossierPersonnelCompletude = dossierPersonnelCompletude;
+    }
+
+    res.json(response);
   } catch (error) {
+    console.error('Erreur getConcoursById:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
