@@ -2,6 +2,186 @@
 require(__DIR__ . '/fpdf.php');
 require(__DIR__ . '/pdf-common.php');
 
+/**
+ * Conversion UTF-8 → ISO-8859-1 pour FPDF standard (accents français).
+ */
+function ficheText($text) {
+    if ($text === null || $text === '') {
+        return '';
+    }
+    $converted = @iconv('UTF-8', 'ISO-8859-1//TRANSLIT//IGNORE', (string) $text);
+    return $converted !== false ? $converted : (string) $text;
+}
+
+function ensureSpacePreinscription($pdf, $minYNeeded, $leftMargin, $rightMargin, $contentWidth) {
+    if ($pdf->GetY() + $minYNeeded > 270) {
+        $pdf->AddPage();
+        renderFicheOfficialHeader(
+            $pdf,
+            $leftMargin,
+            $rightMargin,
+            $contentWidth,
+            'Fiche de pré-inscription',
+            'Plateforme nationale UniPath'
+        );
+    }
+}
+
+/**
+ * Affiche la zone photo à partir du base64 fourni par Node.js.
+ */
+function renderFichePhotoZoneFromBase64($pdf, $photoBase64, $photoMime, $photoX, $photoY, $photoW, $photoH) {
+    $pdf->Rect($photoX, $photoY, $photoW, $photoH);
+
+    if (empty($photoBase64)) {
+        $pdf->SetXY($photoX, $photoY + ($photoH / 2) - 3);
+        $pdf->SetFont('Helvetica', 'I', 8);
+        $pdf->SetTextColor(150, 150, 150);
+        $pdf->Cell($photoW, 6, ficheText('Photo'), 0, 0, 'C');
+        $pdf->SetTextColor(0, 0, 0);
+        return;
+    }
+
+    $imageData = base64_decode($photoBase64, true);
+    if ($imageData === false || strlen($imageData) === 0) {
+        $pdf->SetXY($photoX, $photoY + ($photoH / 2) - 3);
+        $pdf->SetFont('Helvetica', 'I', 8);
+        $pdf->SetTextColor(150, 150, 150);
+        $pdf->Cell($photoW, 6, ficheText('Photo'), 0, 0, 'C');
+        $pdf->SetTextColor(0, 0, 0);
+        return;
+    }
+
+    $mime = $photoMime ?? 'image/jpeg';
+    $extension = 'jpg';
+    if ($mime === 'image/png') {
+        $extension = 'png';
+    } elseif ($mime === 'image/webp') {
+        $extension = 'webp';
+    }
+
+    $tempPhoto = tempnam(sys_get_temp_dir(), 'unipath_') . '.' . $extension;
+    file_put_contents($tempPhoto, $imageData);
+
+    if ($mime === 'image/webp' && function_exists('imagecreatefromwebp')) {
+        $webpImage = @imagecreatefromwebp($tempPhoto);
+        if ($webpImage !== false) {
+            $jpgPath = tempnam(sys_get_temp_dir(), 'unipath_') . '.jpg';
+            imagejpeg($webpImage, $jpgPath, 90);
+            imagedestroy($webpImage);
+            unlink($tempPhoto);
+            $tempPhoto = $jpgPath;
+        }
+    }
+
+    try {
+        $pdf->Image($tempPhoto, $photoX + 1, $photoY + 1, $photoW - 2, $photoH - 2);
+    } catch (Exception $e) {
+        $pdf->SetXY($photoX, $photoY + ($photoH / 2) - 3);
+        $pdf->SetFont('Helvetica', 'I', 8);
+        $pdf->SetTextColor(150, 150, 150);
+        $pdf->Cell($photoW, 6, ficheText('Photo'), 0, 0, 'C');
+        $pdf->SetTextColor(0, 0, 0);
+    }
+
+    if (file_exists($tempPhoto)) {
+        unlink($tempPhoto);
+    }
+}
+
+function formatStatutFiche($statut) {
+    $statutLabels = [
+        'EN_ATTENTE' => "En attente d'examen",
+        'VALIDE_PAR_COMMISSION' => 'Validé par la commission',
+        'REJETE_PAR_COMMISSION' => 'Rejeté par la commission',
+        'SOUS_RESERVE_PAR_COMMISSION' => 'Validé sous réserve',
+        'VALIDE' => 'Dossier validé',
+        'REJETE' => 'Dossier rejeté',
+        'SOUS_RESERVE' => 'Validé sous réserve',
+    ];
+    $key = strtoupper(trim((string) $statut));
+    return $statutLabels[$key] ?? $statut;
+}
+
+function renderFicheOfficialHeader($pdf, $leftMargin, $rightMargin, $contentWidth, $documentTitle, $subtitle = null) {
+    $pageWidth = 210;
+    $drapeau = __DIR__ . '/../src/assets/drapeau_du_benin.png';
+    $logo = __DIR__ . '/../src/assets/logo_mesrs.png';
+
+    if (file_exists($drapeau)) {
+        $pdf->Image($drapeau, $leftMargin, 15, 30, 22);
+    }
+    if (file_exists($logo)) {
+        $pdf->Image($logo, $pageWidth - $rightMargin - 30, 15, 30, 22);
+    }
+
+    $pdf->SetY(20);
+    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetTextColor(0, 0, 0);
+    $pdf->Cell(0, 5, ficheText('RÉPUBLIQUE DU BÉNIN'), 0, 1, 'C');
+    $pdf->SetFont('Helvetica', '', 11);
+    $pdf->Cell(0, 4, ficheText("Ministère de l'Enseignement Supérieur"), 0, 1, 'C');
+    $pdf->Cell(0, 4, ficheText('et de la Recherche Scientifique'), 0, 1, 'C');
+    $pdf->SetFont('Helvetica', 'B', 11);
+    $pdf->Cell(0, 5, ficheText("Université d'Abomey-Calavi"), 0, 1, 'C');
+    $pdf->Ln(5);
+
+    $pdf->SetDrawColor(0, 0, 0);
+    $pdf->SetLineWidth(0.5);
+    $pdf->Rect($leftMargin + 30, $pdf->GetY(), $contentWidth - 60, 12);
+    $pdf->SetFont('Helvetica', 'B', 14);
+    $pdf->Cell(0, 12, strtoupper(ficheText($documentTitle)), 0, 1, 'C');
+    $pdf->Ln(3);
+
+    if ($subtitle) {
+        $pdf->SetFont('Helvetica', '', 11);
+        $pdf->Cell(0, 6, ficheText($subtitle), 0, 1, 'C');
+        $pdf->Ln(3);
+    }
+}
+
+function renderFicheSectionHeader($pdf, $leftMargin, $contentWidth, $title, $theme = 'blue') {
+    if ($theme === 'red') {
+        $fill = [253, 243, 243];
+        $draw = [233, 198, 198];
+        $text = [128, 30, 30];
+    } elseif ($theme === 'green') {
+        $fill = [242, 251, 245];
+        $draw = [190, 222, 198];
+        $text = [21, 103, 58];
+    } else {
+        $fill = [245, 248, 255];
+        $draw = [196, 210, 237];
+        $text = [20, 52, 116];
+    }
+
+    $pdf->SetFillColor($fill[0], $fill[1], $fill[2]);
+    $pdf->SetDrawColor($draw[0], $draw[1], $draw[2]);
+    $pdf->Rect($leftMargin, $pdf->GetY(), $contentWidth, 8, 'FD');
+    $pdf->SetFont('Helvetica', 'B', 11);
+    $pdf->SetTextColor($text[0], $text[1], $text[2]);
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell($contentWidth - 4, 8, strtoupper(ficheText($title)), 0, 1, 'L');
+    $pdf->SetTextColor(0, 0, 0);
+}
+
+function renderFicheSignatureBlock($pdf, $label = 'Le Service des Inscriptions') {
+    $pdf->Ln(4);
+    $pdf->SetFont('Helvetica', '', 11);
+    $pdf->Cell(0, 5, ficheText('Fait à Abomey-Calavi, le ') . date('d/m/Y'), 0, 1, 'R');
+    $pdf->SetFont('Helvetica', 'B', 11);
+    $pdf->Cell(0, 5, ficheText($label), 0, 1, 'R');
+}
+
+function renderFicheDocumentFooter($pdf) {
+    $text = ficheText('Document généré automatiquement par UniPath - ') . date('d/m/Y H:i');
+    $pdf->SetY(-20);
+    $pdf->SetFont('Helvetica', '', 9);
+    $pdf->SetTextColor(128, 128, 128);
+    $pdf->Cell(0, 4, $text, 0, 1, 'C');
+    $pdf->SetTextColor(0, 0, 0);
+}
+
 // ── VALIDATION DES ARGUMENTS ──────────────────────────────────
 if ($argc < 3) {
     die("Erreur: Usage - php fiche-preinscription.php <input_file> <output_file>\n");
@@ -10,12 +190,10 @@ if ($argc < 3) {
 $inputFile = $argv[1];
 $outputFile = $argv[2];
 
-// ── VALIDATION DU FICHIER D'ENTRÉE ───────────────────────────
 if (!file_exists($inputFile)) {
     die("Erreur: Le fichier d'entrée '$inputFile' n'existe pas.\n");
 }
 
-// ── LECTURE ET VALIDATION DU JSON ─────────────────────────────
 $input = file_get_contents($inputFile);
 if ($input === false) {
     die("Erreur: Impossible de lire le fichier '$inputFile'.\n");
@@ -26,7 +204,6 @@ if ($data === null) {
     die("Erreur: Le fichier JSON n'est pas valide.\n");
 }
 
-// ── VALIDATION DES CLÉS REQUISES ─────────────────────────────
 if (!isset($data['candidat']) || !isset($data['concours'])) {
     die("Erreur: Les clés 'candidat' et 'concours' sont obligatoires.\n");
 }
@@ -35,193 +212,187 @@ $candidat = $data['candidat'];
 $concours = $data['concours'];
 $numeroDossier = $data['numeroDossier'] ?? 'N/A';
 $inscription = $data['inscription'] ?? [];
+$statutRaw = $data['statut'] ?? ($inscription['dossierInscription']['statut'] ?? 'EN_ATTENTE');
+$serieBac = $data['serie'] ?? ($candidat['serie'] ?? null);
+$photoBase64 = $data['photoBase64'] ?? null;
+$photoMime = $data['photoMime'] ?? null;
 
-function ensureSpacePreinscription($pdf, $minYNeeded, $leftMargin, $rightMargin, $contentWidth) {
-    if ($pdf->GetY() + $minYNeeded > 270) {
-        $pdf->AddPage();
-        renderOfficialHeader(
-            $pdf,
-            $leftMargin,
-            $rightMargin,
-            $contentWidth,
-            'Fiche de pre-inscription',
-            'Plateforme nationale UniPath'
-        );
-    }
-}
-
-// ── CRÉATION DU PDF ───────────────────────────────────────────
 try {
     $pdf = new FPDF('P', 'mm', 'A4');
     $pdf->SetMargins(20, 15, 20);
     $pdf->SetAutoPageBreak(true, 18);
     $pdf->AddPage();
-    
-    // Marges
+
     $leftMargin = 20;
     $rightMargin = 20;
     $pageWidth = 210;
     $contentWidth = $pageWidth - $leftMargin - $rightMargin;
+    $photoW = 28;
+    $photoH = 34;
+    $textWidth = $contentWidth - $photoW - 6;
 
-    renderOfficialHeader(
+    renderFicheOfficialHeader(
         $pdf,
         $leftMargin,
         $rightMargin,
         $contentWidth,
-        'Fiche de pre-inscription',
+        'Fiche de pré-inscription',
         'Plateforme nationale UniPath'
     );
 
-    $numeroDossierFinal = strtoupper(cleanText($numeroDossier ?: ($inscription['numeroInscription'] ?? 'N/A')));
+    $numeroDossierFinal = strtoupper(ficheText($numeroDossier ?: ($inscription['numeroInscription'] ?? 'N/A')));
     $pdf->SetFillColor(245, 247, 251);
     $pdf->SetDrawColor(200, 210, 220);
     $pdf->Rect($leftMargin, $pdf->GetY(), $contentWidth, 9, 'FD');
     $pdf->SetFont('Helvetica', 'B', 12);
     $pdf->SetX($leftMargin + 2);
-    $pdf->Cell($contentWidth - 4, 9, cleanText('Numero de dossier : ') . $numeroDossierFinal, 0, 1, 'L');
+    $pdf->Cell($contentWidth - 4, 9, ficheText('Numéro de dossier : ') . $numeroDossierFinal, 0, 1, 'L');
     $pdf->Ln(3);
 
-    renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Informations du candidat', 'blue');
-    $photoPath = resolveImagePath($candidat['photoPath'] ?? ($candidat['photo'] ?? ''));
-    $photoX = $leftMargin + $contentWidth - 35;
-    $photoY = $pdf->GetY() + 1;
+    renderFicheSectionHeader($pdf, $leftMargin, $contentWidth, 'Informations du candidat', 'blue');
 
-    $pdf->SetFont('Helvetica', '', 12);
-    $pdf->SetX($leftMargin + 2);
-    $pdf->Cell(42, 6, 'Nom et prenom :', 0, 0, 'L');
-    $pdf->SetFont('Helvetica', 'B', 12);
-    $pdf->Cell(95, 6, strtoupper(cleanText(($candidat['nom'] ?? '') . ' ' . ($candidat['prenom'] ?? ''))), 0, 1, 'L');
+    $sectionStartY = $pdf->GetY();
+    $photoX = $leftMargin + $contentWidth - $photoW;
+    $photoY = $sectionStartY + 1;
 
-    $pdf->SetFont('Helvetica', '', 12);
-    $pdf->SetX($leftMargin + 2);
-    $pdf->Cell(42, 6, 'Matricule :', 0, 0, 'L');
-    $pdf->SetFont('Helvetica', 'B', 12);
-    $pdf->Cell(95, 6, strtoupper(cleanText($candidat['matricule'] ?? 'EN ATTENTE')), 0, 1, 'L');
+    $pdf->SetFont('Helvetica', '', 11);
+    $pdf->SetXY($leftMargin + 2, $sectionStartY + 1);
+    $pdf->Cell(42, 6, ficheText('Nom et prénom :'), 0, 0, 'L');
+    $pdf->SetFont('Helvetica', 'B', 11);
+    $pdf->Cell($textWidth - 42, 6, strtoupper(ficheText(($candidat['nom'] ?? '') . ' ' . ($candidat['prenom'] ?? ''))), 0, 1, 'L');
 
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Helvetica', '', 11);
     $pdf->SetX($leftMargin + 2);
-    $pdf->Cell(42, 6, 'Date / lieu naiss. :', 0, 0, 'L');
+    $pdf->Cell(42, 6, ficheText('Matricule :'), 0, 0, 'L');
+    $pdf->SetFont('Helvetica', 'B', 11);
+    $pdf->Cell($textWidth - 42, 6, strtoupper(ficheText($candidat['matricule'] ?? 'EN ATTENTE')), 0, 1, 'L');
+
+    $pdf->SetFont('Helvetica', '', 11);
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(42, 6, ficheText('Date / lieu naiss. :'), 0, 0, 'L');
     $dateNaiss = !empty($candidat['dateNaiss']) ? date('d/m/Y', strtotime($candidat['dateNaiss'])) : 'N/A';
-    $lieuNaiss = cleanText($candidat['lieuNaiss'] ?? 'N/A');
-    $pdf->Cell(95, 6, $dateNaiss . ' / ' . $lieuNaiss, 0, 1, 'L');
+    $lieuNaiss = ficheText($candidat['lieuNaiss'] ?? 'N/A');
+    $pdf->Cell($textWidth - 42, 6, $dateNaiss . ' / ' . $lieuNaiss, 0, 1, 'L');
 
     $pdf->SetX($leftMargin + 2);
-    $pdf->Cell(42, 6, 'Email :', 0, 0, 'L');
-    $pdf->Cell(95, 6, cleanText($candidat['email'] ?? 'N/A'), 0, 1, 'L');
+    $pdf->Cell(42, 6, ficheText('Série BAC :'), 0, 0, 'L');
+    $pdf->Cell($textWidth - 42, 6, ficheText($serieBac ?: 'Non renseignée'), 0, 1, 'L');
 
     $pdf->SetX($leftMargin + 2);
-    $pdf->Cell(42, 6, 'Telephone :', 0, 0, 'L');
-    $pdf->Cell(95, 6, cleanText($candidat['telephone'] ?? 'Non renseigne'), 0, 1, 'L');
+    $pdf->Cell(42, 6, ficheText('Email :'), 0, 0, 'L');
+    $pdf->Cell($textWidth - 42, 6, ficheText($candidat['email'] ?? 'N/A'), 0, 1, 'L');
 
-    if ($photoPath) {
-        $pdf->Image($photoPath, $photoX, $photoY, 28, 34);
-    } else {
-        $pdf->SetXY($photoX, $photoY);
-        $pdf->Rect($photoX, $photoY, 28, 34);
-        $pdf->SetFont('Helvetica', '', 12);
-        $pdf->SetXY($photoX, $photoY + 14);
-        $pdf->Cell(28, 6, 'PHOTO', 0, 0, 'C');
-    }
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(42, 6, ficheText('Téléphone :'), 0, 0, 'L');
+    $pdf->Cell($textWidth - 42, 6, ficheText($candidat['telephone'] ?? 'Non renseigné'), 0, 1, 'L');
+
+    $textEndY = $pdf->GetY();
+    renderFichePhotoZoneFromBase64(
+        $pdf,
+        $photoBase64,
+        $photoMime,
+        $photoX,
+        $photoY,
+        $photoW,
+        $photoH
+    );
+
+    $pdf->SetY(max($textEndY, $photoY + $photoH) + 4);
+
+    ensureSpacePreinscription($pdf, 45, $leftMargin, $rightMargin, $contentWidth);
+    renderFicheSectionHeader($pdf, $leftMargin, $contentWidth, 'Informations du concours', 'green');
+
+    $dateDebutSource = $concours['dateDebutDepot'] ?? $concours['dateDebut'] ?? null;
+    $dateFinSource = $concours['dateFinDepot'] ?? $concours['dateFin'] ?? null;
+    $dateDebut = !empty($dateDebutSource) ? date('d/m/Y', strtotime($dateDebutSource)) : 'N/A';
+    $dateFin = !empty($dateFinSource) ? date('d/m/Y', strtotime($dateFinSource)) : 'N/A';
+    $dateCompositionSource = $concours['dateDebutComposition'] ?? $concours['dateComposition'] ?? null;
+
+    $pdf->Ln(1);
+    $pdf->SetFont('Helvetica', 'B', 11);
+    $pdf->SetX($leftMargin + 2);
+    $libelleConcours = ficheText($concours['libelle'] ?? 'Concours non renseigné');
+    $pdf->MultiCell($contentWidth - 4, 6, $libelleConcours, 0, 'L');
+    $pdf->Ln(3);
+
+    $pdf->SetFont('Helvetica', '', 11);
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(58, 7, ficheText("Période d'inscription :"), 0, 0, 'L');
+    $pdf->MultiCell($contentWidth - 62, 7, ficheText('Du ') . $dateDebut . ficheText(' au ') . $dateFin, 0, 'L');
+    $pdf->Ln(1);
+
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(58, 7, ficheText('Lieu de composition :'), 0, 0, 'L');
+    $lieu = ficheText($concours['lieuComposition'] ?? $concours['etablissement'] ?? 'À communiquer');
+    $pdf->MultiCell($contentWidth - 62, 7, $lieu, 0, 'L');
+    $pdf->Ln(1);
+
+    $pdf->SetX($leftMargin + 2);
+    $pdf->Cell(58, 7, ficheText('Date de composition :'), 0, 0, 'L');
+    $dateComposition = !empty($dateCompositionSource)
+        ? date('d/m/Y', strtotime($dateCompositionSource))
+        : ficheText('À définir');
+    $pdf->MultiCell($contentWidth - 62, 7, $dateComposition, 0, 'L');
 
     $pdf->Ln(3);
     ensureSpacePreinscription($pdf, 40, $leftMargin, $rightMargin, $contentWidth);
-    renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Informations du concours', 'green');
-    $dateDebut = !empty($concours['dateDebut']) ? date('d/m/Y', strtotime($concours['dateDebut'])) : 'N/A';
-    $dateFin = !empty($concours['dateFin']) ? date('d/m/Y', strtotime($concours['dateFin'])) : 'N/A';
+    renderFicheSectionHeader($pdf, $leftMargin, $contentWidth, 'État du dossier', 'blue');
 
-    $pdf->SetFont('Helvetica', 'B', 12);
+    $statutAffiche = formatStatutFiche($statutRaw);
+    $pdf->SetFont('Helvetica', 'B', 11);
     $pdf->SetX($leftMargin + 2);
-    $pdf->MultiCell($contentWidth - 4, 6, strtoupper(cleanText($concours['libelle'] ?? 'Concours non renseigne')), 0, 'L');
-    $pdf->SetFont('Helvetica', '', 12);
-    $pdf->SetX($leftMargin + 2);
-    $pdf->Cell(55, 6, 'Periode d inscription :', 0, 0, 'L');
-    $pdf->Cell(0, 6, cleanText('Du ') . $dateDebut . cleanText(' au ') . $dateFin, 0, 1, 'L');
-    $pdf->SetX($leftMargin + 2);
-    $pdf->Cell(55, 6, 'Lieu de composition :', 0, 0, 'L');
-    $pdf->Cell(0, 6, cleanText($concours['lieuComposition'] ?? 'A communiquer'), 0, 1, 'L');
-    $pdf->SetX($leftMargin + 2);
-    $pdf->Cell(55, 6, 'Date de composition :', 0, 0, 'L');
-    $pdf->Cell(0, 6, !empty($concours['dateComposition']) ? date('d/m/Y', strtotime($concours['dateComposition'])) : 'A definir', 0, 1, 'L');
-
+    $pdf->Cell(52, 7, ficheText('Statut actuel :'), 0, 0, 'L');
+    $pdf->SetFont('Helvetica', '', 11);
+    $pdf->Cell(0, 7, ficheText($statutAffiche), 0, 1, 'L');
     $pdf->Ln(2);
-    ensureSpacePreinscription($pdf, 35, $leftMargin, $rightMargin, $contentWidth);
-    renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Etat du dossier', 'blue');
-    $statut = cleanText($inscription['dossierInscription']['statut'] ?? 'EN_ATTENTE');
-    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetFont('Helvetica', 'I', 9);
+    $pdf->SetTextColor(100, 100, 100);
     $pdf->SetX($leftMargin + 2);
-    $pdf->Cell(52, 7, 'Statut actuel :', 0, 0, 'L');
-    $pdf->Cell(0, 7, strtoupper($statut), 0, 1, 'L');
-
-    $piecesChecklist = [
-        'Acte de naissance',
-        'Carte d identite',
-        'Photo d identite',
-        'Releve de notes',
-        'Quittance / preuve de paiement',
-    ];
-    $pdf->SetFont('Helvetica', '', 12);
-    foreach ($piecesChecklist as $piece) {
-        if ($pdf->GetY() + 7 > 270) {
-            $pdf->AddPage();
-            renderOfficialHeader(
-                $pdf,
-                $leftMargin,
-                $rightMargin,
-                $contentWidth,
-                'Fiche de pre-inscription',
-                'Plateforme nationale UniPath'
-            );
-            renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Etat du dossier', 'blue');
-            $pdf->SetFont('Helvetica', '', 12);
-        }
-        $pdf->SetX($leftMargin + 4);
-        $pdf->Cell(4, 5, chr(149), 0, 0, 'C');
-        $pdf->Cell($contentWidth - 8, 5, cleanText($piece), 0, 1, 'L');
-    }
+    $pdf->MultiCell($contentWidth - 4, 5, ficheText(
+        "Votre dossier est en cours d'examen par la commission. " .
+        'Vous serez notifié par email de la décision. ' .
+        'En cas de validation, une convocation officielle vous sera transmise.'
+    ), 0, 'L');
+    $pdf->SetTextColor(0, 0, 0);
 
     $pdf->Ln(2);
     ensureSpacePreinscription($pdf, 32, $leftMargin, $rightMargin, $contentWidth);
-    renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Mentions importantes', 'red');
+    renderFicheSectionHeader($pdf, $leftMargin, $contentWidth, 'Mentions importantes', 'red');
     $mentions = [
-        'Completer votre dossier dans les delais fixes par l administration.',
-        'Verifier regulierement votre espace UniPath pour suivre la decision de la commission.',
-        'En cas de validation, votre convocation officielle sera generee automatiquement.',
+        "Compléter votre dossier dans les délais fixés par l'administration.",
+        'Vérifier régulièrement votre espace UniPath pour suivre la décision de la commission.',
+        'En cas de validation, votre convocation officielle sera générée automatiquement.',
     ];
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Helvetica', '', 11);
     foreach ($mentions as $mention) {
         if ($pdf->GetY() + 8 > 270) {
             $pdf->AddPage();
-            renderOfficialHeader(
+            renderFicheOfficialHeader(
                 $pdf,
                 $leftMargin,
                 $rightMargin,
                 $contentWidth,
-                'Fiche de pre-inscription',
+                'Fiche de pré-inscription',
                 'Plateforme nationale UniPath'
             );
-            renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Mentions importantes', 'red');
-            $pdf->SetFont('Helvetica', '', 12);
+            renderFicheSectionHeader($pdf, $leftMargin, $contentWidth, 'Mentions importantes', 'red');
+            $pdf->SetFont('Helvetica', '', 11);
         }
         $pdf->SetX($leftMargin + 2);
-        $pdf->MultiCell($contentWidth - 4, 5, cleanText('- ') . cleanText($mention), 0, 'L');
+        $pdf->MultiCell($contentWidth - 4, 5, ficheText('- ') . ficheText($mention), 0, 'L');
     }
 
     ensureSpacePreinscription($pdf, 20, $leftMargin, $rightMargin, $contentWidth);
-    renderSignatureBlock($pdf, 'Le Service des Inscriptions');
-    
-    // ── PIED DE PAGE ──────────────────────────────────────────
-    renderDocumentFooter($pdf);
+    renderFicheSignatureBlock($pdf, 'Le Service des Inscriptions');
+    renderFicheDocumentFooter($pdf);
 
-    // ── SAUVEGARDE DU PDF ─────────────────────────────────────
     $pdf->Output('F', $outputFile);
-    
+
     if (!file_exists($outputFile)) {
         die("Erreur: Le PDF n'a pas été créé correctement.\n");
     }
-    
-    echo "Succès: PDF créé avec succès: $outputFile\n";
 
+    echo "Succès: PDF créé avec succès: $outputFile\n";
 } catch (Exception $e) {
-    die("Erreur lors de la création du PDF: " . $e->getMessage() . "\n");
+    die('Erreur lors de la création du PDF: ' . $e->getMessage() . "\n");
 }
-?>

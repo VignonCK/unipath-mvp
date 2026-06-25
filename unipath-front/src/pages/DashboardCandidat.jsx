@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   candidatService, concoursService,
-  inscriptionService, dossierService
+  dossierService
 } from '../services/api';
 import { handleSessionError } from '../utils/auth';
 import DossierCompletion from '../components/DossierCompletion';
@@ -141,20 +141,20 @@ export default function DashboardCandidat() {
     }
   }, [candidat?.id]);
 
-  const handleInscription = async (concoursId) => {
+  const handleDeposerDossier = (concoursId) => {
     if (profilIncomplet(candidat)) {
-      showMessage('Veuillez compléter votre profil avant de vous inscrire.', 'warning');
+      showMessage('Veuillez compléter votre profil avant de déposer un dossier.', 'warning');
       setEditOpen(true);
       return;
     }
 
     const pieces = Object.keys(PIECES_LABELS);
-    const piecesManquantes = pieces.filter(piece => !candidat?.dossier?.[piece]);
-    
+    const piecesManquantes = pieces.filter((piece) => !candidat?.dossier?.[piece]);
+
     if (piecesManquantes.length > 0) {
-      const piecesManquantesLabels = piecesManquantes.map(p => PIECES_LABELS[p]).join(', ');
+      const piecesManquantesLabels = piecesManquantes.map((p) => PIECES_LABELS[p]).join(', ');
       showMessage(
-        `Votre dossier est incomplet. Veuillez déposer les pièces suivantes : ${piecesManquantesLabels}`,
+        `Votre dossier personnel est incomplet. Déposez d'abord : ${piecesManquantesLabels}`,
         'warning'
       );
       setTimeout(() => {
@@ -162,25 +162,8 @@ export default function DashboardCandidat() {
       }, 100);
       return;
     }
-    
-    try {
-      await inscriptionService.creer(concoursId);
-      showMessage('Inscription réussie ! Une fiche de pré-inscription vous a été envoyée par email.', 'success');
-      const updated = await candidatService.getProfil();
-      setCandidat(updated);
-    } catch (err) {
-      if (err.message.includes('Dossier incomplet') || err.message.includes('pièces manquantes')) {
-        showMessage(
-          'Votre dossier est incomplet. Veuillez déposer toutes les pièces justificatives requises avant de vous inscrire.',
-          'warning'
-        );
-        setTimeout(() => {
-          document.querySelector('#pieces-justificatives')?.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
-      } else {
-        showMessage(err.message, 'error');
-      }
-    }
+
+    navigate(`/concours/${concoursId}`);
   };
 
   const handleUpload = async (typePiece, e) => {
@@ -388,7 +371,9 @@ export default function DashboardCandidat() {
           ) : (
             <BentoGrid columns='auto-fit'>
               {concours.map((c) => {
-                const dejaInscrit = candidat?.inscriptions?.some(i => i.concoursId === c.id);
+                const inscriptionConcours = candidat?.inscriptions?.find((i) => i.concoursId === c.id);
+                const dejaInscrit = !!inscriptionConcours?.quittanceUrl;
+                const preInscription = inscriptionConcours && !inscriptionConcours.quittanceUrl;
                 const peutInscrire = !incomplet && !dossierIncomplet;
                 return (
                   <div key={c.id} className='glass-card-subtle p-4 hover:shadow-lg transition flex flex-col gap-3'>
@@ -402,18 +387,25 @@ export default function DashboardCandidat() {
                       <GlassBadge variant='success' className='text-center w-full justify-center'>
                         Inscrit
                       </GlassBadge>
+                    ) : preInscription ? (
+                      <button
+                        onClick={() => navigate(`/concours/${c.id}`)}
+                        className='text-xs px-3 py-1.5 rounded-lg transition font-medium bg-amber-100 text-amber-800 hover:bg-amber-200 w-full'
+                      >
+                        Finaliser le dossier
+                      </button>
                     ) : (
                       <button
-                        onClick={() => handleInscription(c.id)}
+                        onClick={() => handleDeposerDossier(c.id)}
                         disabled={!peutInscrire}
                         className={`text-xs px-3 py-1.5 rounded-lg transition font-medium ${
                           peutInscrire
                             ? 'bg-orange-500 text-white hover:bg-orange-600'
                             : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                         }`}
-                        title={!peutInscrire ? 'Complétez votre profil et déposez toutes les pièces justificatives' : ''}
+                        title={!peutInscrire ? 'Complétez votre profil et votre dossier personnel' : ''}
                       >
-                        {peutInscrire ? "S'inscrire" : 'Dossier incomplet'}
+                        {peutInscrire ? 'Déposer mon dossier' : 'Dossier incomplet'}
                       </button>
                     )}
                   </div>

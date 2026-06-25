@@ -44,6 +44,10 @@ export default function Login() {
   useEffect(() => {
     if (!isAuthenticated()) return;
     const user = getUser();
+    if (user?.mustChangePassword && user?.role === 'ADMIN_ETABLISSEMENT') {
+      navigate('/admin-etablissement/changer-mot-de-passe', { replace: true });
+      return;
+    }
     const route = getDefaultRoute(user?.role, user?.sousRole);
     if (route && route !== '/login') {
       navigate(route, { replace: true });
@@ -60,7 +64,11 @@ export default function Login() {
       if (!data?.token || !data?.user?.role) {
         throw new Error('Réponse de connexion incomplète. Réessayez.');
       }
-      const { role, sousRole } = data.user;
+      const { role, sousRole, mustChangePassword } = data.user;
+      if (mustChangePassword && role === 'ADMIN_ETABLISSEMENT') {
+        navigate('/admin-etablissement/changer-mot-de-passe');
+        return;
+      }
       if (role === 'COMMISSION') {
         if (sousRole === 'EXAMINATEUR') navigate('/examinateur/dossiers');
         else if (sousRole === 'CONTROLEUR') navigate('/controleur-commission/tableau-de-bord');
@@ -68,7 +76,6 @@ export default function Login() {
       } else if (role === 'ETUDIANT' || role === 'CANDIDAT') navigate('/dashboard');
       else if (role === 'DGES') navigate('/dashboard-dges');
       else if (role === 'CONTROLEUR') navigate('/controleur-commission/tableau-de-bord');
-      else if (role === 'ETABLISSEMENT') navigate('/etablissement');
       else if (role === 'ADMIN_ETABLISSEMENT') navigate('/admin-etablissement/campagnes');
       else navigate('/dashboard');
     } catch (err) {

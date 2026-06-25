@@ -60,7 +60,7 @@ export const authService = {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
-    
+
     if (data.token && data.user) {
       saveAuth(data.token, data.user);
     }
@@ -68,16 +68,52 @@ export const authService = {
     return data;
   },
 
+  changeInitialPassword: async (currentPassword, newPassword) => {
+    const data = await request('/auth/change-initial-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+
+    if (data.token && data.user) {
+      saveAuth(data.token, data.user);
+    }
+
+    return data;
+  },
+
+  changePassword: async (currentPassword, newPassword) => {
+    const data = await request('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+
+    if (data.token && data.user) {
+      saveAuth(data.token, data.user);
+    }
+
+    return data;
+  },
+
+  finalizePasswordReset: async (accessToken) => {
+    const response = await fetch(`${BASE_URL}/auth/finalize-password-reset`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'Erreur lors de la finalisation');
+    }
+    return data;
+  },
+
   register: (userData) =>
     request('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
-    }),
-
-  registerEtablissement: (data) =>
-    request('/auth/register-etablissement', {
-      method: 'POST',
-      body: JSON.stringify(data),
     }),
 
   logout: () => {
@@ -164,6 +200,15 @@ export const inscriptionService = {
 
   getMesInscriptions: () => request('/inscriptions/mes-inscriptions'),
 
+  renvoyerFiche: (inscriptionId) =>
+    request(`/inscriptions/${inscriptionId}/renvoyer-fiche`, { method: 'POST' }),
+
+  telechargerFiche: (inscriptionId, numeroInscription) =>
+    telechargerFichePreInscriptionBlob(
+      inscriptionId,
+      `fiche-preinscription-${numeroInscription || inscriptionId}.pdf`
+    ),
+
   // ✅ NOUVEAU - Récupérer le dossier complet d'une inscription (base + spécifique)
   getDossierComplet: (inscriptionId) => request(`/completion/inscriptions/${inscriptionId}/dossier-complet`),
 
@@ -226,7 +271,22 @@ export const dossierService = {
 
   // ⚠️ DEPRECATED - Utiliser getDossierPersonnel à la place
   getDossier: () => request('/dossier'),
+
+  getSignedUrl: (path) =>
+    request(`/dossier/signed-url?path=${encodeURIComponent(path)}`),
 };
+
+export async function ouvrirPiece(pieceUrl) {
+  if (!pieceUrl) return;
+
+  try {
+    const { signedUrl } = await dossierService.getSignedUrl(pieceUrl);
+    window.open(signedUrl, '_blank');
+  } catch (error) {
+    console.error('Erreur ouverture pièce:', error);
+    alert('Impossible d\'ouvrir ce document. Veuillez réessayer.');
+  }
+}
 
 // ── Commission ───────────────────────────────────────────────────
 export const commissionService = {
@@ -367,6 +427,21 @@ export const filiereService = {
   getByEtablissement: (etablissementId) => request(`/filieres?etablissementId=${etablissementId}`),
 };
 
+export const filiereAdminService = {
+  creer: (data) =>
+    request('/etablissement/filieres', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  modifier: (id, data) =>
+    request(`/etablissement/filieres/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  supprimer: (id) =>
+    request(`/etablissement/filieres/${id}`, { method: 'DELETE' }),
+};
+
 export const inscriptionAcadService = {
   creer: (data) =>
     request('/inscriptions-academiques', {
@@ -464,6 +539,43 @@ export const parcoursService = {
   getMonParcours: () => request('/parcours/mon-parcours'),
   getMonReleve: () => request('/parcours/mon-releve'),
   telechargerMonReleve: () => telechargerPDF(`${BASE_URL}/parcours/mon-releve/pdf`, 'releve_academique.pdf'),
+};
+
+// ── Fiche pré-inscription (blob binaire, pas de parsing JSON) ───────
+const telechargerFichePreInscriptionBlob = async (inscriptionId, filename) => {
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${BASE_URL}/inscriptions/${inscriptionId}/fiche`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (redirectToLoginOn401(response.status)) {
+    return new Promise(() => {});
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+
+  if (!response.ok) {
+    let message = 'Erreur lors du téléchargement de la fiche';
+    if (contentType.includes('application/json')) {
+      const err = await response.json();
+      message = err.error || message;
+    }
+    throw new Error(message);
+  }
+
+  if (!contentType.includes('application/pdf')) {
+    throw new Error('La réponse du serveur n\'est pas un PDF.');
+  }
+
+  const blob = await response.blob();
+  const objectUrl = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(objectUrl);
 };
 
 // ── Convocation PDF ───────────────────────────────────────────────

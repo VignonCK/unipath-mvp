@@ -4,6 +4,7 @@ const { supabaseAdmin } = require('../supabase');
 const emailService = require('../services/email.service');
 const logger = require('../config/logger');
 const { buildFrontendUrl } = require('../utils/url.helper');
+const { buildAdminEtablissementMetadata, TEMP_PASSWORD_VALIDITY_HOURS } = require('../utils/admin-password.helper');
 
 function genererMotDePasseTemporaire() {
   return crypto.randomBytes(9).toString('base64url').slice(0, 12);
@@ -59,10 +60,7 @@ exports.creerAdmin = async (req, res) => {
       email: emailNormalise,
       password: motDePasseTemporaire,
       email_confirm: true,
-      user_metadata: {
-        role: 'ADMIN_ETABLISSEMENT',
-        etablissementId,
-      },
+      user_metadata: buildAdminEtablissementMetadata(etablissementId),
     });
 
     if (authError) {
@@ -101,9 +99,10 @@ exports.creerAdmin = async (req, res) => {
           <p>Un compte administrateur a été créé pour l'établissement <strong>${etablissement.nom}</strong>.</p>
           <p><strong>Email :</strong> ${emailNormalise}</p>
           <p><strong>Mot de passe temporaire :</strong> ${motDePasseTemporaire}</p>
-          <p>Connectez-vous sur <a href="${loginUrl}">${loginUrl}</a> et changez votre mot de passe dès la première connexion.</p>
+          <p><strong>Validité :</strong> ${TEMP_PASSWORD_VALIDITY_HOURS} heures à compter de la réception de cet email.</p>
+          <p>Connectez-vous sur <a href="${loginUrl}">${loginUrl}</a>. Vous devrez <strong>immédiatement définir un mot de passe personnel</strong> (le temporaire ne sera plus utilisable ensuite).</p>
         `,
-        textBody: `Bonjour ${admin.prenom} ${admin.nom}, votre compte admin UniPath pour ${etablissement.nom} : email ${emailNormalise}, mot de passe temporaire ${motDePasseTemporaire}. Connexion : ${loginUrl}`,
+        textBody: `Bonjour ${admin.prenom} ${admin.nom}, votre compte admin UniPath pour ${etablissement.nom} : email ${emailNormalise}, mot de passe temporaire ${motDePasseTemporaire} (valable ${TEMP_PASSWORD_VALIDITY_HOURS}h). Connexion : ${loginUrl}. Vous devrez définir un mot de passe personnel à la première connexion.`,
       });
     } catch (emailErr) {
       logger.error('[AdminEtablissement] Email credentials non envoyé', {

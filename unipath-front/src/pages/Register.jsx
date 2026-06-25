@@ -261,7 +261,6 @@ function BtnSecondary({ children, onClick }) {
 function FormLeft({ isMobile }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
-  const [accountType, setAccountType] = useState("CANDIDAT");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({
@@ -278,23 +277,10 @@ function FormLeft({ isMobile }) {
     password: "", 
     confirmPassword: "",
   });
-  const [etabForm, setEtabForm] = useState({
-    nom: "",
-    type: "",
-    ville: "",
-    adresse: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-  });
 
   const set = (key) => (e) => {
     setForm((f) => ({ ...f, [key]: e.target.value }));
     setError(''); // Clear error when user types
-  };
-  const setEtab = (key) => (e) => {
-    setEtabForm((f) => ({ ...f, [key]: e.target.value }));
-    setError('');
   };
 
   const handleStep1 = () => {
@@ -383,44 +369,6 @@ function FormLeft({ isMobile }) {
     }
   };
 
-  const handleSubmitEtablissement = async () => {
-    if (!etabForm.nom || !etabForm.type || !etabForm.ville || !etabForm.email || !etabForm.password || !etabForm.confirmPassword) {
-      setError('Tous les champs obligatoires doivent etre renseignes');
-      return;
-    }
-    if (etabForm.password !== etabForm.confirmPassword) {
-      setError('Les mots de passe ne correspondent pas');
-      return;
-    }
-    if (etabForm.password.length < 6) {
-      setError('Le mot de passe doit contenir au moins 6 caracteres');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await authService.registerEtablissement({
-        nom: etabForm.nom,
-        type: etabForm.type,
-        ville: etabForm.ville,
-        adresse: etabForm.adresse || null,
-        email: etabForm.email,
-        password: etabForm.password,
-      });
-
-      navigate('/login', {
-        state: {
-          message: 'Compte etablissement cree avec succes. Vous pouvez maintenant vous connecter.',
-          email: etabForm.email,
-        },
-      });
-    } catch (err) {
-      setError(err.message || 'Erreur lors de la creation du compte etablissement');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div style={{ 
       ...S.left, 
@@ -429,58 +377,14 @@ function FormLeft({ isMobile }) {
       backdropFilter: "blur(10px)",
     }}>
       <Logo />
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        <button
-          type="button"
-          onClick={() => {
-            setAccountType("CANDIDAT");
-            setStep(1);
-            setError('');
-          }}
-          style={{
-            border: accountType === "CANDIDAT" ? "1px solid rgb(249, 115, 22)" : "1px solid #d1d5db",
-            background: accountType === "CANDIDAT" ? "rgb(249, 115, 22)" : "white",
-            color: accountType === "CANDIDAT" ? "white" : "#374151",
-            borderRadius: 999,
-            padding: "6px 12px",
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          Compte candidat
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setAccountType("ETABLISSEMENT");
-            setStep(1);
-            setError('');
-          }}
-          style={{
-            border: accountType === "ETABLISSEMENT" ? "1px solid rgb(249, 115, 22)" : "1px solid #d1d5db",
-            background: accountType === "ETABLISSEMENT" ? "rgb(249, 115, 22)" : "white",
-            color: accountType === "ETABLISSEMENT" ? "white" : "#374151",
-            borderRadius: 999,
-            padding: "6px 12px",
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          Compte etablissement
-        </button>
-      </div>
       <h1 style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 4 }}>
-        Creer un compte
+        Creer un compte candidat
       </h1>
       <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 18 }}>
-        {accountType === "CANDIDAT"
-          ? (step === 1 ? "Etape 1/2 - Informations personnelles" : "Etape 2/2 - Compte")
-          : "Creation du compte etablissement"}
+        {step === 1 ? "Etape 1/2 - Informations personnelles" : "Etape 2/2 - Compte"}
       </p>
       
-      {accountType === "CANDIDAT" && <ProgressBar step={step} />}
+      <ProgressBar step={step} />
 
       {error && (
         <div className='glass-card-subtle' style={{
@@ -499,7 +403,7 @@ function FormLeft({ isMobile }) {
         </div>
       )}
 
-      {accountType === "CANDIDAT" && step === 1 && (
+      {step === 1 && (
         <div>
           <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
             <Field label="Nom" required>
@@ -621,7 +525,7 @@ function FormLeft({ isMobile }) {
         </div>
       )}
 
-      {accountType === "CANDIDAT" && step === 2 && (
+      {step === 2 && (
         <div>
           <div style={{ marginBottom: 14 }}>
             <Field label="Email" required>
@@ -683,85 +587,6 @@ function FormLeft({ isMobile }) {
         </div>
       )}
 
-      {accountType === "ETABLISSEMENT" && (
-        <div>
-          <div style={{ marginBottom: 14 }}>
-            <Field label="Nom de l etablissement" required>
-              <Input
-                value={etabForm.nom}
-                onChange={setEtab("nom")}
-                placeholder="Institut Superieur Exemple"
-              />
-            </Field>
-          </div>
-
-          <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
-            <Field label="Type" required>
-              <Select value={etabForm.type} onChange={setEtab("type")}>
-                <option value="">Selectionner</option>
-                <option value="PUBLIC">Public</option>
-                <option value="PRIVE">Prive</option>
-              </Select>
-            </Field>
-            <Field label="Ville" required>
-              <Input
-                value={etabForm.ville}
-                onChange={setEtab("ville")}
-                placeholder="Cotonou"
-              />
-            </Field>
-          </div>
-
-          <div style={{ marginBottom: 14 }}>
-            <Field label="Adresse">
-              <Input
-                value={etabForm.adresse}
-                onChange={setEtab("adresse")}
-                placeholder="Quartier, rue, reference"
-              />
-            </Field>
-          </div>
-
-          <div style={{ marginBottom: 14 }}>
-            <Field label="Email" required>
-              <Input
-                value={etabForm.email}
-                onChange={setEtab("email")}
-                type="email"
-                placeholder="contact@etablissement.bj"
-              />
-            </Field>
-          </div>
-
-          <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-            <Field label="Mot de passe" required>
-              <Input
-                value={etabForm.password}
-                onChange={setEtab("password")}
-                type="password"
-                placeholder="••••••••"
-              />
-            </Field>
-            <Field label="Confirmer le mot de passe" required>
-              <Input
-                value={etabForm.confirmPassword}
-                onChange={setEtab("confirmPassword")}
-                type="password"
-                placeholder="••••••••"
-              />
-            </Field>
-          </div>
-
-          <BtnPrimary
-            style={{ width: "100%" }}
-            onClick={handleSubmitEtablissement}
-            disabled={loading}
-          >
-            {loading ? 'Creation...' : 'Creer le compte etablissement ->'}
-          </BtnPrimary>
-        </div>
-      )}
-
       <p style={{ textAlign: "center", fontSize: 12, color: "#9ca3af", marginTop: 18 }}>
         Déjà inscrit ?{" "}
         <a 
@@ -769,13 +594,6 @@ function FormLeft({ isMobile }) {
           style={{ color: "rgb(249, 115, 22)", textDecoration: "none", fontWeight: 600 }} // orange-500
         >
           Se connecter
-        </a>
-        {" · "}
-        <a
-          href="/register-etablissement"
-          style={{ color: "rgb(249, 115, 22)", textDecoration: "none", fontWeight: 600 }}
-        >
-          Compte etablissement
         </a>
         {" · "}
         <a

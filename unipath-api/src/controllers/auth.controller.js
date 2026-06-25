@@ -6,6 +6,10 @@ const { getFrontendUrl, buildFrontendUrl } = require('../utils/url.helper');
 const { genererMatriculeUnique } = require('../utils/matricule.helper');
 const { SERIES_VALIDES } = require('../constants/pieces.constants');
 const { alignCandidatIdToAuth } = require('../utils/candidat-alignment.helper');
+const {
+  isTempPasswordExpired,
+  mustChangeAdminPassword,
+} = require('../utils/admin-password.helper');
 
 exports.register = async (req, res) => {
   try {
@@ -161,58 +165,9 @@ exports.register = async (req, res) => {
 };
 
 exports.registerEtablissement = async (req, res) => {
-  try {
-    const { email, password, nom, type, ville, adresse } = req.body;
-
-    if (!email || !password || !nom || !type || !ville) {
-      return res.status(400).json({ error: 'email, password, nom, type et ville sont obligatoires' });
-    }
-
-    const typeUpper = String(type).toUpperCase();
-    if (!['PUBLIC', 'PRIVE'].includes(typeUpper)) {
-      return res.status(400).json({ error: 'Le type doit etre PUBLIC ou PRIVE' });
-    }
-
-    const etabExistant = await prisma.etablissement.findUnique({ where: { email } });
-    if (etabExistant) {
-      return res.status(400).json({ error: 'Un etablissement avec cet email existe deja' });
-    }
-
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: buildFrontendUrl('/auth/callback'),
-        data: {
-          nomEtablissement: nom,
-          role: 'ETABLISSEMENT',
-        },
-      },
-    });
-
-    if (authError) {
-      return res.status(400).json({ error: authError.message });
-    }
-
-    const etablissement = await prisma.etablissement.create({
-      data: {
-        id: authData.user.id,
-        nom,
-        type: typeUpper,
-        ville,
-        adresse: adresse || null,
-        email,
-      },
-    });
-
-    return res.status(201).json({
-      message: 'Compte etablissement cree avec succes',
-      etablissement,
-    });
-  } catch (error) {
-    console.error('Erreur registerEtablissement:', error);
-    return res.status(500).json({ error: 'Erreur serveur lors de la creation du compte etablissement' });
-  }
+  return res.status(410).json({
+    error: 'L\'inscription établissement n\'est plus disponible. Contactez la DGES pour obtenir un compte administrateur.',
+  });
 };
 
 exports.login = async (req, res) => {
@@ -339,18 +294,6 @@ exports.login = async (req, res) => {
       }
     }
 
-    if (!role) {
-      const etablissement = await prisma.etablissement.findUnique({
-        where: { id: userId },
-        select: { nom: true, type: true, ville: true, adresse: true, email: true },
-      });
-
-      if (etablissement) {
-        role = 'ETABLISSEMENT';
-        userData = etablissement;
-      }
-    }
-
     // Compte Supabase sans profil DB (inscription interrompue) — tentative de réparation
     if (!role) {
       const meta = data.user.user_metadata || {};
@@ -397,14 +340,30 @@ exports.login = async (req, res) => {
       });
     }
 
+    const userMetadata = data.user.user_metadata || {};
+    let requiresPasswordChange = false;
+
+    if (role === 'ADMIN_ETABLISSEMENT' && mustChangeAdminPassword(userMetadata)) {
+      if (isTempPasswordExpired(userMetadata)) {
+        return res.status(403).json({
+          error:
+            'Votre mot de passe temporaire a expiré. Contactez la DGES pour qu\'un nouvel accès vous soit envoyé.',
+          tempPasswordExpired: true,
+        });
+      }
+      requiresPasswordChange = true;
+    }
+
     res.json({
       token: data.session.access_token,
+      mustChangePassword: requiresPasswordChange,
       user: {
         id: userId,
         email: data.user.email,
         ...userData,
         role,
         ...(sousRole && { sousRole }),
+        mustChangePassword: requiresPasswordChange,
       },
     });
   } catch (error) {
@@ -413,27 +372,294 @@ exports.login = async (req, res) => {
   }
 };
 
+exports.changeInitialPassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.id;
+    const email = req.user.email;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Mot de passe actuel et nouveau mot de passe requis' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'Le nouveau mot de passe doit contenir au moins 8 caractères' });
+    }
+
+    if (newPassword === currentPassword) {
+      return res.status(400).json({ error: 'Le nouveau mot de passe doit être différent du mot de passe temporaire' });
+    }
+
+    if (req.userRole !== 'ADMIN_ETABLISSEMENT') {
+      return res.status(403).json({ error: 'Cette action est réservée aux administrateurs d\'établissement' });
+    }
+
+    const admin = await prisma.adminEtablissement.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        nom: true,
+        prenom: true,
+        email: true,
+        telephone: true,
+        etablissementId: true,
+        role: true,
+      },
+    });
+
+    if (!admin) {
+      return res.status(404).json({ error: 'Profil administrateur introuvable' });
+    }
+
+    const { data: authUserData, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (getUserError || !authUserData?.user) {
+      return res.status(500).json({ error: 'Impossible de vérifier le compte utilisateur' });
+    }
+
+    const metadata = authUserData.user.user_metadata || {};
+    if (!mustChangeAdminPassword(metadata)) {
+      return res.status(400).json({ error: 'Aucun changement de mot de passe initial requis pour ce compte' });
+    }
+
+    if (isTempPasswordExpired(metadata)) {
+      return res.status(403).json({
+        error: 'Votre mot de passe temporaire a expiré. Contactez la DGES pour un nouvel accès.',
+        tempPasswordExpired: true,
+      });
+    }
+
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    });
+
+    if (verifyError) {
+      return res.status(401).json({ error: 'Mot de passe temporaire incorrect' });
+    }
+
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      password: newPassword,
+      user_metadata: {
+        ...metadata,
+        mustChangePassword: false,
+        tempPasswordExpiresAt: null,
+      },
+    });
+
+    if (updateError) {
+      return res.status(400).json({ error: updateError.message });
+    }
+
+    const { data: sessionData, error: sessionError } = await supabase.auth.signInWithPassword({
+      email,
+      password: newPassword,
+    });
+
+    if (sessionError || !sessionData?.session) {
+      return res.status(500).json({ error: 'Mot de passe mis à jour mais reconnexion impossible. Reconnectez-vous.' });
+    }
+
+    return res.json({
+      message: 'Mot de passe personnel enregistré avec succès',
+      token: sessionData.session.access_token,
+      mustChangePassword: false,
+      user: {
+        ...admin,
+        email,
+        role: 'ADMIN_ETABLISSEMENT',
+        mustChangePassword: false,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Erreur changeInitialPassword:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+exports.changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.id;
+    const email = req.user.email;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Mot de passe actuel et nouveau mot de passe requis' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'Le nouveau mot de passe doit contenir au moins 8 caractères' });
+    }
+
+    if (newPassword === currentPassword) {
+      return res.status(400).json({ error: 'Le nouveau mot de passe doit être différent de l\'actuel' });
+    }
+
+    if (req.userRole !== 'ADMIN_ETABLISSEMENT') {
+      return res.status(403).json({ error: 'Cette action est réservée aux administrateurs d\'établissement' });
+    }
+
+    const admin = await prisma.adminEtablissement.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        nom: true,
+        prenom: true,
+        email: true,
+        telephone: true,
+        etablissementId: true,
+        role: true,
+      },
+    });
+
+    if (!admin) {
+      return res.status(404).json({ error: 'Profil administrateur introuvable' });
+    }
+
+    const { data: authUserData, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (getUserError || !authUserData?.user) {
+      return res.status(500).json({ error: 'Impossible de vérifier le compte utilisateur' });
+    }
+
+    const metadata = authUserData.user.user_metadata || {};
+    if (mustChangeAdminPassword(metadata)) {
+      return res.status(400).json({
+        error: 'Vous devez d\'abord définir votre mot de passe personnel via l\'écran de première connexion.',
+        mustChangePassword: true,
+      });
+    }
+
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    });
+
+    if (verifyError) {
+      return res.status(401).json({ error: 'Mot de passe actuel incorrect' });
+    }
+
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      password: newPassword,
+    });
+
+    if (updateError) {
+      return res.status(400).json({ error: updateError.message });
+    }
+
+    const { data: sessionData, error: sessionError } = await supabase.auth.signInWithPassword({
+      email,
+      password: newPassword,
+    });
+
+    if (sessionError || !sessionData?.session) {
+      return res.status(500).json({ error: 'Mot de passe mis à jour mais reconnexion impossible. Reconnectez-vous.' });
+    }
+
+    return res.json({
+      message: 'Mot de passe mis à jour avec succès',
+      token: sessionData.session.access_token,
+      user: {
+        ...admin,
+        email,
+        role: 'ADMIN_ETABLISSEMENT',
+        mustChangePassword: false,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Erreur changePassword:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+exports.finalizePasswordReset = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const { data: authUserData, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (getUserError || !authUserData?.user) {
+      return res.status(500).json({ error: 'Impossible de finaliser la réinitialisation' });
+    }
+
+    const metadata = authUserData.user.user_metadata || {};
+    if (metadata.mustChangePassword || metadata.tempPasswordExpiresAt) {
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+        user_metadata: {
+          ...metadata,
+          mustChangePassword: false,
+          tempPasswordExpiresAt: null,
+        },
+      });
+
+      if (updateError) {
+        return res.status(400).json({ error: updateError.message });
+      }
+    }
+
+    return res.json({ message: 'Réinitialisation finalisée' });
+  } catch (error) {
+    console.error('❌ Erreur finalizePasswordReset:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+async function resolveAccountByEmail(email) {
+  const normalized = email.trim().toLowerCase();
+
+  const candidat = await prisma.candidat.findUnique({
+    where: { email: normalized },
+    select: { id: true },
+  });
+  if (candidat) return candidat;
+
+  if (prisma.adminEtablissement) {
+    const admin = await prisma.adminEtablissement.findUnique({
+      where: { email: normalized },
+      select: { id: true },
+    });
+    if (admin) return admin;
+  }
+
+  const commission = await prisma.membreCommission.findUnique({
+    where: { email: normalized },
+    select: { id: true },
+  });
+  if (commission) return commission;
+
+  const dges = await prisma.administrateurDGES.findUnique({
+    where: { email: normalized },
+    select: { id: true },
+  });
+  if (dges) return dges;
+
+  const controleur = await prisma.controleur.findUnique({
+    where: { email: normalized },
+    select: { id: true },
+  });
+  if (controleur) return controleur;
+
+  return null;
+}
+
 exports.resetPassword = async (req, res) => {
   try {
     const { email } = req.body;
 
-    // Vérifier si l'utilisateur existe
-    const candidat = await prisma.candidat.findUnique({
-      where: { email }
-    });
+    if (!email?.trim()) {
+      return res.status(400).json({ error: 'Email requis' });
+    }
 
-    if (!candidat) {
-      // Ne pas révéler si l'email existe ou non (sécurité)
-      return res.json({ 
-        message: 'Si cet email existe, un lien de réinitialisation a été envoyé.' 
+    const account = await resolveAccountByEmail(email);
+
+    if (!account) {
+      return res.json({
+        message: 'Si cet email existe, un lien de réinitialisation a été envoyé.',
       });
     }
 
     const resetUrl = buildFrontendUrl('/reset-password');
-    console.log(`🔑 URL de réinitialisation: ${resetUrl}`);
+    const normalizedEmail = email.trim().toLowerCase();
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: resetUrl
+    const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+      redirectTo: resetUrl,
     });
 
     if (error) {
@@ -441,31 +667,37 @@ exports.resetPassword = async (req, res) => {
       return res.status(400).json({ error: error.message });
     }
 
-    // Enregistrer la tentative d'envoi
-    await prisma.emailDelivery.create({
-      data: {
-        userId: candidat.id,
-        recipient: email,
-        subject: '[UniPath] Réinitialisation de votre mot de passe',
-        status: 'SENT',
-        attempts: 1,
-        lastAttemptAt: new Date(),
-        sentAt: new Date()
-      }
-    });
+    try {
+      await prisma.emailDelivery.create({
+        data: {
+          userId: account.id,
+          recipient: normalizedEmail,
+          subject: '[UniPath] Réinitialisation de votre mot de passe',
+          status: 'SENT',
+          attempts: 1,
+          lastAttemptAt: new Date(),
+          sentAt: new Date(),
+        },
+      });
+    } catch (logErr) {
+      console.warn('Journal emailDelivery reset-password:', logErr.message);
+    }
 
-    // Créer une notification
-    await prisma.notification.create({
-      data: {
-        userId: candidat.id,
-        type: 'SYSTEME',
-        title: 'Demande de réinitialisation de mot de passe',
-        message: 'Un email de réinitialisation de mot de passe a été envoyé à votre adresse.',
-        priority: 'NORMAL'
-      }
-    });
+    try {
+      await prisma.notification.create({
+        data: {
+          userId: account.id,
+          type: 'SYSTEME',
+          title: 'Demande de réinitialisation de mot de passe',
+          message: 'Un email de réinitialisation de mot de passe a été envoyé à votre adresse.',
+          priority: 'NORMAL',
+        },
+      });
+    } catch (notifErr) {
+      console.warn('Notification reset-password:', notifErr.message);
+    }
 
-    res.json({ message: 'Email de réinitialisation envoyé avec succès' });
+    res.json({ message: 'Si cet email existe, un lien de réinitialisation a été envoyé.' });
   } catch (error) {
     console.error('❌ Erreur serveur:', error);
     res.status(500).json({ error: 'Erreur serveur' });

@@ -31,6 +31,7 @@ export default function GestionConcours() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
+  const [newMatiere, setNewMatiere] = useState('');
 
   useEffect(() => {
     loadConcours();
@@ -69,6 +70,7 @@ export default function GestionConcours() {
       dateFinComposition: '',
     });
     setValidationErrors({});
+    setNewMatiere('');
     setShowModal(true);
   };
 
@@ -105,6 +107,7 @@ export default function GestionConcours() {
       description: c.description || '',
       fraisParticipation: c.fraisParticipation || '',
       seriesAcceptees: c.seriesAcceptees || [],
+      matieres: Array.isArray(c.matieres) ? c.matieres : [],
       piecesRequises: piecesRequises.length > 0 ? piecesRequises : getDefaultPiecesRequises(), // ✅ Utilise la fonction centralisée
       criteresEligibilite,
       dateDebutDepot: c.dateDebutDepot ? c.dateDebutDepot.split('T')[0] : '',
@@ -113,6 +116,7 @@ export default function GestionConcours() {
       dateFinComposition: c.dateFinComposition ? c.dateFinComposition.split('T')[0] : '',
     });
     setValidationErrors({});
+    setNewMatiere('');
     setShowModal(true);
   };
 
@@ -143,6 +147,13 @@ export default function GestionConcours() {
     }
     if (!formData.seriesAcceptees || formData.seriesAcceptees.length === 0) {
       errors.seriesAcceptees = 'Au moins une série doit être sélectionnée';
+    }
+
+    const matieresNettoyees = (formData.matieres || [])
+      .map((m) => (typeof m === 'string' ? m : '').trim())
+      .filter(Boolean);
+    if (matieresNettoyees.length === 0) {
+      errors.matieres = 'Au moins une matière à composer est requise';
     }
 
     // Validation des dates de dépôt
@@ -206,6 +217,9 @@ export default function GestionConcours() {
 
     const payload = {
       ...formData,
+      matieres: (formData.matieres || [])
+        .map((m) => (typeof m === 'string' ? m : '').trim())
+        .filter(Boolean),
       piecesRequises: formData.piecesRequises.map((piece) => ({
         ...piece,
         id: convertLegacyId(piece.id),
@@ -257,6 +271,48 @@ export default function GestionConcours() {
     setFormData((prev) => ({
       ...prev,
       criteresEligibilite: (prev.criteresEligibilite || []).filter((_, i) => i !== index),
+    }));
+  };
+
+  const addMatiere = () => {
+    const libelle = newMatiere.trim();
+    if (!libelle) return;
+
+    const exists = (formData.matieres || []).some(
+      (m) => m.trim().toLowerCase() === libelle.toLowerCase()
+    );
+    if (exists) {
+      setValidationErrors((prev) => ({
+        ...prev,
+        matieres: 'Cette matière est déjà dans la liste',
+      }));
+      return;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      matieres: [...(prev.matieres || []), libelle],
+    }));
+    setNewMatiere('');
+    setValidationErrors((prev) => {
+      const next = { ...prev };
+      delete next.matieres;
+      return next;
+    });
+  };
+
+  const updateMatiere = (index, value) => {
+    setFormData((prev) => {
+      const matieres = [...(prev.matieres || [])];
+      matieres[index] = value;
+      return { ...prev, matieres };
+    });
+  };
+
+  const removeMatiere = (index) => {
+    setFormData((prev) => ({
+      ...prev,
+      matieres: (prev.matieres || []).filter((_, i) => i !== index),
     }));
   };
 
@@ -335,6 +391,7 @@ export default function GestionConcours() {
                   <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Date début</th>
                   <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Date fin</th>
                   <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Date composition</th>
+                  <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Matières</th>
                   <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Frais</th>
                   <th className='px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase'>Actions</th>
                 </tr>
@@ -342,7 +399,7 @@ export default function GestionConcours() {
               <tbody className='divide-y divide-gray-50'>
                 {concours.length === 0 ? (
                   <tr>
-                    <td colSpan='7' className='px-4 py-10 text-center text-gray-400'>
+                    <td colSpan='8' className='px-4 py-10 text-center text-gray-400'>
                       Aucun concours créé. Cliquez sur "Nouveau concours" pour commencer.
                     </td>
                   </tr>
@@ -359,6 +416,11 @@ export default function GestionConcours() {
                       </td>
                       <td className='px-4 py-3 text-gray-600 text-xs'>
                         {c.dateComposition ? new Date(c.dateComposition).toLocaleDateString('fr-FR') : '-'}
+                      </td>
+                      <td className='px-4 py-3 text-gray-600 text-xs'>
+                        {Array.isArray(c.matieres) && c.matieres.length > 0
+                          ? `${c.matieres.length} matière${c.matieres.length > 1 ? 's' : ''}`
+                          : '-'}
                       </td>
                       <td className='px-4 py-3 text-gray-700 font-semibold'>
                         {c.fraisParticipation ? `${c.fraisParticipation} FCFA` : '-'}
@@ -593,6 +655,79 @@ export default function GestionConcours() {
                 </div>
                 {validationErrors.seriesAcceptees && (
                   <p className='mt-1 text-xs text-red-600'>{validationErrors.seriesAcceptees}</p>
+                )}
+              </div>
+
+              {/* Matières à composer */}
+              <div className='border-t pt-4'>
+                <div className='mb-3 flex items-center justify-between'>
+                  <div>
+                    <h3 className='text-sm font-bold text-gray-800'>
+                      Matières à composer <span className='text-red-500'>*</span>
+                    </h3>
+                    <p className='text-xs text-gray-500 mt-1'>
+                      Épreuves du concours — affichées sur la convocation et utilisées pour la saisie des notes.
+                    </p>
+                  </div>
+                </div>
+
+                <div className='flex gap-2 mb-3'>
+                  <input
+                    type='text'
+                    value={newMatiere}
+                    onChange={(e) => setNewMatiere(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addMatiere();
+                      }
+                    }}
+                    className='flex-1 px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm'
+                    placeholder='Ex: Mathématiques, Physique-Chimie, Français...'
+                  />
+                  <button
+                    type='button'
+                    onClick={addMatiere}
+                    className='rounded-xl bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-700 hover:bg-green-100 whitespace-nowrap'
+                  >
+                    + Ajouter
+                  </button>
+                </div>
+
+                {(formData.matieres || []).length === 0 ? (
+                  <p className='text-xs text-gray-500 rounded-xl border border-dashed border-gray-200 px-4 py-3'>
+                    Aucune matière configurée. Ajoutez les épreuves que les candidats composeront.
+                  </p>
+                ) : (
+                  <div className='space-y-2'>
+                    {(formData.matieres || []).map((matiere, index) => (
+                      <div
+                        key={`${matiere}-${index}`}
+                        className='flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2'
+                      >
+                        <span className='flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-xs font-bold text-gray-500 border border-gray-200'>
+                          {index + 1}
+                        </span>
+                        <input
+                          type='text'
+                          value={matiere}
+                          onChange={(e) => updateMatiere(index, e.target.value)}
+                          className='flex-1 bg-transparent border-0 text-sm text-gray-800 focus:ring-0 focus:outline-none'
+                        />
+                        <button
+                          type='button'
+                          onClick={() => removeMatiere(index)}
+                          className='text-xs font-semibold text-red-600 hover:text-red-700 px-2 py-1'
+                        >
+                          Retirer
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {validationErrors.matieres && (
+                  <p className='mt-2 text-xs text-red-600'>{validationErrors.matieres}</p>
                 )}
               </div>
 

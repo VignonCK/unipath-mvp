@@ -1,6 +1,7 @@
 const prisma = require('../prisma');
 const fs = require('fs');
 const path = require('path');
+const { getAdminEtablissementId, adminOwnsEtablissement } = require('../utils/admin-etablissement.helper');
 const { supabaseAdmin } = require('../supabase');
 
 const LOGO_DIR = path.join(__dirname, '../../uploads/etablissements');
@@ -170,6 +171,10 @@ exports.getEtudiantsEtablissement = async (req, res) => {
     const { id } = req.params;
     const { filiere, annee } = req.query;
 
+    if (req.userRole === 'ADMIN_ETABLISSEMENT' && !adminOwnsEtablissement(req, id)) {
+      return res.status(403).json({ error: 'Accès réservé à votre établissement' });
+    }
+
     const etablissement = await prisma.etablissement.findUnique({
       where: { id },
       select: { id: true, nom: true },
@@ -251,9 +256,9 @@ exports.getStatistiquesEtablissement = async (req, res) => {
 
 exports.getMonProfilEtablissement = async (req, res) => {
   try {
-    const etablissementId = req.user?.id;
+    const etablissementId = getAdminEtablissementId(req);
     if (!etablissementId) {
-      return res.status(401).json({ error: 'Utilisateur non authentifie' });
+      return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
     }
 
     const etablissement = await prisma.etablissement.findUnique({
@@ -285,9 +290,9 @@ exports.getMonProfilEtablissement = async (req, res) => {
 
 exports.updateMonProfilEtablissement = async (req, res) => {
   try {
-    const etablissementId = req.user?.id;
+    const etablissementId = getAdminEtablissementId(req);
     if (!etablissementId) {
-      return res.status(401).json({ error: 'Utilisateur non authentifie' });
+      return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
     }
 
     const { nom, type, ville, adresse, email } = req.body;
@@ -327,9 +332,9 @@ exports.updateMonProfilEtablissement = async (req, res) => {
 
 exports.uploadMonLogoEtablissement = async (req, res) => {
   try {
-    const etablissementId = req.user?.id;
+    const etablissementId = getAdminEtablissementId(req);
     if (!etablissementId) {
-      return res.status(401).json({ error: 'Utilisateur non authentifie' });
+      return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
     }
 
     if (!req.file) {

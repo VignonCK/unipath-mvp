@@ -1,6 +1,12 @@
 const { supabaseAdmin } = require('../supabase');
 const prisma = require('../prisma');
 const { isEtudiantRole } = require('../constants/roles.constants');
+const {
+  BUCKET_DOSSIERS_CANDIDATS,
+  extractStorageRelativePath,
+} = require('../utils/storage.helper');
+
+const SIGNED_URL_EXPIRES_IN = 3600;
 
 const uploadToSupabase = async (file, candidatId, typePiece) => {
   const ext = file.originalname.split('.').pop();
@@ -294,6 +300,43 @@ exports.getDossierPersonnel = async (req, res) => {
   } catch (error) {
     console.error('Erreur getDossierPersonnel:', error);
     res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+exports.getSignedUrl = async (req, res) => {
+  try {
+    const { path: filePath } = req.query;
+
+    if (!filePath) {
+      return res.status(400).json({ error: 'Paramètre path requis' });
+    }
+
+    const relativePath = extractStorageRelativePath(filePath);
+    if (!relativePath) {
+      return res.status(400).json({ error: 'Chemin de fichier invalide' });
+    }
+
+    const userRole = req.userRole || req.user?.role;
+    if (isEtudiantRole(userRole)) {
+      const ownerPrefix = `${req.user.id}/`;
+      if (!relativePath.startsWith(ownerPrefix)) {
+        return res.status(403).json({ error: 'Accès non autorisé à ce fichier' });
+      }
+    }
+
+    const { data, error } = await supabaseAdmin.storage
+      .from(BUCKET_DOSSIERS_CANDIDATS)
+      .createSignedUrl(relativePath, SIGNED_URL_EXPIRES_IN);
+
+    if (error) {
+      console.error('Erreur génération URL signée:', error);
+      return res.status(500).json({ error: 'Impossible de générer l\'URL d\'accès.' });
+    }
+
+    res.json({ signedUrl: data.signedUrl, expiresIn: SIGNED_URL_EXPIRES_IN });
+  } catch (error) {
+    console.error('getSignedUrl error:', error);
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 };
 

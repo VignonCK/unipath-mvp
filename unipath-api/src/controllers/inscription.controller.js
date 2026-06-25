@@ -1,210 +1,21 @@
+const fs = require('fs');
 const prisma = require('../prisma');
 const { supabaseAdmin } = require('../supabase');
 const { genererNumeroInscriptionUnique } = require('../utils/numero-inscription.helper');
 const { envoyerPreInscriptionApresCreation } = require('../utils/inscription-email.helper');
 const { candidateSerieMatchesConcours } = require('../utils/series.helper');
-const { PIECES_BASE, getPiecesExtrasConfig } = require('../utils/completude.helper');
-const {
-  computeInscriptionCompletude,
-  profilCandidatComplet,
-} = require('../utils/dossier-submission.helper');
+const { computeInscriptionCompletude, profilCandidatComplet } = require('../utils/dossier-submission.helper');
+const pdfService = require('../services/pdf.service');
 
 /**
- * Créer une nouvelle inscription à un concours
+ * @deprecated Utiliser POST /api/inscriptions/soumettre (soumettreDossierComplet).
+ * L'inscription sans quittance ni pièces concours n'est plus autorisée.
  */
 exports.creerInscription = async (req, res) => {
-  try {
-    const { concoursId } = req.body;
-    const candidatId = req.user.id;
-
-    // Vérifier que le concours existe
-    const concours = await prisma.concours.findUnique({
-      where: { id: concoursId },
-    });
-
-    if (!concours) {
-      return res.status(404).json({ error: 'Concours non trouvé' });
-    }
-
-    // Vérifier que la période de dépôt n'est pas terminée
-    const dateLimite = concours.dateFinDepot || concours.dateFin;
-    if (dateLimite && new Date() > new Date(dateLimite)) {
-      return res.status(400).json({
-        error: 'La période de dépôt pour ce concours est terminée',
-      });
-    }
-
-    // Vérifier que la série du candidat est acceptée par le concours
-    const candidat = await prisma.candidat.findUnique({
-      where: { id: candidatId },
-      select: { serie: true },
-    });
-
-    if (!candidateSerieMatchesConcours(candidat?.serie, concours.seriesAcceptees)) {
-      return res.status(403).json({
-        error: "Votre série n'est pas acceptée pour ce concours",
-      });
-    }
-
-    // Vérifier que le candidat n'est pas déjà inscrit
-    const inscriptionExistante = await prisma.inscription.findFirst({
-      where: {
-        candidatId,
-        concoursId,
-      },
-    });
-
-    if (inscriptionExistante) {
-      return res.status(400).json({ error: 'Vous êtes déjà inscrit à ce concours' });
-    }
-
-    const MARGE_JOURS = 2;
-
-    if (concours.dateDebutComposition && concours.dateFinComposition) {
-      const inscriptionsExistantes = await prisma.inscription.findMany({
-        where: { candidatId },
-        include: {
-          concours: {
-            select: {
-              libelle: true,
-              dateDebutComposition: true,
-              dateFinComposition: true,
-            },
-          },
-        },
-      });
-
-      const margeMs = MARGE_JOURS * 24 * 60 * 60 * 1000;
-      const nouveauDebut = new Date(concours.dateDebutComposition).getTime();
-      const nouveauFin = new Date(concours.dateFinComposition).getTime();
-
-      const conflit = inscriptionsExistantes.find((ins) => {
-        if (!ins.concours.dateDebutComposition || !ins.concours.dateFinComposition) {
-          return false;
-        }
-
-        const existantDebut = new Date(ins.concours.dateDebutComposition).getTime();
-        const existantFin = new Date(ins.concours.dateFinComposition).getTime();
-
-        if (Number.isNaN(nouveauDebut) || Number.isNaN(nouveauFin) || Number.isNaN(existantDebut) || Number.isNaN(existantFin)) {
-          return false;
-        }
-
-        return (
-          nouveauDebut <= existantFin + margeMs &&
-          nouveauFin >= existantDebut - margeMs
-        );
-      });
-
-      if (conflit) {
-        return res.status(409).json({
-          error: `Conflit de dates détecté avec le concours "${conflit.concours.libelle}". Les périodes de composition sont trop proches (moins de ${MARGE_JOURS} jours d'écart). Veuillez choisir un autre concours.`,
-        });
-      }
-    }
-
-    // Vérifier si le candidat a un Dossier, sinon le créer
-    let dossier = await prisma.dossier.findUnique({
-      where: { candidatId }
-    });
-
-    if (!dossier) {
-      dossier = await prisma.dossier.create({
-        data: { candidatId }
-      });
-    }
-
-    const numeroInscription = await genererNumeroInscriptionUnique();
-
-    // Créer l'inscription + DossierInscription dans une transaction
-    const result = await prisma.$transaction(async (tx) => {
-      const inscription = await tx.inscription.create({
-        data: {
-          candidatId,
-          concoursId,
-          numeroInscription,
-        },
-      });
-
-      // Créer le DossierInscription automatiquement
-      const dossierInscription = await tx.dossierInscription.create({
-        data: {
-          inscriptionId: inscription.id,
-          statut: 'EN_ATTENTE',
-          piecesExtras: {},
-        },
-      });
-
-      // Créer une entrée dans l'historique
-      await tx.actionHistory.create({
-        data: {
-          utilisateurId: candidatId,
-          dossierInscriptionId: dossierInscription.id,
-          typeAction: 'DOSSIER_CONCOURS_CREE',
-          details: { concoursId, inscriptionId: inscription.id },
-          ipAddress: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
-          userAgent: req.headers['user-agent']
-        }
-      });
-
-      return { inscription, dossierInscription };
-    });
-
-    // Calculer la complétude initiale
-    const piecesBasesPresentes = PIECES_BASE.filter(p => dossier[p]).length;
-
-    // Quittance + pièces extra configurées par le concours
-    const piecesExtrasConfig = getPiecesExtrasConfig(concours);
-    const total = PIECES_BASE.length + 1 + piecesExtrasConfig.length; // base + quittance + extras
-    const presentes = piecesBasesPresentes; // Initialement, seules les pièces de base peuvent être présentes
-    const completude = Math.round((presentes / total) * 100);
-
-    // Récupérer l'inscription complète avec relations
-    const inscriptionComplete = await prisma.inscription.findUnique({
-      where: { id: result.inscription.id },
-      include: {
-        concours: true,
-        candidat: {
-          select: {
-            id: true,
-            matricule: true,
-            nom: true,
-            prenom: true,
-            email: true,
-            telephone: true,
-            dateNaiss: true,
-            lieuNaiss: true,
-          },
-        },
-        dossierInscription: true,
-      },
-    });
-
-    // Email + PDF pré-inscription (asynchrone, ne bloque pas la réponse)
-    envoyerPreInscriptionApresCreation({
-      candidat: inscriptionComplete.candidat,
-      concours: inscriptionComplete.concours,
-      inscription: inscriptionComplete,
-    }).catch((err) => console.error('Erreur envoi email pré-inscription:', err));
-
-    res.status(201).json({
-      message: 'Inscription créée avec succès. Vous êtes candidat pour ce concours.',
-      inscription: {
-        ...inscriptionComplete,
-        estCandidatConcours: true,
-      },
-      roleContext: 'candidat',
-      concoursId: inscriptionComplete.concoursId,
-      completude: {
-        pourcentage: completude,
-        piecesPresentes: presentes,
-        piecesRequises: total
-      }
-    });
-  } catch (error) {
-    console.error('Erreur création inscription:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
+  return res.status(410).json({
+    error: 'Cette voie d\'inscription n\'est plus disponible. Déposez votre dossier complet depuis la fiche du concours (quittance et pièces requises).',
+    useInstead: 'POST /api/inscriptions/soumettre',
+  });
 };
 
 const PIECE_ID_TO_DOSSIER = {
@@ -245,6 +56,8 @@ async function uploadFichierSupabase(buffer, mimetype, candidatId, concoursId, p
 /**
  * Soumission atomique : inscription + fichiers + email (nouveau flux candidat).
  * POST /api/inscriptions/soumettre
+ *
+ * Règle : aucun appel réseau (Storage, email) dans prisma.$transaction.
  */
 exports.soumettreDossierComplet = async (req, res) => {
   try {
@@ -256,6 +69,7 @@ exports.soumettreDossierComplet = async (req, res) => {
       return res.status(400).json({ error: 'concoursId requis' });
     }
 
+    // —— ÉTAPE 1 : validations (hors transaction) ——
     const concours = await prisma.concours.findUnique({ where: { id: concoursId } });
     if (!concours) {
       return res.status(404).json({ error: 'Concours non trouvé' });
@@ -271,10 +85,17 @@ exports.soumettreDossierComplet = async (req, res) => {
       return res.status(400).json({ error: 'La période de dépôt de dossier est fermée.' });
     }
 
-    const inscriptionExistante = await prisma.inscription.findFirst({
-      where: { candidatId, concoursId },
+    const inscriptionExistante = await prisma.inscription.findUnique({
+      where: { candidatId_concoursId: { candidatId, concoursId } },
+      include: { dossierInscription: true },
     });
-    if (inscriptionExistante) {
+
+    const modeCompletion = !!(
+      inscriptionExistante
+      && !inscriptionExistante.dossierInscription?.quittanceUrl
+    );
+
+    if (inscriptionExistante?.dossierInscription?.quittanceUrl) {
       return res.status(409).json({ error: 'Vous êtes déjà inscrit à ce concours.' });
     }
 
@@ -325,6 +146,7 @@ exports.soumettreDossierComplet = async (req, res) => {
       const nouveauFin = new Date(concours.dateFinComposition).getTime();
 
       const conflit = inscriptionsExistantes.find((ins) => {
+        if (ins.concoursId === concoursId) return false;
         if (!ins.concours.dateDebutComposition || !ins.concours.dateFinComposition) return false;
         const existantDebut = new Date(ins.concours.dateDebutComposition).getTime();
         const existantFin = new Date(ins.concours.dateFinComposition).getTime();
@@ -336,11 +158,12 @@ exports.soumettreDossierComplet = async (req, res) => {
 
       if (conflit) {
         return res.status(409).json({
-          error: `Conflit de dates détecté avec le concours "${conflit.concours.libelle}". Les périodes de composition sont trop proches.`,
+          error: `Conflit de dates avec "${conflit.concours.libelle}". Périodes de composition trop proches.`,
         });
       }
     }
 
+    // —— ÉTAPE 2 : uploads Storage + URLs dossier personnel (hors transaction) ——
     const urlsPieces = {};
     for (const fichier of fichiers) {
       if (!fichier.fieldname?.startsWith('piece_')) continue;
@@ -369,6 +192,19 @@ exports.soumettreDossierComplet = async (req, res) => {
       }
     }
 
+    if (modeCompletion && inscriptionExistante.dossierInscription) {
+      const di = inscriptionExistante.dossierInscription;
+      if (di.quittanceUrl && !urlsPieces.quittance) {
+        urlsPieces.quittance = di.quittanceUrl;
+      }
+      const existingExtras = di.piecesExtras && typeof di.piecesExtras === 'object' ? di.piecesExtras : {};
+      for (const [pieceId, url] of Object.entries(existingExtras)) {
+        if (!urlsPieces[pieceId] && url) {
+          urlsPieces[pieceId] = url;
+        }
+      }
+    }
+
     const piecesConcours = getConcoursPiecesList(concours);
     const piecesObligatoires = piecesConcours.filter((p) => p.obligatoire !== false);
     const manquantes = [];
@@ -383,6 +219,13 @@ exports.soumettreDossierComplet = async (req, res) => {
       manquantes.push(piece.nom || piece.id);
     }
 
+    if (!urlsPieces.quittance) {
+      return res.status(400).json({
+        error: 'La quittance de paiement est obligatoire.',
+        piecesManquantes: ['Quittance de paiement'],
+      });
+    }
+
     if (manquantes.length > 0) {
       return res.status(400).json({
         error: `Pièces obligatoires manquantes : ${manquantes.join(', ')}`,
@@ -390,7 +233,6 @@ exports.soumettreDossierComplet = async (req, res) => {
       });
     }
 
-    const numeroInscription = await genererNumeroInscriptionUnique();
     const quittanceUrl = urlsPieces.quittance || null;
     const piecesExtras = { ...urlsPieces };
     delete piecesExtras.quittance;
@@ -398,75 +240,125 @@ exports.soumettreDossierComplet = async (req, res) => {
     const ipAddress = req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'unknown';
     const userAgent = req.headers['user-agent'] || 'unknown';
 
-    const result = await prisma.$transaction(async (tx) => {
-      const inscription = await tx.inscription.create({
-        data: { candidatId, concoursId, numeroInscription },
-      });
+    // —— ÉTAPE 3 : écriture DB (transaction courte, Prisma uniquement) ——
+    let inscription;
 
-      const dossierInscription = await tx.dossierInscription.create({
-        data: {
-          inscriptionId: inscription.id,
-          quittanceUrl,
-          piecesExtras,
-          statut: 'EN_ATTENTE',
-        },
-      });
+    if (modeCompletion) {
+      const dossierInscriptionId = inscriptionExistante.dossierInscription.id;
 
-      await tx.actionHistory.create({
-        data: {
-          utilisateurId: candidatId,
-          dossierInscriptionId: dossierInscription.id,
-          typeAction: 'DOSSIER_CONCOURS_CREE',
-          details: { concoursId, inscriptionId: inscription.id },
-          ipAddress,
-          userAgent,
-        },
-      });
-
-      await tx.actionHistory.create({
-        data: {
-          utilisateurId: candidatId,
-          dossierInscriptionId: dossierInscription.id,
-          typeAction: 'DOSSIER_SOUMIS',
-          details: {
-            message: 'Dossier soumis en une seule requête',
-            concoursId,
-            inscriptionId: inscription.id,
+      await prisma.$transaction(async (tx) => {
+        await tx.dossierInscription.update({
+          where: { id: dossierInscriptionId },
+          data: {
+            quittanceUrl,
+            piecesExtras,
+            statut: 'EN_ATTENTE',
           },
-          ipAddress,
-          userAgent,
-        },
+        });
+
+        const dejaSoumis = await tx.actionHistory.findFirst({
+          where: {
+            dossierInscriptionId,
+            typeAction: 'DOSSIER_SOUMIS',
+          },
+        });
+
+        if (!dejaSoumis) {
+          await tx.actionHistory.create({
+            data: {
+              utilisateurId: candidatId,
+              dossierInscriptionId,
+              typeAction: 'DOSSIER_SOUMIS',
+              details: {
+                message: 'Dossier complété après pré-inscription',
+                concoursId,
+                inscriptionId: inscriptionExistante.id,
+              },
+              ipAddress,
+              userAgent,
+            },
+          });
+        }
       });
 
-      return { inscription, dossierInscription };
-    });
+      inscription = await prisma.inscription.findUnique({
+        where: { id: inscriptionExistante.id },
+        include: { concours: true, dossierInscription: true },
+      });
+    } else {
+      const result = await prisma.$transaction(async (tx) => {
+        const newInscription = await tx.inscription.create({
+          data: { candidatId, concoursId },
+        });
 
-    const inscriptionComplete = await prisma.inscription.findUnique({
-      where: { id: result.inscription.id },
-      include: { concours: true, dossierInscription: true },
-    });
+        const dossierInscription = await tx.dossierInscription.create({
+          data: {
+            inscriptionId: newInscription.id,
+            quittanceUrl,
+            piecesExtras,
+            statut: 'EN_ATTENTE',
+          },
+        });
 
+        await tx.actionHistory.create({
+          data: {
+            utilisateurId: candidatId,
+            dossierInscriptionId: dossierInscription.id,
+            typeAction: 'DOSSIER_CONCOURS_CREE',
+            details: { concoursId, inscriptionId: newInscription.id },
+            ipAddress,
+            userAgent,
+          },
+        });
+
+        await tx.actionHistory.create({
+          data: {
+            utilisateurId: candidatId,
+            dossierInscriptionId: dossierInscription.id,
+            typeAction: 'DOSSIER_SOUMIS',
+            details: {
+              message: 'Dossier soumis en une seule requête',
+              concoursId,
+              inscriptionId: newInscription.id,
+            },
+            ipAddress,
+            userAgent,
+          },
+        });
+
+        return { inscription: newInscription, dossierInscription };
+      });
+
+      const numeroInscription = await genererNumeroInscriptionUnique();
+      inscription = await prisma.inscription.update({
+        where: { id: result.inscription.id },
+        data: { numeroInscription },
+        include: { concours: true, dossierInscription: true },
+      });
+    }
+
+    // —— ÉTAPE 4 : email (non bloquant, hors transaction) ——
     try {
       await envoyerPreInscriptionApresCreation({
         candidat,
         concours,
-        inscription: inscriptionComplete,
+        inscription,
       });
     } catch (emailError) {
-      console.error('Email non envoyé:', emailError);
+      console.error('Email non envoyé (non bloquant):', emailError);
     }
 
     res.status(201).json({
       message: 'Dossier soumis avec succès.',
-      inscriptionId: result.inscription.id,
-      numeroInscription: result.inscription.numeroInscription,
+      inscriptionId: inscription.id,
+      numeroInscription: inscription.numeroInscription,
     });
   } catch (error) {
     console.error('soumettreDossierComplet error:', error);
     if (error.code === 'P2002') {
       return res.status(409).json({ error: 'Vous êtes déjà inscrit à ce concours.' });
     }
-    res.status(500).json({ error: error.message || 'Erreur serveur lors de la soumission.' });
+    res.status(500).json({ error: 'Erreur serveur lors de la soumission.' });
   }
 };
 
@@ -830,6 +722,114 @@ exports.annulerInscription = async (req, res) => {
   } catch (error) {
     console.error('Erreur annulation inscription:', error);
     res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+/**
+ * Télécharger la fiche de pré-inscription en PDF.
+ * GET /api/inscriptions/:id/fiche
+ */
+exports.telechargerFichePreInscriptionPdf = async (req, res) => {
+  let pdfPath = null;
+  try {
+    const { id } = req.params;
+    const candidatId = req.user.id;
+
+    const inscription = await prisma.inscription.findUnique({
+      where: { id },
+      include: {
+        candidat: {
+          include: {
+            dossier: { select: { photo: true } },
+          },
+        },
+        concours: true,
+        dossierInscription: true,
+      },
+    });
+
+    if (!inscription || inscription.candidatId !== candidatId) {
+      return res.status(404).json({ error: 'Inscription non trouvée' });
+    }
+
+    if (!inscription.dossierInscription?.quittanceUrl) {
+      return res.status(400).json({
+        error: 'La fiche n\'est disponible qu\'après dépôt complet du dossier (quittance incluse).',
+      });
+    }
+
+    const numeroInscription = inscription.numeroInscription
+      || inscription.id.substring(0, 8).toUpperCase();
+
+    const pdfResult = await pdfService.genererFichePreInscriptionDepuisInscription(inscription);
+    pdfPath = pdfResult.filePath;
+    const pdfBuffer = await fs.promises.readFile(pdfPath);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="fiche-preinscription-${numeroInscription}.pdf"`
+    );
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('telechargerFichePreInscriptionPdf error:', error);
+    res.status(500).json({ error: 'Erreur lors de la génération du PDF' });
+  } finally {
+    if (pdfPath) {
+      pdfService.nettoyerPDF(pdfPath).catch(() => {});
+    }
+  }
+};
+
+/**
+ * Renvoyer la fiche de pré-inscription par email (dossier complet uniquement).
+ * POST /api/inscriptions/:id/renvoyer-fiche
+ */
+exports.renvoyerFichePreInscription = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const candidatId = req.user.id;
+
+    const inscription = await prisma.inscription.findUnique({
+      where: { id },
+      include: {
+        concours: true,
+        dossierInscription: true,
+        candidat: {
+          select: {
+            id: true,
+            email: true,
+            nom: true,
+            prenom: true,
+            matricule: true,
+            telephone: true,
+            dateNaiss: true,
+            lieuNaiss: true,
+          },
+        },
+      },
+    });
+
+    if (!inscription || inscription.candidatId !== candidatId) {
+      return res.status(404).json({ error: 'Inscription non trouvée' });
+    }
+
+    if (!inscription.dossierInscription?.quittanceUrl) {
+      return res.status(400).json({
+        error: 'La fiche n\'est disponible qu\'après dépôt complet du dossier (quittance incluse).',
+      });
+    }
+
+    await envoyerPreInscriptionApresCreation({
+      candidat: inscription.candidat,
+      concours: inscription.concours,
+      inscription,
+    });
+
+    res.json({ message: 'Fiche de pré-inscription envoyée par email.' });
+  } catch (error) {
+    console.error('renvoyerFichePreInscription error:', error);
+    res.status(500).json({ error: 'Impossible d\'envoyer la fiche par email. Réessayez plus tard.' });
   }
 };
 

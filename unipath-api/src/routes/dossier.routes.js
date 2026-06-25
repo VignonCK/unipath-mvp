@@ -6,6 +6,13 @@ const { checkRole } = require('../middleware/role.middleware');
 const dossierController = require('../controllers/dossier.controller');
 const { handleDossierUpload } = require('../middleware/upload.middleware');
 
+router.get(
+  '/signed-url',
+  protect,
+  checkRole(['COMMISSION', 'CONTROLEUR', 'DGES', 'CANDIDAT', 'ADMIN_ETABLISSEMENT']),
+  dossierController.getSignedUrl
+);
+
 // 🔒 Routes CANDIDAT — dossier personnel (multer une seule fois, mémoire → Supabase)
 router.post(
   '/upload',

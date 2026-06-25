@@ -295,12 +295,12 @@ export default function Home() {
               </button>
 
               <button
-                onClick={() => navigate('/register-etablissement')}
+                onClick={() => navigate('/login', { state: { message: 'Les établissements privés reçoivent leurs accès via la DGES.', type: 'info' } })}
                 className='text-left rounded-xl border border-orange-200 bg-orange-50 p-4 hover:bg-orange-100 transition'
               >
-                <p className='text-sm font-bold text-orange-700 mb-1'>Je suis etablissement</p>
+                <p className='text-sm font-bold text-orange-700 mb-1'>Je suis un établissement</p>
                 <p className='text-xs text-orange-700'>
-                  Creation du compte institutionnel, gestion du profil et logo officiel.
+                  Connexion avec le compte administrateur fourni par la DGES.
                 </p>
               </button>
             </div>

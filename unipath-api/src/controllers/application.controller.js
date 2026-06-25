@@ -4,6 +4,10 @@ const { supabaseAdmin } = require('../supabase');
 const paymentService = require('../services/payment.service');
 const pdfService = require('../services/pdf.service');
 const emailService = require('../services/email.service');
+const {
+  getAdminEtablissementId,
+  canAdminAccessApplication,
+} = require('../utils/admin-etablissement.helper');
 
 const REQUIRED_PROFILE_FIELDS = {
   nom: (c) => c?.nom,
@@ -291,16 +295,28 @@ exports.getMyApplications = async (req, res) => {
 
 exports.getApplicationsForEtablissement = async (req, res) => {
   try {
-    const etablissementId = req.user?.id;
+    const etablissementId = getAdminEtablissementId(req);
     if (!etablissementId) {
-      return res.status(401).json({ error: 'Utilisateur non authentifie' });
+      return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
     }
+
     const applications = await prisma.application.findMany({
       where: { etablissementId },
       include: {
-        candidat: { select: { id: true, matricule: true, nom: true, prenom: true, email: true } },
+        candidat: {
+          select: {
+            id: true,
+            matricule: true,
+            nom: true,
+            prenom: true,
+            email: true,
+            telephone: true,
+          },
+        },
         filiere: { select: { id: true, nom: true, code: true } },
+        preinscription: { select: { id: true, numeroPreinscription: true, statut: true } },
         payments: { select: { paymentType: true, status: true } },
+        documents: { select: { id: true, code: true, label: true, status: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -327,7 +343,7 @@ exports.getApplicationById = async (req, res) => {
 
     const canAccess =
       application.candidatId === userId ||
-      (userRole === 'ETABLISSEMENT' && application.etablissementId === userId);
+      canAdminAccessApplication(req, application);
     if (!canAccess) {
       return res.status(403).json({ error: 'Acces refuse' });
     }
@@ -840,7 +856,7 @@ exports.downloadPreinscriptionFiche = async (req, res) => {
 
     const canAccess =
       application.candidatId === userId ||
-      (role === 'ETABLISSEMENT' && application.etablissementId === userId);
+      canAdminAccessApplication(req, application);
     if (!canAccess) {
       return res.status(403).json({ error: 'Acces refuse' });
     }
@@ -901,9 +917,9 @@ exports.getSchoolRequirements = async (req, res) => {
 
 exports.getMySchoolRequirements = async (req, res) => {
   try {
-    const etablissementId = req.user?.id;
+    const etablissementId = getAdminEtablissementId(req);
     if (!etablissementId) {
-      return res.status(401).json({ error: 'Utilisateur non authentifie' });
+      return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
     }
     const requirements = await prisma.schoolRequirement.findMany({
       where: { etablissementId },
@@ -918,10 +934,10 @@ exports.getMySchoolRequirements = async (req, res) => {
 
 exports.upsertSchoolRequirement = async (req, res) => {
   try {
-    const etablissementId = req.user?.id;
+    const etablissementId = getAdminEtablissementId(req);
     const { code, label, requirementType, profileFieldKey, isRequired = true } = req.body;
     if (!etablissementId) {
-      return res.status(401).json({ error: 'Utilisateur non authentifie' });
+      return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
     }
     if (!code || !label || !requirementType) {
       return res.status(400).json({ error: 'code, label et requirementType sont requis' });
@@ -968,10 +984,10 @@ exports.upsertSchoolRequirement = async (req, res) => {
 
 exports.deleteSchoolRequirement = async (req, res) => {
   try {
-    const etablissementId = req.user?.id;
+    const etablissementId = getAdminEtablissementId(req);
     const { id } = req.params;
     if (!etablissementId) {
-      return res.status(401).json({ error: 'Utilisateur non authentifie' });
+      return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
     }
 
     const requirement = await prisma.schoolRequirement.findUnique({

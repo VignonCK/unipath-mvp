@@ -59,14 +59,6 @@ async function resolveUserContext(userId, email) {
     };
   }
 
-  const etablissement = await prisma.etablissement.findUnique({
-    where: { id: userId },
-    select: { id: true, nom: true, type: true, ville: true, email: true },
-  });
-  if (etablissement) {
-    return { role: 'ETABLISSEMENT', sousRole: null, profile: etablissement };
-  }
-
   return { role: null, sousRole: null, profile: null };
 }
 

@@ -16,6 +16,8 @@ router.post('/:inscriptionId/soumettre', protect, checkRole(['CANDIDAT']), inscr
 router.put('/:inscriptionId/pieces-extras', protect, checkRole(['CANDIDAT']), inscriptionController.updatePiecesExtras);
 router.post('/:inscriptionId/quittance', protect, checkRole(['CANDIDAT']), upload.single('quittance'), inscriptionController.uploadQuittanceInscription);
 router.delete('/:inscriptionId', protect, checkRole(['CANDIDAT']), inscriptionController.annulerInscription);
+router.post('/:id/renvoyer-fiche', protect, checkRole(['CANDIDAT']), inscriptionController.renvoyerFichePreInscription);
+router.get('/:id/fiche', protect, checkRole(['CANDIDAT']), inscriptionController.telechargerFichePreInscriptionPdf);
 
 // Routes de consultation - Tous les rôles authentifiés
 router.get('/:id', protect, inscriptionController.getInscriptionById);

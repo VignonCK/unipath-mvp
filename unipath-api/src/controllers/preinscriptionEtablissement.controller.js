@@ -1,4 +1,5 @@
 const prisma = require('../prisma');
+const { getAdminEtablissementId, adminOwnsEtablissement } = require('../utils/admin-etablissement.helper');
 const emailService = require('../services/email.service');
 const pdfService = require('../services/pdf.service');
 const fs = require('fs');
@@ -145,10 +146,10 @@ exports.getMesPreinscriptionsEtablissement = async (req, res) => {
 
 exports.getDemandesEtablissement = async (req, res) => {
   try {
-    const etablissementId = req.user?.id;
+    const etablissementId = getAdminEtablissementId(req);
     const { statut } = req.query;
     if (!etablissementId) {
-      return res.status(401).json({ error: 'Utilisateur non authentifie' });
+      return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
     }
 
     const where = {
@@ -165,6 +166,9 @@ exports.getDemandesEtablissement = async (req, res) => {
         filiere: {
           select: { id: true, nom: true, code: true },
         },
+        applicationSource: {
+          select: { id: true, numeroApplication: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -178,12 +182,12 @@ exports.getDemandesEtablissement = async (req, res) => {
 
 exports.deciderPreinscriptionEtablissement = async (req, res) => {
   try {
-    const etablissementId = req.user?.id;
+    const etablissementId = getAdminEtablissementId(req);
     const { id } = req.params;
     const { statut, motifDecision } = req.body;
 
     if (!etablissementId) {
-      return res.status(401).json({ error: 'Utilisateur non authentifie' });
+      return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
     }
     if (!STATUTS_DECISION.includes(statut)) {
       return res.status(400).json({ error: 'Statut de decision invalide' });
@@ -312,8 +316,8 @@ exports.telechargerFichePreinscriptionEtablissement = async (req, res) => {
     }
 
     const isOwnerEtudiant = preinscription.candidatId === userId;
-    const isOwnerEtablissement = userRole === 'ETABLISSEMENT' && preinscription.etablissementId === userId;
-    if (!isOwnerEtudiant && !isOwnerEtablissement) {
+    const isAdminEtab = adminOwnsEtablissement(req, preinscription.etablissementId);
+    if (!isOwnerEtudiant && !isAdminEtab) {
       return res.status(403).json({ error: 'Acces refuse' });
     }
 

@@ -1,0 +1,31 @@
+const TEMP_PASSWORD_VALIDITY_HOURS = 48;
+
+function getTempPasswordExpiresAt(fromDate = new Date()) {
+  return new Date(fromDate.getTime() + TEMP_PASSWORD_VALIDITY_HOURS * 60 * 60 * 1000);
+}
+
+function buildAdminEtablissementMetadata(etablissementId) {
+  return {
+    role: 'ADMIN_ETABLISSEMENT',
+    etablissementId,
+    mustChangePassword: true,
+    tempPasswordExpiresAt: getTempPasswordExpiresAt().toISOString(),
+  };
+}
+
+function isTempPasswordExpired(metadata) {
+  if (!metadata?.mustChangePassword) return false;
+  if (!metadata?.tempPasswordExpiresAt) return false;
+  return new Date() > new Date(metadata.tempPasswordExpiresAt);
+}
+
+function mustChangeAdminPassword(metadata) {
+  return metadata?.mustChangePassword === true;
+}
+
+module.exports = {
+  TEMP_PASSWORD_VALIDITY_HOURS,
+  buildAdminEtablissementMetadata,
+  isTempPasswordExpired,
+  mustChangeAdminPassword,
+};

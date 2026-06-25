@@ -29,9 +29,31 @@ export default function AdminEtablissementLayout({ children }) {
       icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
     },
     {
+      name: 'Candidatures',
+      subtitle: 'Consulter les dossiers',
+      path: '/admin-etablissement/candidatures',
+      icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+    },
+    {
+      name: 'Pré-inscriptions',
+      subtitle: 'Décider (valider / rejeter)',
+      path: '/admin-etablissement/preinscriptions',
+      icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
+    },
+    {
+      name: 'Étudiants',
+      path: '/admin-etablissement/etudiants',
+      icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
+    },
+    {
       name: 'Mon Établissement',
       path: '/admin-etablissement/etablissement',
       icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
+    },
+    {
+      name: 'Sécurité',
+      path: '/admin-etablissement/securite',
+      icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
     },
   ];
 
@@ -62,7 +84,14 @@ export default function AdminEtablissementLayout({ children }) {
             <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
             </svg>
-            <span>{item.name}</span>
+            <span className="text-left">
+              <span className="block">{item.name}</span>
+              {item.subtitle && (
+                <span className={`block text-[10px] font-normal leading-tight ${isActive(item.path) ? 'text-orange-100' : 'text-teal-300'}`}>
+                  {item.subtitle}
+                </span>
+              )}
+            </span>
           </button>
         ))}
       </nav>

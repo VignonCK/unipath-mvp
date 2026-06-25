@@ -8,7 +8,7 @@ router.post('/', protect, checkRole(['CANDIDAT']), controller.creerPreinscriptio
 router.get('/mes-preinscriptions', protect, checkRole(['CANDIDAT']), controller.getMesPreinscriptionsEtablissement);
 router.get('/:id/pdf', protect, controller.telechargerFichePreinscriptionEtablissement);
 
-router.get('/etablissement/demandes', protect, checkRole(['ETABLISSEMENT']), controller.getDemandesEtablissement);
-router.patch('/:id/decision', protect, checkRole(['ETABLISSEMENT']), controller.deciderPreinscriptionEtablissement);
+router.get('/etablissement/demandes', protect, checkRole(['ADMIN_ETABLISSEMENT']), controller.getDemandesEtablissement);
+router.patch('/:id/decision', protect, checkRole(['ADMIN_ETABLISSEMENT']), controller.deciderPreinscriptionEtablissement);
 
 module.exports = router;

@@ -13,11 +13,11 @@ router.post(
   checkRole(['CANDIDAT']),
   etablissementController.rechercherParFilieres
 );
-router.get('/mon/profil', protect, checkRole(['ETABLISSEMENT']), etablissementController.getMonProfilEtablissement);
-router.put('/mon/profil', protect, checkRole(['ETABLISSEMENT']), etablissementController.updateMonProfilEtablissement);
-router.post('/mon/logo', protect, checkRole(['ETABLISSEMENT']), upload.single('logo'), etablissementController.uploadMonLogoEtablissement);
+router.get('/mon/profil', protect, checkRole(['ADMIN_ETABLISSEMENT']), etablissementController.getMonProfilEtablissement);
+router.put('/mon/profil', protect, checkRole(['ADMIN_ETABLISSEMENT']), etablissementController.updateMonProfilEtablissement);
+router.post('/mon/logo', protect, checkRole(['ADMIN_ETABLISSEMENT']), upload.single('logo'), etablissementController.uploadMonLogoEtablissement);
 router.get('/:id', etablissementController.getEtablissementById);
-router.get('/:id/etudiants', protect, etablissementController.getEtudiantsEtablissement);
+router.get('/:id/etudiants', protect, checkRole(['ADMIN_ETABLISSEMENT']), etablissementController.getEtudiantsEtablissement);
 router.get('/:id/statistiques', protect, etablissementController.getStatistiquesEtablissement);
 
 module.exports = router;

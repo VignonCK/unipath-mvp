@@ -4,7 +4,6 @@ import './styles/academicBento.css';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import RegisterEtablissement from './pages/RegisterEtablissement';
 import AuthCallback from './pages/AuthCallback';
 import EmailConfirmation from './pages/EmailConfirmation';
 import DashboardCommission from './pages/DashboardCommission';
@@ -32,12 +31,18 @@ import DetailDossierControleur from './pages/DetailDossierControleur';
 import DossiersSansVerdictControleur from './pages/DossiersSansVerdictControleur';
 import DashboardEtudiant from './pages/DashboardEtudiant';
 import InscriptionAcademique from './pages/InscriptionAcademique';
-import EspaceEtablissement from './pages/EspaceEtablissement';
 import DGESEtablissementsAdmins from './pages/dges/DGESEtablissementsAdmins';
 import MesCampagnes from './pages/admin-etablissement/MesCampagnes';
 import CampagneForm from './pages/admin-etablissement/CampagneForm';
 import DetailCampagneAdmin from './pages/admin-etablissement/DetailCampagneAdmin';
 import MonEtablissementAdmin from './pages/admin-etablissement/MonEtablissementAdmin';
+import ChangerMotDePasseObligatoire from './pages/admin-etablissement/ChangerMotDePasseObligatoire';
+import SecuriteCompteAdmin from './pages/admin-etablissement/SecuriteCompteAdmin';
+import CandidaturesAdmin from './pages/admin-etablissement/CandidaturesAdmin';
+import DetailCandidatureAdmin from './pages/admin-etablissement/DetailCandidatureAdmin';
+import PreinscriptionsAdmin from './pages/admin-etablissement/PreinscriptionsAdmin';
+import EtudiantsAdmin from './pages/admin-etablissement/EtudiantsAdmin';
+import ResetPassword from './pages/ResetPassword';
 import PageCampagnesInscription from './pages/campagnes/PageCampagnesInscription';
 import DetailCampagneCandidat from './pages/campagnes/DetailCampagneCandidat';
 
@@ -48,8 +53,18 @@ function App() {
         {/* Routes publiques */}
         <Route path='/' element={<Home />} />
         <Route path='/login' element={<Login />} />
+        <Route path='/reset-password' element={<ResetPassword />} />
         <Route path='/register' element={<Register />} />
-        <Route path='/register-etablissement' element={<RegisterEtablissement />} />
+        <Route
+          path='/register-etablissement'
+          element={
+            <Navigate
+              to='/login'
+              replace
+              state={{ message: 'Les établissements privés reçoivent un compte administrateur de la DGES.', type: 'info' }}
+            />
+          }
+        />
         <Route path='/auth/callback' element={<AuthCallback />} />
         <Route path='/auth/confirm' element={<EmailConfirmation />} />
         <Route path='/confirmer-email' element={<EmailConfirmation />} />
@@ -175,11 +190,7 @@ function App() {
 
         <Route
           path='/etablissement'
-          element={
-            <ProtectedRoute allowedRoles={['ETABLISSEMENT']}>
-              <EspaceEtablissement />
-            </ProtectedRoute>
-          }
+          element={<Navigate to='/login' replace state={{ message: 'Utilisez votre compte administrateur d\'établissement.', type: 'info' }} />}
         />
 
         {/* Routes protégées - COMMISSION uniquement */}
@@ -296,6 +307,15 @@ function App() {
 
         {/* Routes protégées - ADMIN_ETABLISSEMENT */}
         <Route
+          path='/admin-etablissement/changer-mot-de-passe'
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+              <ChangerMotDePasseObligatoire />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path='/admin-etablissement/campagnes'
           element={
             <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
@@ -336,6 +356,51 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
               <MonEtablissementAdmin />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/admin-etablissement/candidatures'
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+              <CandidaturesAdmin />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/admin-etablissement/candidatures/:id'
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+              <DetailCandidatureAdmin />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/admin-etablissement/preinscriptions'
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+              <PreinscriptionsAdmin />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/admin-etablissement/etudiants'
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+              <EtudiantsAdmin />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/admin-etablissement/securite'
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+              <SecuriteCompteAdmin />
             </ProtectedRoute>
           }
         />

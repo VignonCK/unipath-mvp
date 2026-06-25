@@ -1,5 +1,4 @@
-// Tests du garde-fou série/date à la création d'inscription
-// Prisma et services externes sont mockés : aucun accès base/réseau requis.
+// Tests inscription controller
 
 jest.mock('../../prisma', () => ({
   concours: { findUnique: jest.fn() },
@@ -23,9 +22,6 @@ jest.mock('../../utils/inscription-email.helper', () => ({
 const prisma = require('../../prisma');
 const { creerInscription, soumettreDossier } = require('../inscription.controller');
 
-const FUTUR = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // +30 jours
-const PASSE = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // -30 jours
-
 function makeRes() {
   return {
     status: jest.fn().mockReturnThis(),
@@ -42,98 +38,25 @@ function makeReq(concoursId = 'concours-1', candidatId = 'cand-1') {
   };
 }
 
-describe('creerInscription — garde-fou série / date de dépôt', () => {
+describe('creerInscription — déprécié', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('refuse (403) un candidat dont la série n\'est pas acceptée', async () => {
-    prisma.concours.findUnique.mockResolvedValue({
-      id: 'concours-1',
-      seriesAcceptees: ['G1', 'G2'],
-      dateFin: FUTUR,
-      dateFinDepot: null,
-    });
-    prisma.candidat.findUnique.mockResolvedValue({ serie: 'C' });
-
+  it('renvoie 410 et ne crée pas d\'inscription', async () => {
     const req = makeReq();
     const res = makeRes();
     await creerInscription(req, res);
 
-    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.status).toHaveBeenCalledWith(410);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ error: expect.stringMatching(/série/i) })
-    );
-    // L'inscription ne doit pas avoir été tentée
-    expect(prisma.$transaction).not.toHaveBeenCalled();
-  });
-
-  it('refuse (400) si la période de dépôt est terminée', async () => {
-    prisma.concours.findUnique.mockResolvedValue({
-      id: 'concours-1',
-      seriesAcceptees: ['C'],
-      dateFin: PASSE,
-      dateFinDepot: null,
-    });
-
-    const req = makeReq();
-    const res = makeRes();
-    await creerInscription(req, res);
-
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ error: expect.stringMatching(/dépôt/i) })
-    );
-    expect(prisma.$transaction).not.toHaveBeenCalled();
-  });
-
-  it('accepte une série compatible via alias (candidat G2, concours G)', async () => {
-    prisma.concours.findUnique.mockResolvedValue({
-      id: 'concours-1',
-      seriesAcceptees: ['G'],
-      dateFin: FUTUR,
-      dateFinDepot: null,
-      piecesRequises: { pieces: [{ id: 'quittance', nom: 'Quittance' }] },
-    });
-    prisma.candidat.findUnique.mockResolvedValue({ serie: 'G2' });
-    prisma.inscription.findFirst.mockResolvedValue(null);
-    prisma.dossier.findUnique.mockResolvedValue({
-      id: 'dossier-1',
-      acteNaissance: 'url',
-      carteIdentite: 'url',
-      photo: 'url',
-      releve: 'url',
-    });
-    prisma.$transaction.mockImplementation(async (cb) =>
-      cb({
-        inscription: { create: jest.fn().mockResolvedValue({ id: 'ins-1' }) },
-        dossierInscription: { create: jest.fn().mockResolvedValue({ id: 'di-1' }) },
-        actionHistory: { create: jest.fn().mockResolvedValue({}) },
+      expect.objectContaining({
+        error: expect.stringMatching(/plus disponible/i),
+        useInstead: 'POST /api/inscriptions/soumettre',
       })
     );
-    prisma.inscription.findUnique.mockResolvedValue({
-      id: 'ins-1',
-      candidat: { id: 'cand-1', email: 'a@b.c' },
-      concours: { id: 'concours-1', libelle: 'Test' },
-      dossierInscription: { id: 'di-1' },
-    });
-
-    const req = makeReq();
-    const res = makeRes();
-    await creerInscription(req, res);
-
-    expect(res.status).toHaveBeenCalledWith(201);
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-  });
-
-  it('renvoie 404 si le concours est introuvable', async () => {
-    prisma.concours.findUnique.mockResolvedValue(null);
-
-    const req = makeReq();
-    const res = makeRes();
-    await creerInscription(req, res);
-
-    expect(res.status).toHaveBeenCalledWith(404);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.concours.findUnique).not.toHaveBeenCalled();
   });
 });
 

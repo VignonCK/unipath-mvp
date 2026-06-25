@@ -1,12 +1,10 @@
 // src/pages/DetailCandidatCommission.jsx
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { commissionService } from '../services/api';
+import { commissionService, dossierService } from '../services/api';
 import DocumentViewer from '../components/DocumentViewer';
 import HistoriqueActions from '../components/HistoriqueActions';
 import CommissionLayout from '../components/CommissionLayout';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 function initiales(prenom, nom) {
   return `${(prenom || '?')[0]}${(nom || '?')[0]}`.toUpperCase();
@@ -112,14 +110,18 @@ export default function DetailCandidatCommission() {
     handleDecision('SOUS_RESERVE', null, sousReserveModal.commentaire);
   };
 
-  const ouvrirDocument = (url, name, type = '') => {
+  const ouvrirDocument = async (url, name, type = '') => {
     if (!url) {
       showMessage('Document non disponible', 'error');
       return;
     }
-    // Construire l'URL complète si nécessaire
-    const fullUrl = url.startsWith('http') ? url : `${API_URL.replace('/api', '')}${url}`;
-    setDocumentViewer({ open: true, url: fullUrl, name, type });
+    try {
+      const { signedUrl } = await dossierService.getSignedUrl(url);
+      setDocumentViewer({ open: true, url: signedUrl, name, type });
+    } catch (err) {
+      console.error('Erreur ouverture document:', err);
+      showMessage('Impossible d\'ouvrir ce document. Veuillez réessayer.', 'error');
+    }
   };
 
   if (loading) {

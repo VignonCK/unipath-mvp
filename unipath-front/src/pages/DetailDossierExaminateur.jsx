@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../utils/apiConfig';
+import { ouvrirPiece } from '../services/api';
 import { BentoCard } from '../components/AcademicLayout';
 import {
   ControleurLoading,
@@ -186,14 +187,13 @@ const DetailDossierExaminateur = () => {
           {Object.entries(dossier.piecesBase).map(([key, piece]) => (
             <InfoRow key={key} label={key}>
               {piece.url ? (
-                <a
-                  href={piece.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
+                  onClick={() => ouvrirPiece(piece.url)}
                   className="text-sm text-blue-700 hover:underline"
                 >
                   Voir la pièce
-                </a>
+                </button>
               ) : (
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
                   Manquante
@@ -208,14 +208,13 @@ const DetailDossierExaminateur = () => {
           {Object.entries(dossier.piecesSpecifiques).map(([key, piece]) => (
             <InfoRow key={key} label={key}>
               {piece.url ? (
-                <a
-                  href={piece.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
+                  onClick={() => ouvrirPiece(piece.url)}
                   className="text-sm text-blue-700 hover:underline"
                 >
                   Voir la pièce
-                </a>
+                </button>
               ) : (
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
                   Manquante

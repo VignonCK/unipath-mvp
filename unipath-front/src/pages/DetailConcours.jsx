@@ -100,8 +100,57 @@ function profilIncomplet(candidat) {
   return CHAMPS_REQUIS.some((c) => !candidat[c]);
 }
 
+const PIECE_ID_ALIASES = {
+  acte_naissance: ['acte-naissance', 'acteNaissance'],
+  'acte-naissance': ['acte_naissance', 'acteNaissance'],
+  acteNaissance: ['acte_naissance', 'acte-naissance'],
+  carte_identite: ['carte-identite', 'carteIdentite'],
+  'carte-identite': ['carte_identite', 'carteIdentite'],
+  carteIdentite: ['carte_identite', 'carte-identite'],
+  photo_identite: ['photo'],
+  photo: ['photo_identite'],
+  releve_bac: ['releve-notes', 'releve'],
+  'releve-notes': ['releve_bac', 'releve'],
+  releve: ['releve_bac', 'releve-notes'],
+};
+
+function getPieceIdsToCheck(pieceId) {
+  return [pieceId, ...(PIECE_ID_ALIASES[pieceId] || [])];
+}
+
+function normalizeInscription(inscription) {
+  if (!inscription) return null;
+  return {
+    ...inscription,
+    quittanceUrl: inscription.quittanceUrl ?? inscription.dossierInscription?.quittanceUrl ?? null,
+    piecesExtras: inscription.piecesExtras ?? inscription.dossierInscription?.piecesExtras ?? {},
+  };
+}
+
 function getInscriptionExistante(candidat, concoursId) {
-  return candidat?.inscriptions?.find((i) => i.concoursId === concoursId) || null;
+  const raw = candidat?.inscriptions?.find((i) => i.concoursId === concoursId) || null;
+  return normalizeInscription(raw);
+}
+
+function getPieceStoredUrl(inscription, pieceId) {
+  if (!inscription) return null;
+  if (pieceId === 'quittance') return inscription.quittanceUrl || null;
+  const extras = inscription.piecesExtras || {};
+  for (const id of getPieceIdsToCheck(pieceId)) {
+    if (extras[id]) return extras[id];
+  }
+  return null;
+}
+
+function estPieceFournie(piece, inscription, fichiersLocaux = {}) {
+  if (piece.fournieDepuisDossier || !!fichiersLocaux[piece.id]) return true;
+  if (!inscription) return false;
+  return !!getPieceStoredUrl(inscription, piece.id);
+}
+
+/** Dossier réellement soumis (quittance déposée) — pas une simple pré-inscription legacy. */
+function isDossierConcoursSoumis(inscription) {
+  return !!normalizeInscription(inscription)?.quittanceUrl;
 }
 
 export default function DetailConcours() {
@@ -117,6 +166,9 @@ export default function DetailConcours() {
   const [erreur, setErreur] = useState(null);
   const [succes, setSucces] = useState(false);
   const [numeroInscription, setNumeroInscription] = useState(null);
+  const [telechargementFiche, setTelechargementFiche] = useState(false);
+  const [renvoiEmail, setRenvoiEmail] = useState(false);
+  const [messageFiche, setMessageFiche] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -153,16 +205,43 @@ export default function DetailConcours() {
     e.target.value = '';
   };
 
+  const handleTelechargerFiche = async (inscription) => {
+    setTelechargementFiche(true);
+    setMessageFiche(null);
+    try {
+      await inscriptionService.telechargerFiche(inscription.id, inscription.numeroInscription);
+      setMessageFiche({ type: 'success', text: 'Fiche de pré-inscription téléchargée.' });
+    } catch (error) {
+      setMessageFiche({ type: 'error', text: error.message || 'Impossible de générer la fiche.' });
+    } finally {
+      setTelechargementFiche(false);
+    }
+  };
+
+  const handleRenvoyerFicheEmail = async (inscriptionId) => {
+    setRenvoiEmail(true);
+    setMessageFiche(null);
+    try {
+      await inscriptionService.renvoyerFiche(inscriptionId);
+      setMessageFiche({ type: 'success', text: 'Fiche envoyée à votre adresse email.' });
+    } catch (error) {
+      setMessageFiche({ type: 'error', text: error.message || 'Envoi email impossible.' });
+    } finally {
+      setRenvoiEmail(false);
+    }
+  };
+
   const handleSoumettre = async () => {
     if (!concours || !candidat) return;
 
     const piecesList = getPiecesRequisesConcours(concours);
     const piecesObl = piecesList.filter((p) => p.obligatoire !== false);
-    const estFournieLocal = (piece) =>
-      piece.fournieDepuisDossier || !!fichiersLocaux[piece.id];
+    const inscriptionCourante = getInscriptionExistante(candidat, concours.id);
+    const dejaSoumis = isDossierConcoursSoumis(inscriptionCourante);
+    const estFournieLocal = (piece) => estPieceFournie(piece, inscriptionCourante, fichiersLocaux);
     const pret = piecesObl.length > 0
       && piecesObl.every((p) => estFournieLocal(p))
-      && !getInscriptionExistante(candidat, concours.id)
+      && !dejaSoumis
       && serieCandidatAcceptee(candidat, concours)
       && !depotEstFerme(concours)
       && !depotPasEncoreOuvert(concours)
@@ -240,14 +319,14 @@ export default function DetailConcours() {
   }
 
   const inscriptionExistante = getInscriptionExistante(candidat, concours.id);
+  const dossierSoumis = isDossierConcoursSoumis(inscriptionExistante);
   const pieces = getPiecesRequisesConcours(concours);
   const criteresEligibilite = getCriteresEligibilite(concours);
   const serieOk = serieCandidatAcceptee(candidat, concours);
   const depotFerme = depotEstFerme(concours);
   const depotFermeOuPasOuvert = depotFerme || depotPasEncoreOuvert(concours);
 
-  const estFournie = (piece) =>
-    piece.fournieDepuisDossier || !!fichiersLocaux[piece.id];
+  const estFournie = (piece) => estPieceFournie(piece, inscriptionExistante, fichiersLocaux);
 
   const piecesObligatoires = pieces.filter((p) => p.obligatoire !== false);
   const piecesOblFournies = piecesObligatoires.filter((p) => estFournie(p));
@@ -256,7 +335,7 @@ export default function DetailConcours() {
     : 0;
   const peutSoumettre = piecesObligatoires.length > 0
     && piecesOblFournies.length === piecesObligatoires.length
-    && !inscriptionExistante
+    && !dossierSoumis
     && serieOk
     && !depotFermeOuPasOuvert
     && !profilIncomplet(candidat);
@@ -281,13 +360,64 @@ export default function DetailConcours() {
           </div>
         )}
 
-        {inscriptionExistante && (
-          <div className='px-4 py-3 rounded-lg text-xs sm:text-sm bg-green-50 border border-green-200 text-green-800'>
-            Vous êtes déjà inscrit à ce concours
+        {messageFiche && (
+          <div className={`px-4 py-3 rounded-lg text-xs sm:text-sm border ${
+            messageFiche.type === 'success'
+              ? 'bg-green-50 border-green-200 text-green-800'
+              : 'bg-red-50 border-red-200 text-red-700'
+          }`}>
+            {messageFiche.text}
+          </div>
+        )}
+
+        {dossierSoumis && (
+          <div className='px-4 py-4 rounded-lg text-xs sm:text-sm bg-green-50 border border-green-200 text-green-800 space-y-3'>
+            <p>
+              Vous êtes inscrit à ce concours
+              {inscriptionExistante.numeroInscription && (
+                <> — N° <span className='font-mono'>{inscriptionExistante.numeroInscription}</span></>
+              )}
+              .
+            </p>
+            <div className='flex flex-wrap gap-2'>
+              <button
+                type='button'
+                onClick={() => handleTelechargerFiche(inscriptionExistante)}
+                disabled={telechargementFiche}
+                className='inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-700 text-white text-xs font-medium hover:bg-blue-800 disabled:opacity-50'
+              >
+                {telechargementFiche ? 'Génération...' : 'Télécharger ma fiche'}
+              </button>
+              <button
+                type='button'
+                onClick={() => handleRenvoyerFicheEmail(inscriptionExistante.id)}
+                disabled={renvoiEmail}
+                className='inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-green-300 text-green-800 text-xs font-medium hover:bg-green-100 disabled:opacity-50'
+              >
+                {renvoiEmail ? 'Envoi...' : 'Renvoyer par email'}
+              </button>
+            </div>
+            <p className='text-green-700 text-xs'>
+              La fiche est aussi accessible depuis{' '}
+              <button
+                type='button'
+                onClick={() => navigate(`/inscription/${inscriptionExistante.id}`)}
+                className='underline font-medium hover:text-green-900'
+              >
+                votre espace inscription
+              </button>
+              .
+            </p>
+          </div>
+        )}
+
+        {inscriptionExistante && !dossierSoumis && (
+          <div className='px-4 py-3 rounded-lg text-xs sm:text-sm bg-orange-50 border border-orange-200 text-orange-800'>
+            Pré-inscription enregistrée
             {inscriptionExistante.numeroInscription && (
-              <> — N° <span className='font-mono'>{inscriptionExistante.numeroInscription}</span></>
+              <> (N° <span className='font-mono'>{inscriptionExistante.numeroInscription}</span>)</>
             )}
-            .
+            {' '}— déposez la quittance et finalisez votre dossier ci-dessous.
           </div>
         )}
 
@@ -377,7 +507,7 @@ export default function DetailConcours() {
             <div className='flex items-center justify-between mb-3'>
               <h2 className='text-lg font-bold text-gray-900'>Pièces requises</h2>
               <span className={`text-xs font-bold px-3 py-1 rounded-full ${
-                peutSoumettre ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                dossierSoumis || peutSoumettre ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
               }`}>
                 {piecesOblFournies.length}/{piecesObligatoires.length} obligatoire{piecesObligatoires.length > 1 ? 's' : ''}
               </span>
@@ -386,12 +516,22 @@ export default function DetailConcours() {
             <div className='mb-4'>
               <div className='w-full bg-gray-100 rounded-full h-2 overflow-hidden'>
                 <div
-                  className={`h-2 rounded-full transition-all duration-500 ${peutSoumettre ? 'bg-green-500' : 'bg-orange-500'}`}
+                  className={`h-2 rounded-full transition-all duration-500 ${
+                    dossierSoumis || peutSoumettre ? 'bg-green-500' : 'bg-orange-500'
+                  }`}
                   style={{ width: `${pourcentage}%` }}
                 />
               </div>
-              <p className={`text-xs mt-1 font-medium ${peutSoumettre ? 'text-green-600' : 'text-orange-600'}`}>
-                {pourcentage}% — {peutSoumettre ? 'Prêt à soumettre' : 'Complétez toutes les pièces obligatoires'}
+              <p className={`text-xs mt-1 font-medium ${
+                dossierSoumis ? 'text-green-600' : peutSoumettre ? 'text-green-600' : 'text-orange-600'
+              }`}>
+                {pourcentage}%
+                {' — '}
+                {dossierSoumis
+                  ? 'Dossier soumis'
+                  : peutSoumettre
+                    ? 'Prêt à soumettre'
+                    : 'Complétez toutes les pièces obligatoires'}
               </p>
             </div>
 
@@ -402,7 +542,7 @@ export default function DetailConcours() {
                 const fichierLocal = fichiersLocaux[piece.id];
                 const accept = PIECES_FORMATS[piece.id] || '.pdf,.jpg,.jpeg,.png';
                 const depuisDossier = piece.fournieDepuisDossier;
-                const lectureSeule = inscriptionExistante || depuisDossier;
+                const lectureSeule = dossierSoumis || depuisDossier;
 
                 return (
                   <div
@@ -445,7 +585,7 @@ export default function DetailConcours() {
                       </div>
                     </div>
                     <div className='flex flex-col items-end gap-1 flex-shrink-0 ml-3'>
-                      {!lectureSeule && !inscriptionExistante ? (
+                      {!lectureSeule ? (
                         <label className='cursor-pointer'>
                           <span className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${
                             fournie
@@ -464,7 +604,7 @@ export default function DetailConcours() {
                       ) : depuisDossier ? (
                         <span className='text-xs text-green-600 font-medium'>Fournie</span>
                       ) : null}
-                      {!depuisDossier && !inscriptionExistante && (
+                      {!depuisDossier && !dossierSoumis && (
                         <span className='text-xs text-gray-400'>Max 5 MB</span>
                       )}
                     </div>
@@ -486,7 +626,7 @@ export default function DetailConcours() {
             </div>
           )}
 
-          {depotPasEncoreOuvert(concours) && !inscriptionExistante && (
+          {depotPasEncoreOuvert(concours) && !dossierSoumis && (
             <p className='text-orange-600 text-sm font-medium'>
               La période de dépôt ouvre le{' '}
               {new Date(concours.dateDebutDepot || concours.dateDebut).toLocaleDateString('fr-FR', {
@@ -498,13 +638,13 @@ export default function DetailConcours() {
             </p>
           )}
 
-          {depotFerme && !inscriptionExistante && (
+          {depotFerme && !dossierSoumis && (
             <div className='bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-800'>
               La période de dépôt est terminée.
             </div>
           )}
 
-          {!inscriptionExistante && (
+          {!dossierSoumis && (
             <button
               onClick={handleSoumettre}
               disabled={!peutSoumettre || soumissionEnCours}

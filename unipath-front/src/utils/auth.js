@@ -23,7 +23,6 @@ export const ROLES = {
   COMMISSION: 'COMMISSION',
   DGES: 'DGES',
   CONTROLEUR: 'CONTROLEUR',
-  ETABLISSEMENT: 'ETABLISSEMENT',
   ADMIN_ETABLISSEMENT: 'ADMIN_ETABLISSEMENT',
 };
 
@@ -39,7 +38,6 @@ const DEFAULT_ROUTES = {
   [ROLES.COMMISSION]: '/commission',
   [ROLES.DGES]: '/dashboard-dges',
   [ROLES.CONTROLEUR]: '/controleur-commission/tableau-de-bord',
-  [ROLES.ETABLISSEMENT]: '/etablissement',
   [ROLES.ADMIN_ETABLISSEMENT]: '/admin-etablissement/campagnes',
 };
 

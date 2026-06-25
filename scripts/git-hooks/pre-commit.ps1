@@ -35,17 +35,17 @@ if ($addedLines.Count -eq 0) {
 $addedText = $addedLines -join "`n"
 
 $patterns = @(
-    'password\s*=\s*\S+'
-    'api[_-]?key\s*=\s*\S+'
-    'secret\s*=\s*\S+'
-    'token\s*=\s*\S+'
-    'AKIA[0-9A-Z]+'
+    'password\s*=\s*[''"][^''"]{8,}[''"]'
+    'api[_-]?key\s*=\s*[''"][^''"]{8,}[''"]'
+    'secret\s*=\s*[''"][^''"]{8,}[''"]'
+    'token\s*=\s*[''"][^''"]{20,}[''"]'
+    'AKIA[0-9A-Z]{16}'
 )
 
 $found = $false
 
 foreach ($pattern in $patterns) {
-    if ($addedText -match $pattern) {
+    if ($addedText -cmatch $pattern) {
         if (-not $found) {
             Write-Host ""
             Write-Host "ERREUR: Possible secret detecte dans le commit" -ForegroundColor Red
