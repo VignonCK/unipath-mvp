@@ -65,10 +65,26 @@ export default function PageConcours() {
 
         {/* En-tête */}
         <BentoCard>
-          <h1 className='text-xl sm:text-2xl font-black gradient-text'>Concours disponibles</h1>
-          <p className='text-gray-500 text-xs sm:text-sm mt-1'>
-            {concours.length} concours — Inscrivez-vous avant la date limite de dépôt
-          </p>
+          <div className='flex flex-wrap items-start justify-between gap-3'>
+            <div>
+              <h1 className='text-xl sm:text-2xl font-black gradient-text'>Concours ouverts</h1>
+              <p className='text-gray-500 text-xs sm:text-sm mt-1'>
+                {concours.length} concours — Inscrivez-vous avant la date limite de dépôt
+              </p>
+            </div>
+            <button
+              type='button'
+              onClick={() => navigate('/mes-concours')}
+              className='inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-900 hover:bg-blue-100 transition'
+            >
+              Mes concours
+              {(candidat?.inscriptions?.length ?? 0) > 0 && (
+                <span className='rounded-full bg-orange-500 text-white px-1.5 py-0.5 text-[10px]'>
+                  {candidat.inscriptions.length}
+                </span>
+              )}
+            </button>
+          </div>
         </BentoCard>
 
         {/* Barre de recherche + tri */}

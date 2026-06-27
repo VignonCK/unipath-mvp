@@ -30,7 +30,8 @@ import ListeDossiersControleur from './pages/ListeDossiersControleur';
 import DetailDossierControleur from './pages/DetailDossierControleur';
 import DossiersSansVerdictControleur from './pages/DossiersSansVerdictControleur';
 import DashboardEtudiant from './pages/DashboardEtudiant';
-import InscriptionAcademique from './pages/InscriptionAcademique';
+import DemandeInscription from './pages/DemandeInscription';
+import MesInscriptionsAcademiques from './pages/MesInscriptionsAcademiques';
 import DGESEtablissementsAdmins from './pages/dges/DGESEtablissementsAdmins';
 import MesCampagnes from './pages/admin-etablissement/MesCampagnes';
 import CampagneForm from './pages/admin-etablissement/CampagneForm';
@@ -41,6 +42,7 @@ import SecuriteCompteAdmin from './pages/admin-etablissement/SecuriteCompteAdmin
 import CandidaturesAdmin from './pages/admin-etablissement/CandidaturesAdmin';
 import DetailCandidatureAdmin from './pages/admin-etablissement/DetailCandidatureAdmin';
 import PreinscriptionsAdmin from './pages/admin-etablissement/PreinscriptionsAdmin';
+import ValidationQuittances from './pages/admin-etablissement/ValidationQuittances';
 import EtudiantsAdmin from './pages/admin-etablissement/EtudiantsAdmin';
 import ResetPassword from './pages/ResetPassword';
 import PageCampagnesInscription from './pages/campagnes/PageCampagnesInscription';
@@ -162,12 +164,26 @@ function App() {
         />
 
         <Route
-          path='/inscription-academique'
+          path='/mes-inscriptions-academiques'
           element={
             <ProtectedRoute allowedRoles={STUDENT_ROLES}>
-              <InscriptionAcademique />
+              <MesInscriptionsAcademiques />
             </ProtectedRoute>
           }
+        />
+
+        <Route
+          path='/demande-inscription'
+          element={
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
+              <DemandeInscription />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/inscription-academique'
+          element={<Navigate to='/demande-inscription' replace />}
         />
 
         <Route
@@ -383,6 +399,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
               <PreinscriptionsAdmin />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/admin-etablissement/validation-quittances'
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+              <ValidationQuittances />
             </ProtectedRoute>
           }
         />

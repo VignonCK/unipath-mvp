@@ -200,14 +200,24 @@ export const inscriptionService = {
 
   getMesInscriptions: () => request('/inscriptions/mes-inscriptions'),
 
+  ajouterDocumentCompl: async (inscriptionId, formData) => {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${BASE_URL}/inscriptions/${inscriptionId}/documents-complementaires`, {
+      method: 'POST',
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      body: formData,
+    });
+    return handleMultipartResponse(response, 'Erreur upload document complementaire');
+  },
+
+  resoumettre: (inscriptionId) =>
+    request(`/inscriptions/${inscriptionId}/resoumettre`, { method: 'POST' }),
+
   renvoyerFiche: (inscriptionId) =>
     request(`/inscriptions/${inscriptionId}/renvoyer-fiche`, { method: 'POST' }),
 
-  telechargerFiche: (inscriptionId, numeroInscription) =>
-    telechargerFichePreInscriptionBlob(
-      inscriptionId,
-      `fiche-preinscription-${numeroInscription || inscriptionId}.pdf`
-    ),
+  telechargerFiche: (inscriptionId) =>
+    telechargerFichePreInscriptionBlob(inscriptionId, 'fiche-preinscription.pdf'),
 
   // ✅ NOUVEAU - Récupérer le dossier complet d'une inscription (base + spécifique)
   getDossierComplet: (inscriptionId) => request(`/completion/inscriptions/${inscriptionId}/dossier-complet`),
@@ -443,12 +453,16 @@ export const filiereAdminService = {
 };
 
 export const inscriptionAcadService = {
-  creer: (data) =>
-    request('/inscriptions-academiques', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
   getMesInscriptions: () => request('/inscriptions-academiques/mes-inscriptions'),
+  soumettreQuittance: async (id, formData) => {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${BASE_URL}/inscriptions-academiques/${id}/quittance`, {
+      method: 'POST',
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      body: formData,
+    });
+    return handleMultipartResponse(response, 'Erreur soumission quittance');
+  },
 };
 
 export const preinscriptionEtablissementService = {
@@ -466,6 +480,35 @@ export const preinscriptionEtablissementService = {
     request(`/preinscriptions-etablissement/${id}/decision`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
+    }),
+  ajouterDocumentCompl: async (id, formData) => {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${BASE_URL}/preinscriptions-etablissement/${id}/documents-complementaires`, {
+      method: 'POST',
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      body: formData,
+    });
+    return handleMultipartResponse(response, 'Erreur upload document complementaire');
+  },
+  resoumettre: (id) =>
+    request(`/preinscriptions-etablissement/${id}/resoumettre`, { method: 'POST' }),
+};
+
+export const preinscriptionService = preinscriptionEtablissementService;
+
+export const adminInscriptionService = {
+  getQuittancesSoumises: async (etablissementId) => {
+    const data = await etablissementService.getEtudiants(etablissementId);
+    return {
+      inscriptions: (data.etudiants || []).filter((i) => i.statut === 'QUITTANCE_SOUMISE'),
+    };
+  },
+  validerQuittance: (id) =>
+    request(`/inscriptions-academiques/${id}/valider-quittance`, { method: 'PATCH' }),
+  rejeterQuittance: (id, motif) =>
+    request(`/inscriptions-academiques/${id}/rejeter-quittance`, {
+      method: 'PATCH',
+      body: JSON.stringify({ motif }),
     }),
 };
 
@@ -542,7 +585,21 @@ export const parcoursService = {
 };
 
 // ── Fiche pré-inscription (blob binaire, pas de parsing JSON) ───────
-const telechargerFichePreInscriptionBlob = async (inscriptionId, filename) => {
+function extractFilenameFromContentDisposition(contentDisposition, fallback) {
+  if (!contentDisposition) return fallback;
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;\n]+)/i);
+  if (utf8Match) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {
+      return utf8Match[1];
+    }
+  }
+  const match = contentDisposition.match(/filename="?([^";\n]+)"?/i);
+  return match ? match[1] : fallback;
+}
+
+const telechargerFichePreInscriptionBlob = async (inscriptionId, fallbackFilename) => {
   const token = localStorage.getItem('token');
   const response = await fetch(`${BASE_URL}/inscriptions/${inscriptionId}/fiche`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -568,6 +625,8 @@ const telechargerFichePreInscriptionBlob = async (inscriptionId, filename) => {
   }
 
   const blob = await response.blob();
+  const contentDisposition = response.headers.get('content-disposition');
+  const filename = extractFilenameFromContentDisposition(contentDisposition, fallbackFilename);
   const objectUrl = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
   const link = document.createElement('a');
   link.href = objectUrl;
@@ -579,16 +638,23 @@ const telechargerFichePreInscriptionBlob = async (inscriptionId, filename) => {
 };
 
 // ── Convocation PDF ───────────────────────────────────────────────
-const telechargerPDF = async (url, filename) => {
+const telechargerPDF = async (url, fallbackFilename) => {
   const token = localStorage.getItem('token');
   const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (redirectToLoginOn401(response.status)) {
     return new Promise(() => {});
   }
   if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error || 'Erreur téléchargement');
+    const contentType = response.headers.get('content-type') || '';
+    let message = 'Erreur téléchargement';
+    if (contentType.includes('application/json')) {
+      const err = await response.json();
+      message = err.error || message;
+    }
+    throw new Error(message);
   }
+  const contentDisposition = response.headers.get('content-disposition');
+  const filename = extractFilenameFromContentDisposition(contentDisposition, fallbackFilename);
   const blob = await response.blob();
   const objectUrl = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -602,10 +668,10 @@ const telechargerPDF = async (url, filename) => {
 
 export const convocationService = {
   telecharger: (inscriptionId) =>
-    telechargerPDF(`${BASE_URL}/candidats/convocation/${inscriptionId}`, `convocation_${inscriptionId}.pdf`),
+    telechargerPDF(`${BASE_URL}/candidats/convocation/${inscriptionId}`, 'convocation.pdf'),
 
   telechargerPreinscription: (inscriptionId) =>
-    telechargerPDF(`${BASE_URL}/candidats/preinscription/${inscriptionId}`, `preinscription_${inscriptionId}.pdf`),
+    telechargerPDF(`${BASE_URL}/candidats/preinscription/${inscriptionId}`, 'fiche-preinscription.pdf'),
 };
 
 // ── History ───────────────────────────────────────────────────────

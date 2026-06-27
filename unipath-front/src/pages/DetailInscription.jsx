@@ -1,9 +1,16 @@
 // src/pages/DetailInscription.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { candidatService, convocationService } from '../services/api';
+import { candidatService, convocationService, inscriptionService } from '../services/api';
 import CandidatLayout from '../components/CandidatLayout';
-import { BentoCard, GlassBadge, AcademicButton } from '../components/AcademicLayout';
+import { BentoCard } from '../components/AcademicLayout';
+
+function parseDocumentsCompl(documentsCompl) {
+  if (documentsCompl?.pieces && Array.isArray(documentsCompl.pieces)) {
+    return documentsCompl.pieces;
+  }
+  return [];
+}
 
 const STATUT_CONFIG = {
   VALIDE:     { 
@@ -36,6 +43,16 @@ const STATUT_CONFIG = {
       </svg>
     )
   },
+  SOUS_RESERVE: {
+    label: 'Sous réserve',
+    color: 'bg-orange-500',
+    badge: 'bg-orange-100 text-orange-700',
+    icon: (
+      <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+        <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' />
+      </svg>
+    )
+  },
 };
 
 export default function DetailInscription() {
@@ -47,28 +64,34 @@ export default function DetailInscription() {
   const [photoUrl, setPhotoUrl] = useState(null);
   const [telechargement, setTelechargement] = useState({});
   const [message, setMessage] = useState({ text: '', type: 'info' });
+  const [docModalOpen, setDocModalOpen] = useState(false);
+  const [docFichier, setDocFichier] = useState(null);
+  const [actionBusy, setActionBusy] = useState(false);
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) { navigate('/login'); return; }
-    
-    candidatService.getProfil()
+  const loadProfil = useCallback(() => {
+    return candidatService.getProfil()
       .then((p) => {
         setCandidat(p);
         const saved = localStorage.getItem('photoProfil_' + p.id);
         if (saved) setPhotoUrl(saved);
-        
-        // Trouver l'inscription correspondante
+
         const insc = p.inscriptions?.find(i => i.id === inscriptionId);
         if (!insc) {
           navigate('/dashboard');
           return;
         }
         setInscription(insc);
-      })
+      });
+  }, [inscriptionId, navigate]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) { navigate('/login'); return; }
+    
+    loadProfil()
       .catch(() => navigate('/login'))
       .finally(() => setLoading(false));
-  }, [inscriptionId, navigate]);
+  }, [loadProfil, navigate]);
 
   const showMessage = (text, type = 'info') => {
     setMessage({ text, type });
@@ -99,6 +122,38 @@ export default function DetailInscription() {
     }
   };
 
+  const ajouterDocumentCompl = async () => {
+    if (!docFichier) return;
+    try {
+      setActionBusy(true);
+      const formData = new FormData();
+      formData.append('fichier', docFichier);
+      const data = await inscriptionService.ajouterDocumentCompl(inscriptionId, formData);
+      showMessage(data.message || 'Document ajouté avec succès', 'success');
+      setDocFichier(null);
+      setDocModalOpen(false);
+      await loadProfil();
+    } catch (err) {
+      showMessage(err.message || 'Erreur upload document', 'error');
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const resoumettreDossier = async () => {
+    if (!window.confirm('Confirmer la resoumission de votre dossier à la commission ?')) return;
+    try {
+      setActionBusy(true);
+      const data = await inscriptionService.resoumettre(inscriptionId);
+      showMessage(data.message || 'Dossier resoumis avec succès', 'success');
+      await loadProfil();
+    } catch (err) {
+      showMessage(err.message || 'Erreur resoumission', 'error');
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
   if (loading) return (
     <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
       <div className='w-10 h-10 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin' />
@@ -108,6 +163,7 @@ export default function DetailInscription() {
   if (!inscription) return null;
 
   const cfg = STATUT_CONFIG[inscription.statut] || STATUT_CONFIG.EN_ATTENTE;
+  const piecesCompl = parseDocumentsCompl(inscription.documentsCompl);
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
@@ -115,13 +171,13 @@ export default function DetailInscription() {
 
         {/* Bouton retour */}
         <button
-          onClick={() => navigate('/dashboard')}
+          onClick={() => navigate('/mes-concours')}
           className='flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm font-medium transition'
         >
           <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
             <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 19l-7-7 7-7' />
           </svg>
-          Retour au tableau de bord
+          Retour à Mes concours
         </button>
 
         {/* Toast */}
@@ -237,6 +293,57 @@ export default function DetailInscription() {
               </div>
             </div>
           </div>
+        )}
+
+        {inscription.statut === 'SOUS_RESERVE' && (
+          <BentoCard className='p-6 border-l-4 border-orange-500'>
+            <div className='space-y-4'>
+              <div className='rounded-xl border border-orange-200 bg-orange-50 px-5 py-4'>
+                <p className='font-semibold text-orange-900 text-sm'>Action requise — dossier accepté sous réserve</p>
+                <p className='text-orange-800 text-sm mt-2 whitespace-pre-wrap'>
+                  {inscription.commentaireSousReserve || 'Veuillez compléter votre dossier avec les documents demandés par la commission.'}
+                </p>
+              </div>
+
+              {piecesCompl.length > 0 && (
+                <div>
+                  <p className='text-xs font-medium text-gray-500 mb-2'>Documents complémentaires déposés</p>
+                  <ul className='space-y-2'>
+                    {piecesCompl.map((doc) => (
+                      <li key={doc.id || doc.url} className='flex items-center gap-2 text-sm'>
+                        <svg className='w-4 h-4 text-blue-600 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' />
+                        </svg>
+                        <a href={doc.url} target='_blank' rel='noopener noreferrer' className='text-blue-800 hover:underline'>
+                          {doc.nom || 'Document'}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className='flex flex-wrap gap-3'>
+                <button
+                  type='button'
+                  onClick={() => { setDocModalOpen(true); setDocFichier(null); }}
+                  disabled={actionBusy}
+                  className='btn-academic px-4 py-2 text-sm disabled:opacity-50'
+                >
+                  Ajouter un document
+                </button>
+                <button
+                  type='button'
+                  onClick={resoumettreDossier}
+                  disabled={actionBusy || piecesCompl.length === 0}
+                  className='px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition disabled:opacity-50'
+                  title={piecesCompl.length === 0 ? 'Ajoutez au moins un document avant de resoumettre' : undefined}
+                >
+                  Resoumettre mon dossier
+                </button>
+              </div>
+            </div>
+          </BentoCard>
         )}
 
         {/* Documents disponibles */}
@@ -359,6 +466,41 @@ export default function DetailInscription() {
         </BentoCard>
 
       </div>
+
+      {docModalOpen && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm'>
+          <div className='bg-white w-full max-w-md rounded-2xl shadow-xl'>
+            <div className='px-6 py-4 border-b border-gray-200'>
+              <h3 className='font-semibold text-gray-900'>Ajouter un document complémentaire</h3>
+            </div>
+            <div className='px-6 py-5'>
+              <input
+                type='file'
+                accept='application/pdf,image/png,image/jpeg'
+                onChange={(e) => setDocFichier(e.target.files?.[0] || null)}
+                className='w-full text-sm'
+              />
+            </div>
+            <div className='px-6 py-4 border-t border-gray-200 flex gap-3 justify-end'>
+              <button
+                type='button'
+                onClick={() => { setDocModalOpen(false); setDocFichier(null); }}
+                className='text-sm border border-gray-200 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-50'
+              >
+                Annuler
+              </button>
+              <button
+                type='button'
+                onClick={ajouterDocumentCompl}
+                disabled={actionBusy || !docFichier}
+                className='text-sm bg-blue-900 text-white px-4 py-2 rounded-lg hover:bg-blue-800 disabled:opacity-50'
+              >
+                {actionBusy ? 'Envoi...' : 'Envoyer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </CandidatLayout>
   );
 }

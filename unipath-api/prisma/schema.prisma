@@ -134,6 +134,8 @@ model DossierInscription {
   decisionControleurPar   String?
   commentaireRejet        String?
   commentaireSousReserve  String?
+  documentsCompl          Json?
+  historiqueStatuts       Json?
   decisionCommissionPar   String?
   decisionCommissionDate  DateTime?
   commentaireControleur   String?
@@ -312,6 +314,7 @@ model Etablissement {
   applications    Application[]
   campagnes       CampagneInscription[]
   requirements    SchoolRequirement[]
+  matriculeFormat String?
 
   @@index([type])
   @@index([ville])
@@ -331,6 +334,8 @@ model Filiere {
   preinscriptions PreinscriptionEtablissement[]
   applications    Application[]
   campagneFilieres CampagneFiliere[]
+  sigle             String?
+  matriculeCompteur Int                           @default(0)
 
   @@index([etablissementId])
   @@index([niveau])
@@ -345,6 +350,10 @@ model InscriptionAcademique {
   createdAt            DateTime                     @default(now())
   niveau               Int
   statut               StatutInscriptionAcad        @default(EN_COURS)
+  quittanceBancaire    String?
+  quittanceSoumiseLe   DateTime?
+  quittanceValideeLe   DateTime?
+  matricule            String?                      @unique
   candidat             Candidat                     @relation(fields: [candidatId], references: [id], onDelete: Cascade)
   etablissement        Etablissement                @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
   filiere              Filiere                      @relation(fields: [filiereId], references: [id], onDelete: Cascade)
@@ -367,6 +376,9 @@ model PreinscriptionEtablissement {
   anneeAcademique       String
   niveau                Int
   statut                StatutPreinscriptionEtablissement @default(EN_ATTENTE)
+  commentaireAdmin      String?
+  documentsCompl        Json?
+  historiqueStatuts     Json?
   motifDecision         String?
   decidedAt             DateTime?
   decidedBy             String?
@@ -535,6 +547,8 @@ enum StatutInscriptionAcad {
   VALIDE
   REDOUBLANT
   ABANDONNE
+  EN_ATTENTE_QUITTANCE
+  QUITTANCE_SOUMISE
 }
 
 enum StatutPreinscriptionEtablissement {

@@ -24,7 +24,7 @@ export default function DetailCampagneCandidat() {
   }, [id]);
 
   const postuler = (cf) => {
-    navigate('/inscription-academique', {
+    navigate('/demande-inscription', {
       state: {
         etablissementId: campagne.etablissement?.id,
         filiereId: cf.filiereId || cf.filiere?.id,

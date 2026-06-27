@@ -11,6 +11,7 @@ app.use(cors({
     /\.vercel\.app$/,
   ],
   credentials: true,
+  exposedHeaders: ['Content-Disposition'],
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

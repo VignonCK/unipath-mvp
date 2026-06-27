@@ -2,6 +2,7 @@ const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { promisify } = require('util');
+const prisma = require('../prisma');
 const { supabaseAdmin } = require('../supabase');
 const {
   BUCKET_DOSSIERS_CANDIDATS,
@@ -86,16 +87,23 @@ function computePiecesFichePayload(inscription) {
   return { pieces_fournies: piecesFournies, pieces_manquantes: piecesManquantes };
 }
 
-async function downloadPhotoAsBase64(photoUrl) {
+async function downloadPhotoAsBase64(photoUrl, { logPrefix } = {}) {
   let photoBase64 = null;
   let photoMime = null;
 
   if (!photoUrl) {
+    if (logPrefix) {
+      console.log(`${logPrefix} photo URL:`, photoUrl);
+    }
     return { photoBase64, photoMime };
   }
 
   try {
     const relativePath = extractStorageRelativePath(photoUrl);
+    if (logPrefix) {
+      console.log(`${logPrefix} relativePath:`, relativePath);
+      console.log(`${logPrefix} bucket:`, BUCKET_DOSSIERS_CANDIDATS);
+    }
     if (!relativePath) {
       return { photoBase64, photoMime };
     }
@@ -104,16 +112,28 @@ async function downloadPhotoAsBase64(photoUrl) {
       .from(BUCKET_DOSSIERS_CANDIDATS)
       .createSignedUrl(relativePath, PDF_PHOTO_SIGNED_URL_EXPIRES_IN);
 
+    if (logPrefix) {
+      console.log(`${logPrefix} signedData:`, signedData);
+      console.log(`${logPrefix} signedError:`, signedError);
+    }
+
     if (signedError || !signedData?.signedUrl) {
       console.warn('[PDF] Impossible de générer URL signée photo:', signedError?.message);
       return { photoBase64, photoMime };
     }
 
     const photoResponse = await fetch(signedData.signedUrl);
+    if (logPrefix) {
+      console.log(`${logPrefix} photoResponse.ok:`, photoResponse?.ok);
+      console.log(`${logPrefix} photoResponse.status:`, photoResponse?.status);
+    }
     if (photoResponse.ok) {
       const buffer = await photoResponse.arrayBuffer();
       photoBase64 = Buffer.from(buffer).toString('base64');
       photoMime = photoResponse.headers.get('content-type') || 'image/jpeg';
+      if (logPrefix) {
+        console.log(`${logPrefix} photoBase64 length:`, photoBase64?.length);
+      }
       console.log('[PDF] Photo récupérée via URL signée ✅, taille:', buffer.byteLength, 'bytes');
     } else {
       console.warn('[PDF] Impossible de télécharger la photo:', photoResponse.status);
@@ -138,10 +158,12 @@ function collectPhotoCandidateUrls({ photo, candidat, inscription }) {
   ].filter(Boolean);
 }
 
-async function downloadFirstAvailablePhotoAsBase64(urls) {
+async function downloadFirstAvailablePhotoAsBase64(urls, logPrefix = null) {
   const uniqueUrls = [...new Set(urls)];
-  for (const url of uniqueUrls) {
-    const result = await downloadPhotoAsBase64(url);
+  for (let index = 0; index < uniqueUrls.length; index += 1) {
+    const result = await downloadPhotoAsBase64(uniqueUrls[index], {
+      logPrefix: logPrefix && index === 0 ? logPrefix : null,
+    });
     if (result.photoBase64) {
       return result;
     }
@@ -175,27 +197,64 @@ class PDFService {
       serie,
       photo,
     } = data;
-    
+
+    let inscriptionComplete = inscription;
+    if (inscription?.id) {
+      inscriptionComplete = await prisma.inscription.findUnique({
+        where: { id: inscription.id },
+        include: {
+          candidat: {
+            include: {
+              dossier: true,
+            },
+          },
+          concours: true,
+          dossierInscription: true,
+        },
+      });
+    }
+
+    const candidatEffectif = inscriptionComplete?.candidat ?? candidat;
+    const inscriptionEffectif = inscriptionComplete ?? inscription;
+
+    console.log('[PDF-Fiche] candidat.dossier:', JSON.stringify(candidatEffectif?.dossier, null, 2));
+    console.log('[PDF-Fiche] photo URL:', candidatEffectif?.dossier?.photo);
+
     // Créer un fichier JSON temporaire avec les données
     const inputFile = path.join(this.tempDir, `input-preinscription-${Date.now()}.json`);
     const outputFile = path.join(this.tempDir, `fiche-preinscription-${numeroDossier}.pdf`);
     
     try {
-      const photoCandidateUrls = collectPhotoCandidateUrls({ photo, candidat, inscription });
-      const { photoBase64, photoMime } = await downloadFirstAvailablePhotoAsBase64(photoCandidateUrls);
+      const photoCandidateUrls = collectPhotoCandidateUrls({
+        photo,
+        candidat: candidatEffectif,
+        inscription: inscriptionEffectif,
+      });
+      console.log('[PDF-Fiche] photoCandidateUrls:', photoCandidateUrls);
+      const { photoBase64, photoMime } = await downloadFirstAvailablePhotoAsBase64(
+        photoCandidateUrls,
+        '[PDF-Fiche]',
+      );
+      console.log('[PDF-Fiche] photoBase64 length (final):', photoBase64?.length);
 
       const payload = {
-        candidat,
-        concours,
+        candidat: candidatEffectif,
+        concours: inscriptionEffectif?.concours ?? concours,
         numeroDossier,
         pieces_fournies: pieces_fournies || [],
         pieces_manquantes: pieces_manquantes || [],
-        statut: statut || inscription?.dossierInscription?.statut || 'EN_ATTENTE',
-        serie: serie ?? candidat?.serie ?? null,
+        statut: statut || inscriptionEffectif?.dossierInscription?.statut || 'EN_ATTENTE',
+        serie: serie ?? candidatEffectif?.serie ?? null,
         photoBase64,
         photoMime,
       };
-      if (inscription) payload.inscription = inscription;
+      if (inscriptionEffectif) {
+        payload.inscription = {
+          id: inscriptionEffectif.id,
+          numeroInscription: inscriptionEffectif.numeroInscription,
+          dossierInscription: inscriptionEffectif.dossierInscription || null,
+        };
+      }
       await writeFileAsync(inputFile, JSON.stringify(payload));
 
       // Appeler le script PHP
@@ -283,21 +342,32 @@ class PDFService {
     const outputFile = path.join(this.tempDir, `convocation-${candidat.matricule}.pdf`);
 
     try {
-      const sigle = (concours?.libelle || '')
-        .replace(/^Concours\s+/i, '')
-        .split(' ')[0]
+      console.log('[Convocation] inscription.numeroInscription:', inscription?.numeroInscription);
+      console.log('[Convocation] inscription.concours.libelle:', inscription?.concours?.libelle);
+      console.log('[Convocation] inscription.id:', inscription?.id);
+
+      // Extraire le sigle depuis le libellé du concours
+      // Ex: "Concours EPAC 2026 - Génie Civil" → "EPAC"
+      const libelle = inscription?.concours?.libelle || concours?.libelle || '';
+      const sigle = libelle
+        .replace(/concours\s*/i, '')
+        .trim()
+        .split(/\s+/)[0]
         .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
         .slice(0, 6) || 'CONV';
 
-      const year = concours?.dateDebutComposition
-        ? new Date(concours.dateDebutComposition).getFullYear()
-        : new Date().getFullYear();
+      // Extraire le numéro séquentiel depuis numeroInscription
+      // Ex: "INS-2026-000001" → "000001"
+      const numeroInscription = inscription?.numeroInscription ?? data.numeroInscription ?? null;
+      let sequence = '000001';
+      if (numeroInscription) {
+        const parts = numeroInscription.split('-');
+        sequence = parts[parts.length - 1] || '000001';
+      }
 
-      const numeroSuffix = inscription?.numeroInscription?.split('-').pop()
-        || candidat?.matricule
-        || '000001';
-
-      const numeroConvocation = `CONV-${sigle}-${year}-${numeroSuffix}`;
+      const numeroConvocation = `CONV-${sigle}-2026-${sequence}`;
+      console.log('[Convocation] numeroConvocation généré:', numeroConvocation);
 
       const photoCandidateUrls = collectPhotoCandidateUrls({
         photo: candidat?.dossier?.photo || candidat?.photoPath || candidat?.photo,
@@ -310,6 +380,7 @@ class PDFService {
         candidat,
         concours,
         numeroConvocation,
+        numeroInscription,
         libelleConcours: concours?.libelle || 'Concours d\'entrée à l\'université',
         matieres: concours?.matieres || [],
         dateDebutComposition: concours?.dateDebutComposition || null,

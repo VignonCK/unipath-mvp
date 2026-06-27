@@ -5,6 +5,47 @@ import { candidatService, concoursService, inscriptionService } from '../service
 import { handleSessionError } from '../utils/auth';
 import CandidatLayout from '../components/CandidatLayout';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+function extractFilenameFromContentDisposition(contentDisposition, fallback) {
+  if (!contentDisposition) return fallback;
+  const match = contentDisposition.match(/filename="?([^";\n]+)"?/);
+  return match ? match[1] : fallback;
+}
+
+async function downloadPdfFromUrl(url, fallbackFilename) {
+  const token = localStorage.getItem('token');
+  const response = await fetch(url, {
+    headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+  });
+
+  if (response.status === 401) {
+    throw new Error('Session expirée');
+  }
+
+  if (!response.ok) {
+    const contentType = response.headers.get('content-type') || '';
+    let message = 'Erreur lors du téléchargement';
+    if (contentType.includes('application/json')) {
+      const err = await response.json();
+      message = err.error || message;
+    }
+    throw new Error(message);
+  }
+
+  const contentDisposition = response.headers.get('content-disposition');
+  const nomFichier = extractFilenameFromContentDisposition(contentDisposition, fallbackFilename);
+  const blob = await response.blob();
+  const objectUrl = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.setAttribute('download', nomFichier);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(objectUrl);
+}
+
 const CHAMPS_REQUIS = ['telephone', 'dateNaiss', 'lieuNaiss'];
 
 const PIECES_FORMATS = {
@@ -166,9 +207,48 @@ export default function DetailConcours() {
   const [erreur, setErreur] = useState(null);
   const [succes, setSucces] = useState(false);
   const [numeroInscription, setNumeroInscription] = useState(null);
-  const [telechargementFiche, setTelechargementFiche] = useState(false);
-  const [renvoiEmail, setRenvoiEmail] = useState(false);
-  const [messageFiche, setMessageFiche] = useState(null);
+  const [inscriptionId, setInscriptionId] = useState(null);
+  const [telechargement, setTelechargement] = useState({ fiche: false, convocation: false });
+
+  const resolveInscriptionId = () => inscriptionId || getInscriptionExistante(candidat, id)?.id;
+
+  const handleTelechargerFiche = async () => {
+    const currentInscriptionId = resolveInscriptionId();
+    if (!currentInscriptionId) return;
+    try {
+      setTelechargement((prev) => ({ ...prev, fiche: true }));
+      setErreur(null);
+      await downloadPdfFromUrl(
+        `${API_BASE_URL}/candidats/preinscription/${currentInscriptionId}`,
+        'fiche-preinscription.pdf',
+      );
+    } catch (error) {
+      console.error('Erreur téléchargement fiche:', error);
+      if (handleSessionError(error, navigate)) return;
+      setErreur('Erreur lors du téléchargement de la fiche.');
+    } finally {
+      setTelechargement((prev) => ({ ...prev, fiche: false }));
+    }
+  };
+
+  const handleTelechargerConvocation = async () => {
+    const currentInscriptionId = resolveInscriptionId();
+    if (!currentInscriptionId) return;
+    try {
+      setTelechargement((prev) => ({ ...prev, convocation: true }));
+      setErreur(null);
+      await downloadPdfFromUrl(
+        `${API_BASE_URL}/candidats/convocation/${currentInscriptionId}`,
+        'convocation.pdf',
+      );
+    } catch (error) {
+      console.error('Erreur téléchargement convocation:', error);
+      if (handleSessionError(error, navigate)) return;
+      setErreur('Erreur lors du téléchargement de la convocation.');
+    } finally {
+      setTelechargement((prev) => ({ ...prev, convocation: false }));
+    }
+  };
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -203,32 +283,6 @@ export default function DetailConcours() {
     setFichiersLocaux((prev) => ({ ...prev, [pieceId]: file }));
     setErreur(null);
     e.target.value = '';
-  };
-
-  const handleTelechargerFiche = async (inscription) => {
-    setTelechargementFiche(true);
-    setMessageFiche(null);
-    try {
-      await inscriptionService.telechargerFiche(inscription.id, inscription.numeroInscription);
-      setMessageFiche({ type: 'success', text: 'Fiche de pré-inscription téléchargée.' });
-    } catch (error) {
-      setMessageFiche({ type: 'error', text: error.message || 'Impossible de générer la fiche.' });
-    } finally {
-      setTelechargementFiche(false);
-    }
-  };
-
-  const handleRenvoyerFicheEmail = async (inscriptionId) => {
-    setRenvoiEmail(true);
-    setMessageFiche(null);
-    try {
-      await inscriptionService.renvoyerFiche(inscriptionId);
-      setMessageFiche({ type: 'success', text: 'Fiche envoyée à votre adresse email.' });
-    } catch (error) {
-      setMessageFiche({ type: 'error', text: error.message || 'Envoi email impossible.' });
-    } finally {
-      setRenvoiEmail(false);
-    }
   };
 
   const handleSoumettre = async () => {
@@ -267,6 +321,7 @@ export default function DetailConcours() {
 
       const result = await inscriptionService.soumettreComplet(formData);
       setNumeroInscription(result.numeroInscription || null);
+      setInscriptionId(result.inscriptionId || null);
       setSucces(true);
     } catch (error) {
       setErreur(error.message || 'Erreur lors de la soumission.');
@@ -304,15 +359,36 @@ export default function DetailConcours() {
             <p className='text-sm font-mono text-green-700 mb-2'>N° {numeroInscription}</p>
           )}
           <p className='text-gray-600 mb-6'>
-            Votre dossier a été soumis avec succès. Vous recevrez votre fiche de pré-inscription par email.
+            Votre dossier a été soumis avec succès. Votre fiche de pré-inscription est disponible dans votre espace inscription (et par email).
             La commission examinera votre dossier et vous enverra une convocation si celui-ci est validé.
           </p>
-          <button
-            onClick={() => navigate('/concours')}
-            className='bg-blue-700 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-800'
-          >
-            Retour aux concours
-          </button>
+          <div className='flex flex-col sm:flex-row gap-2 justify-center'>
+            {inscriptionId && (
+              <>
+                <button
+                  type='button'
+                  onClick={handleTelechargerFiche}
+                  disabled={telechargement.fiche}
+                  className='bg-blue-700 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-800 disabled:opacity-60'
+                >
+                  {telechargement.fiche ? 'Téléchargement...' : 'Télécharger la fiche'}
+                </button>
+                <button
+                  type='button'
+                  onClick={() => navigate(`/inscription/${inscriptionId}`)}
+                  className='bg-white border border-gray-200 text-gray-800 px-6 py-2 rounded-lg font-medium hover:bg-gray-50'
+                >
+                  Voir mon inscription
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => navigate('/concours')}
+              className='bg-white border border-gray-200 text-gray-800 px-6 py-2 rounded-lg font-medium hover:bg-gray-50'
+            >
+              Retour aux concours
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -360,18 +436,8 @@ export default function DetailConcours() {
           </div>
         )}
 
-        {messageFiche && (
-          <div className={`px-4 py-3 rounded-lg text-xs sm:text-sm border ${
-            messageFiche.type === 'success'
-              ? 'bg-green-50 border-green-200 text-green-800'
-              : 'bg-red-50 border-red-200 text-red-700'
-          }`}>
-            {messageFiche.text}
-          </div>
-        )}
-
         {dossierSoumis && (
-          <div className='px-4 py-4 rounded-lg text-xs sm:text-sm bg-green-50 border border-green-200 text-green-800 space-y-3'>
+          <div className='px-4 py-4 rounded-lg text-xs sm:text-sm bg-green-50 border border-green-200 text-green-800 space-y-2'>
             <p>
               Vous êtes inscrit à ce concours
               {inscriptionExistante.numeroInscription && (
@@ -379,35 +445,37 @@ export default function DetailConcours() {
               )}
               .
             </p>
-            <div className='flex flex-wrap gap-2'>
-              <button
-                type='button'
-                onClick={() => handleTelechargerFiche(inscriptionExistante)}
-                disabled={telechargementFiche}
-                className='inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-700 text-white text-xs font-medium hover:bg-blue-800 disabled:opacity-50'
-              >
-                {telechargementFiche ? 'Génération...' : 'Télécharger ma fiche'}
-              </button>
-              <button
-                type='button'
-                onClick={() => handleRenvoyerFicheEmail(inscriptionExistante.id)}
-                disabled={renvoiEmail}
-                className='inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-green-300 text-green-800 text-xs font-medium hover:bg-green-100 disabled:opacity-50'
-              >
-                {renvoiEmail ? 'Envoi...' : 'Renvoyer par email'}
-              </button>
-            </div>
             <p className='text-green-700 text-xs'>
-              La fiche est aussi accessible depuis{' '}
+              Consultez votre{' '}
               <button
                 type='button'
                 onClick={() => navigate(`/inscription/${inscriptionExistante.id}`)}
                 className='underline font-medium hover:text-green-900'
               >
-                votre espace inscription
+                espace inscription
               </button>
-              .
+              {' '}pour suivre l&apos;état de votre dossier.
             </p>
+            <div className='flex flex-wrap gap-2 pt-1'>
+              <button
+                type='button'
+                onClick={handleTelechargerFiche}
+                disabled={telechargement.fiche}
+                className='rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-800 disabled:opacity-60'
+              >
+                {telechargement.fiche ? 'Téléchargement...' : 'Télécharger la fiche'}
+              </button>
+              {inscriptionExistante.statut === 'VALIDE' && (
+                <button
+                  type='button'
+                  onClick={handleTelechargerConvocation}
+                  disabled={telechargement.convocation}
+                  className='rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-60'
+                >
+                  {telechargement.convocation ? 'Téléchargement...' : 'Télécharger la convocation'}
+                </button>
+              )}
+            </div>
           </div>
         )}
 

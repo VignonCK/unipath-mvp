@@ -15,6 +15,7 @@ async function envoyerEmailDecisionFinale({ candidat, concours, inscription, dec
     candidatId: candidat.id,
     concours: concours.libelle,
     numeroDossier,
+    inscriptionId: inscription.id,
     concoursDateDebut: concours.dateDebut,
     concoursDateFin: concours.dateFin,
     concoursDescription: concours.description,

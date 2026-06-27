@@ -5,7 +5,15 @@ const { genererNumeroInscriptionUnique } = require('../utils/numero-inscription.
 const { envoyerPreInscriptionApresCreation } = require('../utils/inscription-email.helper');
 const { candidateSerieMatchesConcours } = require('../utils/series.helper');
 const { computeInscriptionCompletude, profilCandidatComplet } = require('../utils/dossier-submission.helper');
+const { uploadBufferToSupabase } = require('../utils/file-upload.helper');
+const {
+  appendHistorique,
+  appendDocument,
+  hasDocumentsCompl,
+  newDocumentId,
+} = require('../utils/preinscription.helper');
 const pdfService = require('../services/pdf.service');
+const emailService = require('../services/email.service');
 
 /**
  * @deprecated Utiliser POST /api/inscriptions/soumettre (soumettreDossierComplet).
@@ -383,6 +391,7 @@ exports.getMesInscriptions = async (req, res) => {
       statut: ins.dossierInscription?.statut ?? 'EN_ATTENTE',
       commentaireRejet: ins.dossierInscription?.commentaireRejet,
       commentaireSousReserve: ins.dossierInscription?.commentaireSousReserve,
+      documentsCompl: ins.dossierInscription?.documentsCompl ?? null,
     }));
 
     res.json(mapped);
@@ -425,6 +434,7 @@ exports.getInscriptionByConcours = async (req, res) => {
       commentaireSousReserve: inscription.dossierInscription?.commentaireSousReserve,
       quittanceUrl: inscription.dossierInscription?.quittanceUrl ?? null,
       piecesExtras: inscription.dossierInscription?.piecesExtras ?? {},
+      documentsCompl: inscription.dossierInscription?.documentsCompl ?? null,
       dossierInscriptionId: inscription.dossierInscription?.id ?? null,
     });
   } catch (error) {
@@ -466,6 +476,7 @@ exports.getInscriptionById = async (req, res) => {
       statut: inscription.dossierInscription?.statut ?? 'EN_ATTENTE',
       commentaireRejet: inscription.dossierInscription?.commentaireRejet,
       commentaireSousReserve: inscription.dossierInscription?.commentaireSousReserve,
+      documentsCompl: inscription.dossierInscription?.documentsCompl ?? null,
     });
   } catch (error) {
     console.error('Erreur récupération inscription:', error);
@@ -830,6 +841,159 @@ exports.renvoyerFichePreInscription = async (req, res) => {
   } catch (error) {
     console.error('renvoyerFichePreInscription error:', error);
     res.status(500).json({ error: 'Impossible d\'envoyer la fiche par email. Réessayez plus tard.' });
+  }
+};
+
+async function notifierCommissionDossierResoumis(inscription, concours) {
+  const membres = await prisma.membreCommission.findMany({
+    select: { id: true, email: true },
+  });
+  for (const membre of membres) {
+    try {
+      await emailService.envoyerEmailCommissionDossierResoumis({
+        commissionId: membre.id,
+        commissionEmail: membre.email,
+        candidatNom: inscription.candidat?.nom,
+        candidatPrenom: inscription.candidat?.prenom,
+        concoursLibelle: concours?.libelle,
+        numeroInscription: inscription.numeroInscription,
+      });
+    } catch (err) {
+      console.error('Erreur notification commission resoumission:', err);
+    }
+  }
+}
+
+exports.ajouterDocumentComplementaireConcours = async (req, res) => {
+  try {
+    const candidatId = req.user.id;
+    const { inscriptionId } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'Aucun fichier fourni' });
+    }
+
+    const inscription = await prisma.inscription.findFirst({
+      where: { id: inscriptionId, candidatId },
+      include: { dossierInscription: true },
+    });
+
+    if (!inscription?.dossierInscription) {
+      return res.status(404).json({ error: 'Inscription ou dossier non trouve' });
+    }
+    if (inscription.dossierInscription.statut !== 'SOUS_RESERVE') {
+      return res.status(400).json({ error: 'Des documents complementaires ne peuvent etre ajoutes que pour un dossier sous reserve' });
+    }
+
+    const ext = req.file.originalname.split('.').pop();
+    const storagePath = `${candidatId}/concours/${inscriptionId}/complements/${newDocumentId()}-${Date.now()}.${ext}`;
+    const url = await uploadBufferToSupabase(req.file.buffer, storagePath, req.file.mimetype);
+
+    const piece = {
+      id: newDocumentId(),
+      nom: req.file.originalname,
+      url,
+      mimeType: req.file.mimetype,
+      uploadedAt: new Date().toISOString(),
+    };
+
+    const dossier = await prisma.dossierInscription.update({
+      where: { id: inscription.dossierInscription.id },
+      data: {
+        documentsCompl: appendDocument(inscription.dossierInscription.documentsCompl, piece),
+        historiqueStatuts: appendHistorique(inscription.dossierInscription.historiqueStatuts, {
+          statut: 'SOUS_RESERVE',
+          date: new Date().toISOString(),
+          commentaire: `Document complementaire ajoute : ${req.file.originalname}`,
+        }),
+      },
+      include: {
+        inscription: {
+          include: { concours: true, candidat: true },
+        },
+      },
+    });
+
+    return res.json({
+      message: 'Document ajoute avec succes',
+      inscription: {
+        ...dossier.inscription,
+        statut: dossier.statut,
+        commentaireSousReserve: dossier.commentaireSousReserve,
+        documentsCompl: dossier.documentsCompl,
+      },
+    });
+  } catch (error) {
+    console.error('Erreur ajouterDocumentComplementaireConcours:', error);
+    if (error.message?.includes('Type de fichier') || error.message?.includes('Format')) {
+      return res.status(400).json({ error: error.message });
+    }
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+exports.resoumettreDossierConcours = async (req, res) => {
+  try {
+    const candidatId = req.user.id;
+    const { inscriptionId } = req.params;
+
+    const inscription = await prisma.inscription.findFirst({
+      where: { id: inscriptionId, candidatId },
+      include: {
+        dossierInscription: true,
+        concours: true,
+        candidat: { select: { id: true, nom: true, prenom: true } },
+      },
+    });
+
+    if (!inscription?.dossierInscription) {
+      return res.status(404).json({ error: 'Inscription ou dossier non trouve' });
+    }
+    if (inscription.dossierInscription.statut !== 'SOUS_RESERVE') {
+      return res.status(400).json({ error: 'Seul un dossier sous reserve peut etre resoumis' });
+    }
+    if (!hasDocumentsCompl(inscription.dossierInscription.documentsCompl)) {
+      return res.status(400).json({ error: 'Au moins un document complementaire doit etre uploade avant la resoumission' });
+    }
+
+    const dossier = await prisma.dossierInscription.update({
+      where: { id: inscription.dossierInscription.id },
+      data: {
+        statut: 'EN_ATTENTE',
+        historiqueStatuts: appendHistorique(inscription.dossierInscription.historiqueStatuts, {
+          statut: 'EN_ATTENTE',
+          date: new Date().toISOString(),
+          commentaire: 'Resoumission candidat',
+        }),
+        decisionCommissionPar: null,
+        decisionCommissionDate: null,
+        decisionControleur: null,
+        decisionControleurMotif: null,
+        decisionControleurDate: null,
+        decisionControleurPar: null,
+        commentaireControleur: null,
+      },
+      include: {
+        inscription: {
+          include: { concours: true, candidat: true },
+        },
+      },
+    });
+
+    await notifierCommissionDossierResoumis(inscription, inscription.concours);
+
+    return res.json({
+      message: 'Dossier resoumis avec succes',
+      inscription: {
+        ...dossier.inscription,
+        statut: dossier.statut,
+        commentaireSousReserve: dossier.commentaireSousReserve,
+        documentsCompl: dossier.documentsCompl,
+      },
+    });
+  } catch (error) {
+    console.error('Erreur resoumettreDossierConcours:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 };
 

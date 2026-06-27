@@ -43,6 +43,6 @@ test.describe('Établissements privés', () => {
 
   test('permet de continuer vers la demande d\'inscription académique', async ({ page }) => {
     const lien = page.getByRole('link', { name: /Continuer vers la demande/i });
-    await expect(lien).toHaveAttribute('href', '/inscription-academique');
+    await expect(lien).toHaveAttribute('href', '/demande-inscription');
   });
 });

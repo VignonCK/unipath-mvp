@@ -1,9 +1,38 @@
 // src/controllers/pdf.controller.js
-const prisma = require('../prisma');
-const { exec } = require('child_process');
-const path = require('path');
 const fs = require('fs');
-const os = require('os');
+const prisma = require('../prisma');
+const pdfService = require('../services/pdf.service');
+
+const INSCRIPTION_PDF_INCLUDE = {
+  candidat: {
+    include: {
+      dossier: true,
+    },
+  },
+  concours: true,
+  dossierInscription: true,
+};
+
+function buildNomFichierPdf(prefix, candidat, numeroInscription) {
+  const numero = numeroInscription || 'N-A';
+  return `${prefix}-${candidat.nom}-${candidat.prenom}-${numero}.pdf`
+    .replace(/\s+/g, '-')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+}
+
+async function envoyerPdfGenere(res, pdfResult, nomFichier) {
+  const pdfBuffer = await fs.promises.readFile(pdfResult.filePath);
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${nomFichier}"`);
+  console.log('[PDF] Content-Disposition envoyé:', `attachment; filename="${nomFichier}"`);
+  console.log('[PDF] Access-Control-Expose-Headers:', res.getHeader('Access-Control-Expose-Headers'));
+  res.send(pdfBuffer);
+
+  setTimeout(() => pdfService.nettoyerPDF(pdfResult.filePath), 10000);
+}
 
 exports.telechargerConvocation = async (req, res) => {
   try {
@@ -11,19 +40,7 @@ exports.telechargerConvocation = async (req, res) => {
 
     const inscription = await prisma.inscription.findUnique({
       where: { id: inscriptionId },
-      include: {
-        candidat: {
-          include: {
-            dossier: {
-              select: {
-                photo: true,
-              },
-            },
-          },
-        },
-        concours: true,
-        dossierInscription: true,
-      },
+      include: INSCRIPTION_PDF_INCLUDE,
     });
 
     if (!inscription) {
@@ -39,56 +56,32 @@ exports.telechargerConvocation = async (req, res) => {
       return res.status(400).json({ error: 'La convocation n\'est disponible que pour les dossiers valides' });
     }
 
-    // Utiliser le répertoire du projet pour éviter les problèmes de chemin avec espaces
-    const tmpDir    = path.join(__dirname, '../../tmp');
-    const timestamp = Date.now();
-    const tmpInput  = path.join(tmpDir, `conv_input_${timestamp}.json`);
-    const tmpOutput = path.join(tmpDir, `conv_output_${timestamp}.pdf`);
-
-    // Créer le dossier tmp s'il n'existe pas
-    if (!fs.existsSync(tmpDir)) {
-      fs.mkdirSync(tmpDir, { recursive: true });
-    }
-
-    const data = JSON.stringify({
+    const pdfResult = await pdfService.genererConvocation({
       candidat: {
         ...inscription.candidat,
-        photoPath: inscription.candidat?.dossier?.photo || '',
+        dossier: inscription.candidat?.dossier ?? null,
       },
       concours: inscription.concours,
+      inscription: {
+        id: inscription.id,
+        numeroInscription: inscription.numeroInscription,
+        concours: inscription.concours,
+        dossierInscription: inscription.dossierInscription || null,
+        candidat: {
+          dossier: inscription.candidat?.dossier ?? null,
+        },
+      },
     });
 
-    fs.writeFileSync(tmpInput, data, 'utf8');
+    const nomFichier = buildNomFichierPdf(
+      'convocation',
+      inscription.candidat,
+      inscription.numeroInscription,
+    );
 
-    const phpScript = path.join(__dirname, '../../php/convocation.php');
-    const cmd = `php "${phpScript.replace(/\\/g, '/')}" "${tmpInput.replace(/\\/g, '/')}" "${tmpOutput.replace(/\\/g, '/')}"`;
-
-    exec(cmd, { timeout: 30000 }, (error, stdout, stderr) => {
-      try { if (fs.existsSync(tmpInput)) fs.unlinkSync(tmpInput); } catch {}
-
-      if (error) {
-        console.error('Erreur PHP:', error);
-        console.error('PHP stderr:', stderr);
-        try { if (fs.existsSync(tmpOutput)) fs.unlinkSync(tmpOutput); } catch {}
-        return res.status(500).json({ error: 'Erreur lors de la generation PHP du PDF' });
-      }
-
-      if (!fs.existsSync(tmpOutput)) {
-        return res.status(500).json({ error: 'Le PDF n\'a pas ete genere' });
-      }
-
-      const pdfBuffer = fs.readFileSync(tmpOutput);
-      const filename = `convocation_${inscription.candidat.matricule}.pdf`;
-
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send(pdfBuffer);
-
-      try { fs.unlinkSync(tmpOutput); } catch {}
-    });
-
+    await envoyerPdfGenere(res, pdfResult, nomFichier);
   } catch (error) {
-    console.error(error);
+    console.error('telechargerConvocation error:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
@@ -99,19 +92,7 @@ exports.telechargerPreinscription = async (req, res) => {
 
     const inscription = await prisma.inscription.findUnique({
       where: { id: inscriptionId },
-      include: {
-        candidat: {
-          include: {
-            dossier: {
-              select: {
-                photo: true,
-              },
-            },
-          },
-        },
-        concours: true,
-        dossierInscription: true,
-      },
+      include: INSCRIPTION_PDF_INCLUDE,
     });
 
     if (!inscription) {
@@ -122,63 +103,17 @@ exports.telechargerPreinscription = async (req, res) => {
       return res.status(403).json({ error: 'Accès refusé' });
     }
 
-    // Utiliser le répertoire du projet pour éviter les problèmes de chemin avec espaces
-    const tmpDir    = path.join(__dirname, '../../tmp');
-    const timestamp = Date.now();
-    const tmpInput  = path.join(tmpDir, `preinsc_input_${timestamp}.json`);
-    const tmpOutput = path.join(tmpDir, `preinsc_output_${timestamp}.pdf`);
+    const pdfResult = await pdfService.genererFichePreInscriptionDepuisInscription(inscription);
 
-    // Créer le dossier tmp s'il n'existe pas
-    if (!fs.existsSync(tmpDir)) {
-      fs.mkdirSync(tmpDir, { recursive: true });
-    }
+    const nomFichier = buildNomFichierPdf(
+      'fiche-preinscription',
+      inscription.candidat,
+      inscription.numeroInscription,
+    );
 
-    fs.writeFileSync(tmpInput, JSON.stringify({
-      candidat: {
-        ...inscription.candidat,
-        photoPath: inscription.candidat?.dossier?.photo || '',
-      },
-      concours: inscription.concours,
-      numeroDossier: inscription.numeroInscription || inscription.id.substring(0, 8).toUpperCase(),
-      inscription: {
-        id: inscription.id,
-        numeroInscription: inscription.numeroInscription,
-        dossierInscription: inscription.dossierInscription || null,
-      },
-    }), 'utf8');
-
-    const phpScript = path.join(__dirname, '../../php/fiche-preinscription.php');
-    // Utiliser des guillemets doubles et normaliser les chemins
-    const cmd = `php "${phpScript.replace(/\\/g, '/')}" "${tmpInput.replace(/\\/g, '/')}" "${tmpOutput.replace(/\\/g, '/')}"`;
-
-    exec(cmd, { timeout: 30000 }, (error, stdout, stderr) => {
-      // Nettoyer le fichier d'entrée dans tous les cas
-      try { if (fs.existsSync(tmpInput)) fs.unlinkSync(tmpInput); } catch {}
-
-      if (error) {
-        console.error('Erreur PHP preinscription:', error.message);
-        console.error('PHP stderr:', stderr);
-        try { if (fs.existsSync(tmpOutput)) fs.unlinkSync(tmpOutput); } catch {}
-        return res.status(500).json({ error: 'Erreur génération PDF', details: stderr });
-      }
-
-      if (!fs.existsSync(tmpOutput)) {
-        return res.status(500).json({ error: 'PDF non généré' });
-      }
-
-      const pdfBuffer = fs.readFileSync(tmpOutput);
-      const libelle   = inscription.concours.libelle.replace(/[^a-zA-Z0-9]/g, '_');
-      const filename  = `preinscription_${inscription.candidat.matricule}_${libelle}.pdf`;
-
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send(pdfBuffer);
-
-      try { fs.unlinkSync(tmpOutput); } catch {}
-    });
-
+    await envoyerPdfGenere(res, pdfResult, nomFichier);
   } catch (error) {
-    console.error(error);
+    console.error('telechargerPreinscription error:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };

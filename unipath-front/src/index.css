@@ -82,3 +82,9 @@ body {
 #root {
   overflow-x: hidden;
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

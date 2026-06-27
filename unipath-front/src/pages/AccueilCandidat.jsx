@@ -3,30 +3,58 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { candidatService, concoursService } from '../services/api';
 import { handleSessionError } from '../utils/auth';
+import {
+  buildConcoursNotifications,
+  marquerAlertesCommeVues,
+  needsConcoursAttention,
+} from '../utils/concoursAlertes';
 import CandidatLayout from '../components/CandidatLayout';
-import BentoGrid from '../components/BentoGrid';
-import BentoCard from '../components/BentoCard';
-import StatCard from '../components/StatCard';
-
-function salutation() {
-  const h = new Date().getHours();
-  if (h < 12) return 'Bonjour';
-  if (h < 18) return 'Bon après-midi';
-  return 'Bonsoir';
-}
 
 function joursRestants(dateFin) {
   const diff = new Date(dateFin) - new Date();
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
+const STATUS_LABELS = {
+  VALIDE: { label: 'Validé', className: 'bg-green-100 text-green-800' },
+  VALIDE_PAR_COMMISSION: { label: 'Validé (commission)', className: 'bg-green-100 text-green-800' },
+  REJETE: { label: 'Rejeté', className: 'bg-red-100 text-red-800' },
+  REJETE_PAR_COMMISSION: { label: 'Rejeté (commission)', className: 'bg-red-100 text-red-800' },
+  SOUS_RESERVE: { label: 'Sous réserve', className: 'bg-amber-100 text-amber-800' },
+  SOUS_RESERVE_PAR_COMMISSION: { label: 'Sous réserve', className: 'bg-amber-100 text-amber-800' },
+  EN_ATTENTE: { label: 'En attente', className: 'bg-gray-100 text-gray-700' },
+};
+
+const NOTIF_CLASSES = {
+  success: 'border-green-200 bg-green-50 text-green-800',
+  error: 'border-red-200 bg-red-50 text-red-800',
+  warning: 'border-amber-200 bg-amber-50 text-amber-900',
+  info: 'border-blue-200 bg-blue-50 text-blue-800',
+};
+
+function StatBox({ label, value, accent }) {
+  const accents = {
+    blue: 'text-blue-900',
+    green: 'text-green-700',
+    red: 'text-red-700',
+    gray: 'text-gray-700',
+  };
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-center">
+      <p className={`text-2xl font-black ${accents[accent] || accents.blue}`}>{value}</p>
+      <p className="text-xs text-gray-500 mt-0.5 font-medium">{label}</p>
+    </div>
+  );
+}
+
 export default function AccueilCandidat() {
   const navigate = useNavigate();
   const [candidat, setCandidat] = useState(null);
   const [concours, setConcours] = useState([]);
-  const [loading, setLoading]   = useState(true);
+  const [loading, setLoading] = useState(true);
   const [photoUrl, setPhotoUrl] = useState(null);
   const [error, setError] = useState('');
+  const [, setAlertesSync] = useState(0);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -35,7 +63,7 @@ export default function AccueilCandidat() {
       .then(([p, c]) => {
         setCandidat(p);
         setConcours(c);
-        const saved = localStorage.getItem('photoProfil_' + p.id);
+        const saved = localStorage.getItem(`photoProfil_${p.id}`);
         if (saved) setPhotoUrl(saved);
       })
       .catch((err) => {
@@ -44,472 +72,187 @@ export default function AccueilCandidat() {
           setError(err?.message || 'Accès refusé à votre profil candidat.');
           return;
         }
-        setError(err?.message || 'Erreur de chargement du tableau de bord');
+        setError(err?.message || 'Erreur de chargement');
       })
       .finally(() => setLoading(false));
   }, [navigate]);
 
-  if (loading) return (
-    <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
-      <div className='w-10 h-10 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin' />
-    </div>
-  );
+  useEffect(() => {
+    const inscriptions = candidat?.inscriptions;
+    if (!inscriptions?.length) return;
+    const idsAlertes = inscriptions.filter(needsConcoursAttention).map((ins) => ins.id);
+    if (idsAlertes.length === 0) return;
+    marquerAlertesCommeVues(idsAlertes);
+    setAlertesSync((n) => n + 1);
+  }, [candidat?.inscriptions]);
 
-  // Calculs
-  const pieces = ['acteNaissance', 'carteIdentite', 'photo', 'releve'];
-  const nbPieces = pieces.filter(p => candidat?.dossier?.[p]).length;
-  const pct = Math.round((nbPieces / pieces.length) * 100);
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   const nbInscriptions = candidat?.inscriptions?.length || 0;
-  const nbValides = candidat?.inscriptions?.filter(i => ['VALIDE', 'VALIDE_PAR_COMMISSION'].includes(i.statut)).length || 0;
-  const nbRejetes = candidat?.inscriptions?.filter(i => ['REJETE', 'REJETE_PAR_COMMISSION'].includes(i.statut)).length || 0;
-  const profilOk = ['telephone', 'dateNaiss', 'lieuNaiss'].every(c => candidat?.[c]);
+  const nbValides = candidat?.inscriptions?.filter((i) => ['VALIDE', 'VALIDE_PAR_COMMISSION'].includes(i.statut)).length || 0;
+  const nbRejetes = candidat?.inscriptions?.filter((i) => ['REJETE', 'REJETE_PAR_COMMISSION'].includes(i.statut)).length || 0;
+  const nbEnCours = nbInscriptions - nbValides - nbRejetes;
 
-  // Concours avec clôture proche (< 7 jours) et non inscrit
-  const urgents = concours.filter(c => {
+  const urgents = concours.filter((c) => {
     const jours = joursRestants(c.dateFin);
-    const inscrit = candidat?.inscriptions?.some(i => i.concoursId === c.id);
+    const inscrit = candidat?.inscriptions?.some((i) => i.concoursId === c.id);
     return jours > 0 && jours <= 7 && !inscrit;
   });
 
-  // Notifications
-  const notifications = [];
-  if (!profilOk) {
-    notifications.push({ type: 'warning', msg: 'Votre profil est incomplet. Renseignez vos informations pour vous inscrire.' });
-  }
-  candidat?.inscriptions?.forEach(ins => {
-    if (['VALIDE', 'VALIDE_PAR_COMMISSION'].includes(ins.statut)) {
-      notifications.push({ type: 'success', msg: `Votre dossier pour "${ins.concours?.libelle}" a été validé. Téléchargez votre convocation.` });
-    }
-    if (['REJETE', 'REJETE_PAR_COMMISSION'].includes(ins.statut)) {
-      notifications.push({ type: 'error', msg: `Votre dossier pour "${ins.concours?.libelle}" a été rejeté.` });
-    }
-    if (['SOUS_RESERVE', 'SOUS_RESERVE_PAR_COMMISSION'].includes(ins.statut)) {
-      notifications.push({ type: 'warning', msg: `Votre dossier pour "${ins.concours?.libelle}" a été accepté sous réserve. Consultez les remarques.` });
-    }
-  });
-  if (pct > 0 && pct < 100) {
-    notifications.push({ type: 'info', msg: `Votre dossier est complété à ${pct}%. Déposez les pièces manquantes.` });
-  }
+  const notifications = buildConcoursNotifications(candidat?.inscriptions);
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
-      {/* Background avec effet de profondeur */}
-      <div className="fixed inset-0 -z-10 bg-gradient-to-br from-gray-50 via-blue-50/30 to-orange-50/20 dark:from-gray-950 dark:via-academic-950 dark:to-gray-900" />
-      
-      <div className='max-w-7xl mx-auto space-y-8 animate-slide-up'>
+      <div className="max-w-4xl mx-auto space-y-6">
         {error && (
-          <div className='rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700'>
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
 
-        {/* Hero Section - Message de bienvenue avec glassmorphism */}
-        <BentoCard size="full" variant="gradient" glow className="relative overflow-hidden">
-          {/* Animated background elements */}
-          <div className="absolute top-0 right-0 w-96 h-96 bg-accent-400/20 rounded-full blur-3xl animate-float" />
-          <div className="absolute bottom-0 left-0 w-80 h-80 bg-academic-400/20 rounded-full blur-3xl animate-float" style={{ animationDelay: '1s' }} />
-          
-          <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            <div className="flex-1">
-              <p className='text-accent-200 text-sm font-medium mb-2 tracking-wide uppercase'>{salutation()}</p>
-              <h1 className='text-4xl md:text-5xl lg:text-6xl font-black mb-3 tracking-tight'>
-                {candidat?.prenom} <span className="text-accent-300">{candidat?.nom}</span>
-              </h1>
-              <p className='text-academic-100 text-base md:text-lg mb-4 font-light'>
-                {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-              </p>
-              <div className='inline-flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-2xl px-5 py-3 border border-white/20'>
-                <svg className="w-5 h-5 text-accent-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
-                </svg>
-                <span className='text-sm text-white font-mono font-semibold tracking-wider'>{candidat?.matricule}</span>
-              </div>
-            </div>
-
-            {/* Photo de profil avec effet glow */}
-            {photoUrl && (
-              <div className="relative group">
-                <div className="absolute inset-0 bg-accent-500 rounded-3xl blur-xl opacity-50 group-hover:opacity-75 transition-opacity" />
-                <img 
-                  src={photoUrl} 
-                  alt="Profil" 
-                  className="relative w-24 h-24 md:w-32 md:h-32 rounded-3xl object-cover border-4 border-white/30 shadow-2xl"
-                />
-              </div>
-            )}
+        {/* En-tête */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Mes concours</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Fiches de pré-inscription, convocations et suivi de vos dossiers.
+            </p>
           </div>
-        </BentoCard>
-
-        {/* Bento Grid - KPIs et Stats */}
-        <BentoGrid>
-          {/* Stat Cards avec couleurs dynamiques */}
-          <div className="col-span-1 md:col-span-2">
-            <StatCard
-              label="Inscriptions"
-              value={nbInscriptions}
-              color="blue"
-              onClick={() => navigate('/mon-compte')}
-              icon={
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              }
-            />
-          </div>
-
-          <div className="col-span-1 md:col-span-2">
-            <StatCard
-              label="Dossiers validés"
-              value={nbValides}
-              color="green"
-              icon={
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              }
-            />
-          </div>
-
-          <div className="col-span-1 md:col-span-2">
-            <StatCard
-              label="Dossiers rejetés"
-              value={nbRejetes}
-              color="red"
-              icon={
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              }
-            />
-          </div>
-
-          {/* Progression du dossier - Large card */}
-          <BentoCard size="lg" variant="glass" magnetic glow>
-            <div className="flex flex-col h-full justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-2xl font-black text-gray-900 dark:text-white">
-                    Progression du dossier
-                  </h3>
-                  <div className={`
-                    text-4xl font-black
-                    ${pct === 100 ? 'text-green-500' : pct >= 50 ? 'text-accent-500' : 'text-gray-400'}
-                  `}>
-                    {pct}%
-                  </div>
-                </div>
-
-                {/* Progress bar avec effet glow */}
-                <div className="relative h-4 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden mb-6">
-                  <div 
-                    className={`
-                      absolute inset-y-0 left-0 rounded-full transition-all duration-1000 ease-out
-                      ${pct === 100 ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-accent-500 to-accent-600'}
-                    `}
-                    style={{ width: `${pct}%` }}
-                  >
-                    <div className="absolute inset-0 bg-white/30 animate-shimmer" style={{ backgroundSize: '200% 100%' }} />
-                  </div>
-                </div>
-
-                {/* Liste des pièces */}
-                <div className="space-y-3">
-                  {[
-                    { key: 'acteNaissance', label: 'Acte de naissance', icon: '📄' },
-                    { key: 'carteIdentite', label: 'Carte d\'identité', icon: '🪪' },
-                    { key: 'photo', label: 'Photo d\'identité', icon: '📸' },
-                    { key: 'releve', label: 'Relevé de notes', icon: '📊' },
-                  ].map(({ key, label, icon }) => {
-                    const isComplete = candidat?.dossier?.[key];
-                    return (
-                      <div key={key} className="flex items-center gap-3 group">
-                        <div className={`
-                          w-8 h-8 rounded-xl flex items-center justify-center text-sm
-                          transition-all duration-300
-                          ${isComplete 
-                            ? 'bg-green-500 text-white scale-100' 
-                            : 'bg-gray-200 dark:bg-gray-800 text-gray-400 scale-95'
-                          }
-                        `}>
-                          {isComplete ? '✓' : icon}
-                        </div>
-                        <span className={`
-                          text-sm font-medium transition-colors
-                          ${isComplete ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}
-                        `}>
-                          {label}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {pct < 100 && (
-                <button
-                  onClick={() => navigate('/mon-compte')}
-                  className="mt-6 w-full bg-gradient-to-r from-accent-500 to-accent-600 text-white py-4 rounded-2xl font-bold hover:shadow-glow transition-all duration-300 hover:scale-[1.02]"
-                >
-                  Compléter mon dossier →
-                </button>
-              )}
-            </div>
-          </BentoCard>
-
-          {/* Concours urgents */}
-          {urgents.length > 0 && (
-            <BentoCard size="md" variant="glass" className="bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-950/20 dark:to-orange-950/20">
-              <div className="flex items-start gap-3 mb-4">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center flex-shrink-0 animate-glow-pulse">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-xl font-black text-red-700 dark:text-red-400">
-                    Clôture imminente
-                  </h3>
-                  <p className="text-sm text-red-600 dark:text-red-500 mt-1">
-                    {urgents.length} concours {urgents.length > 1 ? 'se terminent' : 'se termine'} bientôt
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {urgents.slice(0, 2).map(c => {
-                  const jours = joursRestants(c.dateFin);
-                  return (
-                    <div key={c.id} className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-2xl p-4 border border-red-200 dark:border-red-900/30">
-                      <p className="font-bold text-gray-900 dark:text-white text-sm mb-2">{c.libelle}</p>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-red-600 dark:text-red-400">
-                          {jours === 1 ? '⚠️ Dernier jour !' : `⏰ ${jours} jours restants`}
-                        </span>
-                        <button
-                          onClick={() => navigate('/concours')}
-                          className="text-xs bg-gradient-to-r from-red-500 to-orange-500 text-white px-4 py-2 rounded-xl hover:shadow-glow transition-all font-bold"
-                        >
-                          S'inscrire
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </BentoCard>
-          )}
-        </BentoGrid>
-
-        {/* Notifications avec glassmorphism */}
-        {notifications.length > 0 && (
-          <BentoCard size="full" variant="glass">
-            <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-6">
-              Notifications
-            </h2>
-            <div className="space-y-3">
-              {notifications.map((n, i) => {
-                const icons = {
-                  success: '✅',
-                  error: '❌',
-                  warning: '⚠️',
-                  info: 'ℹ️',
-                };
-                const colors = {
-                  success: 'from-green-500/20 to-green-600/20 border-green-500/30 text-green-700 dark:text-green-400',
-                  error: 'from-red-500/20 to-red-600/20 border-red-500/30 text-red-700 dark:text-red-400',
-                  warning: 'from-orange-500/20 to-orange-600/20 border-orange-500/30 text-orange-700 dark:text-orange-400',
-                  info: 'from-blue-500/20 to-blue-600/20 border-blue-500/30 text-blue-700 dark:text-blue-400',
-                };
-                return (
-                  <div 
-                    key={i} 
-                    className={`
-                      bg-gradient-to-r ${colors[n.type]}
-                      backdrop-blur-sm border rounded-2xl p-4
-                      flex items-start gap-3
-                      animate-slide-down
-                    `}
-                    style={{ animationDelay: `${i * 0.1}s` }}
-                  >
-                    <span className="text-2xl flex-shrink-0">{icons[n.type]}</span>
-                    <p className="text-sm font-medium leading-relaxed">{n.msg}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </BentoCard>
-        )}
-
-        {/* Accès rapide - Bento Grid */}
-        <div>
-          <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-6">
-            Accès rapide
-          </h2>
-          <BentoGrid>
-            {[
-              { 
-                label: 'Voir les concours', 
-                path: '/concours', 
-                icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
-                gradient: 'from-academic-600 to-academic-800',
-                size: 'md'
-              },
-              { 
-                label: 'Ma carte candidat', 
-                path: '/ma-carte', 
-                icon: 'M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2',
-                gradient: 'from-green-600 to-green-800',
-                size: 'md'
-              },
-              { 
-                label: 'Déposer des pièces', 
-                path: '/mon-compte', 
-                icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12',
-                gradient: 'from-accent-600 to-accent-800',
-                size: 'md'
-              },
-              { 
-                label: 'Mon dossier', 
-                path: '/mon-compte', 
-                icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-                gradient: 'from-purple-600 to-purple-800',
-                size: 'md'
-              },
-            ].map(({ label, path, icon, gradient, size }) => (
-              <BentoCard
-                key={label}
-                size={size}
-                variant="glass"
-                magnetic
-                onClick={() => navigate(path)}
-                className={`bg-gradient-to-br ${gradient} text-white cursor-pointer`}
-              >
-                <div className="flex flex-col h-full justify-between">
-                  <svg className="w-10 h-10 mb-4 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
-                  </svg>
-                  <div>
-                    <h3 className="text-lg font-bold">{label}</h3>
-                    <div className="mt-2 text-xs opacity-75 flex items-center gap-1">
-                      Accéder <span>→</span>
-                    </div>
-                  </div>
-                </div>
-              </BentoCard>
-            ))}
-          </BentoGrid>
+          <button
+            type="button"
+            onClick={() => navigate('/concours')}
+            className="inline-flex items-center justify-center rounded-lg bg-blue-900 text-white px-4 py-2 text-sm font-semibold hover:bg-blue-800 transition shrink-0"
+          >
+            + Nouveau concours
+          </button>
         </div>
 
-        {/* Mes inscriptions récentes */}
-        {nbInscriptions > 0 && (
-          <BentoCard size="full" variant="glass">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-black text-gray-900 dark:text-white">
-                Mes inscriptions récentes
-              </h2>
-              <button 
-                onClick={() => navigate('/mon-compte')} 
-                className="text-sm text-accent-600 dark:text-accent-400 hover:text-accent-700 dark:hover:text-accent-300 font-bold flex items-center gap-2 group"
+        {/* Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatBox label="Total" value={nbInscriptions} accent="blue" />
+          <StatBox label="En cours" value={nbEnCours} accent="gray" />
+          <StatBox label="Validés" value={nbValides} accent="green" />
+          <StatBox label="Rejetés" value={nbRejetes} accent="red" />
+        </div>
+
+        {/* Alertes */}
+        {notifications.length > 0 && (
+          <div className="space-y-2">
+            {notifications.map((n, i) => (
+              <div
+                key={i}
+                className={`rounded-lg border px-4 py-3 text-sm font-medium ${NOTIF_CLASSES[n.type] || NOTIF_CLASSES.info}`}
               >
-                Voir tout 
-                <span className="group-hover:translate-x-1 transition-transform">→</span>
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {candidat.inscriptions.slice(0, 3).map(ins => {
-                const statusConfig = {
-                  VALIDE: {
-                    bg: 'from-green-500/20 to-green-600/20',
-                    border: 'border-green-500/30',
-                    text: 'text-green-700 dark:text-green-400',
-                    icon: '✓',
-                    label: 'Validé'
-                  },
-                  VALIDE_PAR_COMMISSION: {
-                    bg: 'from-green-500/20 to-green-600/20',
-                    border: 'border-green-500/30',
-                    text: 'text-green-700 dark:text-green-400',
-                    icon: '✓',
-                    label: 'Validé (commission)'
-                  },
-                  REJETE: {
-                    bg: 'from-red-500/20 to-red-600/20',
-                    border: 'border-red-500/30',
-                    text: 'text-red-700 dark:text-red-400',
-                    icon: '✗',
-                    label: 'Rejeté'
-                  },
-                  REJETE_PAR_COMMISSION: {
-                    bg: 'from-red-500/20 to-red-600/20',
-                    border: 'border-red-500/30',
-                    text: 'text-red-700 dark:text-red-400',
-                    icon: '✗',
-                    label: 'Rejeté (commission)'
-                  },
-                  SOUS_RESERVE: {
-                    bg: 'from-amber-500/20 to-amber-600/20',
-                    border: 'border-amber-500/30',
-                    text: 'text-amber-700 dark:text-amber-400',
-                    icon: '⚠',
-                    label: 'Sous réserve'
-                  },
-                  SOUS_RESERVE_PAR_COMMISSION: {
-                    bg: 'from-amber-500/20 to-amber-600/20',
-                    border: 'border-amber-500/30',
-                    text: 'text-amber-700 dark:text-amber-400',
-                    icon: '⚠',
-                    label: 'Sous réserve (commission)'
-                  },
-                  EN_ATTENTE: {
-                    bg: 'from-yellow-500/20 to-yellow-600/20',
-                    border: 'border-yellow-500/30',
-                    text: 'text-yellow-700 dark:text-yellow-400',
-                    icon: '⏳',
-                    label: 'En attente'
-                  },
-                };
-                const config = statusConfig[ins.statut] || statusConfig.EN_ATTENTE;
-                
-                return (
-                  <div 
-                    key={ins.id} 
-                    className={`
-                      bg-gradient-to-br ${config.bg}
-                      backdrop-blur-sm border ${config.border}
-                      rounded-2xl p-5
-                      hover:scale-[1.02] transition-transform duration-300
-                      cursor-pointer
-                    `}
-                    onClick={() => navigate(`/inscription/${ins.id}`)}
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className={`
-                        w-10 h-10 rounded-xl ${config.bg} border ${config.border}
-                        flex items-center justify-center text-xl
-                      `}>
-                        {config.icon}
-                      </div>
-                      <span className={`
-                        text-xs px-3 py-1 rounded-full font-bold
-                        ${config.bg} border ${config.border} ${config.text}
-                      `}>
-                        {config.label}
-                      </span>
-                    </div>
-                    <h3 className="font-bold text-gray-900 dark:text-white text-sm mb-2 line-clamp-2">
-                      {ins.concours?.libelle}
-                    </h3>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">
-                      {ins.createdAt ? new Date(ins.createdAt).toLocaleDateString('fr-FR') : ''}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </BentoCard>
+                {n.msg}
+              </div>
+            ))}
+          </div>
         )}
 
+        {/* Clôtures proches */}
+        {urgents.length > 0 && (
+          <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+            <p className="text-sm font-semibold text-orange-900 mb-3">
+              Concours bientôt clos — vous n&apos;êtes pas encore inscrit
+            </p>
+            <ul className="space-y-2">
+              {urgents.slice(0, 3).map((c) => {
+                const jours = joursRestants(c.dateFin);
+                return (
+                  <li key={c.id} className="flex items-center justify-between gap-3 bg-white rounded-lg px-3 py-2 border border-orange-100">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{c.libelle}</p>
+                      <p className="text-xs text-orange-700">
+                        {jours === 1 ? 'Dernier jour' : `${jours} jours restants`}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/concours/${c.id}`)}
+                      className="text-xs font-semibold text-blue-900 hover:underline shrink-0"
+                    >
+                      S&apos;inscrire
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {/* Liste principale */}
+        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm" id="mes-inscriptions-liste">
+          <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/80">
+            <h2 className="font-semibold text-gray-900">Vos inscriptions</h2>
+          </div>
+
+          {nbInscriptions === 0 ? (
+            <div className="px-5 py-12 text-center">
+              <p className="text-gray-600 text-sm mb-4">Aucune inscription pour le moment.</p>
+              <button
+                type="button"
+                onClick={() => navigate('/concours')}
+                className="inline-flex items-center rounded-lg bg-blue-900 text-white px-4 py-2 text-sm font-semibold hover:bg-blue-800 transition"
+              >
+                Voir les concours ouverts
+              </button>
+            </div>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {candidat.inscriptions.map((ins) => {
+                const status = STATUS_LABELS[ins.statut] || STATUS_LABELS.EN_ATTENTE;
+                const alerte = needsConcoursAttention(ins);
+
+                return (
+                  <li key={ins.id}>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/inscription/${ins.id}`)}
+                      className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gray-50 transition group"
+                    >
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${alerte ? 'bg-orange-100 text-orange-600' : 'bg-blue-50 text-blue-900'}`}>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-gray-900 text-sm truncate group-hover:text-blue-900">
+                            {ins.concours?.libelle || 'Concours'}
+                          </p>
+                          {alerte && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
+                              <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                              À voir
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Inscrit le {ins.createdAt ? new Date(ins.createdAt).toLocaleDateString('fr-FR') : '—'}
+                        </p>
+                      </div>
+
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0 ${status.className}`}>
+                        {status.label}
+                      </span>
+
+                      <svg className="w-4 h-4 text-gray-300 group-hover:text-blue-900 flex-shrink-0 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </div>
     </CandidatLayout>
   );

@@ -457,7 +457,7 @@ class EmailService {
           </div>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${frontendUrl}/dashboard" 
+            <a href="${frontendUrl}/inscription/${data.inscriptionId || ''}"
                style="background: #f97316; color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold; font-size: 16px;">
               Compléter mon dossier
             </a>
@@ -725,6 +725,203 @@ class EmailService {
       subject,
       htmlBody,
       emailType: 'ARBITRAGE_DIVERGENT_EXAMINATEUR',
+    });
+  }
+
+  async envoyerEmailPreinscriptionSousReserveEtablissement(data) {
+    validateParams(data, ['candidatEmail', 'candidatNom', 'candidatPrenom', 'etablissementNom', 'numeroPreinscription']);
+
+    const commentaire = data.commentaireAdmin || 'Veuillez consulter votre espace candidat pour les details.';
+    const frontendUrl = getFrontendUrl();
+    const subject = `[UniPath] Dossier en attente de complements — ${data.etablissementNom}`;
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); padding: 30px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">Dossier accepte sous reserve</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb;">
+          <p style="font-size: 16px; color: #374151;">Bonjour <strong>${data.candidatPrenom} ${data.candidatNom}</strong>,</p>
+          <p style="font-size: 14px; color: #6b7280; line-height: 1.6;">
+            Votre pre-inscription <strong>${data.numeroPreinscription}</strong> pour <strong>${data.etablissementNom}</strong>
+            est en attente de complements.
+          </p>
+          <div style="background: #fff7ed; border-left: 4px solid #f97316; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; color: #9a3412; font-size: 14px;"><strong>Message de l'etablissement :</strong></p>
+            <p style="margin: 10px 0 0 0; color: #9a3412; font-size: 13px; white-space: pre-wrap;">${commentaire}</p>
+          </div>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${frontendUrl}/demande-inscription"
+               style="background: #f97316; color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold; font-size: 16px;">
+              Completer mon dossier
+            </a>
+          </div>
+        </div>
+      </div>
+    `;
+
+    return this.createEmail({
+      userId: data.userId || data.candidatId,
+      recipient: data.candidatEmail,
+      subject,
+      htmlBody,
+      emailType: 'SOUS_RESERVE',
+    });
+  }
+
+  async envoyerEmailAdminPreinscriptionResoumise(data) {
+    validateParams(data, ['adminEmail', 'candidatNom', 'candidatPrenom', 'etablissementNom', 'numeroPreinscription']);
+
+    const subject = `[UniPath] Dossier resoumis — ${data.numeroPreinscription}`;
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #1e3a8a; padding: 24px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 22px;">Dossier resoumis par un candidat</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb;">
+          <p style="font-size: 14px; color: #374151;">
+            Le candidat <strong>${data.candidatPrenom} ${data.candidatNom}</strong> a resoumis son dossier
+            pour <strong>${data.etablissementNom}</strong>.
+          </p>
+          <p style="font-size: 14px; color: #374151;"><strong>Numero :</strong> ${data.numeroPreinscription}</p>
+          <p style="font-size: 13px; color: #6b7280;">Le dossier est de nouveau en attente de votre decision.</p>
+        </div>
+      </div>
+    `;
+
+    return this.createEmail({
+      userId: data.adminId || null,
+      recipient: data.adminEmail,
+      subject,
+      htmlBody,
+      emailType: 'SYSTEME',
+    });
+  }
+
+  async envoyerEmailAdminQuittanceSoumise(data) {
+    validateParams(data, ['adminEmail', 'candidatNom', 'candidatPrenom', 'etablissementNom', 'filiereNom']);
+
+    const subject = `[UniPath] Quittance bancaire a valider — ${data.candidatPrenom} ${data.candidatNom}`;
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #1e3a8a; padding: 24px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 22px;">Quittance soumise</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb;">
+          <p style="font-size: 14px; color: #374151;">
+            <strong>${data.candidatPrenom} ${data.candidatNom}</strong> a soumis une quittance bancaire pour
+            <strong>${data.filiereNom}</strong> (${data.etablissementNom}).
+          </p>
+          <p style="font-size: 13px; color: #6b7280;">Veuillez verifier et valider la quittance depuis votre espace administrateur.</p>
+        </div>
+      </div>
+    `;
+
+    return this.createEmail({
+      userId: data.adminId || null,
+      recipient: data.adminEmail,
+      subject,
+      htmlBody,
+      emailType: 'SYSTEME',
+    });
+  }
+
+  async envoyerEmailCommissionDossierResoumis(data) {
+    validateParams(data, ['commissionEmail', 'candidatNom', 'candidatPrenom', 'concoursLibelle', 'numeroInscription']);
+
+    const subject = `[UniPath] Dossier resoumis — ${data.concoursLibelle}`;
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #1e3a8a; padding: 24px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 22px;">Dossier resoumis par un candidat</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb;">
+          <p style="font-size: 14px; color: #374151;">
+            Le candidat <strong>${data.candidatPrenom} ${data.candidatNom}</strong> a resoumis son dossier
+            pour le concours <strong>${data.concoursLibelle}</strong>.
+          </p>
+          <p style="font-size: 14px; color: #374151;"><strong>N° dossier :</strong> ${data.numeroInscription}</p>
+          <p style="font-size: 13px; color: #6b7280;">Le dossier est de nouveau en attente d'examen par la commission.</p>
+        </div>
+      </div>
+    `;
+
+    return this.createEmail({
+      userId: data.commissionId || null,
+      recipient: data.commissionEmail,
+      subject,
+      htmlBody,
+      emailType: 'SYSTEME',
+    });
+  }
+
+  async envoyerEmailMatriculeEtudiantValide(data) {
+    validateParams(data, ['candidatEmail', 'candidatNom', 'candidatPrenom', 'matricule', 'etablissementNom', 'filiereNom']);
+
+    const subject = `[UniPath] Felicitations — votre inscription est validee (${data.matricule})`;
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #1e3a8a 0%, #008751 100%); padding: 30px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 26px;">Inscription validee</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb;">
+          <p style="font-size: 16px; color: #374151;">Bonjour <strong>${data.candidatPrenom} ${data.candidatNom}</strong>,</p>
+          <p style="font-size: 14px; color: #6b7280; line-height: 1.6;">
+            Felicitations ! Votre quittance a ete validee. Vous etes officiellement inscrit(e) a
+            <strong>${data.etablissementNom}</strong> en <strong>${data.filiereNom}</strong>.
+          </p>
+          <div style="background: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; font-size: 14px; color: #1e40af;"><strong>Votre matricule etudiant :</strong></p>
+            <p style="margin: 10px 0 0 0; font-size: 20px; font-weight: bold; color: #1e3a8a; font-family: monospace;">${data.matricule}</p>
+          </div>
+          <p style="font-size: 13px; color: #6b7280;">Conservez ce matricule pour toutes vos demarches administratives.</p>
+        </div>
+      </div>
+    `;
+
+    return this.createEmail({
+      userId: data.userId || data.candidatId,
+      recipient: data.candidatEmail,
+      subject,
+      htmlBody,
+      emailType: 'SYSTEME',
+    });
+  }
+
+  async envoyerEmailQuittanceRejetee(data) {
+    validateParams(data, ['candidatEmail', 'candidatNom', 'candidatPrenom', 'motif']);
+
+    const frontendUrl = getFrontendUrl();
+    const subject = '[UniPath] Quittance bancaire non acceptee';
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #dc2626; padding: 24px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 22px;">Quittance non acceptee</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb;">
+          <p style="font-size: 16px; color: #374151;">Bonjour <strong>${data.candidatPrenom} ${data.candidatNom}</strong>,</p>
+          <p style="font-size: 14px; color: #6b7280; line-height: 1.6;">
+            Votre quittance bancaire n'a pas ete acceptee. Veuillez en soumettre une nouvelle.
+          </p>
+          <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; color: #991b1b; font-size: 14px;"><strong>Motif :</strong></p>
+            <p style="margin: 10px 0 0 0; color: #991b1b; font-size: 13px; white-space: pre-wrap;">${data.motif}</p>
+          </div>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${frontendUrl}/mes-inscriptions-academiques"
+               style="background: #1e3a8a; color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold; font-size: 16px;">
+              Soumettre une nouvelle quittance
+            </a>
+          </div>
+        </div>
+      </div>
+    `;
+
+    return this.createEmail({
+      userId: data.userId || data.candidatId,
+      recipient: data.candidatEmail,
+      subject,
+      htmlBody,
+      emailType: 'SYSTEME',
     });
   }
 }

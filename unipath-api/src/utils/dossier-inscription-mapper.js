@@ -21,6 +21,7 @@ function mapDossierInscriptionToInscription(dossier) {
     dossierInscriptionId: dossier.id,
     quittanceUrl: dossier.quittanceUrl,
     piecesExtras: dossier.piecesExtras,
+    documentsCompl: dossier.documentsCompl,
     doubleVerdict: {
       verdict1: dossier.verdict1,
       verdict2: dossier.decisionControleur,

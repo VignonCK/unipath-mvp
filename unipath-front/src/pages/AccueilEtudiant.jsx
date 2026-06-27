@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { candidatService, completionService } from '../services/api';
 import { handleSessionError } from '../utils/auth';
+import { countAlertesConcours } from '../utils/concoursAlertes';
 import CandidatLayout from '../components/CandidatLayout';
 import BentoCard from '../components/BentoCard';
 
@@ -63,6 +64,8 @@ export default function AccueilEtudiant() {
 
   const pct = completion?.pourcentage ?? 0;
   const dossierIncomplet = pct < 100;
+  const nbInscriptions = candidat?.inscriptions?.length ?? 0;
+  const nbAlertes = countAlertesConcours(candidat?.inscriptions);
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
@@ -113,6 +116,40 @@ export default function AccueilEtudiant() {
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           <button
             type="button"
+            onClick={() => navigate('/mes-concours')}
+            className={`group text-left rounded-2xl border p-6 shadow-sm hover:shadow-lg transition ${
+              nbAlertes > 0
+                ? 'border-blue-300 bg-blue-50 ring-2 ring-blue-200'
+                : nbInscriptions > 0
+                ? 'border-gray-100 bg-white hover:border-blue-200'
+                : 'border-gray-100 bg-white hover:border-blue-200'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-blue-900 text-white flex items-center justify-center group-hover:scale-105 transition">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+              </div>
+              {nbAlertes > 0 && (
+                <span
+                  className="rounded-full bg-orange-500 text-white text-xs font-bold min-w-[1.5rem] h-6 px-2 flex items-center justify-center"
+                  title="Documents ou mises à jour à consulter"
+                >
+                  {nbAlertes}
+                </span>
+              )}
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Mes concours</h2>
+            <p className="text-gray-600 text-sm">
+              {nbInscriptions > 0
+                ? 'Suivi de vos inscriptions, fiches et convocations.'
+                : 'Retrouvez ici le suivi de vos inscriptions une fois inscrit à un concours.'}
+            </p>
+          </button>
+
+          <button
+            type="button"
             onClick={() => navigate('/concours')}
             className="group text-left rounded-2xl border border-blue-100 bg-white p-6 shadow-sm hover:shadow-lg hover:border-blue-300 transition"
           >
@@ -132,44 +169,27 @@ export default function AccueilEtudiant() {
             onClick={() => navigate('/etablissements-prives')}
             className="group text-left rounded-2xl border border-orange-100 bg-white p-6 shadow-sm hover:shadow-lg hover:border-orange-300 transition"
           >
-            <div className="w-12 h-12 rounded-xl bg-orange-500 text-white flex items-center justify-center mb-4 group-hover:scale-105 transition">
+            <div className="w-12 h-12 rounded-xl bg-blue-900 text-white flex items-center justify-center mb-4 group-hover:scale-105 transition">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">S&apos;inscrire dans un établissement privé</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Écoles privées</h2>
             <p className="text-gray-600 text-sm">
-              Parcourez les écoles privées, choisissez votre filière et votre niveau d&apos;inscription.
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigate('/campagnes-inscription')}
-            className="group text-left rounded-2xl border border-green-100 bg-white p-6 shadow-sm hover:shadow-lg hover:border-green-300 transition"
-          >
-            <div className="w-12 h-12 rounded-xl bg-green-600 text-white flex items-center justify-center mb-4 group-hover:scale-105 transition">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Inscriptions établissements privés</h2>
-            <p className="text-gray-600 text-sm">
-              Consultez les campagnes d&apos;inscription ouvertes et postulez directement en ligne.
+              Parcourez les offres et déposez votre dossier.
             </p>
           </button>
         </div>
 
-        {(candidat?.inscriptions?.length ?? 0) > 0 && (
-          <div className="rounded-xl border border-blue-100 bg-blue-50/50 px-5 py-4">
-            <p className="text-sm text-blue-900">
-              Vous avez {candidat.inscriptions.length} inscription(s) à un concours.{' '}
-              <Link to="/mes-concours" className="font-semibold underline hover:text-blue-700">
-                Voir le suivi de mes concours
-              </Link>
-            </p>
-          </div>
-        )}
+        <div className="flex flex-wrap items-center justify-center gap-4 pt-2 text-sm">
+          <Link to="/mon-compte" className="text-blue-900 font-medium hover:underline">
+            Mon dossier personnel
+          </Link>
+          <span className="text-gray-300" aria-hidden>|</span>
+          <Link to="/ma-carte" className="text-blue-900 font-medium hover:underline">
+            Ma carte candidat
+          </Link>
+        </div>
       </div>
     </CandidatLayout>
   );

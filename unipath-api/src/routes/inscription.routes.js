@@ -13,6 +13,19 @@ router.get('/', protect, checkRole(['CANDIDAT']), inscriptionController.getInscr
 router.post('/soumettre', protect, checkRole(['CANDIDAT']), handleSoumissionUpload(), inscriptionController.soumettreDossierComplet);
 router.post('/', protect, checkRole(['CANDIDAT']), inscriptionController.creerInscription);
 router.post('/:inscriptionId/soumettre', protect, checkRole(['CANDIDAT']), inscriptionController.soumettreDossier);
+router.post(
+  '/:inscriptionId/documents-complementaires',
+  protect,
+  checkRole(['CANDIDAT']),
+  handleDossierUpload('fichier'),
+  inscriptionController.ajouterDocumentComplementaireConcours,
+);
+router.post(
+  '/:inscriptionId/resoumettre',
+  protect,
+  checkRole(['CANDIDAT']),
+  inscriptionController.resoumettreDossierConcours,
+);
 router.put('/:inscriptionId/pieces-extras', protect, checkRole(['CANDIDAT']), inscriptionController.updatePiecesExtras);
 router.post('/:inscriptionId/quittance', protect, checkRole(['CANDIDAT']), upload.single('quittance'), inscriptionController.uploadQuittanceInscription);
 router.delete('/:inscriptionId', protect, checkRole(['CANDIDAT']), inscriptionController.annulerInscription);

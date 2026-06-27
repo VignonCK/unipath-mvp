@@ -11,6 +11,7 @@ export default function PreinscriptionsAdmin() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [sousReserveModal, setSousReserveModal] = useState({ open: false, id: null, commentaire: '' });
 
   const charger = () => {
     setLoading(true);
@@ -23,20 +24,15 @@ export default function PreinscriptionsAdmin() {
 
   useEffect(() => { charger(); }, []);
 
-  const decider = async (id, statut) => {
-    let motifDecision = '';
-    if (statut === 'SOUS_RESERVE' || statut === 'REJETE') {
-      motifDecision = window.prompt('Motif de la décision :', '') || '';
-      if (!motifDecision.trim()) return;
-    }
+  const decider = async (id, statut, extra = {}) => {
     setError('');
     setSuccess('');
     try {
-      await preinscriptionEtablissementService.decider(id, { statut, motifDecision });
+      await preinscriptionEtablissementService.decider(id, { statut, ...extra });
       if (statut === 'VALIDE') {
         setSuccess('Candidat validé — il apparaîtra dans la liste Étudiants.');
       } else if (statut === 'SOUS_RESERVE') {
-        setSuccess('Décision enregistrée : sous réserve.');
+        setSuccess('Décision enregistrée : sous réserve. Le candidat a été notifié.');
       } else {
         setSuccess('Pré-inscription rejetée.');
       }
@@ -44,6 +40,24 @@ export default function PreinscriptionsAdmin() {
     } catch (err) {
       setError(err.message || 'Décision impossible');
     }
+  };
+
+  const demanderRejet = async (id) => {
+    const motifDecision = window.prompt('Motif de la décision :', '') || '';
+    if (!motifDecision.trim()) return;
+    await decider(id, 'REJETE', { motifDecision: motifDecision.trim() });
+  };
+
+  const ouvrirSousReserve = (id) => {
+    setSousReserveModal({ open: true, id, commentaire: '' });
+  };
+
+  const confirmerSousReserve = async () => {
+    if (!sousReserveModal.commentaire.trim()) return;
+    await decider(sousReserveModal.id, 'SOUS_RESERVE', {
+      commentaireAdmin: sousReserveModal.commentaire.trim(),
+    });
+    setSousReserveModal({ open: false, id: null, commentaire: '' });
   };
 
   return (
@@ -114,8 +128,8 @@ export default function PreinscriptionsAdmin() {
                       <td className="px-6 py-4">
                         <div className="flex flex-wrap gap-2">
                           <button type="button" onClick={() => decider(d.id, 'VALIDE')} className="px-2 py-1 text-xs font-semibold bg-green-600 text-white rounded hover:bg-green-700" title="Crée l'inscription académique">Valider</button>
-                          <button type="button" onClick={() => decider(d.id, 'SOUS_RESERVE')} className="px-2 py-1 text-xs font-semibold bg-amber-500 text-white rounded hover:bg-amber-600">Sous réserve</button>
-                          <button type="button" onClick={() => decider(d.id, 'REJETE')} className="px-2 py-1 text-xs font-semibold bg-red-600 text-white rounded hover:bg-red-700">Rejeter</button>
+                          <button type="button" onClick={() => ouvrirSousReserve(d.id)} className="px-2 py-1 text-xs font-semibold bg-amber-500 text-white rounded hover:bg-amber-600">Sous réserve</button>
+                          <button type="button" onClick={() => demanderRejet(d.id)} className="px-2 py-1 text-xs font-semibold bg-red-600 text-white rounded hover:bg-red-700">Rejeter</button>
                         </div>
                       </td>
                     </tr>
@@ -126,6 +140,46 @@ export default function PreinscriptionsAdmin() {
           </BentoCard>
         )}
       </div>
+
+      {sousReserveModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="font-semibold text-gray-900">Accepter sous réserve</h3>
+            </div>
+            <div className="px-6 py-5">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Message au candidat <span className="text-red-600">*</span>
+              </label>
+              <textarea
+                value={sousReserveModal.commentaire}
+                onChange={(e) => setSousReserveModal((m) => ({ ...m, commentaire: e.target.value }))}
+                placeholder="Indiquez les compléments attendus du candidat…"
+                rows={5}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm resize-none"
+              />
+              <p className="text-xs text-gray-500 mt-2">Ce message sera envoyé au candidat par email.</p>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setSousReserveModal({ open: false, id: null, commentaire: '' })}
+                className="text-sm border border-gray-200 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={confirmerSousReserve}
+                disabled={!sousReserveModal.commentaire.trim()}
+                className="text-sm bg-amber-500 text-white px-5 py-2 rounded-lg hover:bg-amber-600 disabled:opacity-60"
+              >
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminEtablissementLayout>
   );
 }

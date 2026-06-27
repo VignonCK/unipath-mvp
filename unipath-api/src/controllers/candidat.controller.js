@@ -41,6 +41,7 @@ exports.getProfil = async (req, res) => {
       commentaireSousReserve: ins.dossierInscription?.commentaireSousReserve,
       quittanceUrl: ins.dossierInscription?.quittanceUrl ?? null,
       piecesExtras: ins.dossierInscription?.piecesExtras ?? {},
+      documentsCompl: ins.dossierInscription?.documentsCompl ?? null,
       dossierInscriptionId: ins.dossierInscription?.id ?? null,
     }));
 
