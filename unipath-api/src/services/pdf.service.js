@@ -386,6 +386,7 @@ class PDFService {
         dateDebutComposition: concours?.dateDebutComposition || null,
         dateFinComposition: concours?.dateFinComposition || null,
         centresComposition: concours?.centresComposition || null,
+        centreCompositionChoisi: inscription?.dossierInscription?.centreCompositionChoisi || null,
         photoBase64,
         photoMime,
       };

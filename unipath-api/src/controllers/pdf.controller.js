@@ -2,6 +2,7 @@
 const fs = require('fs');
 const prisma = require('../prisma');
 const pdfService = require('../services/pdf.service');
+const { concoursHasCentres, enrichDossierInscriptionForPdf } = require('../utils/centres-composition.helper');
 
 const INSCRIPTION_PDF_INCLUDE = {
   candidat: {
@@ -10,7 +11,13 @@ const INSCRIPTION_PDF_INCLUDE = {
     },
   },
   concours: true,
-  dossierInscription: true,
+  dossierInscription: {
+    include: {
+      centreChoisi: {
+        include: { centre: true },
+      },
+    },
+  },
 };
 
 function buildNomFichierPdf(prefix, candidat, numeroInscription) {
@@ -56,6 +63,20 @@ exports.telechargerConvocation = async (req, res) => {
       return res.status(400).json({ error: 'La convocation n\'est disponible que pour les dossiers valides' });
     }
 
+    const hasCentresJson = concoursHasCentres(inscription.concours?.centresComposition);
+    const hasCentresRelational = await prisma.concourscentreComposition.count({
+      where: { concoursId: inscription.concoursId, estActif: true },
+    }) > 0;
+    const hasCentres = hasCentresRelational || hasCentresJson;
+    const dossierPdf = enrichDossierInscriptionForPdf(inscription.dossierInscription);
+    const centreChoisi = dossierPdf?.centreCompositionChoisi;
+
+    if (hasCentres && !centreChoisi?.nom) {
+      return res.status(400).json({
+        error: 'Veuillez choisir votre centre de composition avant de telecharger la convocation',
+      });
+    }
+
     const pdfResult = await pdfService.genererConvocation({
       candidat: {
         ...inscription.candidat,
@@ -66,7 +87,7 @@ exports.telechargerConvocation = async (req, res) => {
         id: inscription.id,
         numeroInscription: inscription.numeroInscription,
         concours: inscription.concours,
-        dossierInscription: inscription.dossierInscription || null,
+        dossierInscription: dossierPdf,
         candidat: {
           dossier: inscription.candidat?.dossier ?? null,
         },

@@ -17,6 +17,13 @@ jest.mock('../../supabase', () => ({
       signInWithPassword: jest.fn(),
     },
   },
+  supabaseAdmin: {
+    auth: {
+      admin: {
+        updateUserById: jest.fn().mockResolvedValue({ data: {}, error: null }),
+      },
+    },
+  },
 }));
 
 jest.mock('../../services/email.service', () => ({
@@ -90,6 +97,7 @@ describe('auth.controller — login', () => {
 
     expect(res.json).toHaveBeenCalledWith({
       token: 'token-abc',
+      mustChangePassword: false,
       user: expect.objectContaining({
         id: 'user-1',
         role: 'CANDIDAT',
@@ -110,9 +118,10 @@ describe('auth.controller — confirmEmail', () => {
       prenom: 'Jean',
       email: 'test@example.com',
       matricule: 'UnP-2026-000001',
+      emailConfirmExpires: new Date(Date.now() + 3600000),
     });
 
-    const req = { query: { token: 'user-1' } };
+    const req = { query: { token: 'secure-confirm-token' } };
     const res = makeRes();
     await confirmEmail(req, res);
 

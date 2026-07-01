@@ -1,16 +1,62 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   applicationService,
   etablissementService,
   filiereService,
   filiereAdminService,
+  resolvePublicAssetUrl,
 } from '../../services/api';
 import { getUser } from '../../utils/auth';
 import AdminEtablissementLayout from '../../components/AdminEtablissementLayout';
 import { BentoCard } from '../../components/AcademicLayout';
 
-const EMPTY_FILIERE = { nom: '', code: '', niveau: 'LICENCE', dureeAnnees: '3' };
-const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/api\/?$/, '');
+const EMPTY_FILIERE = {
+  nom: '',
+  code: '',
+  niveau: 'LICENCE',
+  dureeAnnees: '3',
+  fraisScolariteAnnuels: '',
+  fraisInscriptionEffective: '',
+  fraisAutres: '',
+  debouches: '',
+  partenariatsEntreprises: '',
+  partenariatsUniversites: '',
+  tauxReussite: '',
+  dureeStage: '',
+  langueEnseignement: '',
+};
+
+const buildFilierePayload = (form) => ({
+  nom: form.nom.trim(),
+  code: form.code.trim() || undefined,
+  niveau: form.niveau,
+  dureeAnnees: Number(form.dureeAnnees),
+  fraisScolariteAnnuels: form.fraisScolariteAnnuels !== '' ? Number(form.fraisScolariteAnnuels) : null,
+  fraisInscriptionEffective: form.fraisInscriptionEffective !== '' ? Number(form.fraisInscriptionEffective) : null,
+  fraisAutres: form.fraisAutres.trim() || null,
+  debouches: form.debouches.trim() || null,
+  partenariatsEntreprises: form.partenariatsEntreprises.trim() || null,
+  partenariatsUniversites: form.partenariatsUniversites.trim() || null,
+  tauxReussite: form.tauxReussite !== '' ? Number(form.tauxReussite) : null,
+  dureeStage: form.dureeStage.trim() || null,
+  langueEnseignement: form.langueEnseignement.trim() || null,
+});
+
+const filiereToForm = (filiere) => ({
+  nom: filiere.nom || '',
+  code: filiere.code || '',
+  niveau: filiere.niveau || 'LICENCE',
+  dureeAnnees: filiere.dureeAnnees != null ? String(filiere.dureeAnnees) : '3',
+  fraisScolariteAnnuels: filiere.fraisScolariteAnnuels != null ? String(filiere.fraisScolariteAnnuels) : '',
+  fraisInscriptionEffective: filiere.fraisInscriptionEffective != null ? String(filiere.fraisInscriptionEffective) : '',
+  fraisAutres: filiere.fraisAutres || '',
+  debouches: filiere.debouches || '',
+  partenariatsEntreprises: filiere.partenariatsEntreprises || '',
+  partenariatsUniversites: filiere.partenariatsUniversites || '',
+  tauxReussite: filiere.tauxReussite != null ? String(filiere.tauxReussite) : '',
+  dureeStage: filiere.dureeStage || '',
+  langueEnseignement: filiere.langueEnseignement || '',
+});
 
 export default function MonEtablissementAdmin() {
   const user = getUser();
@@ -21,7 +67,20 @@ export default function MonEtablissementAdmin() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [filiereForm, setFiliereForm] = useState(EMPTY_FILIERE);
-  const [profilForm, setProfilForm] = useState({ ville: '', adresse: '', email: '' });
+  const [editingFiliereId, setEditingFiliereId] = useState(null);
+  const [profilForm, setProfilForm] = useState({
+    ville: '',
+    adresse: '',
+    email: '',
+    telephone: '',
+    siteWeb: '',
+    description: '',
+    agrementMESRS: '',
+    anneeCreation: '',
+    facebook: '',
+    instagram: '',
+    linkedin: '',
+  });
   const [requirementForm, setRequirementForm] = useState({
     code: '',
     label: '',
@@ -34,6 +93,7 @@ export default function MonEtablissementAdmin() {
   const [logoFile, setLogoFile] = useState(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [savingProfil, setSavingProfil] = useState(false);
+  const filiereFormRef = useRef(null);
 
   const charger = () => {
     if (!user?.etablissementId) {
@@ -54,6 +114,14 @@ export default function MonEtablissementAdmin() {
           ville: etab?.ville || '',
           adresse: etab?.adresse || '',
           email: etab?.email || '',
+          telephone: etab?.telephone || '',
+          siteWeb: etab?.siteWeb || '',
+          description: etab?.description || '',
+          agrementMESRS: etab?.agrementMESRS || '',
+          anneeCreation: etab?.anneeCreation != null ? String(etab.anneeCreation) : '',
+          facebook: etab?.facebook || '',
+          instagram: etab?.instagram || '',
+          linkedin: etab?.linkedin || '',
         });
         setFilieres(filData.filieres || []);
         setRequirements(reqData.requirements || []);
@@ -64,7 +132,7 @@ export default function MonEtablissementAdmin() {
 
   useEffect(() => { charger(); }, [user?.etablissementId]);
 
-  const handleCreateFiliere = async (e) => {
+  const handleSaveFiliere = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
@@ -74,20 +142,37 @@ export default function MonEtablissementAdmin() {
     }
     setSubmitting(true);
     try {
-      await filiereAdminService.creer({
-        nom: filiereForm.nom.trim(),
-        code: filiereForm.code.trim() || undefined,
-        niveau: filiereForm.niveau,
-        dureeAnnees: Number(filiereForm.dureeAnnees),
-      });
+      const payload = buildFilierePayload(filiereForm);
+      if (editingFiliereId) {
+        await filiereAdminService.modifier(editingFiliereId, payload);
+        setSuccess('Filière mise à jour.');
+      } else {
+        await filiereAdminService.creer(payload);
+        setSuccess('Filière ajoutée.');
+      }
       setFiliereForm(EMPTY_FILIERE);
-      setSuccess('Filière ajoutée.');
+      setEditingFiliereId(null);
       charger();
     } catch (err) {
-      setError(err.message || 'Impossible d\'ajouter la filière');
+      setError(err.message || 'Impossible d\'enregistrer la filière');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const startEditFiliere = (filiere) => {
+    setEditingFiliereId(filiere.id);
+    setFiliereForm(filiereToForm(filiere));
+    setError('');
+    setSuccess('');
+    requestAnimationFrame(() => {
+      filiereFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const cancelEditFiliere = () => {
+    setEditingFiliereId(null);
+    setFiliereForm(EMPTY_FILIERE);
   };
 
   const handleDeleteFiliere = async (id) => {
@@ -175,7 +260,7 @@ export default function MonEtablissementAdmin() {
     }
   };
 
-  const logoSrc = etablissement?.logoUrl ? `${API_ORIGIN}${etablissement.logoUrl}` : null;
+  const logoSrc = resolvePublicAssetUrl(etablissement?.logoUrl);
 
   return (
     <AdminEtablissementLayout>
@@ -244,6 +329,84 @@ export default function MonEtablissementAdmin() {
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Téléphone</label>
+                  <input
+                    type="tel"
+                    value={profilForm.telephone}
+                    onChange={(e) => setProfilForm((p) => ({ ...p, telephone: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Site web</label>
+                  <input
+                    type="url"
+                    value={profilForm.siteWeb}
+                    onChange={(e) => setProfilForm((p) => ({ ...p, siteWeb: e.target.value }))}
+                    placeholder="https://"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Agrément MESRS</label>
+                  <input
+                    type="text"
+                    value={profilForm.agrementMESRS}
+                    onChange={(e) => setProfilForm((p) => ({ ...p, agrementMESRS: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Année de création</label>
+                  <input
+                    type="number"
+                    min={1800}
+                    max={new Date().getFullYear()}
+                    value={profilForm.anneeCreation}
+                    onChange={(e) => setProfilForm((p) => ({ ...p, anneeCreation: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Description</label>
+                  <textarea
+                    rows={4}
+                    value={profilForm.description}
+                    onChange={(e) => setProfilForm((p) => ({ ...p, description: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Facebook</label>
+                  <input
+                    type="url"
+                    value={profilForm.facebook}
+                    onChange={(e) => setProfilForm((p) => ({ ...p, facebook: e.target.value }))}
+                    placeholder="https://facebook.com/..."
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Instagram</label>
+                  <input
+                    type="url"
+                    value={profilForm.instagram}
+                    onChange={(e) => setProfilForm((p) => ({ ...p, instagram: e.target.value }))}
+                    placeholder="https://instagram.com/..."
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">LinkedIn</label>
+                  <input
+                    type="url"
+                    value={profilForm.linkedin}
+                    onChange={(e) => setProfilForm((p) => ({ ...p, linkedin: e.target.value }))}
+                    placeholder="https://linkedin.com/..."
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                  />
+                </div>
                 <div className="sm:col-span-2">
                   <button
                     type="submit"
@@ -256,9 +419,24 @@ export default function MonEtablissementAdmin() {
               </form>
             </BentoCard>
 
-            <BentoCard className="p-6 space-y-4">
+            <div ref={filiereFormRef} className="scroll-mt-6">
+            <BentoCard
+              className={`p-6 space-y-4 transition-shadow ${
+                editingFiliereId ? 'ring-2 ring-teal-600 ring-offset-2' : ''
+              }`}
+            >
               <h3 className="font-bold text-gray-900">Filières</h3>
-              <form onSubmit={handleCreateFiliere} className="grid gap-3 sm:grid-cols-2">
+              <form onSubmit={handleSaveFiliere} className="grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2 flex items-center justify-between gap-2">
+                  <p className={`text-sm font-semibold ${editingFiliereId ? 'text-teal-900' : 'text-gray-700'}`}>
+                    {editingFiliereId ? 'Modifier la filière' : 'Nouvelle filière'}
+                  </p>
+                  {editingFiliereId && (
+                    <button type="button" onClick={cancelEditFiliere} className="text-xs text-gray-500 hover:underline">
+                      Annuler
+                    </button>
+                  )}
+                </div>
                 <div className="sm:col-span-2">
                   <input
                     type="text"
@@ -275,6 +453,7 @@ export default function MonEtablissementAdmin() {
                   value={filiereForm.code}
                   onChange={(e) => setFiliereForm((p) => ({ ...p, code: e.target.value }))}
                   className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                  disabled={Boolean(editingFiliereId)}
                 />
                 <select
                   value={filiereForm.niveau}
@@ -294,12 +473,80 @@ export default function MonEtablissementAdmin() {
                   className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
                   required
                 />
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="Frais scolarité annuels (FCFA)"
+                  value={filiereForm.fraisScolariteAnnuels}
+                  onChange={(e) => setFiliereForm((p) => ({ ...p, fraisScolariteAnnuels: e.target.value }))}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="Frais inscription effective (FCFA)"
+                  value={filiereForm.fraisInscriptionEffective}
+                  onChange={(e) => setFiliereForm((p) => ({ ...p, fraisInscriptionEffective: e.target.value }))}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  max={1}
+                  step="0.01"
+                  placeholder="Taux de réussite (0.85 = 85%)"
+                  value={filiereForm.tauxReussite}
+                  onChange={(e) => setFiliereForm((p) => ({ ...p, tauxReussite: e.target.value }))}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                />
+                <input
+                  type="text"
+                  placeholder="Langue d'enseignement"
+                  value={filiereForm.langueEnseignement}
+                  onChange={(e) => setFiliereForm((p) => ({ ...p, langueEnseignement: e.target.value }))}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                />
+                <input
+                  type="text"
+                  placeholder="Durée du stage (ex: 3 mois en L3)"
+                  value={filiereForm.dureeStage}
+                  onChange={(e) => setFiliereForm((p) => ({ ...p, dureeStage: e.target.value }))}
+                  className="sm:col-span-2 px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                />
+                <textarea
+                  rows={2}
+                  placeholder="Autres frais (description libre)"
+                  value={filiereForm.fraisAutres}
+                  onChange={(e) => setFiliereForm((p) => ({ ...p, fraisAutres: e.target.value }))}
+                  className="sm:col-span-2 px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                />
+                <textarea
+                  rows={2}
+                  placeholder="Débouchés"
+                  value={filiereForm.debouches}
+                  onChange={(e) => setFiliereForm((p) => ({ ...p, debouches: e.target.value }))}
+                  className="sm:col-span-2 px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                />
+                <textarea
+                  rows={2}
+                  placeholder="Partenariats entreprises"
+                  value={filiereForm.partenariatsEntreprises}
+                  onChange={(e) => setFiliereForm((p) => ({ ...p, partenariatsEntreprises: e.target.value }))}
+                  className="sm:col-span-2 px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                />
+                <textarea
+                  rows={2}
+                  placeholder="Partenariats universités"
+                  value={filiereForm.partenariatsUniversites}
+                  onChange={(e) => setFiliereForm((p) => ({ ...p, partenariatsUniversites: e.target.value }))}
+                  className="sm:col-span-2 px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                />
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 text-sm font-semibold bg-teal-900 text-white rounded-lg disabled:opacity-50"
+                  className="sm:col-span-2 px-4 py-2 text-sm font-semibold bg-teal-900 text-white rounded-lg disabled:opacity-50"
                 >
-                  {submitting ? 'Ajout...' : 'Ajouter'}
+                  {submitting ? 'Enregistrement...' : editingFiliereId ? 'Mettre à jour la filière' : 'Ajouter la filière'}
                 </button>
               </form>
               {filieres.length === 0 ? (
@@ -307,25 +554,45 @@ export default function MonEtablissementAdmin() {
               ) : (
                 <ul className="divide-y divide-gray-100">
                   {filieres.map((f) => (
-                    <li key={f.id} className="py-3 flex justify-between items-center text-sm">
+                    <li
+                      key={f.id}
+                      className={`py-3 flex justify-between items-start gap-3 text-sm rounded-lg px-2 -mx-2 ${
+                        editingFiliereId === f.id ? 'bg-teal-50 border border-teal-200' : ''
+                      }`}
+                    >
                       <div>
                         <span className="font-medium">{f.nom}</span>
                         <span className="text-gray-500 ml-2">({f.code})</span>
                         <p className="text-xs text-gray-400">{f.niveau} · {f.dureeAnnees} an(s)</p>
+                        {f.fraisScolariteAnnuels != null && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Scolarité : {f.fraisScolariteAnnuels.toLocaleString('fr-FR')} FCFA/an
+                          </p>
+                        )}
                       </div>
-                      <button
-                        type="button"
-                        disabled={deletingId === f.id}
-                        onClick={() => handleDeleteFiliere(f.id)}
-                        className="text-xs text-red-600 font-semibold disabled:opacity-50"
-                      >
-                        Supprimer
-                      </button>
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => startEditFiliere(f)}
+                          className="text-xs text-teal-900 font-semibold hover:underline"
+                        >
+                          Modifier
+                        </button>
+                        <button
+                          type="button"
+                          disabled={deletingId === f.id}
+                          onClick={() => handleDeleteFiliere(f.id)}
+                          className="text-xs text-red-600 font-semibold disabled:opacity-50"
+                        >
+                          Supprimer
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>
               )}
             </BentoCard>
+            </div>
 
             <BentoCard className="p-6 space-y-4">
               <h3 className="font-bold text-gray-900">Pièces requises (candidatures)</h3>

@@ -6,6 +6,30 @@ import { saveAuth, clearAuth, redirectToLoginOn401 } from '../utils/auth';
 
 // ── URL de base ──────────────────────────────────────────────────
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+export const API_ORIGIN = BASE_URL.replace(/\/api\/?$/, '');
+
+/** URL absolue pour les assets publics (logos établissements, etc.). */
+export function resolvePublicAssetUrl(assetPath) {
+  if (!assetPath) return null;
+  if (assetPath.startsWith('http://') || assetPath.startsWith('https://')) return assetPath;
+  if (assetPath.startsWith('/api/public/')) return `${API_ORIGIN}${assetPath}`;
+  if (assetPath.startsWith('/uploads/etablissements/')) {
+    const filename = assetPath.split('/').pop();
+    return `${API_ORIGIN}/api/public/etablissements/${filename}`;
+  }
+  if (assetPath.startsWith('/api/')) return `${API_ORIGIN}${assetPath}`;
+  return `${API_ORIGIN}${assetPath.startsWith('/') ? assetPath : `/${assetPath}`}`;
+}
+
+/** URL API authentifiée pour un fichier local (Authorization requis côté client). */
+export function resolvePrivateUploadUrl(relativePath) {
+  if (!relativePath) return null;
+  if (relativePath.startsWith('http://') || relativePath.startsWith('https://')) return relativePath;
+
+  let clean = relativePath.replace(/^\/uploads\//, '').replace(/^uploads\//, '');
+  clean = clean.replace(/^\/api\/uploads\//, '');
+  return `${BASE_URL}/uploads/${clean}`;
+}
 
 // ── Fonction générique de requête ────────────────────────────────
 async function request(endpoint, options = {}) {
@@ -25,7 +49,24 @@ async function request(endpoint, options = {}) {
     return new Promise(() => {});
   }
 
-  const data = await response.json();
+  const contentType = response.headers.get('content-type') || '';
+  const rawBody = await response.text();
+
+  if (!contentType.includes('application/json')) {
+    const hint = rawBody.trimStart().startsWith('<!DOCTYPE') || rawBody.trimStart().startsWith('<html')
+      ? 'Le serveur API a renvoyé une page HTML au lieu de JSON. Vérifiez que l\'API est démarrée et à jour (npm start dans unipath-api), puis réessayez.'
+      : (rawBody.slice(0, 120) || `Réponse HTTP ${response.status}`);
+    const error = new Error(hint);
+    error.status = response.status;
+    throw error;
+  }
+
+  let data;
+  try {
+    data = rawBody ? JSON.parse(rawBody) : {};
+  } catch {
+    throw new Error('Réponse API illisible (JSON invalide).');
+  }
 
   if (!response.ok) {
     const error = new Error(data.error || 'Erreur API');
@@ -151,6 +192,8 @@ export const candidatService = {
 // ── Concours ─────────────────────────────────────────────────────
 export const concoursService = {
   getAll: () => request('/concours'),
+  getByEtablissement: (etablissementId) =>
+    request(`/concours?etablissementId=${encodeURIComponent(etablissementId)}`),
   getById: (id) => request(`/concours/${id}`),
   getClassement: (id) => request(`/concours/${id}/classement`),
   
@@ -169,6 +212,50 @@ export const concoursService = {
   
   delete: (id) =>
     request(`/concours/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+export const centreCompositionService = {
+  lister: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/centres-composition${qs ? `?${qs}` : ''}`);
+  },
+
+  creer: (data) =>
+    request('/centres-composition', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  modifier: (id, data) =>
+    request(`/centres-composition/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  toggleActif: (id) =>
+    request(`/centres-composition/${id}/actif`, { method: 'PATCH' }),
+
+  getConcoursCentres: (concoursId, params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/concours/${concoursId}/centres${qs ? `?${qs}` : ''}`);
+  },
+
+  ajouterAuConcours: (concoursId, data) =>
+    request(`/concours/${concoursId}/centres`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  modifierConcoursCentre: (concoursId, concourscentreId, data) =>
+    request(`/concours/${concoursId}/centres/${concourscentreId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  retirerDuConcours: (concoursId, concourscentreId) =>
+    request(`/concours/${concoursId}/centres/${concourscentreId}`, {
       method: 'DELETE',
     }),
 };
@@ -212,6 +299,12 @@ export const inscriptionService = {
 
   resoumettre: (inscriptionId) =>
     request(`/inscriptions/${inscriptionId}/resoumettre`, { method: 'POST' }),
+
+  choisirCentreComposition: (inscriptionId, data) =>
+    request(`/inscriptions/${inscriptionId}/centre-composition`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   renvoyerFiche: (inscriptionId) =>
     request(`/inscriptions/${inscriptionId}/renvoyer-fiche`, { method: 'POST' }),
@@ -394,8 +487,14 @@ export const completionService = {
 };
 
 export const etablissementService = {
-  getAll: () => request('/etablissements'),
+  getAll: (params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.type) searchParams.set('type', params.type);
+    const query = searchParams.toString();
+    return request(`/etablissements${query ? `?${query}` : ''}`);
+  },
   getPrives: () => request('/etablissements/prives'),
+  getPublics: () => request('/etablissements/publics'),
   getById: (id) => request(`/etablissements/${id}`),
   rechercherParFilieres: (choix) =>
     request('/etablissements/recherche-filieres', {
@@ -466,11 +565,13 @@ export const inscriptionAcadService = {
 };
 
 export const preinscriptionEtablissementService = {
-  creer: (data) =>
-    request('/preinscriptions-etablissement', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  /** @deprecated Création directe désactivée — utiliser applicationService.creer via /demande-inscription */
+  creer: () =>
+    Promise.reject(
+      new Error(
+        'La création directe de pré-inscription est désactivée. Passez par le dépôt de dossier (/demande-inscription).',
+      ),
+    ),
   getMesPreinscriptions: () => request('/preinscriptions-etablissement/mes-preinscriptions'),
   telechargerFiche: (id) =>
     telechargerPDF(`${BASE_URL}/preinscriptions-etablissement/${id}/pdf`, `fiche_preinscription_${id}.pdf`),

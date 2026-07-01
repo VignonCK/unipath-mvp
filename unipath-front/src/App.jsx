@@ -47,6 +47,7 @@ import EtudiantsAdmin from './pages/admin-etablissement/EtudiantsAdmin';
 import ResetPassword from './pages/ResetPassword';
 import PageCampagnesInscription from './pages/campagnes/PageCampagnesInscription';
 import DetailCampagneCandidat from './pages/campagnes/DetailCampagneCandidat';
+import EtablissementDetail from './pages/candidat/EtablissementDetail';
 
 function App() {
   return (
@@ -96,6 +97,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={STUDENT_ROLES}>
               <EtablissementsPrives />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/etablissements-prives/:id'
+          element={
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
+              <EtablissementDetail />
             </ProtectedRoute>
           }
         />

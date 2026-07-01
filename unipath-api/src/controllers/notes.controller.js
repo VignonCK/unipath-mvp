@@ -1,4 +1,7 @@
 const prisma = require('../prisma');
+const { isEtudiantRole } = require('../constants/roles.constants');
+
+const INSCRIPTION_ACAD_OWNER_SELECT = { select: { candidatId: true } };
 
 const calculerMoyenneNote = (noteCC, noteExamen) => {
   const ccValide = typeof noteCC === 'number';
@@ -18,6 +21,16 @@ const calculerMoyenneGeneralePonderee = (notes) => {
     totalCredits,
   };
 };
+
+function assertNotesReadAccess(req, candidatId) {
+  const userRole = req.userRole || req.user?.role;
+
+  if (isEtudiantRole(userRole) && candidatId !== req.user.id) {
+    return { allowed: false };
+  }
+
+  return { allowed: true };
+}
 
 exports.ajouterNote = async (req, res) => {
   try {
@@ -49,6 +62,9 @@ exports.ajouterNote = async (req, res) => {
         credits: Number(credits),
         semestre: semestreNumber,
       },
+      include: {
+        inscriptionAcad: INSCRIPTION_ACAD_OWNER_SELECT,
+      },
     });
 
     return res.status(201).json({
@@ -70,12 +86,19 @@ exports.getNotesByInscription = async (req, res) => {
       include: {
         notes: {
           orderBy: [{ semestre: 'asc' }, { matiere: 'asc' }],
+          include: {
+            inscriptionAcad: INSCRIPTION_ACAD_OWNER_SELECT,
+          },
         },
       },
     });
 
     if (!inscription) {
       return res.status(404).json({ error: 'Inscription academique non trouvee' });
+    }
+
+    if (!assertNotesReadAccess(req, inscription.candidatId).allowed) {
+      return res.status(403).json({ error: 'Accès non autorisé' });
     }
 
     const { moyenneGenerale, totalCredits } = calculerMoyenneGeneralePonderee(inscription.notes);
@@ -97,7 +120,12 @@ exports.updateNote = async (req, res) => {
     const { id } = req.params;
     const { matiere, noteCC, noteExamen, credits, semestre } = req.body;
 
-    const existing = await prisma.note.findUnique({ where: { id } });
+    const existing = await prisma.note.findUnique({
+      where: { id },
+      include: {
+        inscriptionAcad: INSCRIPTION_ACAD_OWNER_SELECT,
+      },
+    });
     if (!existing) {
       return res.status(404).json({ error: 'Note non trouvee' });
     }
@@ -120,6 +148,9 @@ exports.updateNote = async (req, res) => {
         ...(semestreNumber !== undefined ? { semestre: semestreNumber } : {}),
         noteMoyenne: calculerMoyenneNote(mergedNoteCC, mergedNoteExamen),
       },
+      include: {
+        inscriptionAcad: INSCRIPTION_ACAD_OWNER_SELECT,
+      },
     });
 
     return res.json({
@@ -131,4 +162,3 @@ exports.updateNote = async (req, res) => {
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 };
-

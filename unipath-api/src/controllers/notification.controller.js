@@ -1,3 +1,4 @@
+const prisma = require('../prisma');
 const notificationService = require('../services/notification.service');
 
 // Envoyer une notification (email + in-app)
@@ -117,12 +118,13 @@ const markAllAsRead = async (req, res) => {
 
 const getNotifications = async (req, res) => {
   try {
+    const userId = req.user.id;
     const { page, limit, type, read } = req.query;
-    const notifications = await notificationService.getNotifications(req.user.id, {
-      page: parseInt(page) || 1,
-      limit: parseInt(limit) || 20,
+    const notifications = await notificationService.getNotifications(userId, {
+      page: parseInt(page, 10) || 1,
+      limit: parseInt(limit, 10) || 20,
       type,
-      read: read === 'true' ? true : read === 'false' ? false : undefined
+      read: read === 'true' ? true : read === 'false' ? false : undefined,
     });
     res.json(notifications);
   } catch (error) {
@@ -133,8 +135,24 @@ const getNotifications = async (req, res) => {
 
 const markAsRead = async (req, res) => {
   try {
-    const notification = await notificationService.markAsRead(req.params.id);
-    res.json(notification);
+    const notification = await prisma.notification.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!notification) {
+      return res.status(404).json({ error: 'Notification non trouvée' });
+    }
+
+    if (notification.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Accès non autorisé' });
+    }
+
+    const updated = await prisma.notification.update({
+      where: { id: req.params.id },
+      data: { read: true, readAt: new Date() },
+    });
+
+    res.json(updated);
   } catch (error) {
     console.error('Erreur markAsRead:', error);
     res.status(500).json({ error: error.message });

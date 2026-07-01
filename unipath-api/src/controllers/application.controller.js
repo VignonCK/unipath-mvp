@@ -8,6 +8,7 @@ const {
   getAdminEtablissementId,
   canAdminAccessApplication,
 } = require('../utils/admin-etablissement.helper');
+const { candidateSerieMatchesConcours } = require('../utils/series.helper');
 
 const REQUIRED_PROFILE_FIELDS = {
   nom: (c) => c?.nom,
@@ -46,19 +47,7 @@ const buildPreinscriptionNumber = () => {
   return `PE-${year}-${rand}`;
 };
 
-const uploadBufferToSupabase = async (buffer, storagePath, contentType) => {
-  const bucket = 'dossiers-candidats';
-  const { error } = await supabaseAdmin.storage
-    .from(bucket)
-    .upload(storagePath, buffer, { contentType, upsert: true });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const { data } = supabaseAdmin.storage.from(bucket).getPublicUrl(storagePath);
-  return data.publicUrl;
-};
+const { uploadBufferToSupabase } = require('../utils/file-upload.helper');
 
 const buildApplicationIncludes = () => ({
   candidat: {
@@ -95,6 +84,119 @@ const buildApplicationIncludes = () => ({
   receipts: true,
   preinscription: true,
 });
+
+const campagneFiliereDetailInclude = {
+  campagneFiliere: {
+    include: {
+      campagne: {
+        select: {
+          id: true,
+          titre: true,
+          anneeAcademique: true,
+          dateOuverture: true,
+          dateCloture: true,
+          statut: true,
+          etablissementId: true,
+        },
+      },
+    },
+  },
+};
+
+async function resolveCampagneFiliereForApplication({
+  campagneFiliereId,
+  candidatId,
+  etablissementId,
+  filiereId,
+  niveau,
+}) {
+  if (!campagneFiliereId) {
+    return { campagneFiliereId: null, fraisDossier: DEFAULT_DOSSIER_FEES };
+  }
+
+  const campagneFiliere = await prisma.campagneFiliere.findUnique({
+    where: { id: campagneFiliereId },
+    include: {
+      campagne: true,
+      filiere: { select: { id: true, etablissementId: true } },
+    },
+  });
+
+  if (!campagneFiliere) {
+    return { error: { status: 404, message: 'Campagne filiere non trouvee' } };
+  }
+
+  if (campagneFiliere.filiereId !== filiereId) {
+    return { error: { status: 400, message: 'La filiere ne correspond pas a la campagne selectionnee' } };
+  }
+
+  if (campagneFiliere.filiere.etablissementId !== etablissementId) {
+    return { error: { status: 400, message: 'La campagne ne correspond pas a l etablissement selectionne' } };
+  }
+
+  const { campagne } = campagneFiliere;
+
+  if (campagne.etablissementId !== etablissementId) {
+    return { error: { status: 400, message: 'La campagne ne correspond pas a l etablissement selectionne' } };
+  }
+
+  if (campagne.statut !== 'PUBLIEE') {
+    return { error: { status: 400, message: 'Cette campagne n est pas ouverte aux inscriptions' } };
+  }
+
+  const now = new Date();
+  if (now < new Date(campagne.dateOuverture)) {
+    return { error: { status: 400, message: 'La periode d inscription de cette campagne n est pas encore ouverte' } };
+  }
+  if (now > new Date(campagne.dateCloture)) {
+    return { error: { status: 400, message: 'La periode d inscription de cette campagne est terminee' } };
+  }
+
+  const candidat = await prisma.candidat.findUnique({
+    where: { id: candidatId },
+    select: { serie: true },
+  });
+
+  if (campagneFiliere.seriesAcceptees?.length > 0) {
+    if (!candidateSerieMatchesConcours(candidat?.serie, campagneFiliere.seriesAcceptees)) {
+      return { error: { status: 400, message: 'Votre serie du bac n est pas acceptee pour cette filiere' } };
+    }
+  }
+
+  if (campagneFiliere.niveauMinBac?.trim()) {
+    const minBac = campagneFiliere.niveauMinBac.trim();
+    const minBacNum = Number(minBac);
+    if (!Number.isNaN(minBacNum) && Number.isFinite(minBacNum)) {
+      if (Number(niveau) < minBacNum) {
+        return {
+          error: {
+            status: 400,
+            message: `Niveau d inscription minimum requis : ${minBacNum}`,
+          },
+        };
+      }
+    } else if (!candidateSerieMatchesConcours(candidat?.serie, [minBac])) {
+      return { error: { status: 400, message: 'Vous ne remplissez pas le critere de niveau au bac requis' } };
+    }
+  }
+
+  if (campagneFiliere.placesDisponibles != null) {
+    const placesPrises = await prisma.application.count({
+      where: {
+        campagneFiliereId: campagneFiliere.id,
+        status: { not: 'DRAFT' },
+      },
+    });
+    if (placesPrises >= campagneFiliere.placesDisponibles) {
+      return { error: { status: 400, message: 'Plus de places disponibles pour cette filiere' } };
+    }
+  }
+
+  return {
+    campagneFiliereId: campagneFiliere.id,
+    fraisDossier: campagneFiliere.fraisDossier,
+  };
+}
 
 const getRequirementValue = (candidate, profileFieldKey) => {
   const getter = REQUIRED_PROFILE_FIELDS[profileFieldKey];
@@ -194,14 +296,14 @@ const computeCompletion = async (applicationId) => {
     dossierFeesPaid,
     droitsInscriptionPaid: droitsPaid,
     missingDocuments: missingDocs,
-    isComplete: dossierFeesPaid && droitsPaid && missingDocs.length === 0,
+    isComplete: dossierFeesPaid && missingDocs.length === 0,
   };
 };
 
 exports.createApplication = async (req, res) => {
   try {
     const candidatId = req.user?.id;
-    const { etablissementId, filiereId, anneeAcademique, niveau } = req.body;
+    const { etablissementId, filiereId, anneeAcademique, niveau, campagneFiliereId } = req.body;
 
     if (!candidatId) {
       return res.status(401).json({ error: 'Utilisateur non authentifie' });
@@ -232,6 +334,17 @@ exports.createApplication = async (req, res) => {
       return res.status(400).json({ error: 'La filiere ne correspond pas a cet etablissement' });
     }
 
+    const campagneResolution = await resolveCampagneFiliereForApplication({
+      campagneFiliereId,
+      candidatId,
+      etablissementId,
+      filiereId,
+      niveau,
+    });
+    if (campagneResolution.error) {
+      return res.status(campagneResolution.error.status).json({ error: campagneResolution.error.message });
+    }
+
     const numeroApplication = buildApplicationNumber();
     const application = await prisma.application.create({
       data: {
@@ -241,8 +354,12 @@ exports.createApplication = async (req, res) => {
         filiereId,
         anneeAcademique,
         niveau: Number(niveau),
+        campagneFiliereId: campagneResolution.campagneFiliereId,
       },
-      include: buildApplicationIncludes(),
+      include: {
+        ...buildApplicationIncludes(),
+        ...campagneFiliereDetailInclude,
+      },
     });
 
     const { autoSatisfied } = await getRequirementsAndAutoDocs({
@@ -253,7 +370,10 @@ exports.createApplication = async (req, res) => {
 
     const refreshed = await prisma.application.findUnique({
       where: { id: application.id },
-      include: buildApplicationIncludes(),
+      include: {
+        ...buildApplicationIncludes(),
+        ...campagneFiliereDetailInclude,
+      },
     });
     const completion = await computeCompletion(application.id);
 
@@ -261,6 +381,7 @@ exports.createApplication = async (req, res) => {
       message: 'Demande d inscription creee avec succes',
       application: refreshed,
       completion,
+      fraisDossier: campagneResolution.fraisDossier,
     });
   } catch (error) {
     if (error?.code === 'P2002') {
@@ -317,6 +438,7 @@ exports.getApplicationsForEtablissement = async (req, res) => {
         preinscription: { select: { id: true, numeroPreinscription: true, statut: true } },
         payments: { select: { paymentType: true, status: true } },
         documents: { select: { id: true, code: true, label: true, status: true } },
+        ...campagneFiliereDetailInclude,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -334,7 +456,10 @@ exports.getApplicationById = async (req, res) => {
     const userRole = req.user?.role || req.userRole;
     const application = await prisma.application.findUnique({
       where: { id },
-      include: buildApplicationIncludes(),
+      include: {
+        ...buildApplicationIncludes(),
+        ...campagneFiliereDetailInclude,
+      },
     });
 
     if (!application) {
@@ -414,7 +539,17 @@ exports.payDossierFeesMock = async (req, res) => {
       return res.status(403).json({ error: 'Acces refuse' });
     }
 
-    const amount = DEFAULT_DOSSIER_FEES;
+    let amount = DEFAULT_DOSSIER_FEES;
+    if (application.campagneFiliereId) {
+      const campagneFiliere = await prisma.campagneFiliere.findUnique({
+        where: { id: application.campagneFiliereId },
+        select: { fraisDossier: true },
+      });
+      if (campagneFiliere?.fraisDossier != null) {
+        amount = campagneFiliere.fraisDossier;
+      }
+    }
+
     const initiated = await paymentService.initiatePayment({
       applicationId: id,
       amount,
@@ -507,6 +642,8 @@ exports.payDossierFeesMock = async (req, res) => {
     });
 
     return res.json({
+      success: true,
+      amount,
       message: 'Paiement des frais de dossier confirme (mode mock)',
       payment,
       receipt,
@@ -519,6 +656,11 @@ exports.payDossierFeesMock = async (req, res) => {
 };
 
 exports.uploadDroitsInscriptionReceipt = async (req, res) => {
+  return res.status(410).json({
+    error:
+      "Cette étape a été déplacée après la décision d'admission. Soumettez votre quittance via /mes-inscriptions-academiques.",
+  });
+
   try {
     const { id } = req.params;
     const userId = req.user?.id;
@@ -721,7 +863,7 @@ exports.finalizeApplication = async (req, res) => {
     const completion = await computeCompletion(id);
     if (!completion?.isComplete) {
       return res.status(400).json({
-        error: 'Le dossier n est pas complet ou les paiements ne sont pas confirmes',
+        error: 'Le dossier n est pas complet ou les frais de dossier ne sont pas confirmes',
         completion,
       });
     }

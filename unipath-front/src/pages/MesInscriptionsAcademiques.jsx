@@ -137,7 +137,13 @@ export default function MesInscriptionsAcademiques() {
                   <StatutBadge statut={ins.statut} />
                 </div>
 
-                <div className="mt-4">
+                <div className="mt-4 space-y-3">
+                  {ins.statut === 'EN_ATTENTE_QUITTANCE' && (
+                    <p className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-900">
+                      Votre dossier a été accepté. Déposez votre quittance bancaire pour finaliser votre inscription.
+                    </p>
+                  )}
+
                   {['EN_COURS', 'EN_ATTENTE_QUITTANCE'].includes(ins.statut) && (
                     <button
                       type="button"

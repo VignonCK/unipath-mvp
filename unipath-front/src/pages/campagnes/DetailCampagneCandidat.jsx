@@ -30,6 +30,7 @@ export default function DetailCampagneCandidat() {
         filiereId: cf.filiereId || cf.filiere?.id,
         anneeAcademique: campagne.anneeAcademique,
         niveau: '1',
+        campagneFiliereId: cf.id,
       },
     });
   };

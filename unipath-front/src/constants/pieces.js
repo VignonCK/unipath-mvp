@@ -91,6 +91,7 @@ export const PIECES_PREDEFINIES = [
     predefined: true,
     obligatoire: true,
     sourceDossier: 'photo',
+    description: '1 fichier image (JPEG ou PNG)',
   },
   {
     id: 'releve_bac',
@@ -181,7 +182,20 @@ export function isPieceObligatoire(pieceId) {
  * @returns {string} Label de la pièce
  */
 export function getPieceLabel(pieceId) {
-  return PIECES_LABELS[pieceId] || pieceId;
+  return normalizePieceNom(pieceId, PIECES_LABELS[convertLegacyId(pieceId)] || pieceId);
+}
+
+/** Libellé affiché — retire les mentions obsolètes type « (4 exemplaires) ». */
+export function normalizePieceNom(pieceId, nom) {
+  const id = convertLegacyId(pieceId);
+  if (id === PIECE_IDS.PHOTO_IDENTITE) {
+    return PIECES_LABELS[PIECE_IDS.PHOTO_IDENTITE];
+  }
+  const canonical = PIECES_LABELS[id];
+  if (canonical) return canonical;
+  return String(nom || pieceId || '')
+    .replace(/\s*\(\s*\d+\s*exemplaires?\s*\)/gi, '')
+    .trim() || String(pieceId || '');
 }
 
 /**

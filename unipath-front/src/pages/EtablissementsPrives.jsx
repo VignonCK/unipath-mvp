@@ -1,9 +1,37 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { candidatService, etablissementService, filiereService } from '../services/api';
 import { handleSessionError } from '../utils/auth';
 import CandidatLayout from '../components/CandidatLayout';
 import EcolesPriveesNav from '../components/EcolesPriveesNav';
+
+function findCampagneFiliereForFiliere(etablissement, filiereId) {
+  if (!etablissement?.campagnes?.length || !filiereId) return null;
+
+  for (const campagne of etablissement.campagnes) {
+    const campagneFiliere = (campagne.filieres || []).find(
+      (cf) => cf.filiereId === filiereId || cf.filiere?.id === filiereId,
+    );
+    if (campagneFiliere?.id) {
+      return {
+        campagneFiliereId: campagneFiliere.id,
+        anneeAcademique: campagne.anneeAcademique,
+      };
+    }
+  }
+
+  return null;
+}
+
+function mergeFilieresForEtab(etablissement, allFilieres) {
+  const fromEtab = etablissement?.filieres || [];
+  const fromState = allFilieres.filter((f) => f.etablissementId === etablissement?.id);
+  const merged = new Map();
+  [...fromEtab, ...fromState].forEach((filiere) => {
+    if (filiere?.id) merged.set(filiere.id, filiere);
+  });
+  return Array.from(merged.values());
+}
 
 export default function EtablissementsPrives() {
   const navigate = useNavigate();
@@ -25,13 +53,12 @@ export default function EtablissementsPrives() {
       try {
         const [profil, etabData, filiereData] = await Promise.all([
           candidatService.getProfil(),
-          etablissementService.getAll(),
+          etablissementService.getPrives(),
           filiereService.getAll(),
         ]);
         setCandidat(profil);
-        const prives = (etabData.etablissements || []).filter((e) => e.type === 'PRIVE');
-        setEtablissements(prives);
-        const priveIds = new Set(prives.map((e) => e.id));
+        setEtablissements(etabData.etablissements || []);
+        const priveIds = new Set((etabData.etablissements || []).map((e) => e.id));
         const filieresPrivees = (filiereData.filieres || []).filter((f) => priveIds.has(f.etablissementId));
         setFilieres(filieresPrivees);
       } catch (err) {
@@ -91,10 +118,24 @@ export default function EtablissementsPrives() {
     setExpandedEtabId(null);
   };
 
-  const deposerDossier = (etablissementId, filiereId) => {
-    navigate('/demande-inscription', {
-      state: filiereId ? { etablissementId, filiereId } : { etablissementId },
-    });
+  const deposerDossier = (etablissement, filiereId) => {
+    const etablissementId = typeof etablissement === 'string' ? etablissement : etablissement.id;
+    const etab =
+      typeof etablissement === 'object'
+        ? etablissement
+        : listeAffichee.find((e) => e.id === etablissementId);
+
+    const state = { etablissementId };
+    if (filiereId) state.filiereId = filiereId;
+
+    const campagneMatch = findCampagneFiliereForFiliere(etab, filiereId);
+    if (campagneMatch) {
+      state.campagneFiliereId = campagneMatch.campagneFiliereId;
+      state.anneeAcademique = campagneMatch.anneeAcademique;
+      state.niveau = '1';
+    }
+
+    navigate('/demande-inscription', { state });
   };
 
   if (loading) {
@@ -236,7 +277,7 @@ export default function EtablissementsPrives() {
             <div className="grid gap-4 md:grid-cols-2">
               {listeAffichee.map((etab) => {
                 const expanded = expandedEtabId === etab.id;
-                const filieresEtab = etab.filieres || [];
+                const filieresEtab = mergeFilieresForEtab(etab, filieres);
 
                 return (
                   <article
@@ -260,7 +301,7 @@ export default function EtablissementsPrives() {
                             </span>
                             <button
                               type="button"
-                              onClick={() => deposerDossier(etab.id, f.id)}
+                              onClick={() => deposerDossier(etab, f.id)}
                               className="rounded-lg bg-blue-900 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-800 transition"
                             >
                               Déposer un dossier
@@ -278,6 +319,12 @@ export default function EtablissementsPrives() {
                     )}
 
                     <div className="mt-4 flex flex-wrap gap-2">
+                      <Link
+                        to={`/etablissements-prives/${etab.id}`}
+                        className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
+                      >
+                        Voir le profil
+                      </Link>
                       {filieresEtab.length > 0 && (
                         <button
                           type="button"
@@ -289,7 +336,7 @@ export default function EtablissementsPrives() {
                       )}
                       <button
                         type="button"
-                        onClick={() => deposerDossier(etab.id)}
+                        onClick={() => deposerDossier(etab)}
                         className="rounded-lg bg-blue-900 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-800 transition"
                       >
                         Déposer un dossier

@@ -46,9 +46,10 @@ export default function PageCampagnesInscription() {
     navigate('/demande-inscription', {
       state: {
         etablissementId: campagne.etablissement?.id,
-        filiereId: cf.filiereId || cf.filiere?.id,
+        filiereId: cf?.filiereId || cf?.filiere?.id,
         anneeAcademique: campagne.anneeAcademique,
         niveau: '1',
+        ...(cf?.id ? { campagneFiliereId: cf.id } : {}),
       },
     });
   };
@@ -176,15 +177,7 @@ export default function PageCampagnesInscription() {
                     {campagneFilieres.length === 0 ? (
                       <button
                         type="button"
-                        onClick={() =>
-                          navigate('/demande-inscription', {
-                            state: {
-                              etablissementId: c.etablissement?.id,
-                              anneeAcademique: c.anneeAcademique,
-                              niveau: '1',
-                            },
-                          })
-                        }
+                        onClick={() => deposerDossier(c, null)}
                         className="rounded-lg bg-blue-900 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 transition"
                       >
                         Déposer un dossier

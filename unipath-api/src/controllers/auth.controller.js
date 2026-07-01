@@ -1,4 +1,5 @@
 // src/controllers/auth.controller.js
+const crypto = require('crypto');
 const { supabase, supabaseAdmin } = require('../supabase');
 const prisma = require('../prisma');
 const emailService = require('../services/email.service');
@@ -10,6 +11,15 @@ const {
   isTempPasswordExpired,
   mustChangeAdminPassword,
 } = require('../utils/admin-password.helper');
+
+const EMAIL_CONFIRM_TTL_MS = 24 * 60 * 60 * 1000;
+
+function generateEmailConfirmCredentials() {
+  return {
+    emailConfirmToken: crypto.randomBytes(32).toString('hex'),
+    emailConfirmExpires: new Date(Date.now() + EMAIL_CONFIRM_TTL_MS),
+  };
+}
 
 exports.register = async (req, res) => {
   try {
@@ -50,19 +60,18 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Créer l'utilisateur avec Supabase (email confirmation désactivée côté Supabase)
+    // Compte Supabase sans confirmation email Supabase (voir APP_URL + dashboard Supabase)
     const { data: authData, error: authError } =
-      await supabase.auth.signUp({ 
-        email, 
+      await supabase.auth.signUp({
+        email,
         password,
         options: {
-          emailRedirectTo: buildFrontendUrl('/auth/callback'),
           data: {
             nom,
             prenom,
-            anip
-          }
-        }
+            anip,
+          },
+        },
       });
 
     if (authError) {
@@ -72,6 +81,8 @@ exports.register = async (req, res) => {
     // Générer un matricule unique
     const matricule = await genererMatriculeUnique();
     console.log(`📋 Matricule généré pour ${prenom} ${nom}: ${matricule}`);
+
+    const { emailConfirmToken, emailConfirmExpires } = generateEmailConfirmCredentials();
 
     // Créer le candidat dans la base de données
     const candidat = await prisma.candidat.create({
@@ -89,6 +100,8 @@ exports.register = async (req, res) => {
         lieuNaiss: lieuNaiss || null,
         matricule, // ✅ Matricule au format UAC-2026-00001
         emailConfirme: false,
+        emailConfirmToken,
+        emailConfirmExpires,
         role: 'ETUDIANT',
       },
     });
@@ -110,16 +123,13 @@ exports.register = async (req, res) => {
 
     // Envoyer l'email de confirmation avec gestion d'erreur améliorée
     try {
-      const confirmationToken = authData.user.id;
-
       console.log(`📧 Envoi email de confirmation à ${candidat.email}`);
-      console.log(`🔗 Token de confirmation: ${confirmationToken}`);
 
       const emailResult = await emailService.envoyerEmailConfirmation({
         email: candidat.email,
         nom: candidat.nom,
         prenom: candidat.prenom,
-        confirmationToken
+        confirmationToken: emailConfirmToken,
       });
 
       // Enregistrer la tentative d'envoi
@@ -156,7 +166,6 @@ exports.register = async (req, res) => {
       message: 'Compte créé avec succès. Un email de confirmation a été envoyé à votre adresse.',
       matricule: candidat.matricule,
       emailConfirmationRequired: true,
-      userId: candidat.id
     });
   } catch (error) {
     console.error('❌ Erreur lors de l\'inscription:', error);
@@ -707,29 +716,21 @@ exports.resetPassword = async (req, res) => {
 // Nouvelle route pour confirmer l'email
 exports.confirmEmail = async (req, res) => {
   try {
-    const { token, type } = req.query;
-
-    console.log('🔍 Tentative de confirmation email avec token:', token);
+    const { token } = req.query;
 
     if (!token) {
       return res.status(400).json({ error: 'Token manquant' });
     }
 
-    // Vérifier si le candidat existe dans la base de données
     const candidatExistant = await prisma.candidat.findUnique({
-      where: { id: token }
+      where: { emailConfirmToken: token },
     });
 
-    console.log('🔍 Candidat trouvé:', candidatExistant ? `${candidatExistant.prenom} ${candidatExistant.nom}` : 'NULL');
-
     if (!candidatExistant) {
-      console.log('❌ Aucun candidat trouvé avec l\'ID:', token);
       return res.status(400).json({ error: 'Token invalide ou expiré' });
     }
 
-    // Déjà confirmé : succès (le candidat peut se connecter)
     if (candidatExistant.emailConfirme) {
-      console.log('⚠️ Email déjà confirmé pour:', candidatExistant.email);
       return res.json({
         success: true,
         alreadyConfirmed: true,
@@ -743,13 +744,27 @@ exports.confirmEmail = async (req, res) => {
       });
     }
 
-    console.log('✅ Confirmation de l\'email pour:', candidatExistant.email);
+    if (
+      !candidatExistant.emailConfirmExpires
+      || candidatExistant.emailConfirmExpires <= new Date()
+    ) {
+      return res.status(400).json({ error: 'Lien expiré, demandez un nouveau' });
+    }
 
-    // Mettre à jour le statut de confirmation dans la base de données
     const candidat = await prisma.candidat.update({
-      where: { id: token },
-      data: { emailConfirme: true }
+      where: { id: candidatExistant.id },
+      data: {
+        emailConfirme: true,
+        emailConfirmToken: null,
+        emailConfirmExpires: null,
+      },
     });
+
+    try {
+      await supabaseAdmin.auth.admin.updateUserById(candidat.id, { email_confirm: true });
+    } catch (supabaseConfirmErr) {
+      console.error('Erreur confirmation email Supabase:', supabaseConfirmErr);
+    }
 
     // Créer une notification de confirmation
     await prisma.notification.create({
@@ -824,18 +839,21 @@ exports.resendConfirmationEmail = async (req, res) => {
       return res.status(400).json({ error: 'Email déjà confirmé' });
     }
 
-    // Renvoyer l'email de confirmation
-    try {
-      const confirmationToken = candidat.id;
+    const { emailConfirmToken, emailConfirmExpires } = generateEmailConfirmCredentials();
 
+    await prisma.candidat.update({
+      where: { id: candidat.id },
+      data: { emailConfirmToken, emailConfirmExpires },
+    });
+
+    try {
       console.log(`📧 Renvoi email de confirmation à ${candidat.email}`);
-      console.log(`🔗 Token de confirmation: ${confirmationToken}`);
 
       await emailService.envoyerEmailConfirmation({
         email: candidat.email,
         nom: candidat.nom,
         prenom: candidat.prenom,
-        confirmationToken
+        confirmationToken: emailConfirmToken,
       });
 
       await prisma.emailDelivery.create({

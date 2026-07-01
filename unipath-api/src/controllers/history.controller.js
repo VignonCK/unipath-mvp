@@ -1,37 +1,154 @@
 // src/controllers/history.controller.js
 const prisma = require('../prisma');
+const { isEtudiantRole } = require('../constants/roles.constants');
+const { adminOwnsEtablissement } = require('../utils/admin-etablissement.helper');
+
+const COMMISSION_SOUS_ROLES_ECRITURE = ['EXAMINATEUR', 'CONTROLEUR'];
+
+const ACTIONS_AUTORISEES = {
+  COMMISSION: ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_COMMISSION'],
+  DGES: ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_COMMISSION', 'DECISION_CONTROLEUR'],
+  CONTROLEUR: ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_CONTROLEUR'],
+  ADMIN_ETABLISSEMENT: ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_COMMISSION'],
+};
+
+function getRequestRole(req) {
+  return req.userRole || req.user?.role;
+}
+
+function buildMandatoryActionDetails(req, clientDetails) {
+  const auteurId = req.user?.id;
+  const auteurRole = getRequestRole(req);
+
+  if (!auteurId || !auteurRole) {
+    return null;
+  }
+
+  const base = clientDetails && typeof clientDetails === 'object' && !Array.isArray(clientDetails)
+    ? { ...clientDetails }
+    : {};
+
+  delete base.auteurId;
+  delete base.auteurRole;
+
+  return {
+    ...base,
+    auteurId,
+    auteurRole,
+  };
+}
+
+function canWriteHistory(req) {
+  const role = getRequestRole(req);
+  const sousRole = req.user?.sousRole;
+
+  if (role === 'DGES' || role === 'CONTROLEUR' || role === 'ADMIN_ETABLISSEMENT') {
+    return true;
+  }
+
+  if (role === 'COMMISSION' && COMMISSION_SOUS_ROLES_ECRITURE.includes(sousRole)) {
+    return true;
+  }
+
+  return false;
+}
+
+function assertHistoriqueReadAccess(req, dossierInscription) {
+  const userRole = getRequestRole(req);
+
+  if (isEtudiantRole(userRole) && dossierInscription.inscription.candidatId !== req.user.id) {
+    return false;
+  }
+
+  return true;
+}
+
+async function assertAdminEtablissementHistoryWriteAccess(req, {
+  dossierInscriptionId,
+  applicationId,
+  inscriptionId,
+}) {
+  const etablissementId = req.etablissementId || req.user?.etablissementId;
+  if (!etablissementId) {
+    return false;
+  }
+
+  if (applicationId) {
+    const application = await prisma.application.findUnique({
+      where: { id: applicationId },
+      select: { etablissementId: true },
+    });
+    if (!application || !adminOwnsEtablissement(req, application.etablissementId)) {
+      return false;
+    }
+  }
+
+  if (inscriptionId) {
+    const inscriptionAcad = await prisma.inscriptionAcademique.findUnique({
+      where: { id: inscriptionId },
+      select: { etablissementId: true },
+    });
+    if (!inscriptionAcad || !adminOwnsEtablissement(req, inscriptionAcad.etablissementId)) {
+      return false;
+    }
+  }
+
+  const dossierInscription = await prisma.dossierInscription.findUnique({
+    where: { id: dossierInscriptionId },
+    include: {
+      inscription: { select: { candidatId: true } },
+    },
+  });
+
+  if (!dossierInscription) {
+    return false;
+  }
+
+  const [application, inscriptionAcad] = await Promise.all([
+    prisma.application.findFirst({
+      where: {
+        candidatId: dossierInscription.inscription.candidatId,
+        etablissementId,
+      },
+      select: { id: true },
+    }),
+    prisma.inscriptionAcademique.findFirst({
+      where: {
+        candidatId: dossierInscription.inscription.candidatId,
+        etablissementId,
+      },
+      select: { id: true },
+    }),
+  ]);
+
+  return Boolean(application || inscriptionAcad);
+}
 
 exports.getHistorique = async (req, res) => {
   try {
     const { dossierInscriptionId } = req.params;
     const { dateDebut, dateFin, utilisateur, typeAction, limite = 50, offset = 0 } = req.query;
-    const userRole = req.user?.role;
 
-    // Check permissions: COMMISSION, CONTROLEUR, DGES only
-    if (!['COMMISSION', 'CONTROLEUR', 'DGES'].includes(userRole)) {
-      return res.status(403).json({ 
-        error: 'Accès refusé. Seuls les membres de la commission, contrôleurs et DGES peuvent consulter l\'historique.' 
-      });
-    }
-
-    // Retrieve DossierInscription with inscription details
     const dossierInscription = await prisma.dossierInscription.findUnique({
       where: { id: dossierInscriptionId },
-      include: { 
-        inscription: { 
-          include: { 
+      include: {
+        inscription: {
+          include: {
             candidat: { select: { nom: true, prenom: true, email: true } },
-            concours: { select: { nom: true, annee: true } }
-          } 
-        } 
-      }
+            concours: { select: { libelle: true } },
+          },
+        },
+      },
     });
 
     if (!dossierInscription) {
       return res.status(404).json({ error: 'Dossier d\'inscription non trouvé' });
     }
 
-    // Build WHERE clause with dossierInscriptionId and optional filters
+    if (!assertHistoriqueReadAccess(req, dossierInscription)) {
+      return res.status(403).json({ error: 'Accès non autorisé' });
+    }
+
     const whereClause = { dossierInscriptionId };
     if (dateDebut && dateFin) {
       whereClause.timestamp = { gte: new Date(dateDebut), lte: new Date(dateFin) };
@@ -39,35 +156,32 @@ exports.getHistorique = async (req, res) => {
     if (utilisateur) whereClause.utilisateurId = utilisateur;
     if (typeAction) whereClause.typeAction = typeAction;
 
-    // Retrieve actions with pagination
     const [actions, total] = await Promise.all([
       prisma.actionHistory.findMany({
         where: whereClause,
         orderBy: { timestamp: 'desc' },
-        take: parseInt(limite),
-        skip: parseInt(offset)
+        take: parseInt(limite, 10),
+        skip: parseInt(offset, 10),
       }),
-      prisma.actionHistory.count({ where: whereClause })
+      prisma.actionHistory.count({ where: whereClause }),
     ]);
 
-    // Return actions with inscription details
     res.json({
       dossierInscriptionId,
       inscription: {
         id: dossierInscription.inscription.id,
         numeroInscription: dossierInscription.inscription.numeroInscription,
         candidat: dossierInscription.inscription.candidat,
-        concours: dossierInscription.inscription.concours
+        concours: dossierInscription.inscription.concours,
       },
       actions,
       pagination: {
         total,
-        limite: parseInt(limite),
-        offset: parseInt(offset),
-        pages: Math.ceil(total / parseInt(limite))
-      }
+        limite: parseInt(limite, 10),
+        offset: parseInt(offset, 10),
+        pages: Math.ceil(total / parseInt(limite, 10)),
+      },
     });
-
   } catch (error) {
     console.error('Erreur getHistorique:', error);
     res.status(500).json({ error: 'Erreur serveur lors de la récupération de l\'historique' });
@@ -76,58 +190,71 @@ exports.getHistorique = async (req, res) => {
 
 exports.enregistrerAction = async (req, res) => {
   try {
-    const { dossierInscriptionId, typeAction, details } = req.body;
-    const utilisateurId = req.user.id;
-    const userRole = req.userRole || req.user?.role;
+    const { dossierInscriptionId, typeAction, details, applicationId, inscriptionId } = req.body;
+    const userRole = getRequestRole(req);
+
+    if (!canWriteHistory(req)) {
+      return res.status(403).json({ error: 'Accès non autorisé' });
+    }
 
     if (!dossierInscriptionId || !typeAction) {
       return res.status(400).json({ error: 'dossierInscriptionId et typeAction sont obligatoires' });
     }
 
-    // Verify DossierInscription exists
+    const actionDetails = buildMandatoryActionDetails(req, details);
+    if (!actionDetails) {
+      return res.status(403).json({ error: 'Contexte auteur invalide' });
+    }
+
+    const auteurId = actionDetails.auteurId;
+    const auteurRole = actionDetails.auteurRole;
+
     const dossierInscription = await prisma.dossierInscription.findUnique({
-      where: { id: dossierInscriptionId }
+      where: { id: dossierInscriptionId },
     });
 
     if (!dossierInscription) {
       return res.status(404).json({ error: 'Dossier d\'inscription non trouvé' });
     }
 
-    // Check role-based permissions for typeAction
-    const actionsAutorisees = {
-      'ETUDIANT':   ['DOSSIER_CONCOURS_CREE', 'PIECE_AJOUTEE', 'PIECE_SUPPRIMEE', 'DOSSIER_SOUMIS', 'DOSSIER_MODIFIE', 'PIECE_BASE_MISE_A_JOUR'],
-      'CANDIDAT':   ['DOSSIER_CONCOURS_CREE', 'PIECE_AJOUTEE', 'PIECE_SUPPRIMEE', 'DOSSIER_SOUMIS', 'DOSSIER_MODIFIE', 'PIECE_BASE_MISE_A_JOUR'],
-      'COMMISSION': ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_COMMISSION'],
-      'DGES':       ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_COMMISSION', 'DECISION_CONTROLEUR'],
-      'CONTROLEUR': ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_CONTROLEUR'],
-    };
+    if (userRole === 'ADMIN_ETABLISSEMENT') {
+      const allowed = await assertAdminEtablissementHistoryWriteAccess(req, {
+        dossierInscriptionId,
+        applicationId,
+        inscriptionId,
+      });
+      if (!allowed) {
+        return res.status(403).json({ error: 'Accès non autorisé' });
+      }
+    }
 
-    if (!actionsAutorisees[userRole]?.includes(typeAction)) {
+    const roleKey = userRole === 'COMMISSION' ? 'COMMISSION' : userRole;
+    if (!ACTIONS_AUTORISEES[roleKey]?.includes(typeAction)) {
       return res.status(403).json({ error: `Action ${typeAction} non autorisée pour le rôle ${userRole}` });
     }
 
     const ipAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'unknown';
     const userAgent = req.headers['user-agent'] || 'unknown';
 
-    // Create ActionHistory with dossierInscriptionId
     const action = await prisma.actionHistory.create({
-      data: { 
-        utilisateurId, 
-        dossierInscriptionId, 
-        typeAction, 
-        details: details || null, 
-        ipAddress, 
-        userAgent, 
-        timestamp: new Date() 
-      }
+      data: {
+        utilisateurId: auteurId,
+        dossierInscriptionId,
+        typeAction,
+        details: actionDetails,
+        ipAddress,
+        userAgent,
+        timestamp: new Date(),
+      },
     });
 
-    res.status(201).json({ 
-      message: 'Action enregistrée avec succès', 
-      actionId: action.id, 
-      timestamp: action.timestamp 
+    res.status(201).json({
+      message: 'Action enregistrée avec succès',
+      actionId: action.id,
+      timestamp: action.timestamp,
+      auteurId,
+      auteurRole,
     });
-
   } catch (error) {
     console.error('Erreur enregistrerAction:', error);
     res.status(500).json({ error: 'Erreur serveur lors de l\'enregistrement de l\'action' });
@@ -136,12 +263,11 @@ exports.enregistrerAction = async (req, res) => {
 
 exports.genererRapportAudit = async (req, res) => {
   try {
-    const userRole = req.user?.role;
+    const userRole = getRequestRole(req);
 
-    // Seuls DGES et CONTROLEUR peuvent générer des rapports d'audit globaux
     if (!['DGES', 'CONTROLEUR'].includes(userRole)) {
-      return res.status(403).json({ 
-        error: 'Accès refusé. Seuls les administrateurs DGES et contrôleurs peuvent générer des rapports d\'audit.' 
+      return res.status(403).json({
+        error: 'Accès refusé. Seuls les administrateurs DGES et contrôleurs peuvent générer des rapports d\'audit.',
       });
     }
 
@@ -160,12 +286,12 @@ exports.genererRapportAudit = async (req, res) => {
 
     const actions = await prisma.actionHistory.findMany({
       where: whereClause,
-      orderBy: { timestamp: 'desc' }
+      orderBy: { timestamp: 'desc' },
     });
 
     const parType = {};
     const parUtilisateur = {};
-    actions.forEach(a => {
+    actions.forEach((a) => {
       parType[a.typeAction] = (parType[a.typeAction] || 0) + 1;
       parUtilisateur[a.utilisateurId] = (parUtilisateur[a.utilisateurId] || 0) + 1;
     });
@@ -175,9 +301,8 @@ exports.genererRapportAudit = async (req, res) => {
       statistiques: { totalActions: actions.length, parType, parUtilisateur },
       actions,
       totalActions: actions.length,
-      dateGeneration: new Date().toISOString()
+      dateGeneration: new Date().toISOString(),
     });
-
   } catch (error) {
     console.error('Erreur genererRapportAudit:', error);
     res.status(500).json({ error: 'Erreur serveur lors de la génération du rapport d\'audit' });
@@ -186,12 +311,11 @@ exports.genererRapportAudit = async (req, res) => {
 
 exports.exporterCSV = async (req, res) => {
   try {
-    const userRole = req.user?.role;
+    const userRole = getRequestRole(req);
 
-    // Seuls DGES et CONTROLEUR peuvent exporter des données d'audit
     if (!['DGES', 'CONTROLEUR'].includes(userRole)) {
-      return res.status(403).json({ 
-        error: 'Accès refusé. Seuls les administrateurs DGES et contrôleurs peuvent exporter des données d\'audit.' 
+      return res.status(403).json({
+        error: 'Accès refusé. Seuls les administrateurs DGES et contrôleurs peuvent exporter des données d\'audit.',
       });
     }
 
@@ -208,13 +332,13 @@ exports.exporterCSV = async (req, res) => {
 
     const actions = await prisma.actionHistory.findMany({
       where: whereClause,
-      orderBy: { timestamp: 'desc' }
+      orderBy: { timestamp: 'desc' },
     });
 
     const headers = ['ID', 'Date/Heure', 'Utilisateur', 'DossierInscription', 'Action', 'Détails', 'IP'];
     const csvLines = [headers.join(',')];
 
-    actions.forEach(action => {
+    actions.forEach((action) => {
       const line = [
         action.id,
         action.timestamp.toISOString(),
@@ -222,9 +346,9 @@ exports.exporterCSV = async (req, res) => {
         action.dossierInscriptionId,
         action.typeAction,
         action.details ? JSON.stringify(action.details).replace(/"/g, '""') : '',
-        action.ipAddress || ''
+        action.ipAddress || '',
       ];
-      csvLines.push(line.map(f => `"${f}"`).join(','));
+      csvLines.push(line.map((f) => `"${f}"`).join(','));
     });
 
     const csvContent = csvLines.join('\n');
@@ -236,47 +360,39 @@ exports.exporterCSV = async (req, res) => {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(csvContent);
-
   } catch (error) {
     console.error('Erreur exporterCSV:', error);
     res.status(500).json({ error: 'Erreur serveur lors de l\'export CSV' });
   }
 };
 
-
-/**
- * Récupérer uniquement les actions liées aux verdicts et décisions
- */
 exports.getHistoriqueVerdicts = async (req, res) => {
   try {
     const { dossierInscriptionId } = req.params;
-    const userRole = req.user?.role;
+    const userRole = getRequestRole(req);
 
-    // Check permissions: COMMISSION, CONTROLEUR, DGES only
     if (!['COMMISSION', 'CONTROLEUR', 'DGES'].includes(userRole)) {
-      return res.status(403).json({ 
-        error: 'Accès refusé. Seuls les membres de la commission, contrôleurs et DGES peuvent consulter l\'historique.' 
+      return res.status(403).json({
+        error: 'Accès refusé. Seuls les membres de la commission, contrôleurs et DGES peuvent consulter l\'historique.',
       });
     }
 
-    // Retrieve DossierInscription with inscription details
     const dossierInscription = await prisma.dossierInscription.findUnique({
       where: { id: dossierInscriptionId },
-      include: { 
-        inscription: { 
-          include: { 
+      include: {
+        inscription: {
+          include: {
             candidat: { select: { nom: true, prenom: true, email: true } },
-            concours: { select: { libelle: true, etablissement: true } }
-          } 
-        } 
-      }
+            concours: { select: { libelle: true, etablissement: true } },
+          },
+        },
+      },
     });
 
     if (!dossierInscription) {
       return res.status(404).json({ error: 'Dossier d\'inscription non trouvé' });
     }
 
-    // Récupérer uniquement les actions liées aux verdicts et décisions
     const actions = await prisma.actionHistory.findMany({
       where: {
         dossierInscriptionId,
@@ -285,27 +401,25 @@ exports.getHistoriqueVerdicts = async (req, res) => {
             'VERDICT_EXAMINATEUR_RENDU',
             'VERDICT_EXAMINATEUR_MODIFIE',
             'DECISION_CONTROLEUR_RENDUE',
-            'DECISION_CONTROLEUR_MODIFIEE'
-          ]
-        }
+            'DECISION_CONTROLEUR_MODIFIEE',
+          ],
+        },
       },
-      orderBy: { timestamp: 'desc' }
+      orderBy: { timestamp: 'desc' },
     });
 
-    // Récupérer les informations des utilisateurs (examinateurs et contrôleurs)
-    const utilisateurIds = [...new Set(actions.map(a => a.utilisateurId))];
+    const utilisateurIds = [...new Set(actions.map((a) => a.utilisateurId))];
     const utilisateurs = await prisma.membreCommission.findMany({
       where: { id: { in: utilisateurIds } },
-      select: { id: true, nom: true, prenom: true, sousRole: true }
+      select: { id: true, nom: true, prenom: true, sousRole: true },
     });
     const utilisateursMap = Object.fromEntries(
-      utilisateurs.map(u => [u.id, { nom: u.nom, prenom: u.prenom, sousRole: u.sousRole }])
+      utilisateurs.map((u) => [u.id, { nom: u.nom, prenom: u.prenom, sousRole: u.sousRole }]),
     );
 
-    // Enrichir les actions avec les informations des utilisateurs
-    const actionsEnrichies = actions.map(action => ({
+    const actionsEnrichies = actions.map((action) => ({
       ...action,
-      utilisateur: utilisateursMap[action.utilisateurId] || null
+      utilisateur: utilisateursMap[action.utilisateurId] || null,
     }));
 
     res.json({
@@ -313,12 +427,11 @@ exports.getHistoriqueVerdicts = async (req, res) => {
       inscription: {
         numeroInscription: dossierInscription.inscription.numeroInscription,
         candidat: dossierInscription.inscription.candidat,
-        concours: dossierInscription.inscription.concours
+        concours: dossierInscription.inscription.concours,
       },
       actions: actionsEnrichies,
-      total: actionsEnrichies.length
+      total: actionsEnrichies.length,
     });
-
   } catch (error) {
     console.error('Erreur getHistoriqueVerdicts:', error);
     res.status(500).json({ error: 'Erreur serveur lors de la récupération de l\'historique des verdicts' });

@@ -1,4 +1,77 @@
+const prisma = require('../prisma');
+
 const DEFAULT_FORMAT = '{SIGLE_ECOLE}-{SIGLE_FILIERE}-{ANNEE}-{SEQ4}';
+
+const SITE_CODES = {
+  DEFAULT: 'UnP',
+};
+
+function getSiteCode() {
+  return process.env.SITE_CODE || SITE_CODES.DEFAULT;
+}
+
+function getAnneeAcademique() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  return month >= 9 ? year + 1 : year;
+}
+
+async function genererNumeroSequentiel(siteCode, annee) {
+  const prefix = `${siteCode}-${annee}-`;
+  const count = await prisma.candidat.count({
+    where: { matricule: { startsWith: prefix } },
+  });
+  return String(count + 1).padStart(6, '0');
+}
+
+async function genererMatricule() {
+  const siteCode = getSiteCode();
+  const annee = getAnneeAcademique();
+  const numero = await genererNumeroSequentiel(siteCode, annee);
+  return `${siteCode}-${annee}-${numero}`;
+}
+
+async function matriculeExiste(matricule) {
+  const count = await prisma.candidat.count({ where: { matricule } });
+  return count > 0;
+}
+
+async function genererMatriculeUnique() {
+  let matricule;
+  let tentatives = 0;
+  const maxTentatives = 10;
+
+  do {
+    matricule = await genererMatricule();
+    tentatives += 1;
+
+    if (tentatives >= maxTentatives) {
+      const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+      matricule = `${matricule}-${random}`;
+      break;
+    }
+  } while (await matriculeExiste(matricule));
+
+  return matricule;
+}
+
+function parseMatricule(matricule) {
+  const parts = String(matricule).split('-');
+  if (parts.length >= 3) {
+    return {
+      siteCode: parts[0],
+      annee: parseInt(parts[1], 10),
+      numero: parseInt(parts[2], 10),
+      isValid: true,
+    };
+  }
+  return { siteCode: null, annee: null, numero: null, isValid: false };
+}
+
+function validerFormatMatricule(matricule) {
+  return /^[A-Za-z]{2,4}-\d{4}-\d{6}(-[A-Z0-9]{4})?$/.test(matricule);
+}
 
 function extractAnnee(anneeAcademique) {
   if (!anneeAcademique) return String(new Date().getFullYear());
@@ -54,6 +127,14 @@ function formatMatricule(template, { sigleEcole, sigleFiliere, anneeAcademique, 
 
 module.exports = {
   DEFAULT_FORMAT,
+  SITE_CODES,
+  getSiteCode,
+  getAnneeAcademique,
+  genererMatricule,
+  genererMatriculeUnique,
+  matriculeExiste,
+  parseMatricule,
+  validerFormatMatricule,
   extractAnnee,
   deriveSigleEcole,
   deriveSigleFiliere,

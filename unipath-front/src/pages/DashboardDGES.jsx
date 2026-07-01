@@ -108,6 +108,30 @@ export default function DashboardDGES() {
           </BentoCard>
         )}
 
+        {/* STATS PAR ÉTABLISSEMENT */}
+        {(data?.parEtablissement?.length ?? 0) > 0 && (
+          <BentoCard className='p-0 overflow-hidden'>
+            <div className='px-6 py-4 border-b border-gray-100'>
+              <h2 className='text-base font-bold text-gray-800'>Vue par établissement organisateur</h2>
+            </div>
+            <div className='divide-y divide-gray-50'>
+              {data.parEtablissement.map((group) => (
+                <div key={group.etablissementId || group.etablissement} className='px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2'>
+                  <div>
+                    <p className='font-bold text-gray-900'>{group.etablissement}</p>
+                    <p className='text-sm text-gray-500'>
+                      {group.nbConcours} concours — {group.nbCandidats} candidat{group.nbCandidats > 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <div className='text-xs text-gray-400'>
+                    {group.concours.map((c) => c.concours).join(' · ')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </BentoCard>
+        )}
+
         {/* GRAPHIQUE */}
         <BentoCard className='p-6'>
           <h2 className='text-base font-bold text-gray-800 mb-6'>Inscriptions par concours</h2>

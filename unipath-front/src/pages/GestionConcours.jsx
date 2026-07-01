@@ -1,23 +1,60 @@
 // src/pages/GestionConcours.jsx
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { concoursService } from '../services/api';
+import { concoursService, etablissementService } from '../services/api';
 import { PiecesConfiguration } from '../components/PiecesConfiguration';
+import GestionCentresConcours from '../components/concours/GestionCentresConcours';
 import DGESLayout from '../components/DGESLayout';
 import { getDefaultPiecesRequises, validatePiecesConfiguration, convertLegacyId, DOSSIER_PERSONNEL_FIELDS } from '../constants/pieces';
 
+function extractPiecesRequises(concours) {
+  if (!concours?.piecesRequises) return [];
+  const pr = concours.piecesRequises;
+  if (Array.isArray(pr)) return pr;
+  if (Array.isArray(pr.pieces)) return pr.pieces;
+  return [];
+}
+
+function getCriteresEligibiliteFromConcours(concours) {
+  const rootCriteres = concours?.criteresEligibilite;
+  const nestedCriteres = concours?.piecesRequises?.criteresEligibilite;
+  const source = rootCriteres || nestedCriteres;
+  if (!source) return [];
+  const raw = Array.isArray(source) ? source : (Array.isArray(source?.criteres) ? source.criteres : []);
+  return raw
+    .map((item) => {
+      if (typeof item === 'string') return { titre: item, description: '' };
+      return { titre: item?.titre || '', description: item?.description || '' };
+    })
+    .filter((item) => item.titre.trim() !== '');
+}
+
+function formatDateInput(value) {
+  return value ? value.split('T')[0] : '';
+}
+
+function getConcoursEtablissementLabel(concours) {
+  return concours?.etablissementOrganisateur?.nom || concours?.etablissement || '-';
+}
+
+function getConcoursEtablissementKey(concours) {
+  if (concours?.etablissementId) return concours.etablissementId;
+  return `libre:${(concours?.etablissement || '').trim().toLowerCase()}`;
+}
+
 export default function GestionConcours() {
   const [concours, setConcours] = useState([]);
+  const [publicEtablissements, setPublicEtablissements] = useState([]);
+  const [filterEtablissement, setFilterEtablissement] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingConcours, setEditingConcours] = useState(null);
   const [formData, setFormData] = useState({
     libelle: '',
+    etablissementId: '',
     etablissement: '',
-    dateDebut: '',
-    dateFin: '',
-    dateComposition: '',
+    useEtablissementLibre: false,
     description: '',
     fraisParticipation: '',
     seriesAcceptees: [],
@@ -35,6 +72,10 @@ export default function GestionConcours() {
 
   useEffect(() => {
     loadConcours();
+    etablissementService
+      .getPublics()
+      .then((data) => setPublicEtablissements(data.etablissements || []))
+      .catch(() => setPublicEtablissements([]));
   }, []);
 
   const loadConcours = async () => {
@@ -54,15 +95,14 @@ export default function GestionConcours() {
     setEditingConcours(null);
     setFormData({
       libelle: '',
+      etablissementId: '',
       etablissement: '',
-      dateDebut: '',
-      dateFin: '',
-      dateComposition: '',
+      useEtablissementLibre: false,
       description: '',
       fraisParticipation: '',
       seriesAcceptees: [],
       matieres: [],
-      piecesRequises: getDefaultPiecesRequises(), // ✅ Utilise la fonction centralisée
+      piecesRequises: getDefaultPiecesRequises(),
       criteresEligibilite: [],
       dateDebutDepot: '',
       dateFinDepot: '',
@@ -76,44 +116,28 @@ export default function GestionConcours() {
 
   const openEditModal = (c) => {
     setEditingConcours(c);
-    
-    // Extraire les pièces requises
-    let piecesRequises = [];
-    if (c.piecesRequises) {
-      piecesRequises = c.piecesRequises.pieces || c.piecesRequises;
-    }
 
-    const criteresRaw = Array.isArray(c.criteresEligibilite)
-      ? c.criteresEligibilite
-      : (Array.isArray(c.criteresEligibilite?.criteres) ? c.criteresEligibilite.criteres : []);
-    const criteresEligibilite = criteresRaw
-      .map((item) => {
-        if (typeof item === 'string') {
-          return { titre: item, description: '' };
-        }
-        return {
-          titre: item?.titre || '',
-          description: item?.description || '',
-        };
-      })
-      .filter((item) => item.titre.trim() !== '');
-    
+    const piecesRequises = extractPiecesRequises(c);
+    const criteresEligibilite = getCriteresEligibiliteFromConcours(c);
+
+    const linkedEtab = c.etablissementOrganisateur;
+    const useEtablissementLibre = !c.etablissementId;
+
     setFormData({
       libelle: c.libelle,
-      etablissement: c.etablissement || '',
-      dateDebut: c.dateDebut.split('T')[0],
-      dateFin: c.dateFin.split('T')[0],
-      dateComposition: c.dateComposition ? c.dateComposition.split('T')[0] : '',
+      etablissementId: c.etablissementId || '',
+      etablissement: linkedEtab?.nom || c.etablissement || '',
+      useEtablissementLibre,
       description: c.description || '',
       fraisParticipation: c.fraisParticipation || '',
       seriesAcceptees: c.seriesAcceptees || [],
       matieres: Array.isArray(c.matieres) ? c.matieres : [],
-      piecesRequises: piecesRequises.length > 0 ? piecesRequises : getDefaultPiecesRequises(), // ✅ Utilise la fonction centralisée
+      piecesRequises: piecesRequises.length > 0 ? piecesRequises : getDefaultPiecesRequises(),
       criteresEligibilite,
-      dateDebutDepot: c.dateDebutDepot ? c.dateDebutDepot.split('T')[0] : '',
-      dateFinDepot: c.dateFinDepot ? c.dateFinDepot.split('T')[0] : '',
-      dateDebutComposition: c.dateDebutComposition ? c.dateDebutComposition.split('T')[0] : '',
-      dateFinComposition: c.dateFinComposition ? c.dateFinComposition.split('T')[0] : '',
+      dateDebutDepot: formatDateInput(c.dateDebutDepot || c.dateDebut),
+      dateFinDepot: formatDateInput(c.dateFinDepot || c.dateFin),
+      dateDebutComposition: formatDateInput(c.dateDebutComposition || c.dateComposition),
+      dateFinComposition: formatDateInput(c.dateFinComposition),
     });
     setValidationErrors({});
     setNewMatiere('');
@@ -127,8 +151,12 @@ export default function GestionConcours() {
     if (!formData.libelle || formData.libelle.trim() === '') {
       errors.libelle = 'Le libellé est obligatoire';
     }
-    if (!formData.etablissement || formData.etablissement.trim() === '') {
-      errors.etablissement = "L'établissement est obligatoire";
+    if (formData.useEtablissementLibre) {
+      if (!formData.etablissement || formData.etablissement.trim() === '') {
+        errors.etablissement = "L'établissement est obligatoire";
+      }
+    } else if (!formData.etablissementId) {
+      errors.etablissement = 'Sélectionnez un établissement public ou utilisez le texte libre';
     }
     if (!formData.dateDebutDepot) {
       errors.dateDebutDepot = 'La date de début de dépôt est obligatoire';
@@ -215,8 +243,15 @@ export default function GestionConcours() {
       return;
     }
 
+    const selectedEtab = publicEtablissements.find((e) => e.id === formData.etablissementId);
     const payload = {
-      ...formData,
+      libelle: formData.libelle,
+      etablissement: formData.useEtablissementLibre
+        ? formData.etablissement.trim()
+        : (selectedEtab?.nom || formData.etablissement.trim()),
+      description: formData.description,
+      fraisParticipation: formData.fraisParticipation,
+      seriesAcceptees: formData.seriesAcceptees,
       matieres: (formData.matieres || [])
         .map((m) => (typeof m === 'string' ? m : '').trim())
         .filter(Boolean),
@@ -226,7 +261,18 @@ export default function GestionConcours() {
         formats: (piece.formats || []).map((f) => (f === 'JPG' ? 'JPEG' : f)),
         sourceDossier: piece.sourceDossier || null,
       })),
+      criteresEligibilite: formData.criteresEligibilite,
+      dateDebutDepot: formData.dateDebutDepot,
+      dateFinDepot: formData.dateFinDepot,
+      dateDebutComposition: formData.dateDebutComposition,
+      dateFinComposition: formData.dateFinComposition,
     };
+
+    if (formData.useEtablissementLibre) {
+      payload.etablissementId = null;
+    } else if (formData.etablissementId) {
+      payload.etablissementId = formData.etablissementId;
+    }
 
     setSubmitting(true);
 
@@ -343,6 +389,20 @@ export default function GestionConcours() {
     }
   };
 
+  const etablissementFilterOptions = Array.from(
+    concours.reduce((map, item) => {
+      const key = getConcoursEtablissementKey(item);
+      if (!map.has(key)) {
+        map.set(key, getConcoursEtablissementLabel(item));
+      }
+      return map;
+    }, new Map())
+  ).sort((a, b) => a[1].localeCompare(b[1], 'fr'));
+
+  const filteredConcours = filterEtablissement
+    ? concours.filter((c) => getConcoursEtablissementKey(c) === filterEtablissement)
+    : concours;
+
   if (loading) return (
     <DGESLayout>
       <div className='flex items-center justify-center min-h-[60vh]'>
@@ -363,7 +423,18 @@ export default function GestionConcours() {
             <h1 className='text-2xl font-black text-gray-800'>Gestion des concours</h1>
             <p className='text-sm text-gray-500 mt-1'>{concours.length} concours au total</p>
           </div>
-          <button
+          <div className='flex flex-col sm:flex-row gap-3 sm:items-center'>
+            <select
+              value={filterEtablissement}
+              onChange={(e) => setFilterEtablissement(e.target.value)}
+              className='rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 bg-white'
+            >
+              <option value=''>Tous les établissements</option>
+              {etablissementFilterOptions.map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+            <button
             onClick={openCreateModal}
             className='flex items-center gap-2 bg-orange-500 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-orange-600 transition shadow-sm'
           >
@@ -372,6 +443,7 @@ export default function GestionConcours() {
             </svg>
             Nouveau concours
           </button>
+          </div>
         </div>
 
         {error && (
@@ -388,34 +460,40 @@ export default function GestionConcours() {
                 <tr className='bg-gray-50 border-b border-gray-100'>
                   <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Libellé</th>
                   <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Établissement</th>
-                  <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Date début</th>
-                  <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Date fin</th>
-                  <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Date composition</th>
+                  <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Dépôt début</th>
+                  <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Dépôt fin</th>
+                  <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Composition</th>
                   <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Matières</th>
                   <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Frais</th>
                   <th className='px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase'>Actions</th>
                 </tr>
               </thead>
               <tbody className='divide-y divide-gray-50'>
-                {concours.length === 0 ? (
+                {filteredConcours.length === 0 ? (
                   <tr>
                     <td colSpan='8' className='px-4 py-10 text-center text-gray-400'>
-                      Aucun concours créé. Cliquez sur "Nouveau concours" pour commencer.
+                      {concours.length === 0
+                        ? 'Aucun concours créé. Cliquez sur "Nouveau concours" pour commencer.'
+                        : 'Aucun concours pour cet établissement.'}
                     </td>
                   </tr>
                 ) : (
-                  concours.map((c) => (
+                  filteredConcours.map((c) => (
                     <tr key={c.id} className='hover:bg-gray-50 transition'>
                       <td className='px-4 py-3 font-medium text-gray-800'>{c.libelle}</td>
-                      <td className='px-4 py-3 text-gray-600 text-xs'>{c.etablissement || '-'}</td>
+                      <td className='px-4 py-3 text-gray-600 text-xs'>{getConcoursEtablissementLabel(c)}</td>
                       <td className='px-4 py-3 text-gray-600 text-xs'>
-                        {new Date(c.dateDebut).toLocaleDateString('fr-FR')}
+                        {new Date(c.dateDebutDepot || c.dateDebut).toLocaleDateString('fr-FR')}
                       </td>
                       <td className='px-4 py-3 text-gray-600 text-xs'>
-                        {new Date(c.dateFin).toLocaleDateString('fr-FR')}
+                        {new Date(c.dateFinDepot || c.dateFin).toLocaleDateString('fr-FR')}
                       </td>
                       <td className='px-4 py-3 text-gray-600 text-xs'>
-                        {c.dateComposition ? new Date(c.dateComposition).toLocaleDateString('fr-FR') : '-'}
+                        {c.dateDebutComposition && c.dateFinComposition
+                          ? `${new Date(c.dateDebutComposition).toLocaleDateString('fr-FR')} → ${new Date(c.dateFinComposition).toLocaleDateString('fr-FR')}`
+                          : c.dateComposition
+                            ? new Date(c.dateComposition).toLocaleDateString('fr-FR')
+                            : '-'}
                       </td>
                       <td className='px-4 py-3 text-gray-600 text-xs'>
                         {Array.isArray(c.matieres) && c.matieres.length > 0
@@ -511,16 +589,55 @@ export default function GestionConcours() {
                 <label className='block text-sm font-semibold text-gray-700 mb-1'>
                   Établissement organisateur <span className='text-red-500'>*</span>
                 </label>
-                <input
-                  type='text'
-                  required
-                  value={formData.etablissement}
-                  onChange={(e) => setFormData({ ...formData, etablissement: e.target.value })}
-                  className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent ${
-                    validationErrors.etablissement ? 'border-red-500' : 'border-gray-200'
-                  }`}
-                  placeholder="Ex: EPAC - Université d'Abomey-Calavi"
-                />
+                {!formData.useEtablissementLibre ? (
+                  <select
+                    value={formData.etablissementId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      const selected = publicEtablissements.find((etab) => etab.id === id);
+                      setFormData((prev) => ({
+                        ...prev,
+                        etablissementId: id,
+                        etablissement: selected?.nom || '',
+                      }));
+                    }}
+                    className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent ${
+                      validationErrors.etablissement ? 'border-red-500' : 'border-gray-200'
+                    }`}
+                  >
+                    <option value=''>— Sélectionner un établissement public —</option>
+                    {publicEtablissements.map((etab) => (
+                      <option key={etab.id} value={etab.id}>
+                        {etab.nom} — {etab.ville}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type='text'
+                    required
+                    value={formData.etablissement}
+                    onChange={(e) => setFormData({ ...formData, etablissement: e.target.value })}
+                    className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent ${
+                      validationErrors.etablissement ? 'border-red-500' : 'border-gray-200'
+                    }`}
+                    placeholder="Ex: EPAC - Université d'Abomey-Calavi"
+                  />
+                )}
+                <button
+                  type='button'
+                  onClick={() => setFormData((prev) => ({
+                    ...prev,
+                    useEtablissementLibre: !prev.useEtablissementLibre,
+                    etablissementId: '',
+                    etablissement: prev.useEtablissementLibre ? '' : prev.etablissement,
+                  }))}
+                  className='mt-2 text-xs font-semibold text-blue-900 hover:text-orange-500 transition'
+                >
+                  {formData.useEtablissementLibre
+                    ? '← Choisir dans la liste des établissements publics'
+                    : 'Aucun établissement ne correspond ? Saisir en texte libre'}
+                </button>
                 {validationErrors.etablissement && (
                   <p className='mt-1 text-xs text-red-600'>{validationErrors.etablissement}</p>
                 )}
@@ -744,6 +861,11 @@ export default function GestionConcours() {
                 />
               </div>
 
+              <GestionCentresConcours
+                concoursId={editingConcours?.id}
+                concoursLibelle={formData.libelle || editingConcours?.libelle}
+              />
+
               {/* Configuration des pièces */}
               <div className='border-t pt-4'>
                 <h3 className='text-sm font-bold text-gray-800 mb-3'>
@@ -751,21 +873,7 @@ export default function GestionConcours() {
                 </h3>
                 <PiecesConfiguration
                   piecesRequises={formData.piecesRequises}
-                  onChange={(pieces) => {
-                    console.log('=== ONCHANGE PIECES APPELÉ ===');
-                    console.log('Nombre de pièces reçues:', pieces.length);
-                    console.log('Pièces reçues:', pieces);
-                    console.log('formData.piecesRequises AVANT:', formData.piecesRequises);
-                    
-                    setFormData(prev => {
-                      const newFormData = {
-                        ...prev,
-                        piecesRequises: pieces
-                      };
-                      console.log('formData.piecesRequises APRÈS:', newFormData.piecesRequises);
-                      return newFormData;
-                    });
-                  }}
+                  onChange={(pieces) => setFormData((prev) => ({ ...prev, piecesRequises: pieces }))}
                 />
                 {formData.piecesRequises.length > 0 && (
                   <div className='mt-4 space-y-3'>

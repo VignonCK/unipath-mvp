@@ -1,171 +1,232 @@
 const { PrismaClient } = require('@prisma/client');
-
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding établissements privés...');
+  console.log('Seeding établissements privés agréés du Bénin...');
 
   const etablissementsPrives = [
     // ============================================================
-    // 1. ESATIC — École Supérieure Africaine des TIC
+    // 1. ESAE — École Supérieure d'Administration et d'Économie
     // ============================================================
     {
-      nom: 'École Supérieure Africaine des TIC',
+      nom: "École Supérieure d'Administration et d'Économie",
       type: 'PRIVE',
       ville: 'Cotonou',
-      adresse: 'Lot 1234, Quartier Cadjèhoun, Cotonou',
-      email: 'contact@esatic.bj',
+      adresse: 'Atinkanmey, Quartier Gbèdjromèdé, Cotonou',
+      email: 'contact@esae.bj',
       filieres: [
-        { nom: 'Génie Logiciel', code: 'ESATIC-GL-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Réseaux et Télécommunications', code: 'ESATIC-RT-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Systèmes Embarqués et IoT', code: 'ESATIC-SEI-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Intelligence Artificielle et Data Science', code: 'ESATIC-IADS-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Sciences Économiques', code: 'ESAE-SE-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Administration des Finances', code: 'ESAE-AF-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Administration Générale', code: 'ESAE-AG-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Sciences de Gestion', code: 'ESAE-SG-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Sciences Juridiques', code: 'ESAE-SJ-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Journalisme et Médias', code: 'ESAE-JM-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Administration des Affaires', code: 'ESAE-AA-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Gestion des Ressources Humaines', code: 'ESAE-GRH-M', niveau: 'MASTER', dureeAnnees: 2 },
       ],
     },
 
     // ============================================================
-    // 2. ESGT Bénin — École Supérieure de Gestion et de Technologie
+    // 2. IRGIB Africa University
     // ============================================================
     {
-      nom: 'École Supérieure de Gestion et de Technologie du Bénin',
+      nom: 'IRGIB Africa University',
       type: 'PRIVE',
       ville: 'Cotonou',
-      adresse: 'Avenue Jean-Paul II, Cotonou',
-      email: 'contact@esgt-benin.bj',
+      adresse: 'Face Stade René Pleven, Akpakpa, Cotonou',
+      email: 'contact@irgib.bj',
       filieres: [
-        { nom: 'Gestion Commerciale et Marketing', code: 'ESGT-GCM-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Comptabilité et Audit', code: 'ESGT-CA-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Gestion des Ressources Humaines', code: 'ESGT-GRH-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Management des Organisations', code: 'ESGT-MO-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Génie des Technologies de l\'Information et de la Communication', code: 'IRGIB-GTIC-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Génie des Procédés de Productions Industrielles', code: 'IRGIB-GPPI-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Administration des Affaires', code: 'IRGIB-AA-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Sciences Économiques', code: 'IRGIB-SE-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Analyses Biomédicales', code: 'IRGIB-AB-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Procédés de Productions Industrielles', code: 'IRGIB-PPI-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Administration des Affaires', code: 'IRGIB-AA-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Analyses Biomédicales', code: 'IRGIB-AB-M', niveau: 'MASTER', dureeAnnees: 2 },
       ],
     },
 
     // ============================================================
-    // 3. ESGIS — École Supérieure de Gestion, d'Informatique et des Sciences
+    // 3. ISCG — Institut Supérieur de Communication et de Gestion
     // ============================================================
     {
-      nom: 'École Supérieure de Gestion, d\'Informatique et des Sciences',
+      nom: 'Institut Supérieur de Communication et de Gestion',
+      type: 'PRIVE',
+      ville: 'Cotonou',
+      adresse: 'Quartier Cadjèhoun, Cotonou',
+      email: 'contact@iscg-benin.bj',
+      filieres: [
+        { nom: 'Banque et Finance', code: 'ISCG-BF-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Comptabilité, Contrôle et Audit', code: 'ISCG-CCA-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Journalisme', code: 'ISCG-JO-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Sciences Juridiques', code: 'ISCG-SJ-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Gestion des Ressources Humaines', code: 'ISCG-GRH-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Banque et Finance', code: 'ISCG-BF-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Comptabilité, Contrôle et Audit', code: 'ISCG-CCA-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Gestion des Ressources Humaines', code: 'ISCG-GRH-M', niveau: 'MASTER', dureeAnnees: 2 },
+      ],
+    },
+
+    // ============================================================
+    // 4. ISMA — Institut Supérieur des Métiers de l'Audiovisuel
+    // ============================================================
+    {
+      nom: "Institut Supérieur des Métiers de l'Audiovisuel",
       type: 'PRIVE',
       ville: 'Cotonou',
       adresse: 'Quartier Gbégamey, Cotonou',
-      email: 'contact@esgis.bj',
+      email: 'contact@isma-benin.bj',
       filieres: [
-        { nom: 'Informatique de Gestion', code: 'ESGIS-IG-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Finance et Comptabilité', code: 'ESGIS-FC-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Commerce International', code: 'ESGIS-CI-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Audit et Contrôle de Gestion', code: 'ESGIS-ACG-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Journalisme et Communication', code: 'ISMA-JC-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Production Audiovisuelle', code: 'ISMA-PA-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Communication et Marketing Digital', code: 'ISMA-CMD-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Management de la Communication', code: 'ISMA-MC-M', niveau: 'MASTER', dureeAnnees: 2 },
       ],
     },
 
     // ============================================================
-    // 4. HECM — Hautes Études Commerciales et de Management
+    // 5. HECM — Haute École de Commerce et de Management
     // ============================================================
     {
-      nom: 'Hautes Études Commerciales et de Management',
-      type: 'PRIVE',
-      ville: 'Cotonou',
-      adresse: 'Rue du Commerce, Cotonou',
-      email: 'contact@hecm.bj',
-      filieres: [
-        { nom: 'Management des Entreprises', code: 'HECM-ME-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Marketing et Communication', code: 'HECM-MC-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Banque et Finance', code: 'HECM-BF-M', niveau: 'MASTER', dureeAnnees: 2 },
-      ],
-    },
-
-    // ============================================================
-    // 5. ISM — Institut Supérieur de Management
-    // ============================================================
-    {
-      nom: 'Institut Supérieur de Management du Bénin',
-      type: 'PRIVE',
-      ville: 'Porto-Novo',
-      adresse: 'Avenue des Martyrs, Porto-Novo',
-      email: 'contact@ism-benin.bj',
-      filieres: [
-        { nom: 'Administration des Affaires', code: 'ISM-AA-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Logistique et Transport', code: 'ISM-LT-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Management Stratégique', code: 'ISM-MS-M', niveau: 'MASTER', dureeAnnees: 2 },
-      ],
-    },
-
-    // ============================================================
-    // 6. ESAM — École Supérieure d'Administration et de Management
-    // ============================================================
-    {
-      nom: 'École Supérieure d\'Administration et de Management',
-      type: 'PRIVE',
-      ville: 'Parakou',
-      adresse: 'Boulevard de la Révolution, Parakou',
-      email: 'contact@esam-parakou.bj',
-      filieres: [
-        { nom: 'Administration Publique', code: 'ESAM-AP-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Droit des Affaires', code: 'ESAM-DA-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Gouvernance et Développement Local', code: 'ESAM-GDL-M', niveau: 'MASTER', dureeAnnees: 2 },
-      ],
-    },
-
-    // ============================================================
-    // 7. ESCAE — École Supérieure de Commerce et d'Administration des Entreprises
-    // ============================================================
-    {
-      nom: 'École Supérieure de Commerce et d\'Administration des Entreprises',
+      nom: 'Haute École de Commerce et de Management',
       type: 'PRIVE',
       ville: 'Cotonou',
       adresse: 'Quartier Akpakpa, Cotonou',
-      email: 'contact@escae-benin.bj',
+      email: 'contact@hecm-benin.bj',
       filieres: [
-        { nom: 'Commerce et Distribution', code: 'ESCAE-CD-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Entrepreneuriat et Innovation', code: 'ESCAE-EI-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Management International', code: 'ESCAE-MI-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Management des Entreprises', code: 'HECM-ME-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Commerce International', code: 'HECM-CI-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Finance et Comptabilité', code: 'HECM-FC-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Management Stratégique', code: 'HECM-MS-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Finance', code: 'HECM-FI-M', niveau: 'MASTER', dureeAnnees: 2 },
       ],
     },
 
     // ============================================================
-    // 8. ESMA — École Supérieure de Management et d'Administration
+    // 6. Pigier Bénin
     // ============================================================
     {
-      nom: 'École Supérieure de Management et d\'Administration',
+      nom: 'Pigier Bénin',
+      type: 'PRIVE',
+      ville: 'Cotonou',
+      adresse: 'Avenue Jean-Paul II, Cotonou',
+      email: 'contact@pigier-benin.bj',
+      filieres: [
+        { nom: 'Audit et Contrôle de Gestion', code: 'PIGIER-ACG-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Réseaux et Génie Logiciel', code: 'PIGIER-RGL-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Management des Ressources Humaines', code: 'PIGIER-MRH-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Gestion des Transports et Logistique', code: 'PIGIER-GTL-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Négociation et Communication Multimédia', code: 'PIGIER-NCM-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Management des Ressources Humaines', code: 'PIGIER-MRH-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Finance', code: 'PIGIER-FI-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Audit et Contrôle de Gestion', code: 'PIGIER-ACG-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Communication et Marketing', code: 'PIGIER-CM-M', niveau: 'MASTER', dureeAnnees: 2 },
+      ],
+    },
+
+    // ============================================================
+    // 7. ISM Adonaï — Institut Supérieur de Management Adonaï
+    // ============================================================
+    {
+      nom: 'Institut Supérieur de Management Adonaï',
+      type: 'PRIVE',
+      ville: 'Cotonou',
+      adresse: 'Quartier Fifadji, Cotonou',
+      email: 'contact@ism-adonai.bj',
+      filieres: [
+        { nom: 'Gestion des Entreprises', code: 'ISMA-GE-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Informatique de Gestion', code: 'ISMA-IG-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Droit des Affaires', code: 'ISMA-DA-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Management des Organisations', code: 'ISMA-MO-M', niveau: 'MASTER', dureeAnnees: 2 },
+      ],
+    },
+
+    // ============================================================
+    // 8. UATM Gasa Formation — Université Africaine de Technologie et de Management
+    // ============================================================
+    {
+      nom: 'Université Africaine de Technologie et de Management',
+      type: 'PRIVE',
+      ville: 'Cotonou',
+      adresse: 'Rue du Commissariat, Cotonou',
+      email: 'contact@uatm-gasa.bj',
+      filieres: [
+        { nom: 'Génie Informatique', code: 'UATM-GI-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Management des Organisations', code: 'UATM-MO-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Génie Civil', code: 'UATM-GC-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Électrotechnique', code: 'UATM-ET-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Génie Informatique', code: 'UATM-GI-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Management des Organisations', code: 'UATM-MO-M', niveau: 'MASTER', dureeAnnees: 2 },
+      ],
+    },
+
+    // ============================================================
+    // 9. ESM Bénin — École Supérieure de Management
+    // ============================================================
+    {
+      nom: 'École Supérieure de Management du Bénin',
       type: 'PRIVE',
       ville: 'Cotonou',
       adresse: 'Quartier Fidjrossè, Cotonou',
-      email: 'contact@esma-benin.bj',
+      email: 'contact@esm-benin.bj',
       filieres: [
-        { nom: 'Management et Administration des Entreprises', code: 'ESMA-MAE-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Gestion Financière', code: 'ESMA-GF-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Ressources Humaines et Communication', code: 'ESMA-RHC-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Management et Administration des Entreprises', code: 'ESM-MAE-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Finance et Comptabilité', code: 'ESM-FC-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Marketing et Stratégie Commerciale', code: 'ESM-MSC-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Management Stratégique', code: 'ESM-MS-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Finance', code: 'ESM-FI-M', niveau: 'MASTER', dureeAnnees: 2 },
       ],
     },
 
     // ============================================================
-    // 9. ISPP — Institut Supérieur Polytechnique Privé du Bénin
+    // 10. UCAO — Université Catholique d'Afrique de l'Ouest
     // ============================================================
     {
-      nom: 'Institut Supérieur Polytechnique Privé du Bénin',
+      nom: "Université Catholique d'Afrique de l'Ouest",
       type: 'PRIVE',
-      ville: 'Abomey-Calavi',
-      adresse: 'Route de l\'Aéroport, Abomey-Calavi',
-      email: 'contact@ispp-benin.bj',
+      ville: 'Cotonou',
+      adresse: 'Quartier Missèbo, Cotonou',
+      email: 'contact@ucao-benin.bj',
       filieres: [
-        { nom: 'Génie Civil et BTP', code: 'ISPP-GC-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Électrotechnique et Énergies Renouvelables', code: 'ISPP-EER-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Génie Industriel', code: 'ISPP-GI-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Droit', code: 'UCAO-DR-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Sciences Économiques et Gestion', code: 'UCAO-SEG-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Philosophie et Sciences Humaines', code: 'UCAO-PSH-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Droit des Affaires', code: 'UCAO-DA-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Économie et Développement', code: 'UCAO-ED-M', niveau: 'MASTER', dureeAnnees: 2 },
       ],
     },
 
     // ============================================================
-    // 10. FSEGA — Faculté des Sciences Économiques et de Gestion Appliquée (Privé)
+    // 11. IUP — Institut Universitaire Panafricain
     // ============================================================
     {
-      nom: 'Faculté des Sciences Économiques et de Gestion Appliquée',
+      nom: 'Institut Universitaire Panafricain',
       type: 'PRIVE',
       ville: 'Porto-Novo',
-      adresse: 'Quartier Houinmè, Porto-Novo',
-      email: 'contact@fsega-benin.bj',
+      adresse: 'Avenue des Martyrs, Porto-Novo',
+      email: 'contact@iup-benin.bj',
       filieres: [
-        { nom: 'Économie et Développement', code: 'FSEGA-ED-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Gestion des Projets', code: 'FSEGA-GP-L', niveau: 'LICENCE', dureeAnnees: 3 },
-        { nom: 'Économie Internationale', code: 'FSEGA-EI-M', niveau: 'MASTER', dureeAnnees: 2 },
+        { nom: 'Sciences de Gestion', code: 'IUP-SG-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Informatique Appliquée', code: 'IUP-IA-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Administration et Gestion', code: 'IUP-AG-M', niveau: 'MASTER', dureeAnnees: 2 },
+      ],
+    },
+
+    // ============================================================
+    // 12. ESEP Le Berger
+    // ============================================================
+    {
+      nom: 'École Supérieure de l\'Enseignement Professionnel Le Berger',
+      type: 'PRIVE',
+      ville: 'Cotonou',
+      adresse: 'Quartier Sainte Rita, Cotonou',
+      email: 'contact@esep-leberger.bj',
+      filieres: [
+        { nom: 'Gestion Commerciale', code: 'ESEP-GC-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Informatique de Gestion', code: 'ESEP-IG-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Comptabilité et Finance', code: 'ESEP-CF-L', niveau: 'LICENCE', dureeAnnees: 3 },
+        { nom: 'Management des Organisations', code: 'ESEP-MO-M', niveau: 'MASTER', dureeAnnees: 2 },
       ],
     },
   ];
@@ -226,7 +287,7 @@ async function main() {
     }
   }
 
-  console.log('\nTerminé : 10 établissements privés seedés avec succès.');
+  console.log('\nTerminé : 12 EPES agréés du Bénin seedés avec succès.');
 }
 
 main()

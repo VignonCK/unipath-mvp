@@ -10,7 +10,7 @@ const { validateEmail, validateParams } = require('../utils/validation');
 const rateLimiter = require('./rate-limiter');
 const emailConfig = require('../config/email.config');
 const logger = require('../config/logger');
-const { getFrontendUrl } = require('../utils/url.helper');
+const { getFrontendUrl, buildFrontendUrl } = require('../utils/url.helper');
 
 const prisma = require('../prisma');
 
@@ -88,8 +88,7 @@ class EmailService {
       throw new Error('confirmationToken is required');
     }
 
-    const frontendUrl = getFrontendUrl();
-    const confirmationUrl = `${frontendUrl}/auth/confirm?token=${confirmationToken}`;
+    const confirmationUrl = buildFrontendUrl('/auth/confirm', { token: confirmationToken });
     
     const subject = '[UniPath] Confirmez votre adresse email';
     const htmlBody = `

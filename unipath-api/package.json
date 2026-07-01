@@ -11,7 +11,8 @@
     "create-admins": "node scripts/create-admin-accounts.js",
     "create-commission-roles": "node scripts/create-commission-sous-roles.js",
     "seed:roles": "node prisma/seed-roles.js",
-    "seed:concours-officiels": "node prisma/seed-concours-officiels.js"
+    "seed:concours-officiels": "node prisma/seed-concours-officiels.js",
+    "seed:etablissements-publics": "node scripts/seed-etablissements-publics.js"
   },
   "keywords": [],
   "author": "Groupe 4 de SGBD (GIT) — EPAC: 2025-2026",

@@ -18,7 +18,12 @@ const upload = multer({
   },
 });
 
-router.post('/', protect, checkRole(['CANDIDAT']), controller.creerPreinscriptionEtablissement);
+const DIRECT_PREINSCRIPTION_DISABLED_MESSAGE =
+  'La création directe de pré-inscription est désactivée. Passez par le dépôt de dossier via /api/applications.';
+
+router.post('/', protect, checkRole(['CANDIDAT']), (_req, res) => {
+  return res.status(410).json({ error: DIRECT_PREINSCRIPTION_DISABLED_MESSAGE });
+});
 router.get('/mes-preinscriptions', protect, checkRole(['CANDIDAT']), controller.getMesPreinscriptionsEtablissement);
 router.get('/:id/pdf', protect, controller.telechargerFichePreinscriptionEtablissement);
 

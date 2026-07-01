@@ -429,7 +429,12 @@ export default function DashboardCandidat() {
                 }`}>
                   <div className='flex items-center gap-3'>
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isOk ? 'bg-green-500' : 'bg-gray-300'}`} />
-                    <span className='text-sm font-medium text-gray-700'>{label}</span>
+                    <div>
+                      <span className='text-sm font-medium text-gray-700'>{label}</span>
+                      {key === 'photo' && (
+                        <span className='text-xs text-gray-400 block'>1 fichier (JPEG ou PNG)</span>
+                      )}
+                    </div>
                   </div>
                   <label className='cursor-pointer'>
                     <span className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${

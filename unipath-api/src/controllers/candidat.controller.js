@@ -1,5 +1,6 @@
 // src/controllers/candidat.controller.js
 const prisma = require('../prisma');
+const { DOSSIER_CENTRE_INCLUDE, flattenCentreChoisi, concoursHasCentres } = require('../utils/centres-composition.helper');
 
 exports.getProfil = async (req, res) => {
   try {
@@ -24,8 +25,18 @@ exports.getProfil = async (req, res) => {
         // Ne pas exposer emailConfirme
         inscriptions: {
           include: {
-            concours: true,
-            dossierInscription: true,
+            concours: {
+              include: {
+                centresActifs: {
+                  where: { estActif: true },
+                  select: { id: true },
+                  take: 1,
+                },
+              },
+            },
+            dossierInscription: {
+              include: DOSSIER_CENTRE_INCLUDE,
+            },
           },
         },
         dossier: true,
@@ -36,12 +47,22 @@ exports.getProfil = async (req, res) => {
 
     const inscriptions = candidat.inscriptions.map((ins) => ({
       ...ins,
+      concours: ins.concours
+        ? {
+            ...ins.concours,
+            hasCentresActifs: (ins.concours.centresActifs?.length > 0)
+              || concoursHasCentres(ins.concours.centresComposition),
+            centresActifs: undefined,
+          }
+        : ins.concours,
       statut: ins.dossierInscription?.statut ?? 'EN_ATTENTE',
       commentaireRejet: ins.dossierInscription?.commentaireRejet,
       commentaireSousReserve: ins.dossierInscription?.commentaireSousReserve,
       quittanceUrl: ins.dossierInscription?.quittanceUrl ?? null,
       piecesExtras: ins.dossierInscription?.piecesExtras ?? {},
       documentsCompl: ins.dossierInscription?.documentsCompl ?? null,
+      centreChoisi: flattenCentreChoisi(ins.dossierInscription),
+      centreCompositionChoisi: ins.dossierInscription?.centreCompositionChoisi ?? null,
       dossierInscriptionId: ins.dossierInscription?.id ?? null,
     }));
 

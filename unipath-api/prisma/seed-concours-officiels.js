@@ -1,9 +1,14 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { PrismaClient } = require('@prisma/client');
+const {
+  SOURCE_TAG_OFFICIEL,
+  buildPiecesRequisesMvp,
+  resolveMatieresComposees,
+} = require('../src/constants/concours-mvp.constants');
 
 const prisma = new PrismaClient();
-const SOURCE_TAG = '[MESRS-CONCOURS-2026]';
+const SOURCE_TAG = SOURCE_TAG_OFFICIEL;
 const SERIES_VALIDES = ['A', 'B', 'C', 'D', 'E', 'F1', 'F2', 'F3', 'F4', 'G1', 'G2', 'G3', 'G'];
 
 // Mapping adapte de votre logique metier partagee en chat.
@@ -28,146 +33,6 @@ const SERIES_BY_SIGLE = {
   ENSGTI: ['C', 'D', 'F1', 'F2', 'F3'],
   'IUT-Lokossa': ['C', 'D', 'F1', 'F2', 'F3'],
   IPEN: ['C', 'D'],
-};
-
-/** Pièces communes à tous les concours officiels (ids stables pour le frontend). */
-const PIECES_COMMUNES = [
-  {
-    id: 'acte_naissance',
-    nom: 'Acte de naissance',
-    formats: ['PDF'],
-    obligatoire: true,
-    sourceDossier: 'acteNaissance',
-  },
-  {
-    id: 'carte_identite',
-    nom: "Carte nationale d'identité",
-    formats: ['PDF'],
-    obligatoire: true,
-    sourceDossier: 'carteIdentite',
-  },
-  {
-    id: 'photo_identite',
-    nom: "Photo d'identité (4 exemplaires)",
-    formats: ['PDF', 'JPG', 'PNG'],
-    obligatoire: true,
-    sourceDossier: 'photo',
-  },
-  {
-    id: 'releve_bac',
-    nom: 'Relevé de notes du Bac',
-    formats: ['PDF'],
-    obligatoire: true,
-    sourceDossier: 'releve',
-  },
-  {
-    id: 'diplome_bac',
-    nom: 'Diplôme du Bac ou attestation',
-    formats: ['PDF'],
-    obligatoire: true,
-    sourceDossier: null,
-  },
-  {
-    id: 'casier_judiciaire',
-    nom: 'Casier judiciaire (bulletin n°3)',
-    formats: ['PDF'],
-    obligatoire: true,
-    sourceDossier: null,
-  },
-  {
-    id: 'certificat_medical',
-    nom: 'Certificat médical de bonne santé',
-    formats: ['PDF'],
-    obligatoire: true,
-    sourceDossier: null,
-  },
-  {
-    id: 'quittance',
-    nom: 'Quittance de paiement des frais',
-    formats: ['PDF'],
-    obligatoire: true,
-    sourceDossier: null,
-  },
-];
-
-const PIECE_CERTIFICAT_MEDICAL_SPECIALISE = {
-  id: 'certificat_medical_specialise',
-  nom: 'Certificat médical spécialisé (visite médicale approfondie)',
-  formats: ['PDF'],
-  obligatoire: true,
-  sourceDossier: null,
-};
-
-const PIECE_CERTIFICAT_MEDICAL_SPORTIF = {
-  id: 'certificat_medical_sportif',
-  nom: 'Certificat médical sportif délivré par un médecin agréé',
-  formats: ['PDF'],
-  obligatoire: true,
-  sourceDossier: null,
-};
-
-const PIECE_CASIER_JUDICIAIRE_RECENT = {
-  id: 'casier_judiciaire_recent',
-  nom: 'Extrait de casier judiciaire n°3 daté de moins de 3 mois',
-  formats: ['PDF'],
-  obligatoire: true,
-  sourceDossier: null,
-};
-
-const PIECE_CERTIFICAT_RESIDENCE = {
-  id: 'certificat_residence',
-  nom: 'Certificat de résidence',
-  formats: ['PDF'],
-  obligatoire: true,
-  sourceDossier: null,
-};
-
-const PIECE_RELEVE_DEUX_ANNEES = {
-  id: 'releve_deux_annees',
-  nom: 'Relevé de notes des deux dernières années (si disponible)',
-  formats: ['PDF'],
-  obligatoire: false,
-  sourceDossier: null,
-};
-
-const PIECE_EXTRAIT_NAISSANCE_LEGALISE = {
-  id: 'extrait_naissance_legalise',
-  nom: 'Extrait de naissance légalisé',
-  formats: ['PDF'],
-  obligatoire: true,
-  sourceDossier: null,
-};
-
-const PIECE_LETTRE_MOTIVATION = {
-  id: 'lettre_motivation',
-  nom: 'Lettre de motivation manuscrite',
-  formats: ['PDF'],
-  obligatoire: true,
-  sourceDossier: null,
-};
-
-const PIECE_CERTIFICAT_BONNE_VIE_MOEURS = {
-  id: 'certificat_bonne_vie_moeurs',
-  nom: 'Certificat de bonne vie et mœurs',
-  formats: ['PDF'],
-  obligatoire: true,
-  sourceDossier: null,
-};
-
-const PIECES_BY_SIGLE = {
-  INMeS: [PIECE_CERTIFICAT_MEDICAL_SPECIALISE],
-  FMSS: [PIECE_CERTIFICAT_MEDICAL_SPECIALISE],
-  INEPS: [PIECE_CERTIFICAT_MEDICAL_SPORTIF],
-  ENAM: [PIECE_CASIER_JUDICIAIRE_RECENT, PIECE_CERTIFICAT_RESIDENCE],
-  ENEAM: [PIECE_CERTIFICAT_RESIDENCE],
-  ENSPD: [PIECE_RELEVE_DEUX_ANNEES],
-  ENSTIC: [PIECE_RELEVE_DEUX_ANNEES],
-  ENSGTI: [PIECE_RELEVE_DEUX_ANNEES],
-  ENSET: [PIECE_RELEVE_DEUX_ANNEES],
-  'IUT-Lokossa': [PIECE_RELEVE_DEUX_ANNEES],
-  IFSIO: [PIECE_CERTIFICAT_MEDICAL_SPECIALISE, PIECE_EXTRAIT_NAISSANCE_LEGALISE],
-  IFRI: [PIECE_LETTRE_MOTIVATION],
-  ESMA: [PIECE_CERTIFICAT_BONNE_VIE_MOEURS],
 };
 
 const MONTHS = {
@@ -286,13 +151,8 @@ function toConcoursRecord(item, universites, metadata) {
     description: descriptionLines.join('\n'),
     fraisParticipation: item.frais_inscription_fcfa || metadata._meta.frais_dossier_fcfa,
     seriesAcceptees,
-    matieres: item.filieres,
-    piecesRequises: {
-      pieces: [
-        ...PIECES_COMMUNES,
-        ...(PIECES_BY_SIGLE[item.sigle] || []),
-      ],
-    },
+    matieres: resolveMatieresComposees(item.domaine, item.sigle),
+    piecesRequises: buildPiecesRequisesMvp(),
     criteresEligibilite: { criteres },
     dateDebutDepot,
     dateFinDepot,

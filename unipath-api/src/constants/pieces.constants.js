@@ -22,7 +22,7 @@ const PIECES_PREDEFINIES = [
     id: 'photo',
     nom: "Photo d'identité",
     formatsDefaut: ['JPEG', 'PNG'],
-    description: 'Photo récente format identité'
+    description: '1 fichier image (JPEG ou PNG)',
   },
   {
     id: 'releve-notes',
@@ -59,8 +59,21 @@ const FORMATS_DISPONIBLES = [
  */
 const SERIES_VALIDES = ['A', 'B', 'C', 'D', 'E', 'F1', 'F2', 'F3', 'F4', 'G1', 'G2', 'G3', 'F', 'G'];
 
+function normalizePieceNom(pieceId, nom) {
+  const id = String(pieceId || '').trim();
+  if (id === 'photo' || id === 'photo_identite') {
+    return "Photo d'identité";
+  }
+  const predefined = PIECES_PREDEFINIES.find((p) => p.id === id);
+  if (predefined?.nom) return predefined.nom;
+  return String(nom || id)
+    .replace(/\s*\(\s*\d+\s*exemplaires?\s*\)/gi, '')
+    .trim() || id;
+}
+
 module.exports = {
   PIECES_PREDEFINIES,
   FORMATS_DISPONIBLES,
-  SERIES_VALIDES
+  SERIES_VALIDES,
+  normalizePieceNom,
 };

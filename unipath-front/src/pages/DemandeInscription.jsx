@@ -28,6 +28,103 @@ const inputClass =
   'w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20 transition';
 const labelClass = 'mb-1.5 block text-sm font-semibold text-gray-700';
 
+const DEFAULT_DOSSIER_FEES = 5000;
+
+function formatFcfa(value) {
+  if (value == null) return '—';
+  return `${Number(value).toLocaleString('fr-FR')} FCFA`;
+}
+
+function resolveFraisDossierFromForm(etablissements, form) {
+  if (!form.filiereId) return null;
+
+  if (form.campagneFiliereId) {
+    for (const etab of etablissements) {
+      for (const campagne of etab.campagnes || []) {
+        const cf = (campagne.filieres || []).find((item) => item.id === form.campagneFiliereId);
+        if (cf?.fraisDossier != null) return cf.fraisDossier;
+      }
+    }
+  }
+
+  const etab = etablissements.find((e) => e.id === form.etablissementId);
+  if (etab) {
+    for (const campagne of etab.campagnes || []) {
+      const cf = (campagne.filieres || []).find(
+        (item) => item.filiereId === form.filiereId || item.filiere?.id === form.filiereId,
+      );
+      if (cf?.fraisDossier != null) return cf.fraisDossier;
+    }
+  }
+
+  return DEFAULT_DOSSIER_FEES;
+}
+
+async function fetchFiliereById(filiereId, etablissementId) {
+  if (etablissementId) {
+    const data = await filiereService.getByEtablissement(etablissementId);
+    const found = (data.filieres || []).find((f) => f.id === filiereId);
+    if (found) return found;
+  }
+
+  const data = await filiereService.getAll();
+  return (data.filieres || []).find((f) => f.id === filiereId) || null;
+}
+
+function filiereHasRecapFields(filiere) {
+  if (!filiere) return false;
+  return (
+    filiere.fraisInscriptionEffective != null ||
+    filiere.fraisScolariteAnnuels != null ||
+    Boolean(filiere.fraisAutres)
+  );
+}
+
+function RecapitulatifFrais({ fraisDossier, filiere }) {
+  if (fraisDossier == null) return null;
+
+  const fraisInscription = filiere?.fraisInscriptionEffective ?? null;
+  const totalPrevu = fraisDossier + (fraisInscription ?? 0);
+
+  return (
+    <div className='rounded-xl border border-amber-200 bg-amber-50/40 p-4'>
+      <h3 className='mb-3 text-sm font-bold text-gray-900'>Récapitulatif des frais</h3>
+      <div className='overflow-x-auto rounded-lg border border-amber-100 bg-white'>
+        <table className='w-full text-sm'>
+          <tbody className='divide-y divide-gray-100'>
+            <tr>
+              <td className='px-4 py-2.5 text-gray-700'>Frais de dossier</td>
+              <td className='px-4 py-2.5 text-right font-medium text-gray-900'>{formatFcfa(fraisDossier)}</td>
+            </tr>
+            <tr>
+              <td className='px-4 py-2.5 text-gray-700'>Frais d&apos;inscription</td>
+              <td className='px-4 py-2.5 text-right font-medium text-gray-900'>{formatFcfa(fraisInscription)}</td>
+            </tr>
+            <tr>
+              <td className='px-4 py-2.5 text-gray-700'>Scolarité annuelle</td>
+              <td className='px-4 py-2.5 text-right font-medium text-gray-900'>
+                {formatFcfa(filiere?.fraisScolariteAnnuels)}
+              </td>
+            </tr>
+            <tr>
+              <td className='px-4 py-2.5 text-gray-700'>Autres frais</td>
+              <td className='px-4 py-2.5 text-right text-gray-700'>{filiere?.fraisAutres || '—'}</td>
+            </tr>
+            <tr className='bg-amber-50/80'>
+              <td className='px-4 py-2.5 font-bold text-gray-900'>TOTAL À PRÉVOIR</td>
+              <td className='px-4 py-2.5 text-right font-bold text-gray-900'>{formatFcfa(totalPrevu)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className='mt-3 text-xs leading-relaxed text-amber-900/80'>
+        * Les frais de dossier sont à régler maintenant. Les frais d&apos;inscription et de scolarité seront exigés
+        après acceptation de votre dossier.
+      </p>
+    </div>
+  );
+}
+
 const APPLICATION_ACTION_MESSAGES = {
   DRAFT: 'Votre dossier est en brouillon. Cliquez pour continuer.',
   DOSSIER_FEES_PAID: 'Paiement reçu — complétez les pièces de votre dossier.',
@@ -186,7 +283,6 @@ export default function DemandeInscription() {
   const [applicationDetail, setApplicationDetail] = useState(null);
   const [requirements, setRequirements] = useState([]);
   const [uploadFiles, setUploadFiles] = useState({});
-  const [bankReceiptFile, setBankReceiptFile] = useState(null);
   const [preinscriptions, setPreinscriptions] = useState([]);
   const [loadingPreinscriptions, setLoadingPreinscriptions] = useState(true);
   const [docModal, setDocModal] = useState({ open: false, preinscriptionId: null });
@@ -203,11 +299,15 @@ export default function DemandeInscription() {
   const [acadUploadMessage, setAcadUploadMessage] = useState('');
   const [acadUploadError, setAcadUploadError] = useState('');
 
+  const [recapFiliere, setRecapFiliere] = useState(null);
+  const [confirmedFraisDossier, setConfirmedFraisDossier] = useState(null);
+
   const [form, setForm] = useState({
     etablissementId: prefill.etablissementId || '',
     filiereId: prefill.filiereId || '',
     anneeAcademique: prefill.anneeAcademique || `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
     niveau: prefill.niveau || '',
+    campagneFiliereId: prefill.campagneFiliereId || '',
   });
 
   const selectedApplication = useMemo(
@@ -216,6 +316,78 @@ export default function DemandeInscription() {
   );
 
   const providedCount = useMemo(() => requirements.filter((r) => r.provided).length, [requirements]);
+
+  const fraisDossierMontant = useMemo(() => {
+    const montant = applicationDetail?.campagneFiliere?.fraisDossier;
+    return montant != null ? montant : DEFAULT_DOSSIER_FEES;
+  }, [applicationDetail]);
+
+  const fraisDossierPreview = useMemo(
+    () => resolveFraisDossierFromForm(etablissements, form),
+    [etablissements, form],
+  );
+
+  const recapFiliereId = useMemo(() => {
+    if (activeTab === 'nouvelle') return form.filiereId || '';
+    return applicationDetail?.filiereId || applicationDetail?.filiere?.id || '';
+  }, [activeTab, form.filiereId, applicationDetail]);
+
+  const recapEtablissementId = useMemo(() => {
+    if (activeTab === 'nouvelle') return form.etablissementId || '';
+    return applicationDetail?.etablissementId || applicationDetail?.etablissement?.id || '';
+  }, [activeTab, form.etablissementId, applicationDetail]);
+
+  const fraisDossierAffiche = useMemo(() => {
+    if (confirmedFraisDossier != null) return confirmedFraisDossier;
+    const paid = applicationDetail?.payments?.find(
+      (p) => p.paymentType === 'DOSSIER_FEES' && p.status === 'CONFIRMED',
+    );
+    if (paid?.amount != null) return paid.amount;
+    return fraisDossierMontant;
+  }, [confirmedFraisDossier, applicationDetail, fraisDossierMontant]);
+
+  const fraisDossierRecap = activeTab === 'nouvelle' ? fraisDossierPreview : fraisDossierAffiche;
+
+  const dossierFeesPaid = useMemo(
+    () =>
+      Boolean(
+        applicationDetail?.payments?.some(
+          (p) => p.paymentType === 'DOSSIER_FEES' && p.status === 'CONFIRMED',
+        ),
+      ),
+    [applicationDetail],
+  );
+
+  useEffect(() => {
+    setConfirmedFraisDossier(null);
+  }, [selectedApplicationId]);
+
+  useEffect(() => {
+    if (!recapFiliereId) {
+      setRecapFiliere(null);
+      return undefined;
+    }
+
+    const fromList = filieres.find((f) => f.id === recapFiliereId);
+    if (filiereHasRecapFields(fromList)) {
+      setRecapFiliere(fromList);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    fetchFiliereById(recapFiliereId, recapEtablissementId)
+      .then((detail) => {
+        if (!cancelled) setRecapFiliere(detail || fromList || null);
+      })
+      .catch(() => {
+        if (!cancelled) setRecapFiliere(fromList || null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [recapFiliereId, recapEtablissementId, filieres]);
 
   const loadPreinscriptions = useCallback(async () => {
     setLoadingPreinscriptions(true);
@@ -321,7 +493,11 @@ export default function DemandeInscription() {
     setForm((prev) => ({
       ...prev,
       [name]: value,
-      ...(name === 'etablissementId' ? { filiereId: '' } : {}),
+      ...(name === 'etablissementId'
+        ? { filiereId: '', campagneFiliereId: '' }
+        : name === 'filiereId'
+          ? { campagneFiliereId: '' }
+          : {}),
     }));
   };
 
@@ -337,6 +513,9 @@ export default function DemandeInscription() {
         anneeAcademique: form.anneeAcademique,
         niveau: Number(form.niveau),
       };
+      if (form.campagneFiliereId) {
+        payload.campagneFiliereId = form.campagneFiliereId;
+      }
       const data = await applicationService.creer(payload);
       const appId = data?.application?.id || '';
       const chosenId = await loadApplications(appId);
@@ -356,28 +535,14 @@ export default function DemandeInscription() {
       setActionBusy(true);
       setError('');
       const data = await applicationService.payerFraisDossierMock(selectedApplicationId);
+      if (data.amount != null) {
+        setConfirmedFraisDossier(data.amount);
+      }
       await loadApplicationDetails(selectedApplicationId);
       await loadApplications(selectedApplicationId);
       setMessage(data.message || 'Paiement confirmé');
     } catch (err) {
       setError(err.message || 'Erreur paiement frais dossier');
-    } finally {
-      setActionBusy(false);
-    }
-  };
-
-  const uploadBankReceipt = async () => {
-    if (!selectedApplicationId || !bankReceiptFile) return;
-    try {
-      setActionBusy(true);
-      setError('');
-      const data = await applicationService.uploadQuittanceBancaire(selectedApplicationId, bankReceiptFile);
-      setBankReceiptFile(null);
-      await loadApplicationDetails(selectedApplicationId);
-      await loadApplications(selectedApplicationId);
-      setMessage(data.message || 'Quittance bancaire enregistrée');
-    } catch (err) {
-      setError(err.message || 'Erreur upload quittance bancaire');
     } finally {
       setActionBusy(false);
     }
@@ -636,13 +801,18 @@ export default function DemandeInscription() {
 
                   {!loadingDetail && applicationDetail && (
                     <div className='space-y-6'>
+                      <RecapitulatifFrais fraisDossier={fraisDossierRecap} filiere={recapFiliere} />
+
                       <div className='grid gap-4 md:grid-cols-3'>
                         <div className='rounded-2xl border border-blue-100 bg-blue-50/50 p-4'>
                           <div className='mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-blue-900 text-white'>
                             <span className='text-lg'>💳</span>
                           </div>
                           <h3 className='font-semibold text-gray-900'>Frais de dossier</h3>
-                          <p className='mt-1 text-xs text-gray-600'>Paiement simulé — 5 000 FCFA</p>
+                          <p className='mt-1 text-xs text-gray-600'>
+                            {dossierFeesPaid ? 'Paiement confirmé' : 'Paiement simulé'} —{' '}
+                            {fraisDossierAffiche.toLocaleString('fr-FR')} FCFA
+                          </p>
                           <button
                             type='button'
                             onClick={payDossierFees}
@@ -658,24 +828,16 @@ export default function DemandeInscription() {
                             <span className='text-lg'>🏦</span>
                           </div>
                           <h3 className='font-semibold text-gray-900'>Quittance bancaire</h3>
-                          <p className='mt-1 text-xs text-gray-600'>PDF ou image (PNG, JPEG)</p>
-                          <label className='mt-3 block cursor-pointer rounded-xl border border-dashed border-indigo-200 bg-white px-3 py-3 text-center text-xs text-gray-600 hover:border-indigo-400'>
-                            {bankReceiptFile ? bankReceiptFile.name : 'Choisir un fichier'}
-                            <input
-                              type='file'
-                              accept='application/pdf,image/png,image/jpeg'
-                              onChange={(e) => setBankReceiptFile(e.target.files?.[0] || null)}
-                              className='hidden'
-                            />
-                          </label>
-                          <button
-                            type='button'
-                            onClick={uploadBankReceipt}
-                            disabled={actionBusy || !bankReceiptFile}
-                            className='mt-3 w-full rounded-xl bg-indigo-700 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-50'
-                          >
-                            Envoyer la quittance
-                          </button>
+                          <p className='mt-2 text-xs leading-relaxed text-indigo-900/80'>
+                            Votre quittance bancaire sera demandée uniquement après acceptation de votre dossier.
+                          </p>
+                          <p className='mt-2 text-xs text-gray-500'>
+                            Vous pourrez la déposer depuis{' '}
+                            <Link to='/mes-inscriptions-academiques' className='font-semibold text-indigo-700 underline'>
+                              Mes inscriptions académiques
+                            </Link>
+                            .
+                          </p>
                         </div>
 
                         <div className='rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4'>
@@ -949,7 +1111,13 @@ export default function DemandeInscription() {
                           </span>
                         </div>
 
-                        <div className='mt-4'>
+                        <div className='mt-4 space-y-3'>
+                          {ins.statut === 'EN_ATTENTE_QUITTANCE' && (
+                            <p className='rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-900'>
+                              Votre dossier a été accepté. Déposez votre quittance bancaire pour finaliser votre inscription.
+                            </p>
+                          )}
+
                           {['EN_COURS', 'EN_ATTENTE_QUITTANCE'].includes(ins.statut) && (
                             <button
                               type='button'
@@ -1068,6 +1236,8 @@ export default function DemandeInscription() {
                   </select>
                 </div>
               </div>
+
+              <RecapitulatifFrais fraisDossier={fraisDossierPreview} filiere={recapFiliere} />
 
               <button
                 type='submit'

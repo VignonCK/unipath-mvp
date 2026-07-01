@@ -1,14 +1,34 @@
 import { useEffect, useState } from 'react';
-import { dgesService, etablissementService } from '../../services/api';
+import { useNavigate } from 'react-router-dom';
+import { concoursService, dgesService, etablissementService } from '../../services/api';
 import DGESLayout from '../../components/DGESLayout';
 import { BentoCard } from '../../components/AcademicLayout';
 
 const FORM_INIT = { nom: '', prenom: '', email: '', telephone: '' };
 const ETAB_FORM_INIT = { nom: '', ville: '', type: 'PUBLIC', adresse: '', email: '' };
 
+function formatConcoursDates(concours) {
+  const depotDebut = concours.dateDebutDepot || concours.dateDebut;
+  const depotFin = concours.dateFinDepot || concours.dateFin;
+  const compoDebut = concours.dateDebutComposition || concours.dateComposition;
+  const compoFin = concours.dateFinComposition;
+
+  const fmt = (d) => (d ? new Date(d).toLocaleDateString('fr-FR') : '—');
+
+  if (compoDebut && compoFin) {
+    return `Dépôt ${fmt(depotDebut)} → ${fmt(depotFin)} · Composition ${fmt(compoDebut)} → ${fmt(compoFin)}`;
+  }
+  return `Dépôt ${fmt(depotDebut)} → ${fmt(depotFin)} · Composition ${fmt(compoDebut)}`;
+}
+
 export default function DGESEtablissementsAdmins() {
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('PRIVE');
   const [etablissements, setEtablissements] = useState([]);
+  const [publicEtablissements, setPublicEtablissements] = useState([]);
+  const [concoursByEtab, setConcoursByEtab] = useState({});
   const [loading, setLoading] = useState(true);
+  const [loadingPublic, setLoadingPublic] = useState(false);
   const [error, setError] = useState('');
   const [pageMessage, setPageMessage] = useState('');
 
@@ -31,14 +51,42 @@ export default function DGESEtablissementsAdmins() {
     setError('');
     return etablissementService
       .getAll()
-      .then((data) => setEtablissements(data.etablissements || []))
+      .then((data) =>
+        setEtablissements((data.etablissements || []).filter((e) => e.type === 'PRIVE'))
+      )
       .catch((err) => setError(err.message || 'Erreur de chargement'))
       .finally(() => setLoading(false));
   };
 
+  const chargerEtablissementsPublics = async () => {
+    setLoadingPublic(true);
+    setError('');
+    try {
+      const data = await etablissementService.getPublics();
+      const publics = data.etablissements || [];
+      setPublicEtablissements(publics);
+
+      const entries = await Promise.all(
+        publics.map(async (etab) => {
+          const concours = await concoursService.getByEtablissement(etab.id);
+          return [etab.id, Array.isArray(concours) ? concours : []];
+        })
+      );
+      setConcoursByEtab(Object.fromEntries(entries));
+    } catch (err) {
+      setError(err.message || 'Erreur de chargement des établissements publics');
+    } finally {
+      setLoadingPublic(false);
+    }
+  };
+
   useEffect(() => {
-    chargerEtablissements();
-  }, []);
+    if (activeTab === 'PRIVE') {
+      chargerEtablissements();
+    } else {
+      chargerEtablissementsPublics();
+    }
+  }, [activeTab]);
 
   const ouvrirModal = async (etab) => {
     setSelectedEtab(etab);
@@ -142,15 +190,44 @@ export default function DGESEtablissementsAdmins() {
           <div>
             <h1 className="text-2xl font-black text-gray-900">Établissements &amp; Admins</h1>
             <p className="text-gray-500 text-sm mt-1">
-              Gérez les établissements et leurs administrateurs.
+              {activeTab === 'PRIVE'
+                ? 'Gérez les établissements privés et leurs administrateurs.'
+                : 'Consultez les établissements publics et leurs concours associés.'}
             </p>
           </div>
+          {activeTab === 'PRIVE' && (
           <button
             type="button"
             onClick={ouvrirCreateModal}
             className="px-4 py-2.5 rounded-lg bg-blue-900 text-white text-sm font-semibold hover:bg-blue-800 transition shrink-0"
           >
             + Ajouter un établissement
+          </button>
+          )}
+        </div>
+
+        <div className="flex gap-2 border-b border-gray-200">
+          <button
+            type="button"
+            onClick={() => setActiveTab('PRIVE')}
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition -mb-px ${
+              activeTab === 'PRIVE'
+                ? 'border-orange-500 text-orange-600'
+                : 'border-transparent text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Établissements privés
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('PUBLIC')}
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition -mb-px ${
+              activeTab === 'PUBLIC'
+                ? 'border-blue-900 text-blue-900'
+                : 'border-transparent text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Établissements publics
           </button>
         </div>
 
@@ -162,7 +239,7 @@ export default function DGESEtablissementsAdmins() {
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
 
-        {loading ? (
+        {activeTab === 'PRIVE' && (loading ? (
           <div className="flex justify-center py-16">
             <div className="w-10 h-10 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin" />
           </div>
@@ -182,7 +259,7 @@ export default function DGESEtablissementsAdmins() {
                   {etablissements.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-6 py-10 text-center text-gray-400">
-                        Aucun établissement enregistré.
+                        Aucun établissement privé enregistré.
                       </td>
                     </tr>
                   ) : (
@@ -191,22 +268,18 @@ export default function DGESEtablissementsAdmins() {
                         <td className="px-6 py-4 font-medium text-gray-900">{etab.nom}</td>
                         <td className="px-6 py-4 text-gray-600">{etab.ville}</td>
                         <td className="px-6 py-4">
-                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${etab.type === 'PRIVE' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'}`}>
+                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-orange-100 text-orange-800">
                             {etab.type}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right space-x-3 whitespace-nowrap">
-                          {etab.type === 'PRIVE' ? (
-                            <button
-                              type="button"
-                              onClick={() => ouvrirModal(etab)}
-                              className="text-sm font-semibold text-blue-900 hover:text-orange-500 transition"
-                            >
-                              Gérer les admins
-                            </button>
-                          ) : (
-                            <span className="text-gray-400 text-sm">—</span>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => ouvrirModal(etab)}
+                            className="text-sm font-semibold text-blue-900 hover:text-orange-500 transition"
+                          >
+                            Gérer les admins
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleDeleteEtablissement(etab)}
@@ -222,7 +295,62 @@ export default function DGESEtablissementsAdmins() {
               </table>
             </div>
           </BentoCard>
-        )}
+        ))}
+
+        {activeTab === 'PUBLIC' && (loadingPublic ? (
+          <div className="flex justify-center py-16">
+            <div className="w-10 h-10 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin" />
+          </div>
+        ) : publicEtablissements.length === 0 ? (
+          <BentoCard className="p-10 text-center text-gray-400 text-sm">
+            Aucun établissement public enregistré.
+          </BentoCard>
+        ) : (
+          <div className="space-y-4">
+            {publicEtablissements.map((etab) => {
+              const concours = concoursByEtab[etab.id] || [];
+              return (
+                <BentoCard key={etab.id} className="p-0 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                      <h2 className="text-lg font-bold text-gray-900">{etab.nom}</h2>
+                      <p className="text-sm text-gray-500">{etab.ville}</p>
+                    </div>
+                    <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">
+                      {concours.length} concours associé{concours.length > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  {concours.length === 0 ? (
+                    <p className="px-6 py-8 text-sm text-gray-400">
+                      Aucun concours lié à cet établissement.
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-gray-50">
+                      {concours.map((c) => (
+                        <li key={c.id} className="px-6 py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-gray-900">{c.libelle}</p>
+                            <p className="text-xs text-gray-500 mt-1">{formatConcoursDates(c)}</p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              {c._count?.inscriptions ?? 0} candidat{(c._count?.inscriptions ?? 0) > 1 ? 's' : ''} inscrit{(c._count?.inscriptions ?? 0) > 1 ? 's' : ''}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/dges/concours/${c.id}/commission`)}
+                            className="shrink-0 self-start lg:self-center px-4 py-2 rounded-lg bg-blue-900 text-white text-sm font-semibold hover:bg-blue-800 transition"
+                          >
+                            Gérer la commission
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </BentoCard>
+              );
+            })}
+          </div>
+        ))}
       </div>
 
       {modalOpen && selectedEtab && (

@@ -437,11 +437,16 @@ exports.updateStatut = async (req, res) => {
 
     const existing = await prisma.inscriptionAcademique.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, etablissementId: true },
     });
 
     if (!existing) {
       return res.status(404).json({ error: 'Inscription academique non trouvee' });
+    }
+
+    const adminEtabId = getAdminEtablissementId(req);
+    if (!adminEtabId || adminEtabId !== existing.etablissementId) {
+      return res.status(403).json({ error: 'Accès non autorisé à cette inscription' });
     }
 
     const inscription = await prisma.inscriptionAcademique.update({

@@ -1,6 +1,26 @@
 const prisma = require('../prisma');
 const { getAdminEtablissementId } = require('../utils/admin-etablissement.helper');
 
+exports.FILIERE_PUBLIC_SELECT = {
+  id: true,
+  nom: true,
+  code: true,
+  niveau: true,
+  dureeAnnees: true,
+  sigle: true,
+  etablissementId: true,
+  createdAt: true,
+  fraisScolariteAnnuels: true,
+  fraisInscriptionEffective: true,
+  fraisAutres: true,
+  debouches: true,
+  partenariatsEntreprises: true,
+  partenariatsUniversites: true,
+  tauxReussite: true,
+  dureeStage: true,
+  langueEnseignement: true,
+};
+
 function slugifyCode(nom) {
   const base = String(nom || 'FIL')
     .normalize('NFD')
@@ -12,6 +32,68 @@ function slugifyCode(nom) {
   return `${base || 'FIL'}-${Date.now().toString(36).toUpperCase()}`;
 }
 
+function parseOptionalInt(value, fieldName) {
+  if (value === undefined) return { skip: true };
+  if (value === null || value === '') return { value: null };
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return { error: `${fieldName} doit etre un entier >= 0` };
+  }
+  return { value: parsed };
+}
+
+function parseOptionalFloat(value, fieldName) {
+  if (value === undefined) return { skip: true };
+  if (value === null || value === '') return { value: null };
+  const parsed = Number(value);
+  if (Number.isNaN(parsed) || parsed < 0 || parsed > 1) {
+    return { error: `${fieldName} doit etre un nombre entre 0 et 1 (ex: 0.85 pour 85%)` };
+  }
+  return { value: parsed };
+}
+
+function parseOptionalString(value) {
+  if (value === undefined) return { skip: true };
+  if (value === null) return { value: null };
+  const trimmed = String(value).trim();
+  return { value: trimmed || null };
+}
+
+function buildFilierePedagogiqueData(body) {
+  const data = {};
+  const intFields = [
+    ['fraisScolariteAnnuels', body.fraisScolariteAnnuels],
+    ['fraisInscriptionEffective', body.fraisInscriptionEffective],
+  ];
+  for (const [field, value] of intFields) {
+    const parsed = parseOptionalInt(value, field);
+    if (parsed.error) return { error: parsed.error };
+    if (!parsed.skip) data[field] = parsed.value;
+  }
+
+  const floatFields = [['tauxReussite', body.tauxReussite]];
+  for (const [field, value] of floatFields) {
+    const parsed = parseOptionalFloat(value, field);
+    if (parsed.error) return { error: parsed.error };
+    if (!parsed.skip) data[field] = parsed.value;
+  }
+
+  const stringFields = [
+    'fraisAutres',
+    'debouches',
+    'partenariatsEntreprises',
+    'partenariatsUniversites',
+    'dureeStage',
+    'langueEnseignement',
+  ];
+  for (const field of stringFields) {
+    const parsed = parseOptionalString(body[field]);
+    if (!parsed.skip) data[field] = parsed.value;
+  }
+
+  return { data };
+}
+
 exports.getAllFilieres = async (req, res) => {
   try {
     const { etablissementId } = req.query;
@@ -20,7 +102,8 @@ exports.getAllFilieres = async (req, res) => {
       where: {
         ...(etablissementId ? { etablissementId } : {}),
       },
-      include: {
+      select: {
+        ...exports.FILIERE_PUBLIC_SELECT,
         etablissement: {
           select: { id: true, nom: true, type: true, ville: true },
         },
@@ -60,6 +143,11 @@ exports.creerFiliereAdmin = async (req, res) => {
       return res.status(400).json({ error: 'dureeAnnees doit être un entier entre 1 et 10' });
     }
 
+    const pedagogique = buildFilierePedagogiqueData(req.body);
+    if (pedagogique.error) {
+      return res.status(400).json({ error: pedagogique.error });
+    }
+
     const codeFinal = (code?.trim() || slugifyCode(nom)).toUpperCase();
 
     const filiere = await prisma.filiere.create({
@@ -69,7 +157,9 @@ exports.creerFiliereAdmin = async (req, res) => {
         niveau: niveauUpper,
         dureeAnnees: duree,
         etablissementId,
+        ...pedagogique.data,
       },
+      select: exports.FILIERE_PUBLIC_SELECT,
     });
 
     return res.status(201).json({
@@ -116,9 +206,16 @@ exports.modifierFiliereAdmin = async (req, res) => {
       data.dureeAnnees = duree;
     }
 
+    const pedagogique = buildFilierePedagogiqueData(req.body);
+    if (pedagogique.error) {
+      return res.status(400).json({ error: pedagogique.error });
+    }
+    Object.assign(data, pedagogique.data);
+
     const filiere = await prisma.filiere.update({
       where: { id },
       data,
+      select: exports.FILIERE_PUBLIC_SELECT,
     });
 
     return res.json({ message: 'Filière mise à jour', filiere });
@@ -159,4 +256,3 @@ exports.supprimerFiliereAdmin = async (req, res) => {
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 };
-

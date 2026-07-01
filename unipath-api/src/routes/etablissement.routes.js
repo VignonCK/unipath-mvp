@@ -7,6 +7,7 @@ const { upload } = require('../middleware/upload.middleware');
 
 router.get('/', etablissementController.getAllEtablissements);
 router.get('/prives', etablissementController.getEtablissementsPrives);
+router.get('/publics', etablissementController.getEtablissementsPublics);
 router.post(
   '/recherche-filieres',
   protect,
@@ -18,7 +19,12 @@ router.put('/mon/profil', protect, checkRole(['ADMIN_ETABLISSEMENT']), etablisse
 router.post('/mon/logo', protect, checkRole(['ADMIN_ETABLISSEMENT']), upload.single('logo'), etablissementController.uploadMonLogoEtablissement);
 router.get('/:id', etablissementController.getEtablissementById);
 router.get('/:id/etudiants', protect, checkRole(['ADMIN_ETABLISSEMENT']), etablissementController.getEtudiantsEtablissement);
-router.get('/:id/statistiques', protect, etablissementController.getStatistiquesEtablissement);
+router.get(
+  '/:id/statistiques',
+  protect,
+  checkRole(['ADMIN_ETABLISSEMENT']),
+  etablissementController.getStatistiquesEtablissement,
+);
 
 module.exports = router;
 

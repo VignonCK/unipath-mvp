@@ -58,6 +58,11 @@ const construirePayloadPdf = (preinscription) => ({
 });
 
 exports.creerPreinscriptionEtablissement = async (req, res) => {
+  return res.status(410).json({
+    error:
+      'La création directe de pré-inscription est désactivée. Passez par le dépôt de dossier via /api/applications.',
+  });
+
   try {
     const candidatId = req.user?.id;
     const { etablissementId, filiereId, anneeAcademique, niveau } = req.body;

@@ -1,7 +1,10 @@
-const { PrismaClient } = require('@prisma/client');
 const emailService = require('./email.service');
 const pdfService = require('./pdf.service');
 const prisma = require('../prisma');
+const {
+  resolveInscriptionForConvocationPdf,
+  buildGenererConvocationPayload,
+} = require('../utils/email-decision.helper');
 
 class NotificationService {
   async sendNotification({ event, userId, data, priority = 'NORMAL', sendEmail = true }) {
@@ -101,21 +104,40 @@ class NotificationService {
       } 
       else if (event === 'VALIDATION' || event === 'CONVOCATION') {
         console.log('📄 Génération convocation...');
-        const pdfResult = await pdfService.genererConvocation({
-          candidat: {
-            matricule: data.candidatMatricule,
-            nom: data.candidatNom,
-            prenom: data.candidatPrenom,
-            email: data.candidatEmail,
-            telephone: data.candidatTelephone
-          },
-          concours: {
-            libelle: data.concours,
-            dateDebut: data.concoursDateDebut,
-            dateFin: data.concoursDateFin,
-            description: data.concoursDescription
+        const candidatFallback = {
+          matricule: data.candidatMatricule,
+          nom: data.candidatNom,
+          prenom: data.candidatPrenom,
+          email: data.candidatEmail,
+          telephone: data.candidatTelephone,
+        };
+        const concoursFallback = {
+          libelle: data.concours,
+          dateDebut: data.concoursDateDebut,
+          dateFin: data.concoursDateFin,
+          description: data.concoursDescription,
+        };
+
+        let convocationPayload = null;
+        if (data.inscriptionId) {
+          const inscriptionForPdf = await resolveInscriptionForConvocationPdf({
+            id: data.inscriptionId,
+          });
+          if (inscriptionForPdf) {
+            convocationPayload = buildGenererConvocationPayload(
+              inscriptionForPdf,
+              candidatFallback,
+              concoursFallback,
+            );
           }
-        });
+        }
+
+        const pdfResult = await pdfService.genererConvocation(
+          convocationPayload || {
+            candidat: candidatFallback,
+            concours: concoursFallback,
+          },
+        );
         pdfPath = pdfResult.filePath;
       }
       

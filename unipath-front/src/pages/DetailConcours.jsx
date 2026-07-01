@@ -1,9 +1,13 @@
 // src/pages/DetailConcours.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { candidatService, concoursService, inscriptionService } from '../services/api';
+import { candidatService, concoursService, inscriptionService, centreCompositionService } from '../services/api';
 import { handleSessionError } from '../utils/auth';
 import CandidatLayout from '../components/CandidatLayout';
+import ChoixCentreComposition, { concoursHasCentres } from '../components/concours/ChoixCentreComposition';
+import { normalizePieceNom } from '../constants/pieces';
+
+const STATUTS_CHOIX_CENTRE = ['VALIDE_PAR_COMMISSION', 'VALIDE'];
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -115,11 +119,18 @@ function getPiecesRequisesConcours(concours) {
 function getLabelPiece(pieceObj, concours) {
   const piece = typeof pieceObj === 'object' ? pieceObj.id : pieceObj;
   if (piece === 'quittance') return 'Quittance de paiement';
-  if (typeof pieceObj === 'object' && pieceObj.nom) return pieceObj.nom;
+  if (typeof pieceObj === 'object' && pieceObj.nom) {
+    return normalizePieceNom(pieceObj.id, pieceObj.nom);
+  }
   const liste = getPiecesRequisesConcours(concours);
   const found = liste.find((p) => p.id === piece);
-  if (found?.nom) return found.nom;
+  if (found?.nom) return normalizePieceNom(found.id, found.nom);
   return piece.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
+}
+
+function isPhotoIdentitePiece(piece) {
+  const id = piece?.id;
+  return id === 'photo' || id === 'photo_identite';
 }
 
 function getCriteresEligibilite(concours) {
@@ -209,6 +220,8 @@ export default function DetailConcours() {
   const [numeroInscription, setNumeroInscription] = useState(null);
   const [inscriptionId, setInscriptionId] = useState(null);
   const [telechargement, setTelechargement] = useState({ fiche: false, convocation: false });
+  const [centreBusy, setCentreBusy] = useState(false);
+  const [centresRelational, setCentresRelational] = useState([]);
 
   const resolveInscriptionId = () => inscriptionId || getInscriptionExistante(candidat, id)?.id;
 
@@ -233,7 +246,12 @@ export default function DetailConcours() {
 
   const handleTelechargerConvocation = async () => {
     const currentInscriptionId = resolveInscriptionId();
+    const ins = getInscriptionExistante(candidat, concours?.id);
     if (!currentInscriptionId) return;
+    if (concoursHasCentres(centresRelational) && !ins?.centreChoisi?.nom && !ins?.centreChoisi?.concoursCentreId) {
+      setErreur('Choisissez d\'abord votre centre de composition dans votre espace inscription.');
+      return;
+    }
     try {
       setTelechargement((prev) => ({ ...prev, convocation: true }));
       setErreur(null);
@@ -257,11 +275,17 @@ export default function DetailConcours() {
       return;
     }
     Promise.all([candidatService.getProfil(), concoursService.getById(id)])
-      .then(([p, c]) => {
+      .then(async ([p, c]) => {
         setCandidat(p);
         setConcours(c);
         const saved = localStorage.getItem('photoProfil_' + p.id);
         if (saved) setPhotoUrl(saved);
+        try {
+          const centres = await centreCompositionService.getConcoursCentres(c.id);
+          setCentresRelational(centres);
+        } catch {
+          setCentresRelational([]);
+        }
       })
       .catch((err) => {
         if (handleSessionError(err, navigate)) return;
@@ -396,6 +420,23 @@ export default function DetailConcours() {
 
   const inscriptionExistante = getInscriptionExistante(candidat, concours.id);
   const dossierSoumis = isDossierConcoursSoumis(inscriptionExistante);
+
+  const handleSaveCentre = async ({ concoursCentreId }) => {
+    if (!inscriptionExistante?.id) return;
+    setCentreBusy(true);
+    try {
+      await inscriptionService.choisirCentreComposition(inscriptionExistante.id, { concoursCentreId });
+      const p = await candidatService.getProfil();
+      setCandidat(p);
+      setErreur(null);
+    } catch (error) {
+      setErreur(error.message || 'Enregistrement impossible');
+      throw error;
+    } finally {
+      setCentreBusy(false);
+    }
+  };
+
   const pieces = getPiecesRequisesConcours(concours);
   const criteresEligibilite = getCriteresEligibilite(concours);
   const serieOk = serieCandidatAcceptee(candidat, concours);
@@ -469,13 +510,28 @@ export default function DetailConcours() {
                 <button
                   type='button'
                   onClick={handleTelechargerConvocation}
-                  disabled={telechargement.convocation}
+                  disabled={
+                    telechargement.convocation
+                    || (concoursHasCentres(centresRelational)
+                      && !inscriptionExistante.centreChoisi?.nom
+                      && !inscriptionExistante.centreChoisi?.concoursCentreId)
+                  }
                   className='rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-60'
                 >
                   {telechargement.convocation ? 'Téléchargement...' : 'Télécharger la convocation'}
                 </button>
               )}
             </div>
+            {STATUTS_CHOIX_CENTRE.includes(inscriptionExistante.statut)
+              && concoursHasCentres(centresRelational) && (
+              <ChoixCentreComposition
+                centresRelational={centresRelational}
+                centreChoisi={inscriptionExistante.centreChoisi}
+                statut={inscriptionExistante.statut}
+                onSave={handleSaveCentre}
+                busy={centreBusy}
+              />
+            )}
           </div>
         )}
 
@@ -643,6 +699,11 @@ export default function DetailConcours() {
                         {depuisDossier && (
                           <span className='text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full inline-block w-fit mt-1'>
                             Depuis votre dossier personnel
+                          </span>
+                        )}
+                        {isPhotoIdentitePiece(piece) && !depuisDossier && (
+                          <span className='text-xs text-gray-500 mt-1'>
+                            1 fichier image suffit (JPEG ou PNG)
                           </span>
                         )}
                         {fichierLocal && (

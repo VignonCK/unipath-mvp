@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const { getAdminEtablissementId, adminOwnsEtablissement } = require('../utils/admin-etablissement.helper');
 const { supabaseAdmin } = require('../supabase');
+const { FILIERE_PUBLIC_SELECT } = require('./filiere.controller');
+const { toPublicLogoUrl, resolveStoredLogoUrl } = require('../utils/uploads.helper');
 
 const LOGO_DIR = path.join(__dirname, '../../uploads/etablissements');
 
@@ -12,13 +14,13 @@ const ensureLogoDir = () => {
   }
 };
 
-const findEtablissementLogo = (etablissementId) => {
-  ensureLogoDir();
-  const files = fs.readdirSync(LOGO_DIR);
-  const logo = files.find((name) => name.startsWith(`logo-${etablissementId}.`));
-  if (!logo) return null;
-  return `/uploads/etablissements/${logo}`;
-};
+const resolveLogoUrl = (etablissement) =>
+  resolveStoredLogoUrl(etablissement?.logoUrl, etablissement?.id);
+
+const enrichEtablissementPublic = (etablissement) => ({
+  ...etablissement,
+  logoUrl: resolveLogoUrl(etablissement),
+});
 
 const normalizeChoixFilieres = (body = {}) => {
   const choix = [body.choix1, body.choix2, body.choix3]
@@ -59,6 +61,7 @@ exports.rechercherParFilieres = async (req, res) => {
       include: {
         filieres: {
           where: filiereFilter,
+          select: FILIERE_PUBLIC_SELECT,
           orderBy: { nom: 'asc' },
         },
       },
@@ -82,7 +85,18 @@ exports.rechercherParFilieres = async (req, res) => {
 
 exports.getAllEtablissements = async (req, res) => {
   try {
+    const { type } = req.query;
+    const where = {};
+
+    if (type) {
+      const typeUpper = String(type).toUpperCase();
+      if (['PUBLIC', 'PRIVE'].includes(typeUpper)) {
+        where.type = typeUpper;
+      }
+    }
+
     const etablissements = await prisma.etablissement.findMany({
+      where,
       orderBy: { nom: 'asc' },
       include: {
         _count: { select: { filieres: true, inscriptions: true } },
@@ -91,7 +105,7 @@ exports.getAllEtablissements = async (req, res) => {
 
     return res.json({
       message: 'Etablissements recuperes avec succes',
-      etablissements,
+      etablissements: etablissements.map(enrichEtablissementPublic),
     });
   } catch (error) {
     console.error('Erreur getAllEtablissements:', error);
@@ -106,7 +120,7 @@ exports.getEtablissementsPrives = async (req, res) => {
     const etablissements = await prisma.etablissement.findMany({
       where: { type: 'PRIVE' },
       include: {
-        filieres: { orderBy: { nom: 'asc' } },
+        filieres: { select: FILIERE_PUBLIC_SELECT, orderBy: { nom: 'asc' } },
         campagnes: {
           where: {
             statut: 'PUBLIEE',
@@ -117,7 +131,7 @@ exports.getEtablissementsPrives = async (req, res) => {
             filieres: {
               include: {
                 filiere: {
-                  select: { id: true, nom: true, code: true, niveau: true, dureeAnnees: true },
+                  select: FILIERE_PUBLIC_SELECT,
                 },
               },
               orderBy: { createdAt: 'asc' },
@@ -131,10 +145,28 @@ exports.getEtablissementsPrives = async (req, res) => {
 
     return res.json({
       message: 'Etablissements prives recuperes avec succes',
-      etablissements,
+      etablissements: etablissements.map(enrichEtablissementPublic),
     });
   } catch (error) {
     console.error('Erreur getEtablissementsPrives:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+exports.getEtablissementsPublics = async (req, res) => {
+  try {
+    const etablissements = await prisma.etablissement.findMany({
+      where: { type: 'PUBLIC' },
+      select: { id: true, nom: true, ville: true },
+      orderBy: { nom: 'asc' },
+    });
+
+    return res.json({
+      message: 'Etablissements publics recuperes avec succes',
+      etablissements,
+    });
+  } catch (error) {
+    console.error('Erreur getEtablissementsPublics:', error);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 };
@@ -143,11 +175,32 @@ exports.getEtablissementById = async (req, res) => {
   try {
     const { id } = req.params;
 
+    const now = new Date();
+
     const etablissement = await prisma.etablissement.findUnique({
       where: { id },
       include: {
         filieres: {
+          select: FILIERE_PUBLIC_SELECT,
           orderBy: { nom: 'asc' },
+        },
+        campagnes: {
+          where: {
+            statut: 'PUBLIEE',
+            dateOuverture: { lte: now },
+            dateCloture: { gte: now },
+          },
+          include: {
+            filieres: {
+              include: {
+                filiere: {
+                  select: FILIERE_PUBLIC_SELECT,
+                },
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+          orderBy: { dateCloture: 'asc' },
         },
       },
     });
@@ -158,7 +211,7 @@ exports.getEtablissementById = async (req, res) => {
 
     return res.json({
       message: 'Etablissement recupere avec succes',
-      etablissement,
+      etablissement: enrichEtablissementPublic(etablissement),
     });
   } catch (error) {
     console.error('Erreur getEtablissementById:', error);
@@ -228,6 +281,10 @@ exports.getStatistiquesEtablissement = async (req, res) => {
   try {
     const { id } = req.params;
 
+    if (!adminOwnsEtablissement(req, id)) {
+      return res.status(403).json({ error: 'Vous n\'avez pas accès aux statistiques de cet établissement' });
+    }
+
     const etablissement = await prisma.etablissement.findUnique({
       where: { id },
       select: { nom: true },
@@ -265,7 +322,7 @@ exports.getMonProfilEtablissement = async (req, res) => {
       where: { id: etablissementId },
       include: {
         filieres: {
-          select: { id: true, nom: true, code: true, niveau: true, dureeAnnees: true },
+          select: FILIERE_PUBLIC_SELECT,
           orderBy: { nom: 'asc' },
         },
       },
@@ -279,7 +336,7 @@ exports.getMonProfilEtablissement = async (req, res) => {
       message: 'Profil etablissement recupere avec succes',
       etablissement: {
         ...etablissement,
-        logoUrl: findEtablissementLogo(etablissementId),
+        logoUrl: resolveLogoUrl(etablissement),
       },
     });
   } catch (error) {
@@ -295,12 +352,44 @@ exports.updateMonProfilEtablissement = async (req, res) => {
       return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
     }
 
-    const { nom, type, ville, adresse, email } = req.body;
+    const {
+      nom,
+      type,
+      ville,
+      adresse,
+      email,
+      telephone,
+      siteWeb,
+      description,
+      agrementMESRS,
+      anneeCreation,
+      facebook,
+      instagram,
+      linkedin,
+    } = req.body;
     const data = {};
     if (nom !== undefined) data.nom = nom;
     if (ville !== undefined) data.ville = ville;
     if (adresse !== undefined) data.adresse = adresse;
     if (email !== undefined) data.email = email;
+    if (telephone !== undefined) data.telephone = telephone?.trim() || null;
+    if (siteWeb !== undefined) data.siteWeb = siteWeb?.trim() || null;
+    if (description !== undefined) data.description = description?.trim() || null;
+    if (agrementMESRS !== undefined) data.agrementMESRS = agrementMESRS?.trim() || null;
+    if (facebook !== undefined) data.facebook = facebook?.trim() || null;
+    if (instagram !== undefined) data.instagram = instagram?.trim() || null;
+    if (linkedin !== undefined) data.linkedin = linkedin?.trim() || null;
+    if (anneeCreation !== undefined) {
+      if (anneeCreation === null || anneeCreation === '') {
+        data.anneeCreation = null;
+      } else {
+        const year = Number(anneeCreation);
+        if (!Number.isInteger(year) || year < 1800 || year > new Date().getFullYear()) {
+          return res.status(400).json({ error: 'anneeCreation doit etre une annee valide' });
+        }
+        data.anneeCreation = year;
+      }
+    }
     if (type !== undefined) {
       const typeUpper = String(type).toUpperCase();
       if (!['PUBLIC', 'PRIVE'].includes(typeUpper)) {
@@ -318,7 +407,7 @@ exports.updateMonProfilEtablissement = async (req, res) => {
       message: 'Profil etablissement mis a jour avec succes',
       etablissement: {
         ...etablissement,
-        logoUrl: findEtablissementLogo(etablissementId),
+        logoUrl: resolveLogoUrl(etablissement),
       },
     });
   } catch (error) {
@@ -362,9 +451,15 @@ exports.uploadMonLogoEtablissement = async (req, res) => {
 
     fs.renameSync(uploadedPath, targetPath);
 
+    const logoUrl = toPublicLogoUrl(targetFilename);
+    await prisma.etablissement.update({
+      where: { id: etablissementId },
+      data: { logoUrl },
+    });
+
     return res.json({
       message: 'Logo telecharge avec succes',
-      logoUrl: `/uploads/etablissements/${targetFilename}`,
+      logoUrl,
     });
   } catch (error) {
     if (req.file?.path && fs.existsSync(req.file.path)) {

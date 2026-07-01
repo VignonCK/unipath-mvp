@@ -9,6 +9,8 @@ const {
   validateCriteresEligibilite
 } = require('../utils/concours.validation');
 const { candidateSerieMatchesConcours } = require('../utils/series.helper');
+const { validateCentresComposition } = require('../utils/centres-composition.helper');
+const { normalizePieceNom } = require('../constants/pieces.constants');
 
 /** piece.id → champ Dossier Prisma (fallback si sourceDossier absent). */
 const DOSSIER_FIELD_MAP = {
@@ -59,12 +61,45 @@ const normalizeCriteresEligibilite = (criteresEligibilite) => {
   return { criteres };
 };
 
+const ETABLISSEMENT_ORGANISATEUR_SELECT = {
+  id: true,
+  nom: true,
+  ville: true,
+  type: true,
+};
+
+async function resolveEtablissementId(etablissementId) {
+  if (etablissementId === undefined) {
+    return { value: undefined };
+  }
+  if (etablissementId === null || etablissementId === '') {
+    return { value: null };
+  }
+
+  const etablissement = await prisma.etablissement.findUnique({
+    where: { id: etablissementId },
+    select: { id: true },
+  });
+
+  if (!etablissement) {
+    return { error: 'Établissement non trouvé' };
+  }
+
+  return { value: etablissement.id };
+}
+
 exports.getAllConcours = async (req, res) => {
   try {
+    const { etablissementId } = req.query;
     const userId = req.user?.id;
     let candidat = null;
 
-    if (userId) {
+    const where = {};
+    if (etablissementId) {
+      where.etablissementId = String(etablissementId);
+    }
+
+    if (userId && !etablissementId) {
       candidat = await prisma.candidat.findUnique({
         where: { id: userId },
         select: { serie: true },
@@ -72,11 +107,18 @@ exports.getAllConcours = async (req, res) => {
     }
 
     const concours = await prisma.concours.findMany({
+      where,
       orderBy: { dateDebut: 'asc' },
+      include: {
+        etablissementOrganisateur: {
+          select: ETABLISSEMENT_ORGANISATEUR_SELECT,
+        },
+        _count: { select: { inscriptions: true } },
+      },
     });
 
     let concoursFiltres = concours;
-    if (candidat?.serie) {
+    if (candidat?.serie && !etablissementId) {
       concoursFiltres = concours.filter(c => {
         return candidateSerieMatchesConcours(candidat.serie, c.seriesAcceptees);
       });
@@ -98,6 +140,9 @@ exports.getConcoursById = async (req, res) => {
       where: { id },
       include: {
         _count: { select: { inscriptions: true } },
+        etablissementOrganisateur: {
+          select: ETABLISSEMENT_ORGANISATEUR_SELECT,
+        },
       },
     });
 
@@ -138,9 +183,11 @@ exports.getConcoursById = async (req, res) => {
           const pieceObj = typeof piece === 'object' ? piece : { id: piece, nom: piece };
           const sourceDossier = pieceObj.sourceDossier || DOSSIER_FIELD_MAP[pieceObj.id] || null;
           const fournieDepuisDossier = isFournieDepuisDossier(pieceObj, dossierCandidat);
+          const nom = normalizePieceNom(pieceObj.id, pieceObj.nom);
 
           return {
             ...pieceObj,
+            nom,
             obligatoire: pieceObj.obligatoire !== false,
             sourceDossier: pieceObj.sourceDossier ?? sourceDossier,
             fournieDepuisDossier,
@@ -257,6 +304,7 @@ exports.createConcours = async (req, res) => {
     const {
       libelle,
       etablissement,
+      etablissementId,
       dateDebut,
       dateFin,
       dateComposition,
@@ -269,12 +317,13 @@ exports.createConcours = async (req, res) => {
       dateDebutDepot,
       dateFinDepot,
       dateDebutComposition,
-      dateFinComposition
+      dateFinComposition,
+      centresComposition
     } = req.body;
 
     const missingFields = [];
     if (!libelle) missingFields.push('libelle');
-    if (!etablissement) missingFields.push('etablissement');
+    if (!etablissement && !etablissementId) missingFields.push('etablissement');
     if (!dateDebutDepot) missingFields.push('dateDebutDepot');
     if (!dateFinDepot) missingFields.push('dateFinDepot');
     if (!dateDebutComposition) missingFields.push('dateDebutComposition');
@@ -328,6 +377,16 @@ exports.createConcours = async (req, res) => {
       return res.status(400).json({ error: validationCriteres.error });
     }
 
+    const validationCentres = validateCentresComposition(centresComposition);
+    if (!validationCentres.valid) {
+      return res.status(400).json({ error: validationCentres.error });
+    }
+
+    const resolvedEtablissement = await resolveEtablissementId(etablissementId);
+    if (resolvedEtablissement.error) {
+      return res.status(400).json({ error: resolvedEtablissement.error });
+    }
+
     const piecesData = Array.isArray(piecesRequises)
       ? { pieces: piecesRequises }
       : piecesRequises;
@@ -337,10 +396,9 @@ exports.createConcours = async (req, res) => {
       piecesPayload.criteresEligibilite = criteresData.criteres;
     }
 
-    const concours = await prisma.concours.create({
-      data: {
+    const createData = {
         libelle,
-        etablissement,
+        etablissement: etablissement || null,
         dateDebut: new Date(dateDebutDepot),
         dateFin: new Date(dateFinDepot),
         dateComposition: new Date(dateDebutComposition),
@@ -349,10 +407,24 @@ exports.createConcours = async (req, res) => {
         seriesAcceptees,
         matieres: matieres || [],
         piecesRequises: piecesPayload,
+        centresComposition: validationCentres.data,
+        criteresEligibilite: criteresData ? { criteres: criteresData.criteres } : null,
         dateDebutDepot: new Date(dateDebutDepot),
         dateFinDepot: new Date(dateFinDepot),
         dateDebutComposition: new Date(dateDebutComposition),
         dateFinComposition: new Date(dateFinComposition)
+    };
+
+    if (resolvedEtablissement.value !== undefined) {
+      createData.etablissementId = resolvedEtablissement.value;
+    }
+
+    const concours = await prisma.concours.create({
+      data: createData,
+      include: {
+        etablissementOrganisateur: {
+          select: ETABLISSEMENT_ORGANISATEUR_SELECT,
+        },
       },
     });
 
@@ -369,6 +441,7 @@ exports.updateConcours = async (req, res) => {
     const {
       libelle,
       etablissement,
+      etablissementId,
       dateDebut,
       dateFin,
       dateComposition,
@@ -381,7 +454,8 @@ exports.updateConcours = async (req, res) => {
       dateDebutDepot,
       dateFinDepot,
       dateDebutComposition,
-      dateFinComposition
+      dateFinComposition,
+      centresComposition
     } = req.body;
 
     const existing = await prisma.concours.findUnique({
@@ -478,11 +552,33 @@ exports.updateConcours = async (req, res) => {
         : { ...basePieces };
       normalizedPieces.criteresEligibilite = criteresData ? criteresData.criteres : [];
       updateData.piecesRequises = normalizedPieces;
+      updateData.criteresEligibilite = criteresData ? { criteres: criteresData.criteres } : { criteres: [] };
+    }
+
+    if (centresComposition !== undefined) {
+      const validationCentres = validateCentresComposition(centresComposition);
+      if (!validationCentres.valid) {
+        return res.status(400).json({ error: validationCentres.error });
+      }
+      updateData.centresComposition = validationCentres.data;
+    }
+
+    if (etablissementId !== undefined) {
+      const resolvedEtablissement = await resolveEtablissementId(etablissementId);
+      if (resolvedEtablissement.error) {
+        return res.status(400).json({ error: resolvedEtablissement.error });
+      }
+      updateData.etablissementId = resolvedEtablissement.value;
     }
 
     const concours = await prisma.concours.update({
       where: { id },
       data: updateData,
+      include: {
+        etablissementOrganisateur: {
+          select: ETABLISSEMENT_ORGANISATEUR_SELECT,
+        },
+      },
     });
 
     const response = { ...concours };

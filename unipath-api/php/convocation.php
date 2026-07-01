@@ -251,7 +251,17 @@ try {
     $heureComposition = !empty($concours['heureComposition']) ? convocationCleanText($concours['heureComposition']) : convocationCleanText('À définir');
 
     $centreAffiche = 'CENTRE DE COMPOSITION A CONFIRMER';
-    if (!empty($data['centresComposition']['centres']) && is_array($data['centresComposition']['centres'])) {
+    if (!empty($data['centreCompositionChoisi']['nom'])) {
+        $choisi = $data['centreCompositionChoisi'];
+        $parts = [$choisi['nom'] ?? ''];
+        if (!empty($choisi['ville'])) {
+            $parts[] = $choisi['ville'];
+        }
+        if (!empty($choisi['adresse'])) {
+            $parts[] = $choisi['adresse'];
+        }
+        $centreAffiche = convocationCleanText(implode(' — ', array_filter($parts)));
+    } elseif (!empty($data['centresComposition']['centres']) && is_array($data['centresComposition']['centres'])) {
         $villes = array_map(function ($c) {
             return $c['ville'] ?? '';
         }, $data['centresComposition']['centres']);

@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const app = express();
 
 // ── Middlewares ─────────────────────────────────────────────────
@@ -15,7 +14,8 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Fichiers locaux : routes authentifiées (/api/uploads) et publiques (/api/public) — voir uploads.routes.js
+// app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // ── Routes ──────────────────────────────────────────────────────
 const authRoutes = require('./routes/auth.routes');
@@ -42,10 +42,14 @@ const applicationRoutes = require('./routes/application.routes');
 const campagneAdminRoutes = require('./routes/campagneAdmin.routes');
 const filiereAdminRoutes = require('./routes/filiereAdmin.routes');
 const campagneRoutes = require('./routes/campagne.routes');
+const { centreRouter, concoursCentresRouter } = require('./routes/centreComposition.routes');
+const uploadsRoutes = require('./routes/uploads.routes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/candidats', candidatRoutes);
 app.use('/api/concours', concoursRoutes);
+app.use('/api/concours/:concoursId/centres', concoursCentresRouter);
+app.use('/api/centres-composition', centreRouter);
 app.use('/api/inscriptions', inscriptionRoutes);
 app.use('/api/commission', commissionRoutes);
 app.use('/api/controleur', controleurRoutes);
@@ -73,6 +77,7 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/etablissement/campagnes', campagneAdminRoutes);
 app.use('/api/etablissement/filieres', filiereAdminRoutes);
 app.use('/api/campagnes', campagneRoutes);
+app.use('/api', uploadsRoutes);
 
 // ── Health check ────────────────────────────────────────────────
 app.get('/health', (req, res) => {
@@ -81,6 +86,13 @@ app.get('/health', (req, res) => {
     message: 'UniPath API fonctionne !',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// ── 404 API (évite les pages HTML Express en dev) ───────────────
+app.use('/api', (req, res) => {
+  res.status(404).json({
+    error: `Route API introuvable: ${req.method} ${req.originalUrl}`,
   });
 });
 

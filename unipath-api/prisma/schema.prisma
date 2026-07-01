@@ -19,6 +19,8 @@ model Candidat {
   nationalite                  String?
   email                        String                        @unique
   emailConfirme                Boolean                       @default(false)
+  emailConfirmToken            String?                       @unique
+  emailConfirmExpires          DateTime?
   telephone                    String?
   dateNaiss                    DateTime?
   lieuNaiss                    String?
@@ -72,10 +74,12 @@ model Controleur {
 }
 
 model Concours {
-  id                   String        @id @default(uuid())
-  libelle              String
-  etablissement        String?
-  dateDebut            DateTime
+  id                        String         @id @default(uuid())
+  libelle                   String
+  etablissement             String?
+  etablissementId           String?
+  etablissementOrganisateur Etablissement? @relation(fields: [etablissementId], references: [id], onDelete: SetNull)
+  dateDebut                 DateTime
   dateFin              DateTime
   dateComposition      DateTime?
   description          String?
@@ -83,7 +87,7 @@ model Concours {
   seriesAcceptees      String[]      @default([])
   matieres             String[]      @default([])
   piecesRequises       Json?
-  centresComposition   Json?
+  centresComposition   Json? /// @deprecated — utiliser centresActifs (ConcourscentreComposition)
   dateDebutDepot       DateTime?
   dateFinDepot         DateTime?
   dateDebutComposition DateTime?
@@ -91,9 +95,11 @@ model Concours {
   createdAt            DateTime      @default(now())
   criteresEligibilite  Json?
   inscriptions         Inscription[]
+  centresActifs        ConcourscentreComposition[]
 
   @@index([dateDebutDepot])
   @@index([dateFinDepot])
+  @@index([etablissementId])
 }
 
 model Inscription {
@@ -135,6 +141,8 @@ model DossierInscription {
   commentaireRejet        String?
   commentaireSousReserve  String?
   documentsCompl          Json?
+  centreCompositionChoisi Json? /// @deprecated — utiliser concoursCentreId
+  concoursCentreId      String?
   historiqueStatuts       Json?
   decisionCommissionPar   String?
   decisionCommissionDate  DateTime?
@@ -142,14 +150,50 @@ model DossierInscription {
   createdAt               DateTime        @default(now())
   updatedAt               DateTime        @updatedAt
   actionHistory           ActionHistory[]
+  centreChoisi            ConcourscentreComposition? @relation(fields: [concoursCentreId], references: [id])
   inscription             Inscription     @relation(fields: [inscriptionId], references: [id], onDelete: Cascade)
 
   @@index([inscriptionId])
+  @@index([concoursCentreId])
   @@index([statut])
   @@index([verdict1Par])
   @@index([verdict2Par])
   @@index([decisionControleurPar])
   @@index([createdAt])
+}
+
+model CentreComposition {
+  id        String   @id @default(uuid())
+  nom       String
+  ville     String
+  adresse   String?
+  telephone String?
+  actif     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  concours ConcourscentreComposition[]
+
+  @@index([ville])
+  @@index([actif])
+}
+
+model ConcourscentreComposition {
+  id              String   @id @default(uuid())
+  concoursId      String
+  centreId        String
+  anneeAcademique String
+  capacite        Int?
+  estActif        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  concours Concours            @relation(fields: [concoursId], references: [id], onDelete: Cascade)
+  centre   CentreComposition   @relation(fields: [centreId], references: [id])
+  dossiers DossierInscription[]
+
+  @@unique([concoursId, centreId, anneeAcademique])
+  @@index([concoursId])
+  @@index([centreId])
 }
 
 model Dossier {
@@ -307,6 +351,15 @@ model Etablissement {
   createdAt       DateTime                      @default(now())
   adresse         String?
   email           String?                       @unique
+  telephone       String?
+  siteWeb         String?
+  description     String?
+  agrementMESRS   String?
+  anneeCreation   Int?
+  logoUrl         String?
+  facebook        String?
+  instagram       String?
+  linkedin        String?
   filieres        Filiere[]
   inscriptions    InscriptionAcademique[]
   preinscriptions PreinscriptionEtablissement[]
@@ -315,27 +368,37 @@ model Etablissement {
   campagnes       CampagneInscription[]
   requirements    SchoolRequirement[]
   matriculeFormat String?
+  concours        Concours[]
 
   @@index([type])
   @@index([ville])
 }
 
 model Filiere {
-  id              String                        @id @default(uuid())
-  nom             String
-  etablissementId String
-  dureeAnnees     Int
-  createdAt       DateTime                      @default(now())
-  code            String                        @unique
-  niveau          NiveauFiliere
-  diplomes        Diplome[]
-  etablissement   Etablissement                 @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
-  inscriptions    InscriptionAcademique[]
-  preinscriptions PreinscriptionEtablissement[]
-  applications    Application[]
-  campagneFilieres CampagneFiliere[]
-  sigle             String?
-  matriculeCompteur Int                           @default(0)
+  id                       String                        @id @default(uuid())
+  nom                      String
+  etablissementId          String
+  dureeAnnees              Int
+  createdAt                DateTime                      @default(now())
+  code                     String                        @unique
+  niveau                   NiveauFiliere
+  fraisScolariteAnnuels    Int?
+  fraisInscriptionEffective Int?
+  fraisAutres              String?
+  debouches                String?
+  partenariatsEntreprises  String?
+  partenariatsUniversites  String?
+  tauxReussite             Float?
+  dureeStage               String?
+  langueEnseignement       String?
+  diplomes                 Diplome[]
+  etablissement            Etablissement                 @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  inscriptions             InscriptionAcademique[]
+  preinscriptions          PreinscriptionEtablissement[]
+  applications             Application[]
+  campagneFilieres         CampagneFiliere[]
+  sigle                    String?
+  matriculeCompteur        Int                           @default(0)
 
   @@index([etablissementId])
   @@index([niveau])
@@ -588,11 +651,13 @@ model Application {
   niveau            Int
   status            ApplicationStatus            @default(DRAFT)
   preinscriptionId  String?                      @unique
+  campagneFiliereId String?
   createdAt         DateTime                     @default(now())
   updatedAt         DateTime                     @updatedAt
   candidat          Candidat                     @relation(fields: [candidatId], references: [id], onDelete: Cascade)
   etablissement     Etablissement                @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
   filiere           Filiere                      @relation(fields: [filiereId], references: [id], onDelete: Cascade)
+  campagneFiliere   CampagneFiliere?             @relation(fields: [campagneFiliereId], references: [id], onDelete: SetNull)
   preinscription    PreinscriptionEtablissement? @relation(fields: [preinscriptionId], references: [id])
   documents         ApplicationDocument[]
   payments          Payment[]
@@ -602,6 +667,7 @@ model Application {
   @@index([candidatId])
   @@index([createdAt])
   @@index([etablissementId, status])
+  @@index([campagneFiliereId])
 }
 
 model ApplicationDocument {
@@ -711,6 +777,7 @@ model CampagneFiliere {
   updatedAt         DateTime            @updatedAt
   campagne          CampagneInscription @relation(fields: [campagneId], references: [id], onDelete: Cascade)
   filiere           Filiere             @relation(fields: [filiereId], references: [id], onDelete: Cascade)
+  applications      Application[]
 
   @@unique([campagneId, filiereId])
   @@index([campagneId])

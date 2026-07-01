@@ -3,8 +3,20 @@ export function countAlertesConcours(inscriptions = []) {
   return inscriptions.filter(needsConcoursAttention).length;
 }
 
+function needsCentreChoice(ins) {
+  const hasCentres = ins?.concours?.hasCentresActifs
+    || (Array.isArray(ins?.concours?.centresComposition?.centres)
+      && ins.concours.centresComposition.centres.length > 0);
+  const centreChoisi = ins?.centreChoisi;
+  const aChoisi = Boolean(centreChoisi?.concoursCentreId || centreChoisi?.nom);
+  return hasCentres
+    && ['VALIDE_PAR_COMMISSION', 'VALIDE'].includes(ins?.statut)
+    && !aChoisi;
+}
+
 export function needsConcoursAttention(ins) {
   if (!ins) return false;
+  if (needsCentreChoice(ins)) return true;
   if (['REJETE', 'REJETE_PAR_COMMISSION'].includes(ins.statut)) return false;
   if (ins.statut === 'VALIDE') return true;
   if (['VALIDE_PAR_COMMISSION', 'SOUS_RESERVE', 'SOUS_RESERVE_PAR_COMMISSION'].includes(ins.statut)) return true;
@@ -17,9 +29,19 @@ export function buildConcoursNotifications(inscriptions = []) {
   inscriptions.forEach((ins) => {
     const libelle = ins.concours?.libelle || 'ce concours';
     if (ins.statut === 'VALIDE') {
-      notifications.push({ type: 'success', msg: `"${libelle}" : votre convocation est disponible.` });
+      notifications.push({
+        type: needsCentreChoice(ins) ? 'warning' : 'success',
+        msg: needsCentreChoice(ins)
+          ? `"${libelle}" : choisissez votre centre de composition.`
+          : `"${libelle}" : votre convocation est disponible.`,
+      });
     } else if (ins.statut === 'VALIDE_PAR_COMMISSION') {
-      notifications.push({ type: 'success', msg: `"${libelle}" : dossier validé par la commission.` });
+      notifications.push({
+        type: needsCentreChoice(ins) ? 'warning' : 'success',
+        msg: needsCentreChoice(ins)
+          ? `"${libelle}" : dossier validé — choisissez votre centre de composition.`
+          : `"${libelle}" : dossier validé par la commission.`,
+      });
     } else if (['REJETE', 'REJETE_PAR_COMMISSION'].includes(ins.statut)) {
       notifications.push({ type: 'error', msg: `"${libelle}" : dossier non retenu.` });
     } else if (['SOUS_RESERVE', 'SOUS_RESERVE_PAR_COMMISSION'].includes(ins.statut)) {

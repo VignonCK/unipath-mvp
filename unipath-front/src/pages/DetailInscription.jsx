@@ -1,9 +1,24 @@
 // src/pages/DetailInscription.jsx
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { candidatService, convocationService, inscriptionService } from '../services/api';
+import { candidatService, convocationService, inscriptionService, centreCompositionService } from '../services/api';
 import CandidatLayout from '../components/CandidatLayout';
 import { BentoCard } from '../components/AcademicLayout';
+import ChoixCentreComposition, { concoursHasCentres, formatCentreChoisi } from '../components/concours/ChoixCentreComposition';
+
+const STATUTS_CHOIX_CENTRE = ['VALIDE_PAR_COMMISSION', 'VALIDE'];
+
+function resolveCentreChoisi(inscription) {
+  if (!inscription) return null;
+  return inscription.centreChoisi
+    ?? inscription.dossierInscription?.centreCompositionChoisi
+    ?? null;
+}
+
+function inscriptionHasCentreChoisi(inscription) {
+  const c = resolveCentreChoisi(inscription);
+  return Boolean(c?.concoursCentreId || c?.nom);
+}
 
 function parseDocumentsCompl(documentsCompl) {
   if (documentsCompl?.pieces && Array.isArray(documentsCompl.pieces)) {
@@ -67,10 +82,12 @@ export default function DetailInscription() {
   const [docModalOpen, setDocModalOpen] = useState(false);
   const [docFichier, setDocFichier] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [centreBusy, setCentreBusy] = useState(false);
+  const [centresRelational, setCentresRelational] = useState([]);
 
   const loadProfil = useCallback(() => {
     return candidatService.getProfil()
-      .then((p) => {
+      .then(async (p) => {
         setCandidat(p);
         const saved = localStorage.getItem('photoProfil_' + p.id);
         if (saved) setPhotoUrl(saved);
@@ -81,6 +98,15 @@ export default function DetailInscription() {
           return;
         }
         setInscription(insc);
+
+        if (insc.concours?.id) {
+          try {
+            const centres = await centreCompositionService.getConcoursCentres(insc.concours.id);
+            setCentresRelational(centres);
+          } catch {
+            setCentresRelational([]);
+          }
+        }
       });
   }, [inscriptionId, navigate]);
 
@@ -99,6 +125,14 @@ export default function DetailInscription() {
   };
 
   const handleConvocation = async () => {
+    const centreChoisi = resolveCentreChoisi(inscription);
+    if (
+      concoursHasCentres(centresRelational)
+      && !centreChoisi
+    ) {
+      showMessage('Choisissez d\'abord votre centre de composition.', 'error');
+      return;
+    }
     setTelechargement(prev => ({ ...prev, convocation: true }));
     try {
       await convocationService.telecharger(inscriptionId);
@@ -119,6 +153,20 @@ export default function DetailInscription() {
       showMessage('Erreur : ' + err.message, 'error');
     } finally {
       setTelechargement(prev => ({ ...prev, preinscription: false }));
+    }
+  };
+
+  const handleSaveCentre = async ({ concoursCentreId }) => {
+    setCentreBusy(true);
+    try {
+      const data = await inscriptionService.choisirCentreComposition(inscriptionId, { concoursCentreId });
+      setInscription((prev) => ({
+        ...prev,
+        centreChoisi: data.centreChoisi ?? null,
+      }));
+      showMessage('Centre de composition enregistré.', 'success');
+    } finally {
+      setCentreBusy(false);
     }
   };
 
@@ -164,6 +212,7 @@ export default function DetailInscription() {
 
   const cfg = STATUT_CONFIG[inscription.statut] || STATUT_CONFIG.EN_ATTENTE;
   const piecesCompl = parseDocumentsCompl(inscription.documentsCompl);
+  const centreChoisi = resolveCentreChoisi(inscription);
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
@@ -261,6 +310,28 @@ export default function DetailInscription() {
               </div>
             </div>
           </div>
+        )}
+
+        {inscription.statut === 'VALIDE_PAR_COMMISSION' && (
+          <div className='bg-blue-50 border-l-4 border-blue-500 px-5 py-4 rounded-xl'>
+            <p className='font-semibold text-blue-900 text-sm'>Dossier validé par la commission</p>
+            <p className='text-blue-800 text-xs mt-1'>
+              {concoursHasCentres(centresRelational)
+                ? 'Choisissez votre centre de composition ci-dessous en attendant la validation finale.'
+                : 'Votre dossier est en attente de validation finale par le contrôleur.'}
+            </p>
+          </div>
+        )}
+
+        {STATUTS_CHOIX_CENTRE.includes(inscription.statut)
+          && concoursHasCentres(centresRelational) && (
+          <ChoixCentreComposition
+            centresRelational={centresRelational}
+            centreChoisi={centreChoisi}
+            statut={inscription.statut}
+            onSave={handleSaveCentre}
+            busy={centreBusy}
+          />
         )}
 
         {inscription.statut === 'VALIDE' && (
@@ -396,12 +467,25 @@ export default function DetailInscription() {
                   </div>
                   <div>
                     <p className='font-semibold text-gray-900 text-sm'>Convocation officielle</p>
-                    <p className='text-xs text-gray-500'>À présenter le jour de l'examen avec votre pièce d'identité</p>
+                    <p className='text-xs text-gray-500'>À présenter le jour de l&apos;examen avec votre pièce d&apos;identité</p>
+                    {centreChoisi && (
+                      <p className='text-xs text-orange-700 mt-1'>
+                        Centre : {formatCentreChoisi(centreChoisi)}
+                      </p>
+                    )}
+                    {concoursHasCentres(centresRelational)
+                      && !centreChoisi && (
+                      <p className='text-xs text-red-600 mt-1'>Choisissez votre centre de composition d&apos;abord.</p>
+                    )}
                   </div>
                 </div>
                 <button
                   onClick={handleConvocation}
-                  disabled={telechargement.convocation}
+                  disabled={
+                    telechargement.convocation
+                    || (concoursHasCentres(centresRelational)
+                      && !centreChoisi)
+                  }
                   className='px-4 py-2 bg-orange-500 text-white rounded-lg text-xs font-semibold hover:bg-orange-600 transition disabled:opacity-50 flex items-center gap-2'
                 >
                   {telechargement.convocation ? (
