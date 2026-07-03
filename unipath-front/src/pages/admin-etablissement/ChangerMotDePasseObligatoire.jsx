@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../../services/api';
-import { getUser } from '../../utils/auth';
+import { getUser, getDefaultRoute } from '../../utils/auth';
 
 export default function ChangerMotDePasseObligatoire() {
   const navigate = useNavigate();
@@ -9,7 +9,7 @@ export default function ChangerMotDePasseObligatoire() {
 
   useEffect(() => {
     if (user && !user.mustChangePassword) {
-      navigate('/admin-etablissement/campagnes', { replace: true });
+      navigate(getDefaultRoute(user.role, user.sousRole), { replace: true });
     }
   }, [navigate, user]);
 
@@ -36,7 +36,7 @@ export default function ChangerMotDePasseObligatoire() {
     setLoading(true);
     try {
       await authService.changeInitialPassword(currentPassword, newPassword);
-      navigate('/admin-etablissement/campagnes', { replace: true });
+      navigate(getDefaultRoute(user?.role, user?.sousRole), { replace: true });
     } catch (err) {
       setError(err.message || 'Impossible de mettre à jour le mot de passe');
     } finally {
@@ -54,7 +54,7 @@ export default function ChangerMotDePasseObligatoire() {
           <h1 className="text-xl font-black text-gray-900">Définissez votre mot de passe</h1>
           <p className="text-sm text-gray-500 mt-2">
             Bonjour {user?.prenom} {user?.nom}. Votre mot de passe temporaire ne peut pas être conservé.
-            Choisissez un mot de passe personnel pour accéder à votre espace administrateur.
+            Choisissez un mot de passe personnel pour accéder à votre espace.
           </p>
         </div>
 

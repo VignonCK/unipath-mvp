@@ -1,5 +1,7 @@
 import { NavLink } from 'react-router-dom';
 
+import { ROUTES } from '../constants/routes';
+
 function tabClass({ isActive }) {
   return `px-4 py-2 text-sm font-semibold border-b-2 transition -mb-px ${
     isActive
@@ -13,10 +15,10 @@ export default function EcolesPriveesNav() {
     <div className="space-y-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-blue-900">Écoles privées</p>
       <div className="flex flex-wrap gap-1 border-b border-gray-200">
-        <NavLink to="/etablissements-prives" className={tabClass} end>
+        <NavLink to={ROUTES.parcours.etablissements} className={tabClass} end>
           Toutes les écoles
         </NavLink>
-        <NavLink to="/campagnes-inscription" className={tabClass}>
+        <NavLink to={ROUTES.parcours.campagnes} className={tabClass}>
           Campagnes ouvertes
         </NavLink>
       </div>

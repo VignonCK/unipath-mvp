@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { campagneService, filiereService } from '../../services/api';
 import CandidatLayout from '../../components/CandidatLayout';
 import EcolesPriveesNav from '../../components/EcolesPriveesNav';
+import { ROUTES } from '../../constants/routes';
 import { BentoCard } from '../../components/AcademicLayout';
 
 function formatDate(d) {
@@ -43,7 +44,7 @@ export default function PageCampagnesInscription() {
   const villes = [...new Set(campagnes.map((c) => c.etablissement?.ville).filter(Boolean))].sort();
 
   const deposerDossier = (campagne, cf) => {
-    navigate('/demande-inscription', {
+    navigate(ROUTES.parcours.dossiers, {
       state: {
         etablissementId: campagne.etablissement?.id,
         filiereId: cf?.filiereId || cf?.filiere?.id,
@@ -60,7 +61,7 @@ export default function PageCampagnesInscription() {
         <div>
           <button
             type="button"
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate(ROUTES.parcours.home)}
             className="text-sm text-blue-900 hover:underline mb-4"
           >
             ← Retour à l&apos;accueil
@@ -78,7 +79,7 @@ export default function PageCampagnesInscription() {
             </div>
             <button
               type="button"
-              onClick={() => navigate('/demande-inscription')}
+              onClick={() => navigate(ROUTES.parcours.dossiers)}
               className="shrink-0 rounded-lg bg-blue-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 transition shadow-sm"
             >
               Déposer un dossier
@@ -145,7 +146,7 @@ export default function PageCampagnesInscription() {
               dossier directement.
             </p>
             <Link
-              to="/etablissements-prives"
+              to={ROUTES.parcours.etablissements}
               className="inline-block mt-4 text-sm font-semibold text-blue-900 hover:underline"
             >
               Voir toutes les écoles →

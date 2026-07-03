@@ -1,6 +1,7 @@
 const { supabaseAdmin } = require('../supabase');
 const prisma = require('../prisma');
 const { isEtudiantRole } = require('../constants/roles.constants');
+const { isStatutSousReserveActif } = require('../utils/sous-reserve.helper');
 const {
   BUCKET_DOSSIERS_CANDIDATS,
   sanitizeStorageRelativePath,
@@ -26,6 +27,71 @@ const uploadToSupabase = async (file, candidatId, typePiece) => {
 
 // Pièces de base du dossier candidat
 const PIECES_DOSSIER_BASE = ['acteNaissance', 'carteIdentite', 'photo', 'releve'];
+
+function assertPeutCorrigerDossierInscription(dossierInscription) {
+  if (!dossierInscription) {
+    return { ok: false, error: 'Dossier concours introuvable' };
+  }
+  if (dossierInscription.statut === 'SOUS_RESERVE_PAR_COMMISSION') {
+    return {
+      ok: false,
+      error: 'Attendez la validation sous reserve par le controleur avant de remplacer vos pieces.',
+    };
+  }
+  if (dossierInscription.statut !== 'SOUS_RESERVE' && dossierInscription.statut !== 'EN_ATTENTE') {
+    return {
+      ok: false,
+      error: 'Le remplacement de pieces nest pas autorise pour le statut actuel du dossier.',
+    };
+  }
+  return { ok: true };
+}
+
+function assertPeutCorrigerPieceBase(candidatId, userId, userRole) {
+  if (isEtudiantRole(userRole) && userId !== candidatId) {
+    return { ok: false, error: 'Vous ne pouvez modifier que votre propre dossier personnel.' };
+  }
+  return { ok: true };
+}
+
+async function candidatPeutCorrigerPieceBase(prismaClient, candidatId, inscriptionIdHint) {
+  if (inscriptionIdHint) {
+    const inscription = await prismaClient.inscription.findFirst({
+      where: { id: inscriptionIdHint, candidatId },
+      include: { dossierInscription: true },
+    });
+    return assertPeutCorrigerDossierInscription(inscription?.dossierInscription);
+  }
+
+  const dossiersSousReserve = await prismaClient.dossierInscription.findMany({
+    where: {
+      inscription: { candidatId },
+      statut: 'SOUS_RESERVE',
+    },
+    select: { id: true },
+  });
+
+  if (dossiersSousReserve.length > 0) {
+    return { ok: true };
+  }
+
+  const enAttenteCommission = await prismaClient.dossierInscription.findFirst({
+    where: {
+      inscription: { candidatId },
+      statut: 'SOUS_RESERVE_PAR_COMMISSION',
+    },
+    select: { id: true },
+  });
+
+  if (enAttenteCommission) {
+    return {
+      ok: false,
+      error: 'Attendez la validation sous reserve par le controleur avant de remplacer vos pieces.',
+    };
+  }
+
+  return { ok: true };
+}
 
 exports.uploadPiece = async (req, res) => {
     try {
@@ -55,27 +121,45 @@ exports.uploadPiece = async (req, res) => {
       // ROUTAGE INTELLIGENT
       // Cas 1 : Pièce de base → Dossier Personnel
       if (PIECES_DOSSIER_BASE.includes(typePiece)) {
+        const targetCandidatId = req.params.candidatId || candidatId;
+        const baseCheck = assertPeutCorrigerPieceBase(targetCandidatId, req.user.id, req.userRole || req.user?.role);
+        if (!baseCheck.ok) {
+          return res.status(403).json({ error: baseCheck.error });
+        }
+
+        const sousReserveCheck = await candidatPeutCorrigerPieceBase(
+          prisma,
+          targetCandidatId,
+          inscriptionId,
+        );
+        if (!sousReserveCheck.ok) {
+          return res.status(400).json({ error: sousReserveCheck.error });
+        }
+
         const dossier = await prisma.dossier.upsert({
-          where: { candidatId },
+          where: { candidatId: targetCandidatId },
           update: { [typePiece]: storagePath },
           create: {
-            candidatId,
+            candidatId: targetCandidatId,
             [typePiece]: storagePath,
           },
         });
 
         // Récupérer toutes les inscriptions du candidat pour impact multi-concours
         const inscriptions = await prisma.inscription.findMany({
-          where: { candidatId },
+          where: { candidatId: targetCandidatId },
           include: { 
             concours: { select: { libelle: true } },
-            dossierInscription: { select: { id: true } }
+            dossierInscription: { select: { id: true, statut: true } }
           }
         });
 
-        // Enregistrer l'action pour chaque dossier d'inscription
+        // Enregistrer l'action pour chaque dossier sous réserve actif
         for (const inscription of inscriptions) {
-          if (inscription.dossierInscription) {
+          if (
+            inscription.dossierInscription
+            && isStatutSousReserveActif(inscription.dossierInscription.statut)
+          ) {
             await prisma.actionHistory.create({
               data: {
                 utilisateurId: candidatId,
@@ -122,6 +206,11 @@ exports.uploadPiece = async (req, res) => {
           });
         }
 
+        const correctionCheck = assertPeutCorrigerDossierInscription(inscription.dossierInscription);
+        if (!correctionCheck.ok) {
+          return res.status(400).json({ error: correctionCheck.error });
+        }
+
         // Mettre à jour le dossier d'inscription
         const dossierInscription = await prisma.dossierInscription.update({
           where: { inscriptionId },
@@ -164,6 +253,11 @@ exports.uploadPiece = async (req, res) => {
         return res.status(404).json({ 
           error: 'Inscription non trouvee ou non autorisee' 
         });
+      }
+
+      const extraCheck = assertPeutCorrigerDossierInscription(inscription.dossierInscription);
+      if (!extraCheck.ok) {
+        return res.status(400).json({ error: extraCheck.error });
       }
 
       // Mettre à jour piecesExtras

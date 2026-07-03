@@ -2,6 +2,7 @@
 const prisma = require('../prisma');
 const { getPiecesExtrasConfig } = require('../utils/completude.helper');
 const { isEtudiantRole } = require('../constants/roles.constants');
+const { mapCommentairesFromDossier } = require('../utils/dossier-inscription-mapper');
 
 const PIECES_DOSSIER = ['acteNaissance', 'carteIdentite', 'photo', 'releve']; // ✅ sans quittance
 
@@ -319,6 +320,7 @@ exports.getDossierComplet = async (req, res) => {
     const total = piecesBase.length + 1 + piecesExtrasConfig.length;
     const presentes = piecesBasesPresentes + quittancePresente + piecesExtrasPresentes;
     const pourcentage = Math.round((presentes / total) * 100);
+    const commentaires = mapCommentairesFromDossier(inscription.dossierInscription);
 
     // Structurer la réponse avec informations de décision
     const response = {
@@ -364,20 +366,19 @@ exports.getDossierComplet = async (req, res) => {
       dossierInscription: {
         id: inscription.dossierInscription?.id,
         statut: inscription.dossierInscription?.statut,
-        commentaireRejet: inscription.dossierInscription?.commentaireRejet,
-        commentaireSousReserve: inscription.dossierInscription?.commentaireSousReserve,
+        ...commentaires,
         decisionCommission: {
           par: inscription.dossierInscription?.decisionCommissionPar,
           date: inscription.dossierInscription?.decisionCommissionDate,
           commentaires: {
-            rejet: inscription.dossierInscription?.commentaireRejet,
-            sousReserve: inscription.dossierInscription?.commentaireSousReserve
-          }
+            rejet: commentaires.commentaireRejet,
+            sousReserve: commentaires.commentaireSousReserve,
+          },
         },
         decisionControleur: {
           par: inscription.dossierInscription?.decisionControleurPar,
           date: inscription.dossierInscription?.decisionControleurDate,
-          commentaire: inscription.dossierInscription?.commentaireControleur
+          commentaire: commentaires.commentaireControleur,
         },
         createdAt: inscription.dossierInscription?.createdAt,
         updatedAt: inscription.dossierInscription?.updatedAt

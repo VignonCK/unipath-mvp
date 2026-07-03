@@ -44,9 +44,15 @@ export default function Login() {
   useEffect(() => {
     if (!isAuthenticated()) return;
     const user = getUser();
-    if (user?.mustChangePassword && user?.role === 'ADMIN_ETABLISSEMENT') {
-      navigate('/admin-etablissement/changer-mot-de-passe', { replace: true });
-      return;
+    if (user?.mustChangePassword) {
+      if (user.role === 'ADMIN_ETABLISSEMENT') {
+        navigate('/admin-etablissement/changer-mot-de-passe', { replace: true });
+        return;
+      }
+      if (user.role === 'COMMISSION') {
+        navigate('/commission/changer-mot-de-passe', { replace: true });
+        return;
+      }
     }
     const route = getDefaultRoute(user?.role, user?.sousRole);
     if (route && route !== '/login') {
@@ -65,9 +71,15 @@ export default function Login() {
         throw new Error('Réponse de connexion incomplète. Réessayez.');
       }
       const { role, sousRole, mustChangePassword } = data.user;
-      if (mustChangePassword && role === 'ADMIN_ETABLISSEMENT') {
-        navigate('/admin-etablissement/changer-mot-de-passe');
-        return;
+      if (mustChangePassword) {
+        if (role === 'ADMIN_ETABLISSEMENT') {
+          navigate('/admin-etablissement/changer-mot-de-passe');
+          return;
+        }
+        if (role === 'COMMISSION') {
+          navigate('/commission/changer-mot-de-passe');
+          return;
+        }
       }
       if (role === 'COMMISSION') {
         if (sousRole === 'EXAMINATEUR') navigate('/examinateur/dossiers');

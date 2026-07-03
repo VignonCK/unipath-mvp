@@ -22,10 +22,15 @@ async function resolveUserContext(userId, email) {
 
   const commission = await prisma.membreCommission.findUnique({
     where: { id: userId },
-    select: { role: true, sousRole: true, nom: true, prenom: true },
+    select: { role: true, sousRole: true, nom: true, prenom: true, etablissementId: true },
   });
   if (commission) {
-    return { role: commission.role, sousRole: commission.sousRole, profile: commission };
+    return {
+      role: commission.role,
+      sousRole: commission.sousRole,
+      profile: commission,
+      etablissementId: commission.etablissementId,
+    };
   }
 
   const dges = await prisma.administrateurDGES.findUnique({

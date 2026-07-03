@@ -4,15 +4,48 @@ import { useNavigate } from 'react-router-dom';
 import { candidatService, concoursService } from '../services/api';
 import { handleSessionError } from '../utils/auth';
 import CandidatLayout from '../components/CandidatLayout';
+import { ROUTES } from '../constants/routes';
 import PiecesRequisesCandidats from '../components/PiecesRequisesCandidats';
 import { BentoCard, BentoGrid, GlassBadge } from '../components/AcademicLayout';
 
+function getDepotDates(concours) {
+  return {
+    debut: concours.dateDebutDepot || concours.dateDebut,
+    fin: concours.dateFinDepot || concours.dateFin,
+  };
+}
+
+function getCompositionDates(concours) {
+  const debut = concours.dateDebutComposition || concours.dateComposition;
+  if (!debut) return null;
+  return {
+    debut,
+    fin: concours.dateFinComposition || null,
+  };
+}
+
+function formatPlageDates(debut, fin) {
+  if (!debut) return null;
+  const fmt = (d, withYear = false) =>
+    new Date(d).toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'short',
+      ...(withYear && { year: 'numeric' }),
+    });
+  if (fin) {
+    return `${fmt(debut)} → ${fmt(fin, true)}`;
+  }
+  return fmt(debut, true);
+}
+
 function statutConcours(concours) {
   const now = new Date();
-  const debut = new Date(concours.dateDebut);
-  const fin   = new Date(concours.dateFin);
-  if (now < debut) return { label: 'À venir',   color: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500' };
-  if (now > fin)   return { label: 'Terminé',   color: 'bg-gray-100 text-gray-500',   dot: 'bg-gray-400' };
+  const { debut, fin } = getDepotDates(concours);
+  if (!debut || !fin) {
+    return { label: 'En cours', color: 'bg-green-100 text-green-700', dot: 'bg-green-500' };
+  }
+  if (now < new Date(debut)) return { label: 'À venir',   color: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500' };
+  if (now > new Date(fin))   return { label: 'Terminé',   color: 'bg-gray-100 text-gray-500',   dot: 'bg-gray-400' };
   return              { label: 'En cours',  color: 'bg-green-100 text-green-700', dot: 'bg-green-500' };
 }
 
@@ -44,7 +77,7 @@ export default function PageConcours() {
   }, [navigate]);
 
   const handleVoirConcours = (concoursId) => {
-    navigate(`/concours/${concoursId}`);
+    navigate(ROUTES.concours.detail(concoursId));
   };
 
   if (loading) return (
@@ -74,7 +107,7 @@ export default function PageConcours() {
             </div>
             <button
               type='button'
-              onClick={() => navigate('/mes-concours')}
+              onClick={() => navigate(ROUTES.concours.home)}
               className='inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-900 hover:bg-blue-100 transition'
             >
               Mes concours
@@ -138,8 +171,8 @@ export default function PageConcours() {
             (c.description || '').toLowerCase().includes(recherche.toLowerCase())
           );
           liste = [...liste].sort((a, b) => {
-            const da = new Date(a.dateDebut);
-            const db = new Date(b.dateDebut);
+            const da = new Date(getDepotDates(a).debut);
+            const db = new Date(getDepotDates(b).debut);
             return tri === 'recent' ? db - da : da - db;
           });
 
@@ -156,7 +189,9 @@ export default function PageConcours() {
               {liste.map((c, index) => {
                 const statut      = statutConcours(c);
                 const dejaInscrit = candidat?.inscriptions?.some(i => i.concoursId === c.id);
-                const termine     = new Date() > new Date(c.dateFin);
+                const depot       = getDepotDates(c);
+                const composition = getCompositionDates(c);
+                const termine     = depot.fin ? new Date() > new Date(depot.fin) : false;
                 const num         = String(index + 1).padStart(2, '0');
 
                 // Couleur du badge numéro selon statut
@@ -194,19 +229,29 @@ export default function PageConcours() {
                         <span className='line-clamp-1'>{c.etablissement || 'Etablissement non precise'}</span>
                       </div>
 
-                      {/* Dates */}
-                      <div className='flex items-center gap-2 text-xs text-gray-500'>
-                        <svg className='w-3.5 h-3.5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' />
-                        </svg>
-                        <span>
-                          {new Date(c.dateDebut).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-                          {' → '}
-                          {new Date(c.dateFin).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </span>
-                      </div>
+                      {/* Dates de dépôt */}
+                      {depot.debut && (
+                        <div className='flex items-center gap-2 text-xs text-gray-500'>
+                          <svg className='w-3.5 h-3.5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' />
+                          </svg>
+                          <span>
+                            Dépôt : {formatPlageDates(depot.debut, depot.fin)}
+                          </span>
+                        </div>
+                      )}
 
-                      {/* Description / diplôme */}
+                      {/* Dates de composition */}
+                      {composition && (
+                        <div className='flex items-center gap-2 text-xs text-gray-500'>
+                          <svg className='w-3.5 h-3.5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' />
+                          </svg>
+                          <span>
+                            Composition : {formatPlageDates(composition.debut, composition.fin)}
+                          </span>
+                        </div>
+                      )}
                       {c.description && (
                         <div className='flex items-center gap-2 text-xs text-gray-500'>
                           <svg className='w-3.5 h-3.5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -224,19 +269,6 @@ export default function PageConcours() {
                         </div>
                       )}
 
-                      {/* Dates de dépôt */}
-                      {c.dateDebutDepot && c.dateFinDepot && (
-                        <div className='flex items-center gap-2 text-xs text-gray-500'>
-                          <svg className='w-3.5 h-3.5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' />
-                          </svg>
-                          <span>
-                            Dépôt : {new Date(c.dateDebutDepot).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-                            {' → '}
-                            {new Date(c.dateFinDepot).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-                          </span>
-                        </div>
-                      )}
                     </div>
 
                     {/* Statut / bouton */}

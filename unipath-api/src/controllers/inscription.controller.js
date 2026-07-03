@@ -8,9 +8,7 @@ const { computeInscriptionCompletude, profilCandidatComplet } = require('../util
 const { uploadBufferToSupabase } = require('../utils/file-upload.helper');
 const {
   appendHistorique,
-  appendDocument,
   hasDocumentsCompl,
-  newDocumentId,
 } = require('../utils/preinscription.helper');
 const {
   peutChoisirCentre,
@@ -19,6 +17,14 @@ const {
   flattenCentreChoisi,
   concoursHasCentres,
 } = require('../utils/centres-composition.helper');
+const { mapCommentairesFromDossier } = require('../utils/dossier-inscription-mapper');
+const {
+  getDateDecisionSousReserve,
+  hasCorrectionApresSousReserve,
+  getInfoResoumissionCandidat,
+  isStatutSousReserveActif,
+  isStatutSousReserveEnCours,
+} = require('../utils/sous-reserve.helper');
 
 /**
  * @deprecated Utiliser POST /api/inscriptions/soumettre (soumettreDossierComplet).
@@ -416,8 +422,7 @@ exports.getMesInscriptions = async (req, res) => {
           }
         : ins.concours,
       statut: ins.dossierInscription?.statut ?? 'EN_ATTENTE',
-      commentaireRejet: ins.dossierInscription?.commentaireRejet,
-      commentaireSousReserve: ins.dossierInscription?.commentaireSousReserve,
+      ...mapCommentairesFromDossier(ins.dossierInscription),
       documentsCompl: ins.dossierInscription?.documentsCompl ?? null,
       centreChoisi: flattenCentreChoisi(ins.dossierInscription),
     }));
@@ -458,8 +463,7 @@ exports.getInscriptionByConcours = async (req, res) => {
       ...inscription,
       estCandidatConcours: true,
       statut: inscription.dossierInscription?.statut ?? 'EN_ATTENTE',
-      commentaireRejet: inscription.dossierInscription?.commentaireRejet,
-      commentaireSousReserve: inscription.dossierInscription?.commentaireSousReserve,
+      ...mapCommentairesFromDossier(inscription.dossierInscription),
       quittanceUrl: inscription.dossierInscription?.quittanceUrl ?? null,
       piecesExtras: inscription.dossierInscription?.piecesExtras ?? {},
       documentsCompl: inscription.dossierInscription?.documentsCompl ?? null,
@@ -504,8 +508,7 @@ exports.getInscriptionById = async (req, res) => {
     res.json({
       ...inscription,
       statut: inscription.dossierInscription?.statut ?? 'EN_ATTENTE',
-      commentaireRejet: inscription.dossierInscription?.commentaireRejet,
-      commentaireSousReserve: inscription.dossierInscription?.commentaireSousReserve,
+      ...mapCommentairesFromDossier(inscription.dossierInscription),
       documentsCompl: inscription.dossierInscription?.documentsCompl ?? null,
       centreChoisi: flattenCentreChoisi(inscription.dossierInscription),
     });
@@ -575,9 +578,10 @@ exports.uploadQuittanceInscription = async (req, res) => {
 
     const inscription = await prisma.inscription.findFirst({
       where: { id: inscriptionId, candidatId },
+      include: { dossierInscription: true },
     });
 
-    if (!inscription) {
+    if (!inscription?.dossierInscription) {
       return res.status(404).json({ error: 'Inscription non trouvée ou non autorisée' });
     }
 
@@ -585,7 +589,6 @@ exports.uploadQuittanceInscription = async (req, res) => {
       return res.status(400).json({ error: 'Aucun fichier fourni' });
     }
 
-    // Upload vers Supabase
     const ext = req.file.originalname.split('.').pop();
     const fileName = `${candidatId}/quittance-${inscriptionId}-${Date.now()}.${ext}`;
 
@@ -600,17 +603,26 @@ exports.uploadQuittanceInscription = async (req, res) => {
       throw new Error(error.message);
     }
 
-    const quittanceUrl = fileName;
+    const dossierInscription = await prisma.dossierInscription.update({
+      where: { inscriptionId },
+      data: { quittanceUrl: fileName },
+    });
 
-    const updated = await prisma.inscription.update({
-      where: { id: inscriptionId },
-      data: { quittanceUrl },
+    await prisma.actionHistory.create({
+      data: {
+        utilisateurId: candidatId,
+        dossierInscriptionId: dossierInscription.id,
+        typeAction: 'QUITTANCE_AJOUTEE',
+        details: { url: fileName },
+        ipAddress: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
+        userAgent: req.headers['user-agent'],
+      },
     });
 
     res.json({
       message: 'Quittance uploadée avec succès',
-      quittanceUrl,
-      inscription: updated,
+      quittanceUrl: fileName,
+      dossierInscription,
     });
   } catch (error) {
     console.error('Erreur upload quittance inscription:', error);
@@ -896,10 +908,6 @@ exports.ajouterDocumentComplementaireConcours = async (req, res) => {
     const candidatId = req.user.id;
     const { inscriptionId } = req.params;
 
-    if (!req.file) {
-      return res.status(400).json({ error: 'Aucun fichier fourni' });
-    }
-
     const inscription = await prisma.inscription.findFirst({
       where: { id: inscriptionId, candidatId },
       include: { dossierInscription: true },
@@ -909,52 +917,48 @@ exports.ajouterDocumentComplementaireConcours = async (req, res) => {
       return res.status(404).json({ error: 'Inscription ou dossier non trouve' });
     }
     if (inscription.dossierInscription.statut !== 'SOUS_RESERVE') {
-      return res.status(400).json({ error: 'Des documents complementaires ne peuvent etre ajoutes que pour un dossier sous reserve' });
+      return res.status(400).json({ error: 'Des corrections ne peuvent etre deposees que pour un dossier sous reserve' });
     }
 
-    const ext = req.file.originalname.split('.').pop();
-    const storagePath = `${candidatId}/concours/${inscriptionId}/complements/${newDocumentId()}-${Date.now()}.${ext}`;
-    const url = await uploadBufferToSupabase(req.file.buffer, storagePath, req.file.mimetype);
-
-    const piece = {
-      id: newDocumentId(),
-      nom: req.file.originalname,
-      url,
-      mimeType: req.file.mimetype,
-      uploadedAt: new Date().toISOString(),
-    };
-
-    const dossier = await prisma.dossierInscription.update({
-      where: { id: inscription.dossierInscription.id },
-      data: {
-        documentsCompl: appendDocument(inscription.dossierInscription.documentsCompl, piece),
-        historiqueStatuts: appendHistorique(inscription.dossierInscription.historiqueStatuts, {
-          statut: 'SOUS_RESERVE',
-          date: new Date().toISOString(),
-          commentaire: `Document complementaire ajoute : ${req.file.originalname}`,
-        }),
-      },
-      include: {
-        inscription: {
-          include: { concours: true, candidat: true },
-        },
-      },
-    });
-
-    return res.json({
-      message: 'Document ajoute avec succes',
-      inscription: {
-        ...dossier.inscription,
-        statut: dossier.statut,
-        commentaireSousReserve: dossier.commentaireSousReserve,
-        documentsCompl: dossier.documentsCompl,
-      },
+    return res.status(400).json({
+      error: 'Les documents complementaires ne sont plus acceptes. Remplacez la piece non conforme indiquee dans le motif de la commission.',
     });
   } catch (error) {
     console.error('Erreur ajouterDocumentComplementaireConcours:', error);
-    if (error.message?.includes('Type de fichier') || error.message?.includes('Format')) {
-      return res.status(400).json({ error: error.message });
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+exports.getStatutCorrectionsSousReserve = async (req, res) => {
+  try {
+    const candidatId = req.user.id;
+    const { inscriptionId } = req.params;
+
+    const inscription = await prisma.inscription.findFirst({
+      where: { id: inscriptionId, candidatId },
+      include: { dossierInscription: true },
+    });
+
+    if (!inscription?.dossierInscription) {
+      return res.status(404).json({ error: 'Inscription ou dossier non trouve' });
     }
+
+    const dossier = inscription.dossierInscription;
+    const peutCorriger = isStatutSousReserveActif(dossier.statut);
+    const correctionsEffectuees = peutCorriger && (
+      await hasCorrectionApresSousReserve(prisma, dossier.id, dossier)
+      || hasDocumentsCompl(dossier.documentsCompl)
+    );
+
+    return res.json({
+      statut: dossier.statut,
+      dateDecision: getDateDecisionSousReserve(dossier),
+      correctionsEffectuees: Boolean(correctionsEffectuees),
+      peutCorriger,
+      enAttenteControleur: dossier.statut === 'SOUS_RESERVE_PAR_COMMISSION',
+    });
+  } catch (error) {
+    console.error('Erreur getStatutCorrectionsSousReserve:', error);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 };
@@ -979,32 +983,59 @@ exports.resoumettreDossierConcours = async (req, res) => {
     if (inscription.dossierInscription.statut !== 'SOUS_RESERVE') {
       return res.status(400).json({ error: 'Seul un dossier sous reserve peut etre resoumis' });
     }
-    if (!hasDocumentsCompl(inscription.dossierInscription.documentsCompl)) {
-      return res.status(400).json({ error: 'Au moins un document complementaire doit etre uploade avant la resoumission' });
+
+    const dossierInscription = inscription.dossierInscription;
+    const correctionEffectuee = await hasCorrectionApresSousReserve(
+      prisma,
+      dossierInscription.id,
+      dossierInscription,
+    ) || hasDocumentsCompl(dossierInscription.documentsCompl);
+
+    if (!correctionEffectuee) {
+      return res.status(400).json({
+        error: 'Remplacez au moins une piece non conforme (indiquee dans le motif) avant de resoumettre votre dossier.',
+      });
     }
 
-    const dossier = await prisma.dossierInscription.update({
-      where: { id: inscription.dossierInscription.id },
-      data: {
-        statut: 'EN_ATTENTE',
-        historiqueStatuts: appendHistorique(inscription.dossierInscription.historiqueStatuts, {
+    const dossier = await prisma.$transaction(async (tx) => {
+      const updated = await tx.dossierInscription.update({
+        where: { id: dossierInscription.id },
+        data: {
           statut: 'EN_ATTENTE',
-          date: new Date().toISOString(),
-          commentaire: 'Resoumission candidat',
-        }),
-        decisionCommissionPar: null,
-        decisionCommissionDate: null,
-        decisionControleur: null,
-        decisionControleurMotif: null,
-        decisionControleurDate: null,
-        decisionControleurPar: null,
-        commentaireControleur: null,
-      },
-      include: {
-        inscription: {
-          include: { concours: true, candidat: true },
+          historiqueStatuts: appendHistorique(dossierInscription.historiqueStatuts, {
+            statut: 'EN_ATTENTE',
+            date: new Date().toISOString(),
+            commentaire: 'Resoumission candidat apres correction de pieces',
+          }),
+          decisionCommissionPar: null,
+          decisionCommissionDate: null,
+          decisionControleur: null,
+          decisionControleurMotif: null,
+          decisionControleurDate: null,
+          decisionControleurPar: null,
+          commentaireControleur: null,
+          commentaireSousReserve: null,
+          decisionControleurModifieCount: 0,
         },
-      },
+        include: {
+          inscription: {
+            include: { concours: true, candidat: true },
+          },
+        },
+      });
+
+      await tx.actionHistory.create({
+        data: {
+          utilisateurId: candidatId,
+          dossierInscriptionId: dossierInscription.id,
+          typeAction: 'DOSSIER_RESOUMIS_CANDIDAT',
+          details: { commentaire: 'Resoumission apres correction de pieces sous reserve' },
+          ipAddress: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
+          userAgent: req.headers['user-agent'],
+        },
+      });
+
+      return updated;
     });
 
     await notifierCommissionDossierResoumis(inscription, inscription.concours);
@@ -1014,7 +1045,7 @@ exports.resoumettreDossierConcours = async (req, res) => {
       inscription: {
         ...dossier.inscription,
         statut: dossier.statut,
-        commentaireSousReserve: dossier.commentaireSousReserve,
+        ...mapCommentairesFromDossier(dossier),
         documentsCompl: dossier.documentsCompl,
       },
     });
@@ -1105,6 +1136,22 @@ exports.choisirCentreComposition = async (req, res) => {
     });
 
     const centreChoisi = flattenCentreChoisi(dossier);
+
+    if (statut === 'VALIDE') {
+      try {
+        const { envoyerConvocationAuCandidat } = require('../utils/email-decision.helper');
+        await envoyerConvocationAuCandidat({
+          candidat: inscription.candidat,
+          concours: inscription.concours,
+          inscription: {
+            ...inscription,
+            dossierInscription: dossier,
+          },
+        });
+      } catch (emailErr) {
+        console.error('Erreur envoi convocation apres choix centre:', emailErr);
+      }
+    }
 
     return res.json({
       message: 'Centre de composition enregistre',

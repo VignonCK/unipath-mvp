@@ -162,11 +162,43 @@ function enrichDossierInscriptionForPdf(dossierInscription) {
   };
 }
 
+function centreCompositionEstChoisi(dossierInscription) {
+  const enriched = enrichDossierInscriptionForPdf(dossierInscription);
+  return Boolean(enriched?.centreCompositionChoisi?.nom);
+}
+
+async function concoursHasCentresActifs(concoursId, concours, prismaClient) {
+  if (concoursHasCentres(concours?.centresComposition)) {
+    return true;
+  }
+  if (!concoursId || !prismaClient) {
+    return false;
+  }
+  const count = await prismaClient.concourscentreComposition.count({
+    where: { concoursId, estActif: true },
+  });
+  return count > 0;
+}
+
+async function peutEnvoyerConvocationPdf({ concoursId, concours, dossierInscription }, prismaClient) {
+  const hasCentres = await concoursHasCentresActifs(concoursId, concours, prismaClient);
+  if (!hasCentres) {
+    return { ok: true, hasCentres: false };
+  }
+  if (centreCompositionEstChoisi(dossierInscription)) {
+    return { ok: true, hasCentres: true };
+  }
+  return { ok: false, hasCentres: true, reason: 'CENTRE_NON_CHOISI' };
+}
+
 module.exports = {
   STATUTS_CHOIX_CENTRE,
   normalizeCentresComposition,
   validateCentresComposition,
   concoursHasCentres,
+  concoursHasCentresActifs,
+  centreCompositionEstChoisi,
+  peutEnvoyerConvocationPdf,
   resolveChoixCentre,
   formatCentreAffiche,
   peutChoisirCentre,

@@ -80,13 +80,32 @@ app.use('/api/campagnes', campagneRoutes);
 app.use('/api', uploadsRoutes);
 
 // ── Health check ────────────────────────────────────────────────
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+app.get('/health', async (req, res) => {
+  const payload = {
+    status: 'OK',
     message: 'UniPath API fonctionne !',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
-  });
+    environment: process.env.NODE_ENV || 'development',
+    database: 'unknown',
+  };
+
+  try {
+    if (process.env.NODE_ENV === 'test') {
+      payload.database = 'skipped';
+      return res.json(payload);
+    }
+
+    const prisma = require('./prisma');
+    const { pingDatabase } = require('./utils/prisma-retry.helper');
+    await pingDatabase(prisma, { retries: 2, baseDelayMs: 300 });
+    payload.database = 'connected';
+    return res.json(payload);
+  } catch (error) {
+    payload.status = 'DEGRADED';
+    payload.database = 'unreachable';
+    payload.databaseError = error.code || error.message;
+    return res.status(503).json(payload);
+  }
 });
 
 // ── 404 API (évite les pages HTML Express en dev) ───────────────

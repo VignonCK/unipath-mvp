@@ -5,6 +5,7 @@ import { candidatService, concoursService, inscriptionService, centreComposition
 import { handleSessionError } from '../utils/auth';
 import CandidatLayout from '../components/CandidatLayout';
 import ChoixCentreComposition, { concoursHasCentres } from '../components/concours/ChoixCentreComposition';
+import { ROUTES } from '../constants/routes';
 import { normalizePieceNom } from '../constants/pieces';
 
 const STATUTS_CHOIX_CENTRE = ['VALIDE_PAR_COMMISSION', 'VALIDE'];
@@ -367,7 +368,7 @@ export default function DetailConcours() {
       <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
         <div className='text-center'>
           <p className='text-gray-500 mb-4'>Concours introuvable</p>
-          <button onClick={() => navigate('/concours')} className='text-blue-900 hover:underline'>Retour</button>
+          <button onClick={() => navigate(ROUTES.concours.ouverts)} className='text-blue-900 hover:underline'>Retour</button>
         </div>
       </div>
     );
@@ -399,7 +400,7 @@ export default function DetailConcours() {
                 </button>
                 <button
                   type='button'
-                  onClick={() => navigate(`/inscription/${inscriptionId}`)}
+                  onClick={() => navigate(ROUTES.concours.inscription(inscriptionId))}
                   className='bg-white border border-gray-200 text-gray-800 px-6 py-2 rounded-lg font-medium hover:bg-gray-50'
                 >
                   Voir mon inscription
@@ -407,7 +408,7 @@ export default function DetailConcours() {
               </>
             )}
             <button
-              onClick={() => navigate('/concours')}
+              onClick={() => navigate(ROUTES.concours.ouverts)}
               className='bg-white border border-gray-200 text-gray-800 px-6 py-2 rounded-lg font-medium hover:bg-gray-50'
             >
               Retour aux concours
@@ -462,7 +463,7 @@ export default function DetailConcours() {
       <div className='max-w-4xl mx-auto space-y-4 sm:space-y-6 px-3 sm:px-0'>
 
         <button
-          onClick={() => navigate('/concours')}
+          onClick={() => navigate(ROUTES.concours.ouverts)}
           className='flex items-center gap-2 text-gray-600 hover:text-gray-900 text-xs sm:text-sm font-medium'
         >
           <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -490,7 +491,7 @@ export default function DetailConcours() {
               Consultez votre{' '}
               <button
                 type='button'
-                onClick={() => navigate(`/inscription/${inscriptionExistante.id}`)}
+                onClick={() => navigate(ROUTES.concours.inscription(inscriptionExistante.id))}
                 className='underline font-medium hover:text-green-900'
               >
                 espace inscription

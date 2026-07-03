@@ -1,12 +1,17 @@
 // src/controllers/examinateur.controller.js
 const prisma = require('../prisma');
-const { validateAndSanitizeVerdict, validateUUID } = require('../utils/validation');
+const { validateAndSanitizeVerdict, validateUUID, formatMotifForClient } = require('../utils/validation');
 const {
   dossierVerrouilleParControleur,
   assertExaminateurPeutRendreVerdict,
   assertExaminateurPeutModifierSonVerdict,
 } = require('../utils/verdict-examinateur.helper');
 const { isArbitrageDivergent, VERDICT_LABELS } = require('../utils/verdict-workflow.helper');
+const {
+  resolveCommissionScope,
+  applyConcoursScope,
+  assertDossierDansScope,
+} = require('../utils/commission-etablissement.helper');
 
 /**
  * Liste des dossiers à évaluer par l'examinateur connecté
@@ -16,14 +21,18 @@ exports.getDossiersAEvaluer = async (req, res) => {
   try {
     const examinateurId = req.user.id;
     const { concoursId, limite = 50, offset = 0 } = req.query;
+    const scope = await resolveCommissionScope(examinateurId);
 
-    const whereClause = {
-      decisionControleurPar: null,
-      verdict1Par: null,
-    };
+    let whereClause = applyConcoursScope(
+      {
+        decisionControleurPar: null,
+        verdict1Par: null,
+      },
+      scope ? scope.concoursIds : null
+    );
 
     if (concoursId) {
-      whereClause.inscription = { concoursId };
+      whereClause.inscription = { ...(whereClause.inscription || {}), concoursId };
     }
 
     const [dossiers, total] = await Promise.all([
@@ -101,6 +110,11 @@ exports.getDetailDossier = async (req, res) => {
       return res.status(404).json({ error: 'Dossier non trouvé' });
     }
 
+    const scope = await resolveCommissionScope(examinateurId);
+    if (scope && !(await assertDossierDansScope(dossierInscriptionId, scope.concoursIds))) {
+      return res.status(403).json({ error: 'Accès refusé à ce dossier' });
+    }
+
     // Déterminer si l'examinateur a déjà rendu son verdict
     const monVerdictRendu = dossier.verdict1Par === examinateurId;
     let monVerdict = null;
@@ -109,7 +123,7 @@ exports.getDetailDossier = async (req, res) => {
     if (monVerdictRendu) {
       monVerdict = {
         verdict: dossier.verdict1,
-        motif: dossier.verdict1Motif,
+        motif: formatMotifForClient(dossier.verdict1Motif),
         date: dossier.verdict1Date,
       };
       modificationsPossibles = 1 - dossier.verdict1ModifieCount;
@@ -144,7 +158,7 @@ exports.getDetailDossier = async (req, res) => {
           decisionControleur: dossier.decisionControleur,
           decisionControleurLabel:
             VERDICT_LABELS[dossier.decisionControleur] || dossier.decisionControleur,
-          motif: dossier.decisionControleurMotif,
+          motif: formatMotifForClient(dossier.decisionControleurMotif),
           date: dossier.decisionControleurDate,
         }
       : null;
@@ -243,6 +257,11 @@ exports.rendreVerdict = async (req, res) => {
       return res.status(404).json({ error: 'Dossier non trouvé' });
     }
 
+    const scope = await resolveCommissionScope(examinateurId);
+    if (scope && !(await assertDossierDansScope(dossierInscriptionId, scope.concoursIds))) {
+      return res.status(403).json({ error: 'Accès refusé à ce dossier' });
+    }
+
     const check = assertExaminateurPeutRendreVerdict(dossier, examinateurId);
     if (!check.ok) {
       return res.status(403).json({ error: check.error });
@@ -278,8 +297,12 @@ exports.rendreVerdict = async (req, res) => {
     });
 
     // Créer une notification pour le contrôleur
+    const controleurWhere = { sousRole: 'CONTROLEUR' };
+    if (scope?.etablissementId) {
+      controleurWhere.etablissementId = scope.etablissementId;
+    }
     const controleur = await prisma.membreCommission.findFirst({
-      where: { sousRole: 'CONTROLEUR' },
+      where: controleurWhere,
     });
 
     if (controleur) {
@@ -345,6 +368,11 @@ exports.modifierVerdict = async (req, res) => {
 
     if (!dossier) {
       return res.status(404).json({ error: 'Dossier non trouvé' });
+    }
+
+    const scope = await resolveCommissionScope(examinateurId);
+    if (scope && !(await assertDossierDansScope(dossierInscriptionId, scope.concoursIds))) {
+      return res.status(403).json({ error: 'Accès refusé à ce dossier' });
     }
 
     const check = assertExaminateurPeutModifierSonVerdict(dossier, examinateurId);

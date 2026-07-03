@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { campagneService } from '../../services/api';
 import CandidatLayout from '../../components/CandidatLayout';
 import { BentoCard } from '../../components/AcademicLayout';
+import { ROUTES } from '../../constants/routes';
 
 function formatDate(d) {
   return new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -24,7 +25,7 @@ export default function DetailCampagneCandidat() {
   }, [id]);
 
   const postuler = (cf) => {
-    navigate('/demande-inscription', {
+    navigate(ROUTES.parcours.dossiers, {
       state: {
         etablissementId: campagne.etablissement?.id,
         filiereId: cf.filiereId || cf.filiere?.id,
@@ -58,7 +59,7 @@ export default function DetailCampagneCandidat() {
   return (
     <CandidatLayout>
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-        <button type="button" onClick={() => navigate('/campagnes-inscription')} className="text-sm text-blue-900 hover:underline">← Campagnes</button>
+        <button type="button" onClick={() => navigate(ROUTES.parcours.campagnes)} className="text-sm text-blue-900 hover:underline">← Campagnes</button>
 
         <BentoCard className="p-6">
           <h1 className="text-2xl font-black text-gray-900">{campagne.titre}</h1>

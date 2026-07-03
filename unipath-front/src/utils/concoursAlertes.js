@@ -45,7 +45,7 @@ export function buildConcoursNotifications(inscriptions = []) {
     } else if (['REJETE', 'REJETE_PAR_COMMISSION'].includes(ins.statut)) {
       notifications.push({ type: 'error', msg: `"${libelle}" : dossier non retenu.` });
     } else if (['SOUS_RESERVE', 'SOUS_RESERVE_PAR_COMMISSION'].includes(ins.statut)) {
-      notifications.push({ type: 'warning', msg: `"${libelle}" : accepté sous réserve — consultez les remarques.` });
+      notifications.push({ type: 'warning', msg: `"${libelle}" : accepté sous réserve — corrigez la pièce indiquée dans le motif.` });
     } else if (ins.quittanceUrl) {
       notifications.push({ type: 'info', msg: `"${libelle}" : fiche de pré-inscription disponible.` });
     }

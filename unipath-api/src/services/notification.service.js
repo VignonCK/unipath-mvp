@@ -4,7 +4,9 @@ const prisma = require('../prisma');
 const {
   resolveInscriptionForConvocationPdf,
   buildGenererConvocationPayload,
+  buildEmailDataDecision,
 } = require('../utils/email-decision.helper');
+const { peutEnvoyerConvocationPdf } = require('../utils/centres-composition.helper');
 
 class NotificationService {
   async sendNotification({ event, userId, data, priority = 'NORMAL', sendEmail = true }) {
@@ -118,27 +120,64 @@ class NotificationService {
           description: data.concoursDescription,
         };
 
-        let convocationPayload = null;
+        let peutEnvoyerPdf = true;
         if (data.inscriptionId) {
           const inscriptionForPdf = await resolveInscriptionForConvocationPdf({
             id: data.inscriptionId,
           });
-          if (inscriptionForPdf) {
-            convocationPayload = buildGenererConvocationPayload(
-              inscriptionForPdf,
-              candidatFallback,
-              concoursFallback,
-            );
-          }
+          const convocationCheck = await peutEnvoyerConvocationPdf(
+            {
+              concoursId: inscriptionForPdf?.concoursId,
+              concours: inscriptionForPdf?.concours || concoursFallback,
+              dossierInscription: inscriptionForPdf?.dossierInscription,
+            },
+            prisma,
+          );
+          peutEnvoyerPdf = convocationCheck.ok;
         }
 
-        const pdfResult = await pdfService.genererConvocation(
-          convocationPayload || {
-            candidat: candidatFallback,
-            concours: concoursFallback,
-          },
-        );
-        pdfPath = pdfResult.filePath;
+        if (peutEnvoyerPdf) {
+          let convocationPayload = null;
+          if (data.inscriptionId) {
+            const inscriptionForPdf = await resolveInscriptionForConvocationPdf({
+              id: data.inscriptionId,
+            });
+            if (inscriptionForPdf) {
+              convocationPayload = buildGenererConvocationPayload(
+                inscriptionForPdf,
+                candidatFallback,
+                concoursFallback,
+              );
+            }
+          }
+
+          const pdfResult = await pdfService.genererConvocation(
+            convocationPayload || {
+              candidat: candidatFallback,
+              concours: concoursFallback,
+            },
+          );
+          pdfPath = pdfResult.filePath;
+        } else if (event === 'VALIDATION') {
+          await emailService.envoyerEmailDossierValideAttenteCentre(
+            buildEmailDataDecision({
+              candidat: {
+                email: data.candidatEmail,
+                nom: data.candidatNom,
+                prenom: data.candidatPrenom,
+                matricule: data.candidatMatricule,
+                telephone: data.candidatTelephone,
+                id: data.candidatId,
+              },
+              concours: concoursFallback,
+              inscription: { id: data.inscriptionId, numeroInscription: data.numeroDossier },
+            }),
+          );
+          return;
+        } else {
+          console.log('Convocation non envoyee : centre de composition non choisi');
+          return;
+        }
       }
       
       // Appeler la méthode correspondante du service email avec le PDF

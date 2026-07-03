@@ -1,5 +1,6 @@
 const prisma = require('../prisma');
 const { mapDossierInscriptionToInscription } = require('../utils/dossier-inscription-mapper');
+const { appendHistorique } = require('../utils/preinscription.helper');
 
 const STATUTS_VALIDES = [
   'EN_ATTENTE',
@@ -18,6 +19,17 @@ const STATUTS_COMMISSION = [
   'SOUS_RESERVE_PAR_COMMISSION',
 ];
 
+const ALIAS_STATUTS_COMMISSION = {
+  VALIDE: 'VALIDE_PAR_COMMISSION',
+  REJETE: 'REJETE_PAR_COMMISSION',
+  SOUS_RESERVE: 'SOUS_RESERVE_PAR_COMMISSION',
+};
+
+function resolveStatutCommissionQuery(statut) {
+  if (!statut) return null;
+  return ALIAS_STATUTS_COMMISSION[statut] || statut;
+}
+
 exports.getDossiers = async (req, res) => {
   try {
     const { statut } = req.query;
@@ -34,18 +46,19 @@ exports.getDossiers = async (req, res) => {
 
     if (userRole === 'COMMISSION') {
       if (statut) {
-        if (!STATUTS_COMMISSION.includes(statut)) {
+        const statutEffectif = resolveStatutCommissionQuery(statut);
+        if (!STATUTS_COMMISSION.includes(statutEffectif)) {
           return res.status(403).json({
             error: 'Accès refusé à ce statut',
             statutsAutorises: STATUTS_COMMISSION,
           });
         }
-        whereClause = { statut };
+        whereClause = { statut: statutEffectif };
       } else {
         whereClause = { statut: { in: STATUTS_COMMISSION } };
       }
     } else if (statut) {
-      whereClause = { statut };
+      whereClause = { statut: resolveStatutCommissionQuery(statut) || statut };
     }
 
     const dossiers = await prisma.dossierInscription.findMany({
@@ -208,6 +221,15 @@ exports.updateStatut = async (req, res) => {
         commentaireSousReserve: statut === 'SOUS_RESERVE' ? commentaireSousReserve : null,
         decisionCommissionPar: membreCommissionId,
         decisionCommissionDate: new Date(),
+        historiqueStatuts: appendHistorique(dossier.historiqueStatuts, {
+          statut: nouveauStatut,
+          date: new Date().toISOString(),
+          commentaire: statut === 'SOUS_RESERVE'
+            ? commentaireSousReserve
+            : statut === 'REJETE'
+              ? commentaireRejet
+              : `Decision commission: ${statut}`,
+        }),
       },
       include: {
         inscription: {

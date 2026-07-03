@@ -385,6 +385,7 @@ class PDFService {
         matieres: concours?.matieres || [],
         dateDebutComposition: concours?.dateDebutComposition || null,
         dateFinComposition: concours?.dateFinComposition || null,
+        heureComposition: concours?.heureComposition || '8h au plus tard',
         centresComposition: concours?.centresComposition || null,
         centreCompositionChoisi: inscription?.dossierInscription?.centreCompositionChoisi || null,
         photoBase64,

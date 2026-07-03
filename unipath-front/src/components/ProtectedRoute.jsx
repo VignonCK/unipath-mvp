@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { isAuthenticated, getDefaultRoute, hasRole, hasSousRole, getUser, clearAuth } from '../utils/auth';
 
 const ADMIN_PASSWORD_CHANGE_PATH = '/admin-etablissement/changer-mot-de-passe';
+const COMMISSION_PASSWORD_CHANGE_PATH = '/commission/changer-mot-de-passe';
 
 /**
  * @param {Array<string>} [allowedRoles]
@@ -27,6 +28,14 @@ export default function ProtectedRoute({ children, allowedRoles = [], allowedSou
     && location.pathname !== ADMIN_PASSWORD_CHANGE_PATH
   ) {
     return <Navigate to={ADMIN_PASSWORD_CHANGE_PATH} replace />;
+  }
+
+  if (
+    user.role === 'COMMISSION'
+    && user.mustChangePassword
+    && location.pathname !== COMMISSION_PASSWORD_CHANGE_PATH
+  ) {
+    return <Navigate to={COMMISSION_PASSWORD_CHANGE_PATH} replace />;
   }
 
   if (allowedRoles.length > 0 && !hasRole(allowedRoles)) {

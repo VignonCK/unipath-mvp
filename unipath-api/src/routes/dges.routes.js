@@ -5,8 +5,9 @@ const { protect } = require('../middleware/auth.middleware');
 const { checkRole } = require('../middleware/role.middleware');
 const dgesController = require('../controllers/dges.controller');
 const adminEtablissementRoutes = require('./adminEtablissement.routes');
+const commissionEtablissementRoutes = require('./commissionEtablissement.routes');
 
-// Gestion des administrateurs d'établissement (DGES only)
+router.use('/etablissements/:etablissementId/commission', commissionEtablissementRoutes);
 router.use('/etablissements', adminEtablissementRoutes);
 
 // Routes protégées - DGES et COMMISSION peuvent voir les statistiques

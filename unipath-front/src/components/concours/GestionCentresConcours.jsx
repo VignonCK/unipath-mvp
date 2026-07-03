@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { centreCompositionService } from '../../services/api';
 
 const EMPTY_CENTRE = { nom: '', ville: '', adresse: '', telephone: '' };
@@ -22,11 +23,12 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
   const [anneeAcademique, setAnneeAcademique] = useState(() => defaultAnneeAcademique(concoursLibelle));
   const [capaciteAjout, setCapaciteAjout] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [newCentre, setNewCentre] = useState(EMPTY_CENTRE);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async ({ silent = false } = {}) => {
     if (!concoursId) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError('');
     try {
       const [centres, liens] = await Promise.all([
@@ -35,10 +37,11 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
       ]);
       setCatalogue(centres);
       setAssocies(liens);
+      setInitialLoadDone(true);
     } catch (err) {
       setError(err.message || 'Impossible de charger les centres');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [concoursId]);
 
@@ -57,7 +60,7 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
       });
       setSelectedCentreId('');
       setCapaciteAjout('');
-      await loadData();
+      await loadData({ silent: true });
     } catch (err) {
       alert(err.message);
     } finally {
@@ -70,7 +73,7 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
     setBusy(true);
     try {
       await centreCompositionService.retirerDuConcours(concoursId, concourscentreId);
-      await loadData();
+      await loadData({ silent: true });
     } catch (err) {
       alert(err.message);
     } finally {
@@ -82,7 +85,7 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
     setBusy(true);
     try {
       await centreCompositionService.modifierConcoursCentre(concoursId, lien.id, patch);
-      await loadData();
+      await loadData({ silent: true });
     } catch (err) {
       alert(err.message);
     } finally {
@@ -97,7 +100,7 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
       const created = await centreCompositionService.creer(newCentre);
       setShowCreateModal(false);
       setNewCentre(EMPTY_CENTRE);
-      await loadData();
+      await loadData({ silent: true });
       setSelectedCentreId(created.id);
     } catch (err) {
       alert(err.message);
@@ -114,12 +117,15 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
     );
   }
 
-  if (loading) {
+  if (loading && !initialLoadDone) {
     return <p className='text-sm text-gray-500'>Chargement des centres…</p>;
   }
 
   return (
-    <div className='border-t pt-4 space-y-4'>
+    <div className='border-t pt-4 space-y-4 relative'>
+      {loading && (
+        <p className='text-xs text-gray-400 absolute top-0 right-0'>Mise à jour…</p>
+      )}
       <div className='flex flex-wrap items-center justify-between gap-2'>
         <h3 className='text-sm font-bold text-gray-800'>Centres de composition</h3>
         <button
@@ -152,6 +158,7 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
             type='text'
             value={anneeAcademique}
             onChange={(e) => setAnneeAcademique(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
             placeholder='2025-2026'
             className='px-3 py-2 border border-gray-200 rounded-lg text-sm'
           />
@@ -160,6 +167,7 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
             min='1'
             value={capaciteAjout}
             onChange={(e) => setCapaciteAjout(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
             placeholder='Capacité (opt.)'
             className='px-3 py-2 border border-gray-200 rounded-lg text-sm'
           />
@@ -230,8 +238,8 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
         ))}
       </div>
 
-      {showCreateModal && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4'>
+      {showCreateModal && createPortal(
+        <div className='fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4'>
           <form
             onSubmit={handleCreerCentre}
             className='w-full max-w-md rounded-2xl bg-white p-6 shadow-xl space-y-4'
@@ -274,13 +282,14 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
               <button
                 type='submit'
                 disabled={busy}
-                className='px-4 py-2 rounded-lg bg-orange-600 text-white text-sm font-semibold'
+                className='px-4 py-2 rounded-lg bg-orange-600 text-white text-sm font-semibold disabled:opacity-60'
               >
-                Créer
+                {busy ? 'Création...' : 'Créer'}
               </button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

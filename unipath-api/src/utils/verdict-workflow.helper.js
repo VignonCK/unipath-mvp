@@ -1,3 +1,5 @@
+const { formatMotifForClient } = require('./motif.helper');
+
 /**
  * Workflow : 1 examinateur (verdict1) + arbitrage final du contrôleur (decisionControleur).
  * verdict2 est synchronisé avec la décision du contrôleur pour l'affichage « 2/2 ».
@@ -38,7 +40,7 @@ function getVerdictExaminateur(dossier) {
     verdict: dossier.verdict1,
     par: dossier.verdict1Par,
     date: dossier.verdict1Date,
-    motif: dossier.verdict1Motif,
+    motif: formatMotifForClient(dossier.verdict1Motif),
   };
 }
 
@@ -48,7 +50,7 @@ function getVerdictControleur(dossier) {
     verdict: dossier.decisionControleur,
     par: dossier.decisionControleurPar,
     date: dossier.decisionControleurDate,
-    motif: dossier.decisionControleurMotif,
+    motif: formatMotifForClient(dossier.decisionControleurMotif),
   };
 }
 

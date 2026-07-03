@@ -15,6 +15,7 @@ import { handleSessionError } from '../utils/auth';
 import { getApplicationStatus, PREINSCRIPTION_STATUS } from '../utils/adminParcoursInscription';
 import CandidatLayout from '../components/CandidatLayout';
 import BentoCard from '../components/BentoCard';
+import { ROUTES } from '../constants/routes';
 
 const NIVEAUX = [
   { value: '1', label: 'Licence 1' },
@@ -136,7 +137,7 @@ const APPLICATION_ACTION_MESSAGES = {
 const PREINSCRIPTION_ACTION_MESSAGES = {
   EN_ATTENTE: 'L\'école examine votre dossier.',
   VALIDE: 'Félicitations ! Votre dossier a été accepté.',
-  SOUS_RESERVE: 'Action requise : des documents complémentaires sont demandés.',
+  SOUS_RESERVE: 'Action requise : une ou plusieurs pièces de votre dossier ne sont pas conformes.',
   REJETE: 'Votre dossier n\'a pas été retenu.',
 };
 
@@ -714,7 +715,7 @@ export default function DemandeInscription() {
                     </p>
                     <p className='mt-2 text-sm text-gray-500'>
                       Commencez par parcourir les{' '}
-                      <Link to='/etablissements-prives' className='font-semibold text-blue-900 hover:underline'>
+                      <Link to={ROUTES.parcours.etablissements} className='font-semibold text-blue-900 hover:underline'>
                         écoles privées
                       </Link>
                       .
@@ -833,7 +834,7 @@ export default function DemandeInscription() {
                           </p>
                           <p className='mt-2 text-xs text-gray-500'>
                             Vous pourrez la déposer depuis{' '}
-                            <Link to='/mes-inscriptions-academiques' className='font-semibold text-indigo-700 underline'>
+                            <Link to={ROUTES.parcours.mesInscriptions} className='font-semibold text-indigo-700 underline'>
                               Mes inscriptions académiques
                             </Link>
                             .

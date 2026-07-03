@@ -236,10 +236,11 @@ export default function GestionConcours() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    e?.preventDefault?.();
     
     // Validation côté client
     if (!validateForm()) {
+      document.getElementById('concours-modal-scroll')?.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
@@ -418,31 +419,38 @@ export default function GestionConcours() {
     <DGESLayout>
       <div className='max-w-6xl mx-auto px-4 py-6 space-y-6'>
         {/* HEADER SECTION */}
-        <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
-          <div>
-            <h1 className='text-2xl font-black text-gray-800'>Gestion des concours</h1>
-            <p className='text-sm text-gray-500 mt-1'>{concours.length} concours au total</p>
+        <div className='flex flex-col gap-4'>
+          <div className='flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4'>
+            <div>
+              <h1 className='text-2xl font-black text-gray-800'>Gestion des concours</h1>
+              <p className='text-sm text-gray-500 mt-1'>{concours.length} concours au total</p>
+            </div>
+            <button
+              type='button'
+              onClick={openCreateModal}
+              className='flex shrink-0 items-center justify-center gap-2 bg-orange-500 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-orange-600 transition shadow-sm w-full sm:w-auto'
+            >
+              <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 4v16m8-8H4' />
+              </svg>
+              Nouveau concours
+            </button>
           </div>
-          <div className='flex flex-col sm:flex-row gap-3 sm:items-center'>
+          <div className='flex flex-col sm:flex-row sm:items-center gap-3'>
+            <label className='text-sm font-medium text-gray-600 shrink-0' htmlFor='filter-etablissement'>
+              Filtrer par établissement
+            </label>
             <select
+              id='filter-etablissement'
               value={filterEtablissement}
               onChange={(e) => setFilterEtablissement(e.target.value)}
-              className='rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 bg-white'
+              className='w-full sm:max-w-md rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 bg-white'
             >
               <option value=''>Tous les établissements</option>
               {etablissementFilterOptions.map(([key, label]) => (
                 <option key={key} value={key}>{label}</option>
               ))}
             </select>
-            <button
-            onClick={openCreateModal}
-            className='flex items-center gap-2 bg-orange-500 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-orange-600 transition shadow-sm'
-          >
-            <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 4v16m8-8H4' />
-            </svg>
-            Nouveau concours
-          </button>
           </div>
         </div>
 
@@ -536,7 +544,7 @@ export default function GestionConcours() {
         {/* MODAL CRÉATION/ÉDITION — portail vers body pour éviter le double sidebar */}
         {showModal && createPortal(
           <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4'>
-            <div className='relative bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto'>
+            <div id='concours-modal-scroll' className='relative bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto'>
             <div className='sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between z-10'>
               <h2 className='text-lg font-bold text-gray-800'>
                 {editingConcours ? 'Modifier le concours' : 'Nouveau concours'}
@@ -553,7 +561,7 @@ export default function GestionConcours() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className='p-6 space-y-4'>
+            <div className='p-6 space-y-4'>
               {/* Erreurs de validation globales */}
               {Object.keys(validationErrors).length > 0 && (
                 <div className='bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm'>
@@ -992,7 +1000,7 @@ export default function GestionConcours() {
                 )}
               </div>
 
-              <div className='flex gap-3 pt-4'>
+              <div className='flex gap-3 pt-4 border-t'>
                 <button
                   type='button'
                   onClick={() => setShowModal(false)}
@@ -1001,14 +1009,15 @@ export default function GestionConcours() {
                   Annuler
                 </button>
                 <button
-                  type='submit'
+                  type='button'
+                  onClick={handleSubmit}
                   disabled={submitting}
                   className='flex-1 px-4 py-2.5 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition disabled:opacity-50'
                 >
                   {submitting ? 'Enregistrement...' : editingConcours ? 'Modifier' : 'Créer'}
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>,
           document.body

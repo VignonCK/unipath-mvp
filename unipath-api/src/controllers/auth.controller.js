@@ -10,6 +10,7 @@ const { alignCandidatIdToAuth } = require('../utils/candidat-alignment.helper');
 const {
   isTempPasswordExpired,
   mustChangeAdminPassword,
+  mustChangeTempPassword,
 } = require('../utils/admin-password.helper');
 
 const EMAIL_CONFIRM_TTL_MS = 24 * 60 * 60 * 1000;
@@ -352,11 +353,13 @@ exports.login = async (req, res) => {
     const userMetadata = data.user.user_metadata || {};
     let requiresPasswordChange = false;
 
-    if (role === 'ADMIN_ETABLISSEMENT' && mustChangeAdminPassword(userMetadata)) {
+    if ((role === 'ADMIN_ETABLISSEMENT' || role === 'COMMISSION') && mustChangeTempPassword(userMetadata)) {
       if (isTempPasswordExpired(userMetadata)) {
         return res.status(403).json({
           error:
-            'Votre mot de passe temporaire a expiré. Contactez la DGES pour qu\'un nouvel accès vous soit envoyé.',
+            role === 'COMMISSION'
+              ? 'Votre mot de passe temporaire a expiré. Contactez la DGES pour qu\'un nouvel accès vous soit envoyé.'
+              : 'Votre mot de passe temporaire a expiré. Contactez la DGES pour qu\'un nouvel accès vous soit envoyé.',
           tempPasswordExpired: true,
         });
       }
@@ -399,25 +402,45 @@ exports.changeInitialPassword = async (req, res) => {
       return res.status(400).json({ error: 'Le nouveau mot de passe doit être différent du mot de passe temporaire' });
     }
 
-    if (req.userRole !== 'ADMIN_ETABLISSEMENT') {
-      return res.status(403).json({ error: 'Cette action est réservée aux administrateurs d\'établissement' });
+    if (!['ADMIN_ETABLISSEMENT', 'COMMISSION'].includes(req.userRole)) {
+      return res.status(403).json({ error: 'Cette action est réservée aux comptes avec mot de passe temporaire DGES' });
     }
 
-    const admin = await prisma.adminEtablissement.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        nom: true,
-        prenom: true,
-        email: true,
-        telephone: true,
-        etablissementId: true,
-        role: true,
-      },
-    });
+    let profile = null;
 
-    if (!admin) {
-      return res.status(404).json({ error: 'Profil administrateur introuvable' });
+    if (req.userRole === 'ADMIN_ETABLISSEMENT') {
+      profile = await prisma.adminEtablissement.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          nom: true,
+          prenom: true,
+          email: true,
+          telephone: true,
+          etablissementId: true,
+          role: true,
+        },
+      });
+      if (!profile) {
+        return res.status(404).json({ error: 'Profil administrateur introuvable' });
+      }
+    } else {
+      profile = await prisma.membreCommission.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          nom: true,
+          prenom: true,
+          email: true,
+          telephone: true,
+          etablissementId: true,
+          role: true,
+          sousRole: true,
+        },
+      });
+      if (!profile) {
+        return res.status(404).json({ error: 'Profil commission introuvable' });
+      }
     }
 
     const { data: authUserData, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
@@ -426,7 +449,7 @@ exports.changeInitialPassword = async (req, res) => {
     }
 
     const metadata = authUserData.user.user_metadata || {};
-    if (!mustChangeAdminPassword(metadata)) {
+    if (!mustChangeTempPassword(metadata)) {
       return res.status(400).json({ error: 'Aucun changement de mot de passe initial requis pour ce compte' });
     }
 
@@ -473,9 +496,10 @@ exports.changeInitialPassword = async (req, res) => {
       token: sessionData.session.access_token,
       mustChangePassword: false,
       user: {
-        ...admin,
+        ...profile,
         email,
-        role: 'ADMIN_ETABLISSEMENT',
+        role: profile.role,
+        ...(profile.sousRole && { sousRole: profile.sousRole }),
         mustChangePassword: false,
       },
     });

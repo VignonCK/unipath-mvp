@@ -154,6 +154,11 @@ const ListeDossiersControleur = () => {
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
                       {dossier.statutVerdicts}
                     </span>
+                    {dossier.resoumission?.enAttenteNouvelleDecision && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-900 border border-amber-200">
+                        Resoumis
+                      </span>
+                    )}
                     {dossier.verdictsDivergents && (
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
                         Divergents

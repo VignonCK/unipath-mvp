@@ -260,6 +260,11 @@ const DetailDossierControleur = () => {
     verdictExaminateur && decision && decision !== verdictExaminateur
   );
   const motifObligatoire = motifRequis(decision, verdictExaminateur);
+  const modInfo = dossier?.modificationControleur;
+  const formulaireDecisionVerrouille = Boolean(
+    dossier?.decisionControleur && !modInfo?.peutModifier
+  );
+  const peutSoumettreDecision = !formulaireDecisionVerrouille;
 
   return (
     <ControleurPage>
@@ -288,6 +293,29 @@ const DetailDossierControleur = () => {
         <ControleurAlert type="error">
           <span>⚠️</span>
           <span>{error}</span>
+        </ControleurAlert>
+      )}
+
+      {dossier.resoumission?.enAttenteNouvelleDecision && (
+        <ControleurAlert type="warning">
+          <span>↻</span>
+          <span>
+            <strong>Dossier resoumis par le candidat</strong>
+            {dossier.resoumission.date && (
+              <>
+                {' '}
+                le{' '}
+                {new Date(dossier.resoumission.date).toLocaleString('fr-FR', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </>
+            )}
+            . Les pièces ont été corrigées — une nouvelle décision de votre part est attendue.
+          </span>
         </ControleurAlert>
       )}
 
@@ -441,16 +469,57 @@ const DetailDossierControleur = () => {
         </div>
       </BentoCard>
 
+      {dossier.activiteCandidat?.length > 0 && (
+        <BentoCard className="p-5 bg-white">
+          <h2 className="text-base font-semibold text-slate-800 mb-4">Activité récente du candidat</h2>
+          <ul className="space-y-2">
+            {dossier.activiteCandidat.map((evt, index) => (
+              <li
+                key={`${evt.typeAction}-${evt.date}-${index}`}
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2"
+              >
+                <span className="text-sm text-slate-800">{evt.label}</span>
+                {evt.date && (
+                  <span className="text-xs text-gray-500">
+                    {new Date(evt.date).toLocaleString('fr-FR', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </BentoCard>
+      )}
+
       <BentoCard className="p-5 bg-white">
         <h2 className="text-base font-semibold text-slate-800 mb-4">
           {dossier.decisionControleur ? 'Modifier ma décision' : 'Rendre ma décision'}
         </h2>
 
-        {dossier.decisionControleur && (
+        {dossier.decisionControleur && modInfo?.peutModifier && (
           <ControleurAlert type="info">
             <span>ℹ️</span>
             <span>
-              Vous avez déjà rendu votre décision. Vous pouvez la modifier autant de fois que nécessaire.
+              Décision sous réserve : vous pouvez effectuer <strong>une seule correction</strong> dans les{' '}
+              <strong>24 h</strong> suivant votre décision (ex. corriger le motif). Ensuite, seule la
+              resoumission du candidat permet un nouvel examen.
+            </span>
+          </ControleurAlert>
+        )}
+
+        {formulaireDecisionVerrouille && (
+          <ControleurAlert type="warning">
+            <span>🔒</span>
+            <span>
+              {modInfo?.message
+                || (['VALIDE', 'REJETE'].includes(dossier.decisionControleur?.decision)
+                  ? 'Cette décision est définitive et ne peut plus être modifiée.'
+                  : 'Cette décision ne peut plus être modifiée.')}
             </span>
           </ControleurAlert>
         )}
@@ -484,7 +553,7 @@ const DetailDossierControleur = () => {
                   value={v}
                   checked={decision === v}
                   onChange={(e) => setDecision(e.target.value)}
-                  disabled={submitting || success}
+                  disabled={submitting || success || formulaireDecisionVerrouille}
                   className="text-slate-700"
                 />
                 <VerdictBadge verdict={v} />
@@ -505,15 +574,18 @@ const DetailDossierControleur = () => {
             placeholder={
               arbitrageDivergent
                 ? 'Expliquez pourquoi vous arbitrez différemment de l\'examinateur (min. 10 caractères, envoyé à l\'examinateur)'
-                : decision === 'REJETE' || decision === 'SOUS_RESERVE'
-                  ? 'Motif obligatoire (minimum 10 caractères)'
-                  : 'Motif optionnel'
+                : decision === 'SOUS_RESERVE'
+                  ? 'Indiquez la pièce non conforme et la correction attendue (ex. : relevé illisible — merci de le remplacer). Min. 10 caractères.'
+                  : decision === 'REJETE'
+                    ? 'Motif obligatoire (minimum 10 caractères)'
+                    : 'Motif optionnel'
             }
-            disabled={submitting || success}
+            disabled={submitting || success || formulaireDecisionVerrouille}
           />
           <p className="text-xs text-gray-400 mt-1">{motif.trim().length} / 1000 caractères</p>
         </div>
 
+        {peutSoumettreDecision && (
         <div className="mt-6 pt-4 border-t border-gray-100">
           <button
             type="button"
@@ -524,10 +596,11 @@ const DetailDossierControleur = () => {
             {submitting
               ? 'Envoi en cours...'
               : dossier.decisionControleur
-                ? 'Modifier ma décision'
+                ? 'Enregistrer la correction'
                 : 'Soumettre ma décision'}
           </button>
         </div>
+        )}
       </BentoCard>
     </ControleurPage>
   );

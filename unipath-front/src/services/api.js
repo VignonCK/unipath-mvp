@@ -300,6 +300,9 @@ export const inscriptionService = {
   resoumettre: (inscriptionId) =>
     request(`/inscriptions/${inscriptionId}/resoumettre`, { method: 'POST' }),
 
+  getStatutCorrectionsSousReserve: (inscriptionId) =>
+    request(`/inscriptions/${inscriptionId}/corrections-sous-reserve`),
+
   choisirCentreComposition: (inscriptionId, data) =>
     request(`/inscriptions/${inscriptionId}/centre-composition`, {
       method: 'POST',
@@ -443,6 +446,20 @@ export const dgesService = {
 
   supprimerEtablissement: (etablissementId) =>
     request(`/dges/etablissements/${etablissementId}`, {
+      method: 'DELETE',
+    }),
+
+  getCommissionEtablissement: (etablissementId) =>
+    request(`/dges/etablissements/${etablissementId}/commission`),
+
+  creerMembreCommission: (etablissementId, data) =>
+    request(`/dges/etablissements/${etablissementId}/commission`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  supprimerMembreCommission: (etablissementId, membreId) =>
+    request(`/dges/etablissements/${etablissementId}/commission/${membreId}`, {
       method: 'DELETE',
     }),
 };

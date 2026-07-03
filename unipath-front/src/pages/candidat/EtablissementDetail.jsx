@@ -4,6 +4,7 @@ import { candidatService, etablissementService, resolvePublicAssetUrl } from '..
 import { handleSessionError } from '../../utils/auth';
 import CandidatLayout from '../../components/CandidatLayout';
 import EcolesPriveesNav from '../../components/EcolesPriveesNav';
+import { ROUTES } from '../../constants/routes';
 import { BentoCard } from '../../components/AcademicLayout';
 
 function formatDate(value) {
@@ -108,7 +109,7 @@ export default function EtablissementDetail() {
   const campagnesActives = useMemo(() => etablissement?.campagnes || [], [etablissement]);
 
   const postuler = (campagne, cf) => {
-    navigate('/demande-inscription', {
+    navigate(ROUTES.parcours.dossiers, {
       state: {
         etablissementId: etablissement.id,
         filiereId: cf.filiereId || cf.filiere?.id,
@@ -132,7 +133,7 @@ export default function EtablissementDetail() {
       <CandidatLayout candidat={candidat}>
         <div className="max-w-4xl mx-auto px-4 py-12 text-center">
           <p className="text-red-600">{error || 'Établissement introuvable'}</p>
-          <Link to="/etablissements-prives" className="inline-block mt-4 text-sm text-blue-900 hover:underline">
+          <Link to={ROUTES.parcours.etablissements} className="inline-block mt-4 text-sm text-blue-900 hover:underline">
             ← Retour aux écoles privées
           </Link>
         </div>
@@ -150,7 +151,7 @@ export default function EtablissementDetail() {
     <CandidatLayout candidat={candidat}>
       <div className="max-w-4xl mx-auto space-y-6 px-2 sm:px-0 py-2">
         <div>
-          <Link to="/etablissements-prives" className="text-sm text-blue-900 hover:underline mb-4 inline-block">
+          <Link to={ROUTES.parcours.etablissements} className="text-sm text-blue-900 hover:underline mb-4 inline-block">
             ← Écoles privées
           </Link>
           <EcolesPriveesNav />
@@ -232,7 +233,7 @@ export default function EtablissementDetail() {
           {campagnesActives.length === 0 ? (
             <p className="px-6 py-8 text-sm text-gray-500">
               Aucune campagne ouverte pour le moment. Vous pouvez tout de même déposer un dossier depuis{' '}
-              <Link to="/demande-inscription" state={{ etablissementId: etablissement.id }} className="text-blue-900 hover:underline">
+              <Link to={ROUTES.parcours.dossiers} state={{ etablissementId: etablissement.id }} className="text-blue-900 hover:underline">
                 la page de candidature
               </Link>
               .

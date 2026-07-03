@@ -1,5 +1,5 @@
 // src/App.jsx
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import './styles/academicBento.css';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -33,6 +33,7 @@ import DashboardEtudiant from './pages/DashboardEtudiant';
 import DemandeInscription from './pages/DemandeInscription';
 import MesInscriptionsAcademiques from './pages/MesInscriptionsAcademiques';
 import DGESEtablissementsAdmins from './pages/dges/DGESEtablissementsAdmins';
+import DGESCommissionEtablissement from './pages/dges/DGESCommissionEtablissement';
 import MesCampagnes from './pages/admin-etablissement/MesCampagnes';
 import CampagneForm from './pages/admin-etablissement/CampagneForm';
 import DetailCampagneAdmin from './pages/admin-etablissement/DetailCampagneAdmin';
@@ -48,6 +49,32 @@ import ResetPassword from './pages/ResetPassword';
 import PageCampagnesInscription from './pages/campagnes/PageCampagnesInscription';
 import DetailCampagneCandidat from './pages/campagnes/DetailCampagneCandidat';
 import EtablissementDetail from './pages/candidat/EtablissementDetail';
+import AccueilParcours from './pages/AccueilParcours';
+
+function LegacyConcoursDetailRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/concours/ouverts/${id}`} replace />;
+}
+
+function LegacyConcoursClassementRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/concours/ouverts/${id}/classement`} replace />;
+}
+
+function LegacyInscriptionRedirect() {
+  const { inscriptionId } = useParams();
+  return <Navigate to={`/concours/inscription/${inscriptionId}`} replace />;
+}
+
+function LegacyCampagneRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/parcours/campagnes/${id}`} replace />;
+}
+
+function LegacyEtablissementRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/parcours/etablissements/${id}`} replace />;
+}
 
 function App() {
   return (
@@ -73,7 +100,7 @@ function App() {
         <Route path='/confirmer-email' element={<EmailConfirmation />} />
         <Route path='/design-demo' element={<DesignSystemDemo />} />
 
-        {/* Routes protégées - Étudiant / Candidat */}
+        {/* Hub — choix du module */}
         <Route
           path='/dashboard'
           element={
@@ -83,33 +110,7 @@ function App() {
           }
         />
 
-        <Route
-          path='/mes-concours'
-          element={
-            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
-              <AccueilCandidat />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path='/etablissements-prives'
-          element={
-            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
-              <EtablissementsPrives />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path='/etablissements-prives/:id'
-          element={
-            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
-              <EtablissementDetail />
-            </ProtectedRoute>
-          }
-        />
-
+        {/* Compte partagé */}
         <Route
           path='/mon-compte'
           element={
@@ -128,8 +129,18 @@ function App() {
           }
         />
 
+        {/* Module 1 — Concours */}
         <Route
           path='/concours'
+          element={
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
+              <AccueilCandidat />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/concours/ouverts'
           element={
             <ProtectedRoute allowedRoles={STUDENT_ROLES}>
               <PageConcours />
@@ -138,7 +149,7 @@ function App() {
         />
 
         <Route
-          path='/concours/:id'
+          path='/concours/ouverts/:id'
           element={
             <ProtectedRoute allowedRoles={STUDENT_ROLES}>
               <DetailConcours />
@@ -147,7 +158,7 @@ function App() {
         />
 
         <Route
-          path='/concours/:id/classement'
+          path='/concours/ouverts/:id/classement'
           element={
             <ProtectedRoute allowedRoles={STUDENT_ROLES}>
               <ClassementConcours />
@@ -156,7 +167,7 @@ function App() {
         />
 
         <Route
-          path='/inscription/:inscriptionId'
+          path='/concours/inscription/:inscriptionId'
           element={
             <ProtectedRoute allowedRoles={STUDENT_ROLES}>
               <DetailInscription />
@@ -164,26 +175,36 @@ function App() {
           }
         />
 
+        {/* Module 2 — Parcours académique */}
         <Route
-          path='/etudiant'
+          path='/parcours'
           element={
             <ProtectedRoute allowedRoles={STUDENT_ROLES}>
-              <DashboardEtudiant />
+              <AccueilParcours />
             </ProtectedRoute>
           }
         />
 
         <Route
-          path='/mes-inscriptions-academiques'
+          path='/parcours/etablissements'
           element={
             <ProtectedRoute allowedRoles={STUDENT_ROLES}>
-              <MesInscriptionsAcademiques />
+              <EtablissementsPrives />
             </ProtectedRoute>
           }
         />
 
         <Route
-          path='/demande-inscription'
+          path='/parcours/etablissements/:id'
+          element={
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
+              <EtablissementDetail />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/parcours/dossiers'
           element={
             <ProtectedRoute allowedRoles={STUDENT_ROLES}>
               <DemandeInscription />
@@ -192,12 +213,16 @@ function App() {
         />
 
         <Route
-          path='/inscription-academique'
-          element={<Navigate to='/demande-inscription' replace />}
+          path='/parcours/mes-inscriptions'
+          element={
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
+              <MesInscriptionsAcademiques />
+            </ProtectedRoute>
+          }
         />
 
         <Route
-          path='/campagnes-inscription'
+          path='/parcours/campagnes'
           element={
             <ProtectedRoute allowedRoles={STUDENT_ROLES}>
               <PageCampagnesInscription />
@@ -206,13 +231,36 @@ function App() {
         />
 
         <Route
-          path='/campagnes-inscription/:id'
+          path='/parcours/campagnes/:id'
           element={
             <ProtectedRoute allowedRoles={STUDENT_ROLES}>
               <DetailCampagneCandidat />
             </ProtectedRoute>
           }
         />
+
+        <Route
+          path='/parcours/releve'
+          element={
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}>
+              <DashboardEtudiant />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Redirections legacy */}
+        <Route path='/mes-concours' element={<Navigate to='/concours' replace />} />
+        <Route path='/concours/:id/classement' element={<LegacyConcoursClassementRedirect />} />
+        <Route path='/concours/:id' element={<LegacyConcoursDetailRedirect />} />
+        <Route path='/inscription/:inscriptionId' element={<LegacyInscriptionRedirect />} />
+        <Route path='/etablissements-prives' element={<Navigate to='/parcours/etablissements' replace />} />
+        <Route path='/etablissements-prives/:id' element={<LegacyEtablissementRedirect />} />
+        <Route path='/demande-inscription' element={<Navigate to='/parcours/dossiers' replace />} />
+        <Route path='/mes-inscriptions-academiques' element={<Navigate to='/parcours/mes-inscriptions' replace />} />
+        <Route path='/inscription-academique' element={<Navigate to='/parcours/dossiers' replace />} />
+        <Route path='/campagnes-inscription' element={<Navigate to='/parcours/campagnes' replace />} />
+        <Route path='/campagnes-inscription/:id' element={<LegacyCampagneRedirect />} />
+        <Route path='/etudiant' element={<Navigate to='/parcours/releve' replace />} />
 
         <Route
           path='/etablissement'
@@ -225,6 +273,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['COMMISSION']}>
               <DashboardCommission />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/commission/changer-mot-de-passe'
+          element={
+            <ProtectedRoute allowedRoles={['COMMISSION']}>
+              <ChangerMotDePasseObligatoire />
             </ProtectedRoute>
           }
         />
@@ -327,6 +384,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['DGES']}>
               <DGESEtablissementsAdmins />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/dges/etablissements/:etablissementId/commission'
+          element={
+            <ProtectedRoute allowedRoles={['DGES']}>
+              <DGESCommissionEtablissement />
             </ProtectedRoute>
           }
         />

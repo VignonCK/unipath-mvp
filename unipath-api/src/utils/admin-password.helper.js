@@ -13,6 +13,16 @@ function buildAdminEtablissementMetadata(etablissementId) {
   };
 }
 
+function buildMembreCommissionMetadata(etablissementId, sousRole) {
+  return {
+    role: 'COMMISSION',
+    sousRole,
+    etablissementId,
+    mustChangePassword: true,
+    tempPasswordExpiresAt: getTempPasswordExpiresAt().toISOString(),
+  };
+}
+
 function isTempPasswordExpired(metadata) {
   if (!metadata?.mustChangePassword) return false;
   if (!metadata?.tempPasswordExpiresAt) return false;
@@ -23,9 +33,15 @@ function mustChangeAdminPassword(metadata) {
   return metadata?.mustChangePassword === true;
 }
 
+function mustChangeTempPassword(metadata) {
+  return metadata?.mustChangePassword === true;
+}
+
 module.exports = {
   TEMP_PASSWORD_VALIDITY_HOURS,
   buildAdminEtablissementMetadata,
+  buildMembreCommissionMetadata,
   isTempPasswordExpired,
   mustChangeAdminPassword,
+  mustChangeTempPassword,
 };

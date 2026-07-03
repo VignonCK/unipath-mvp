@@ -9,6 +9,7 @@ import {
   needsConcoursAttention,
 } from '../utils/concoursAlertes';
 import CandidatLayout from '../components/CandidatLayout';
+import { ROUTES } from '../constants/routes';
 
 function joursRestants(dateFin) {
   const diff = new Date(dateFin) - new Date();
@@ -126,7 +127,7 @@ export default function AccueilCandidat() {
           </div>
           <button
             type="button"
-            onClick={() => navigate('/concours')}
+            onClick={() => navigate(ROUTES.concours.ouverts)}
             className="inline-flex items-center justify-center rounded-lg bg-blue-900 text-white px-4 py-2 text-sm font-semibold hover:bg-blue-800 transition shrink-0"
           >
             + Nouveau concours
@@ -174,7 +175,7 @@ export default function AccueilCandidat() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => navigate(`/concours/${c.id}`)}
+                      onClick={() => navigate(ROUTES.concours.detail(c.id))}
                       className="text-xs font-semibold text-blue-900 hover:underline shrink-0"
                     >
                       S&apos;inscrire
@@ -197,7 +198,7 @@ export default function AccueilCandidat() {
               <p className="text-gray-600 text-sm mb-4">Aucune inscription pour le moment.</p>
               <button
                 type="button"
-                onClick={() => navigate('/concours')}
+                onClick={() => navigate(ROUTES.concours.ouverts)}
                 className="inline-flex items-center rounded-lg bg-blue-900 text-white px-4 py-2 text-sm font-semibold hover:bg-blue-800 transition"
               >
                 Voir les concours ouverts
@@ -213,7 +214,7 @@ export default function AccueilCandidat() {
                   <li key={ins.id}>
                     <button
                       type="button"
-                      onClick={() => navigate(`/inscription/${ins.id}`)}
+                      onClick={() => navigate(ROUTES.concours.inscription(ins.id))}
                       className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gray-50 transition group"
                     >
                       <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${alerte ? 'bg-orange-100 text-orange-600' : 'bg-blue-50 text-blue-900'}`}>

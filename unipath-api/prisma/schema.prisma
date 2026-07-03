@@ -38,17 +38,21 @@ model Candidat {
 }
 
 model MembreCommission {
-  id        String             @id @default(uuid())
-  nom       String
-  prenom    String
-  email     String             @unique
-  telephone String?
-  role      Role               @default(COMMISSION)
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-  sousRole  SousRoleCommission @default(MEMBRE)
+  id              String             @id @default(uuid())
+  nom             String
+  prenom          String
+  email           String             @unique
+  telephone       String?
+  role            Role               @default(COMMISSION)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  sousRole        SousRoleCommission @default(MEMBRE)
+  etablissementId String?
+  etablissement   Etablissement?     @relation(fields: [etablissementId], references: [id], onDelete: SetNull)
 
   @@index([sousRole])
+  @@index([etablissementId])
+  @@index([etablissementId, sousRole])
 }
 
 model AdministrateurDGES {
@@ -138,6 +142,7 @@ model DossierInscription {
   decisionControleurMotif String?
   decisionControleurDate  DateTime?
   decisionControleurPar   String?
+  decisionControleurModifieCount Int @default(0)
   commentaireRejet        String?
   commentaireSousReserve  String?
   documentsCompl          Json?
@@ -369,6 +374,7 @@ model Etablissement {
   requirements    SchoolRequirement[]
   matriculeFormat String?
   concours        Concours[]
+  membresCommission MembreCommission[]
 
   @@index([type])
   @@index([ville])

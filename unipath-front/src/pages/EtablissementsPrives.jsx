@@ -4,6 +4,7 @@ import { candidatService, etablissementService, filiereService } from '../servic
 import { handleSessionError } from '../utils/auth';
 import CandidatLayout from '../components/CandidatLayout';
 import EcolesPriveesNav from '../components/EcolesPriveesNav';
+import { ROUTES } from '../constants/routes';
 
 function findCampagneFiliereForFiliere(etablissement, filiereId) {
   if (!etablissement?.campagnes?.length || !filiereId) return null;
@@ -135,7 +136,7 @@ export default function EtablissementsPrives() {
       state.niveau = '1';
     }
 
-    navigate('/demande-inscription', { state });
+    navigate(ROUTES.parcours.dossiers, { state });
   };
 
   if (loading) {
@@ -152,7 +153,7 @@ export default function EtablissementsPrives() {
         <div>
           <button
             type="button"
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate(ROUTES.parcours.home)}
             className="text-sm text-blue-900 hover:underline mb-4"
           >
             ← Retour à l&apos;accueil
@@ -170,7 +171,7 @@ export default function EtablissementsPrives() {
             </div>
             <button
               type="button"
-              onClick={() => navigate('/demande-inscription')}
+              onClick={() => navigate(ROUTES.parcours.dossiers)}
               className="shrink-0 rounded-lg bg-blue-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 transition shadow-sm"
             >
               Déposer un dossier
@@ -320,7 +321,7 @@ export default function EtablissementsPrives() {
 
                     <div className="mt-4 flex flex-wrap gap-2">
                       <Link
-                        to={`/etablissements-prives/${etab.id}`}
+                        to={ROUTES.parcours.etablissement(etab.id)}
                         className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
                       >
                         Voir le profil

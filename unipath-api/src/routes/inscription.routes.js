@@ -26,6 +26,12 @@ router.post(
   checkRole(['CANDIDAT']),
   inscriptionController.resoumettreDossierConcours,
 );
+router.get(
+  '/:inscriptionId/corrections-sous-reserve',
+  protect,
+  checkRole(['CANDIDAT']),
+  inscriptionController.getStatutCorrectionsSousReserve,
+);
 router.patch(
   '/:inscriptionId/centre-composition',
   protect,

@@ -415,7 +415,7 @@ export default function DashboardCommission() {
               <textarea
                 value={sousReserveModal.commentaire}
                 onChange={(e) => setSousReserveModal(m => ({ ...m, commentaire: e.target.value }))}
-                placeholder='Indiquez les conditions que le candidat doit remplir (ex: fournir une pièce manquante, corriger un document, etc.)'
+                placeholder='Indiquez la pièce non conforme et la correction attendue (ex. : relevé illisible — merci de le remplacer)'
                 rows={5}
                 className='input-glass w-full px-4 py-3 text-sm resize-none'
               />

@@ -5,6 +5,8 @@ import { candidatService, convocationService, inscriptionService, centreComposit
 import CandidatLayout from '../components/CandidatLayout';
 import { BentoCard } from '../components/AcademicLayout';
 import ChoixCentreComposition, { concoursHasCentres, formatCentreChoisi } from '../components/concours/ChoixCentreComposition';
+import { ROUTES } from '../constants/routes';
+import CorrectionPiecesSousReserve from '../components/CorrectionPiecesSousReserve';
 
 const STATUTS_CHOIX_CENTRE = ['VALIDE_PAR_COMMISSION', 'VALIDE'];
 
@@ -20,12 +22,8 @@ function inscriptionHasCentreChoisi(inscription) {
   return Boolean(c?.concoursCentreId || c?.nom);
 }
 
-function parseDocumentsCompl(documentsCompl) {
-  if (documentsCompl?.pieces && Array.isArray(documentsCompl.pieces)) {
-    return documentsCompl.pieces;
-  }
-  return [];
-}
+const SOUS_RESERVE_MOTIF_FALLBACK =
+  'Certaines pièces de votre dossier ne sont pas conformes. Consultez le motif ci-dessous, remplacez la ou les pièces concernées, puis resoumettez votre dossier.';
 
 const STATUT_CONFIG = {
   VALIDE:     { 
@@ -68,6 +66,16 @@ const STATUT_CONFIG = {
       </svg>
     )
   },
+  SOUS_RESERVE_PAR_COMMISSION: {
+    label: 'Sous réserve (commission)',
+    color: 'bg-amber-500',
+    badge: 'bg-amber-100 text-amber-800',
+    icon: (
+      <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+        <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' />
+      </svg>
+    )
+  },
 };
 
 export default function DetailInscription() {
@@ -79,9 +87,8 @@ export default function DetailInscription() {
   const [photoUrl, setPhotoUrl] = useState(null);
   const [telechargement, setTelechargement] = useState({});
   const [message, setMessage] = useState({ text: '', type: 'info' });
-  const [docModalOpen, setDocModalOpen] = useState(false);
-  const [docFichier, setDocFichier] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [peutResoumettre, setPeutResoumettre] = useState(false);
   const [centreBusy, setCentreBusy] = useState(false);
   const [centresRelational, setCentresRelational] = useState([]);
 
@@ -170,24 +177,6 @@ export default function DetailInscription() {
     }
   };
 
-  const ajouterDocumentCompl = async () => {
-    if (!docFichier) return;
-    try {
-      setActionBusy(true);
-      const formData = new FormData();
-      formData.append('fichier', docFichier);
-      const data = await inscriptionService.ajouterDocumentCompl(inscriptionId, formData);
-      showMessage(data.message || 'Document ajouté avec succès', 'success');
-      setDocFichier(null);
-      setDocModalOpen(false);
-      await loadProfil();
-    } catch (err) {
-      showMessage(err.message || 'Erreur upload document', 'error');
-    } finally {
-      setActionBusy(false);
-    }
-  };
-
   const resoumettreDossier = async () => {
     if (!window.confirm('Confirmer la resoumission de votre dossier à la commission ?')) return;
     try {
@@ -211,7 +200,6 @@ export default function DetailInscription() {
   if (!inscription) return null;
 
   const cfg = STATUT_CONFIG[inscription.statut] || STATUT_CONFIG.EN_ATTENTE;
-  const piecesCompl = parseDocumentsCompl(inscription.documentsCompl);
   const centreChoisi = resolveCentreChoisi(inscription);
 
   return (
@@ -220,7 +208,7 @@ export default function DetailInscription() {
 
         {/* Bouton retour */}
         <button
-          onClick={() => navigate('/mes-concours')}
+          onClick={() => navigate(ROUTES.concours.home)}
           className='flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm font-medium transition'
         >
           <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -366,49 +354,50 @@ export default function DetailInscription() {
           </div>
         )}
 
+        {inscription.statut === 'SOUS_RESERVE_PAR_COMMISSION' && (
+          <div className='bg-amber-50 border-l-4 border-amber-500 px-5 py-4 rounded-xl'>
+            <p className='font-semibold text-amber-900 text-sm'>Dossier sous réserve — en attente du contrôleur</p>
+            <p className='text-amber-800 text-xs mt-2'>
+              La commission a signalé des pièces à corriger. Le contrôleur doit confirmer la décision avant que vous puissiez remplacer vos documents.
+            </p>
+            {(inscription.commentaireSousReserve) && (
+              <p className='text-amber-900 text-sm mt-3 font-medium whitespace-pre-wrap'>
+                {inscription.commentaireSousReserve}
+              </p>
+            )}
+          </div>
+        )}
+
         {inscription.statut === 'SOUS_RESERVE' && (
           <BentoCard className='p-6 border-l-4 border-orange-500'>
             <div className='space-y-4'>
               <div className='rounded-xl border border-orange-200 bg-orange-50 px-5 py-4'>
-                <p className='font-semibold text-orange-900 text-sm'>Action requise — dossier accepté sous réserve</p>
-                <p className='text-orange-800 text-sm mt-2 whitespace-pre-wrap'>
-                  {inscription.commentaireSousReserve || 'Veuillez compléter votre dossier avec les documents demandés par la commission.'}
+                <p className='font-semibold text-orange-900 text-sm'>Action requise — pièces non conformes</p>
+                <p className='text-orange-800 text-xs mt-2'>
+                  Votre dossier est accepté sous réserve. Le motif ci-dessous indique quelle pièce corriger.
+                </p>
+                <p className='text-orange-900 text-sm mt-3 font-medium whitespace-pre-wrap'>
+                  {inscription.commentaireSousReserve || SOUS_RESERVE_MOTIF_FALLBACK}
                 </p>
               </div>
 
-              {piecesCompl.length > 0 && (
-                <div>
-                  <p className='text-xs font-medium text-gray-500 mb-2'>Documents complémentaires déposés</p>
-                  <ul className='space-y-2'>
-                    {piecesCompl.map((doc) => (
-                      <li key={doc.id || doc.url} className='flex items-center gap-2 text-sm'>
-                        <svg className='w-4 h-4 text-blue-600 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' />
-                        </svg>
-                        <a href={doc.url} target='_blank' rel='noopener noreferrer' className='text-blue-800 hover:underline'>
-                          {doc.nom || 'Document'}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <CorrectionPiecesSousReserve
+                candidatId={candidat?.id}
+                inscriptionId={inscriptionId}
+                concours={inscription.concours}
+                quittanceUrl={inscription.quittanceUrl}
+                piecesExtras={inscription.piecesExtras}
+                onCorrectionChange={setPeutResoumettre}
+                onError={(msg) => showMessage(msg, 'error')}
+              />
 
-              <div className='flex flex-wrap gap-3'>
-                <button
-                  type='button'
-                  onClick={() => { setDocModalOpen(true); setDocFichier(null); }}
-                  disabled={actionBusy}
-                  className='btn-academic px-4 py-2 text-sm disabled:opacity-50'
-                >
-                  Ajouter un document
-                </button>
+              <div className='flex flex-wrap gap-3 pt-2'>
                 <button
                   type='button'
                   onClick={resoumettreDossier}
-                  disabled={actionBusy || piecesCompl.length === 0}
+                  disabled={actionBusy || !peutResoumettre}
                   className='px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition disabled:opacity-50'
-                  title={piecesCompl.length === 0 ? 'Ajoutez au moins un document avant de resoumettre' : undefined}
+                  title={!peutResoumettre ? 'Remplacez au moins une pièce non conforme avant de resoumettre' : undefined}
                 >
                   Resoumettre mon dossier
                 </button>
@@ -550,41 +539,6 @@ export default function DetailInscription() {
         </BentoCard>
 
       </div>
-
-      {docModalOpen && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm'>
-          <div className='bg-white w-full max-w-md rounded-2xl shadow-xl'>
-            <div className='px-6 py-4 border-b border-gray-200'>
-              <h3 className='font-semibold text-gray-900'>Ajouter un document complémentaire</h3>
-            </div>
-            <div className='px-6 py-5'>
-              <input
-                type='file'
-                accept='application/pdf,image/png,image/jpeg'
-                onChange={(e) => setDocFichier(e.target.files?.[0] || null)}
-                className='w-full text-sm'
-              />
-            </div>
-            <div className='px-6 py-4 border-t border-gray-200 flex gap-3 justify-end'>
-              <button
-                type='button'
-                onClick={() => { setDocModalOpen(false); setDocFichier(null); }}
-                className='text-sm border border-gray-200 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-50'
-              >
-                Annuler
-              </button>
-              <button
-                type='button'
-                onClick={ajouterDocumentCompl}
-                disabled={actionBusy || !docFichier}
-                className='text-sm bg-blue-900 text-white px-4 py-2 rounded-lg hover:bg-blue-800 disabled:opacity-50'
-              >
-                {actionBusy ? 'Envoi...' : 'Envoyer'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </CandidatLayout>
   );
 }

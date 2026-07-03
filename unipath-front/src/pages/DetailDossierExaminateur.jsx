@@ -321,9 +321,11 @@ const DetailDossierExaminateur = () => {
             value={motif}
             onChange={(e) => setMotif(e.target.value)}
             placeholder={
-              verdict === 'REJETE' || verdict === 'SOUS_RESERVE'
-                ? 'Motif obligatoire (minimum 10 caractères)'
-                : 'Motif optionnel'
+              verdict === 'SOUS_RESERVE'
+                ? 'Indiquez la pièce non conforme et la correction attendue (ex. : relevé illisible — merci de le remplacer). Min. 10 caractères.'
+                : verdict === 'REJETE'
+                  ? 'Motif obligatoire (minimum 10 caractères)'
+                  : 'Motif optionnel'
             }
             disabled={submitting || success || lectureSeule || !peutAgir}
           />

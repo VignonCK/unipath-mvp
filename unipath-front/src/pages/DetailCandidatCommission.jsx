@@ -474,12 +474,12 @@ export default function DetailCandidatCommission() {
               <textarea
                 value={sousReserveModal.commentaire}
                 onChange={(e) => setSousReserveModal(m => ({ ...m, commentaire: e.target.value }))}
-                placeholder='Indiquez les conditions que le candidat doit remplir (ex: fournir une pièce manquante, corriger un document, etc.)'
+                placeholder='Indiquez la pièce non conforme et la correction attendue (ex. : relevé illisible — merci de le remplacer)'
                 rows={5}
                 className='w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-slate-500 resize-none'
               />
               <p className='text-xs text-gray-500 mt-2'>
-                Ce message sera envoyé au candidat par email avec les conditions à remplir.
+                Ce message indique au candidat quelle pièce remplacer ; il sera transmis par email.
               </p>
             </div>
             <div className='px-6 py-4 border-t border-gray-200 flex gap-3 justify-end'>

@@ -355,6 +355,66 @@ class EmailService {
   }
 
   /**
+   * Dossier validé mais convocation différée : le candidat doit d'abord choisir son centre.
+   */
+  async envoyerEmailDossierValideAttenteCentre(data) {
+    validateParams(data, ['candidatEmail', 'candidatNom', 'candidatPrenom', 'concours', 'numeroDossier']);
+
+    const frontendUrl = getFrontendUrl();
+    const subject = `[UniPath] Dossier validé — choisissez votre centre de composition`;
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #16a34a 0%, #008751 100%); padding: 30px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">Dossier validé</h1>
+        </div>
+
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb;">
+          <p style="font-size: 16px; color: #374151;">Bonjour <strong>${data.candidatPrenom} ${data.candidatNom}</strong>,</p>
+
+          <p style="font-size: 14px; color: #6b7280; line-height: 1.6;">
+            Votre dossier pour le concours <strong>${data.concours}</strong> a été validé.
+          </p>
+
+          <div style="background: #dcfce7; padding: 20px; border-radius: 8px; margin: 20px 0; border: 2px solid #16a34a;">
+            <p style="margin: 0; font-size: 14px; color: #166534;"><strong>Numéro de dossier :</strong> ${data.numeroDossier}</p>
+          </div>
+
+          <div style="background: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; color: #1e40af; font-size: 14px;">
+              <strong>Étape suivante obligatoire</strong><br/>
+              <span style="font-size: 13px;">
+                Connectez-vous à votre espace candidat et choisissez votre centre de composition.
+                Votre convocation officielle (PDF) vous sera envoyée par email dès que ce choix sera enregistré.
+              </span>
+            </p>
+          </div>
+
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${frontendUrl}/mes-inscriptions" style="display: inline-block; background: #008751; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+              Choisir mon centre
+            </a>
+          </div>
+
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;"/>
+          <p style="color:#888; font-size:12px; text-align: center; margin: 0;">
+            <strong>Université d'Abomey-Calavi</strong><br/>
+            Année Académique ${emailConfig.app.academicYear}
+          </p>
+        </div>
+      </div>
+    `;
+
+    return this.createEmail({
+      userId: data.userId || data.candidatId,
+      recipient: data.candidatEmail,
+      subject,
+      htmlBody,
+      attachments: [],
+      emailType: 'VALIDATION_ATTENTE_CENTRE',
+    });
+  }
+
+  /**
    * Email de rejet
    * @param {Object} data - { candidatEmail, candidatNom, candidatPrenom, concours, motif, userId }
    * @returns {Promise<Object>} { emailId, status }
@@ -422,7 +482,7 @@ class EmailService {
     validateParams(data, ['candidatEmail', 'candidatNom', 'candidatPrenom', 'concours', 'numeroDossier']);
 
     const frontendUrl = getFrontendUrl();
-    const conditions = data.motif || "Veuillez compléter votre dossier selon les instructions de la commission";
+    const conditions = data.motif || 'Certaines pièces de votre dossier ne sont pas conformes. Consultez le motif et remplacez la pièce concernée.';
     const dateLimite = new Date(Date.now() + 48 * 60 * 60 * 1000).toLocaleDateString('fr-FR');
     
     const subject = `[UniPath] ⚠️ Dossier accepté sous réserve - ${data.concours}`;
@@ -444,21 +504,21 @@ class EmailService {
           </div>
 
           <div style="background: #fff7ed; border-left: 4px solid #f97316; padding: 15px; margin: 20px 0;">
-            <p style="margin: 0; color: #9a3412; font-size: 14px;"><strong>📋 Conditions à remplir :</strong></p>
+            <p style="margin: 0; color: #9a3412; font-size: 14px;"><strong>📋 Pièce(s) à corriger :</strong></p>
             <p style="margin: 10px 0 0 0; color: #9a3412; font-size: 13px;">${conditions}</p>
           </div>
 
           <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0;">
             <p style="margin: 0; color: #991b1b; font-size: 14px;">
               <strong>⚠️ Action requise :</strong><br/>
-              <span style="font-size: 13px;">Vous devez régulariser votre situation avant le <strong>${dateLimite}</strong> (48 heures). Veuillez compléter ou corriger les éléments mentionnés ci-dessus dans les plus brefs délais.</span>
+              <span style="font-size: 13px;">Remplacez la ou les pièces non conformes mentionnées ci-dessus avant le <strong>${dateLimite}</strong> (48 heures), puis resoumettez votre dossier depuis votre espace candidat.</span>
             </p>
           </div>
 
           <div style="text-align: center; margin: 30px 0;">
             <a href="${frontendUrl}/inscription/${data.inscriptionId || ''}"
                style="background: #f97316; color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold; font-size: 16px;">
-              Compléter mon dossier
+              Corriger mes pièces
             </a>
           </div>
 

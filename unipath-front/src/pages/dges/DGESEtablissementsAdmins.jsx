@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { concoursService, dgesService, etablissementService } from '../../services/api';
 import DGESLayout from '../../components/DGESLayout';
@@ -45,6 +45,7 @@ export default function DGESEtablissementsAdmins() {
   const [etabForm, setEtabForm] = useState(ETAB_FORM_INIT);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [expandedPublicEtabId, setExpandedPublicEtabId] = useState(null);
 
   const chargerEtablissements = () => {
     setLoading(true);
@@ -163,6 +164,9 @@ export default function DGESEtablissementsAdmins() {
       setPageMessage(data.message || 'Établissement créé');
       fermerCreateModal();
       await chargerEtablissements();
+      if (etabForm.type === 'PUBLIC') {
+        await chargerEtablissementsPublics();
+      }
     } catch (err) {
       setCreateError(err.message || 'Erreur lors de la création');
     } finally {
@@ -178,6 +182,15 @@ export default function DGESEtablissementsAdmins() {
       const data = await dgesService.supprimerEtablissement(etab.id);
       setPageMessage(data.message || 'Établissement supprimé');
       setEtablissements((prev) => prev.filter((e) => e.id !== etab.id));
+      setPublicEtablissements((prev) => prev.filter((e) => e.id !== etab.id));
+      setConcoursByEtab((prev) => {
+        const next = { ...prev };
+        delete next[etab.id];
+        return next;
+      });
+      if (expandedPublicEtabId === etab.id) {
+        setExpandedPublicEtabId(null);
+      }
     } catch (err) {
       setError(err.message || 'Erreur lors de la suppression');
     }
@@ -192,10 +205,9 @@ export default function DGESEtablissementsAdmins() {
             <p className="text-gray-500 text-sm mt-1">
               {activeTab === 'PRIVE'
                 ? 'Gérez les établissements privés et leurs administrateurs.'
-                : 'Consultez les établissements publics et leurs concours associés.'}
+                : 'Gérez les établissements publics, leurs concours et la commission (examinateurs / contrôleurs) par établissement.'}
             </p>
           </div>
-          {activeTab === 'PRIVE' && (
           <button
             type="button"
             onClick={ouvrirCreateModal}
@@ -203,7 +215,6 @@ export default function DGESEtablissementsAdmins() {
           >
             + Ajouter un établissement
           </button>
-          )}
         </div>
 
         <div className="flex gap-2 border-b border-gray-200">
@@ -301,55 +312,101 @@ export default function DGESEtablissementsAdmins() {
           <div className="flex justify-center py-16">
             <div className="w-10 h-10 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin" />
           </div>
-        ) : publicEtablissements.length === 0 ? (
-          <BentoCard className="p-10 text-center text-gray-400 text-sm">
-            Aucun établissement public enregistré.
-          </BentoCard>
         ) : (
-          <div className="space-y-4">
-            {publicEtablissements.map((etab) => {
-              const concours = concoursByEtab[etab.id] || [];
-              return (
-                <BentoCard key={etab.id} className="p-0 overflow-hidden">
-                  <div className="px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div>
-                      <h2 className="text-lg font-bold text-gray-900">{etab.nom}</h2>
-                      <p className="text-sm text-gray-500">{etab.ville}</p>
-                    </div>
-                    <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">
-                      {concours.length} concours associé{concours.length > 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  {concours.length === 0 ? (
-                    <p className="px-6 py-8 text-sm text-gray-400">
-                      Aucun concours lié à cet établissement.
-                    </p>
+          <BentoCard className="p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th className="text-left px-6 py-3 font-semibold text-gray-600">Nom</th>
+                    <th className="text-left px-6 py-3 font-semibold text-gray-600">Ville</th>
+                    <th className="text-left px-6 py-3 font-semibold text-gray-600">Nb concours</th>
+                    <th className="text-right px-6 py-3 font-semibold text-gray-600">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {publicEtablissements.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-10 text-center text-gray-400">
+                        Aucun établissement public enregistré.
+                      </td>
+                    </tr>
                   ) : (
-                    <ul className="divide-y divide-gray-50">
-                      {concours.map((c) => (
-                        <li key={c.id} className="px-6 py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="font-semibold text-gray-900">{c.libelle}</p>
-                            <p className="text-xs text-gray-500 mt-1">{formatConcoursDates(c)}</p>
-                            <p className="text-xs text-gray-400 mt-1">
-                              {c._count?.inscriptions ?? 0} candidat{(c._count?.inscriptions ?? 0) > 1 ? 's' : ''} inscrit{(c._count?.inscriptions ?? 0) > 1 ? 's' : ''}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/dges/concours/${c.id}/commission`)}
-                            className="shrink-0 self-start lg:self-center px-4 py-2 rounded-lg bg-blue-900 text-white text-sm font-semibold hover:bg-blue-800 transition"
-                          >
-                            Gérer la commission
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                    publicEtablissements.map((etab) => {
+                      const concours = concoursByEtab[etab.id] || [];
+                      const isExpanded = expandedPublicEtabId === etab.id;
+
+                      return (
+                        <Fragment key={etab.id}>
+                          <tr className="hover:bg-gray-50/50">
+                            <td className="px-6 py-4 font-medium text-gray-900">{etab.nom}</td>
+                            <td className="px-6 py-4 text-gray-600">{etab.ville}</td>
+                            <td className="px-6 py-4 text-gray-700 font-semibold">{concours.length}</td>
+                            <td className="px-6 py-4 text-right space-x-3 whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/dges/etablissements/${etab.id}/commission`)}
+                                className="text-sm font-semibold text-blue-900 hover:text-orange-500 transition"
+                              >
+                                Gérer la commission
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedPublicEtabId(isExpanded ? null : etab.id)
+                                }
+                                className="text-sm font-semibold text-blue-900 hover:text-orange-500 transition"
+                              >
+                                {isExpanded ? 'Masquer les concours' : 'Voir les concours'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteEtablissement(etab)}
+                                className="text-sm font-semibold text-red-600 hover:text-red-800 transition"
+                              >
+                                Supprimer
+                              </button>
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr key={`${etab.id}-concours`} className="bg-gray-50/80">
+                              <td colSpan={4} className="px-6 py-4">
+                                {concours.length === 0 ? (
+                                  <p className="text-sm text-gray-400">
+                                    Aucun concours lié à cet établissement.
+                                  </p>
+                                ) : (
+                                  <ul className="space-y-3">
+                                    {concours.map((c) => {
+                                      const nbCandidats = c._count?.inscriptions ?? 0;
+                                      return (
+                                        <li
+                                          key={c.id}
+                                          className="rounded-lg border border-gray-200 bg-white px-4 py-3"
+                                        >
+                                          <p className="font-semibold text-gray-900">{c.libelle}</p>
+                                          <p className="text-xs text-gray-500 mt-1">
+                                            {formatConcoursDates(c)}
+                                          </p>
+                                          <p className="text-xs text-gray-400 mt-1">
+                                            {nbCandidats} candidat{nbCandidats > 1 ? 's' : ''} inscrit{nbCandidats > 1 ? 's' : ''}
+                                          </p>
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })
                   )}
-                </BentoCard>
-              );
-            })}
-          </div>
+                </tbody>
+              </table>
+            </div>
+          </BentoCard>
         ))}
       </div>
 
