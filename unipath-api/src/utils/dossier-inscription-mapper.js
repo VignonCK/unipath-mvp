@@ -1,6 +1,9 @@
 const { etapesCompletees, verdictsDivergents } = require('./verdict-workflow.helper');
 const { formatMotifForClient } = require('./motif.helper');
 
+const REJET_STATUTS = ['REJETE', 'REJETE_PAR_COMMISSION'];
+const SOUS_RESERVE_STATUTS = ['SOUS_RESERVE', 'SOUS_RESERVE_PAR_COMMISSION'];
+
 function mapCommentairesFromDossier(dossier) {
   if (!dossier) {
     return {
@@ -10,9 +13,15 @@ function mapCommentairesFromDossier(dossier) {
     };
   }
 
+  const statut = dossier.statut;
+
   return {
-    commentaireRejet: formatMotifForClient(dossier.commentaireRejet),
-    commentaireSousReserve: formatMotifForClient(dossier.commentaireSousReserve),
+    commentaireRejet: REJET_STATUTS.includes(statut)
+      ? formatMotifForClient(dossier.commentaireRejet)
+      : null,
+    commentaireSousReserve: SOUS_RESERVE_STATUTS.includes(statut)
+      ? formatMotifForClient(dossier.commentaireSousReserve)
+      : null,
     commentaireControleur: formatMotifForClient(dossier.commentaireControleur),
   };
 }

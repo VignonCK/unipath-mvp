@@ -268,9 +268,9 @@ export default function DetailInscription() {
                 </p>
               </div>
               <div className='glass-card-subtle px-4 py-3'>
-                <p className='text-xs text-gray-400 mb-0.5'>Numéro de dossier</p>
+                <p className='text-xs text-gray-400 mb-0.5'>N° de table / inscription</p>
                 <p className='text-sm font-mono font-bold text-blue-900'>
-                  {inscription.id.substring(0, 8).toUpperCase()}
+                  {inscription.numeroInscription || 'En attente d\'attribution'}
                 </p>
               </div>
               <div className='glass-card-subtle px-4 py-3'>
@@ -331,14 +331,16 @@ export default function DetailInscription() {
               <div>
                 <p className='font-semibold text-green-800 text-sm'>Félicitations ! Votre dossier a été validé</p>
                 <p className='text-green-700 text-xs mt-1'>
-                  Vous êtes convoqué(e) à l'examen. Téléchargez votre convocation ci-dessous et présentez-vous avec une pièce d'identité valide.
+                  {concoursHasCentres(centresRelational) && !centreChoisi
+                    ? 'Vous êtes convoqué(e) à l\'examen. Choisissez d\'abord votre centre de composition (étape ci-dessus), puis téléchargez votre convocation.'
+                    : 'Vous êtes convoqué(e) à l\'examen. Téléchargez votre convocation ci-dessous et présentez-vous avec une pièce d\'identité valide.'}
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        {inscription.statut === 'REJETE' && (
+        {['REJETE', 'REJETE_PAR_COMMISSION'].includes(inscription.statut) && (
           <div className='bg-red-50 border-l-4 border-red-500 px-5 py-4 rounded-xl'>
             <div className='flex items-start gap-3'>
               <svg className='w-5 h-5 text-red-600 flex-shrink-0 mt-0.5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -349,6 +351,12 @@ export default function DetailInscription() {
                 <p className='text-red-700 text-xs mt-1'>
                   Votre candidature n'a malheureusement pas été retenue pour ce concours. Vous pouvez postuler à nouveau lors des prochaines sessions.
                 </p>
+                {inscription.commentaireRejet && (
+                  <p className='text-red-900 text-sm mt-3 font-medium whitespace-pre-wrap'>
+                    <span className='block text-xs uppercase tracking-wide text-red-700 mb-1'>Motif du rejet</span>
+                    {inscription.commentaireRejet}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -445,7 +453,7 @@ export default function DetailInscription() {
               </button>
             </div>
 
-            {/* Convocation (uniquement si validé) */}
+            {/* Convocation (uniquement si validé, après choix du centre si requis) */}
             {inscription.statut === 'VALIDE' && (
               <div className='flex items-center justify-between p-4 glass-card-subtle border-l-4 border-orange-500'>
                 <div className='flex items-center gap-3'>
@@ -456,7 +464,7 @@ export default function DetailInscription() {
                   </div>
                   <div>
                     <p className='font-semibold text-gray-900 text-sm'>Convocation officielle</p>
-                    <p className='text-xs text-gray-500'>À présenter le jour de l&apos;examen avec votre pièce d&apos;identité</p>
+                    <p className='text-xs text-gray-500'>Étape finale — à présenter le jour de l&apos;examen avec votre pièce d&apos;identité</p>
                     {centreChoisi && (
                       <p className='text-xs text-orange-700 mt-1'>
                         Centre : {formatCentreChoisi(centreChoisi)}

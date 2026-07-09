@@ -1,153 +1,85 @@
-// src/controllers/dges.controller.js
-const prisma = require('../prisma');
+const statsExportService = require('../services/statsExport.service');
+const { parseStatsFilters } = require('../utils/stats-filters.helper');
 
-function buildConcoursStats(concours) {
-  const total_inscrits = concours.inscriptions.length;
-  let dossiers_valides = 0;
-  let dossiers_rejetes = 0;
-  let en_attente = 0;
-
-  concours.inscriptions.forEach((ins) => {
-    const statut = ins.dossierInscription?.statut;
-    if (statut === 'VALIDE') dossiers_valides += 1;
-    else if (statut === 'REJETE') dossiers_rejetes += 1;
-    else en_attente += 1;
-  });
-
-  const taux_validation_pct =
-    total_inscrits > 0
-      ? Math.round((dossiers_valides / total_inscrits) * 10000) / 100
-      : 0;
-
+function mapParConcoursToLegacy(row) {
   return {
-    concours_id: concours.id,
-    concours: concours.libelle,
-    description: concours.description,
-    dateDebut: concours.dateDebut,
-    dateFin: concours.dateFin,
-    etablissementId: concours.etablissementId,
-    etablissement: concours.etablissementOrganisateur?.nom || concours.etablissement || null,
-    total_inscrits,
-    dossiers_valides,
-    dossiers_rejetes,
-    en_attente,
-    taux_validation_pct,
+    concours_id: row.concoursId,
+    concours: row.libelle,
+    description: row.description ?? null,
+    dateDebut: row.dateDebut ?? null,
+    dateFin: row.dateFin ?? null,
+    etablissementId: row.etablissementId,
+    etablissement: row.etablissement,
+    total_inscrits: row.totalCandidats,
+    dossiers_valides: row.acceptes,
+    dossiers_rejetes: row.rejetes,
+    en_attente: row.enAttente,
+    taux_validation_pct: row.tauxValidationPct,
   };
 }
 
-function getEtablissementGroupKey(concours) {
-  if (concours.etablissementId) {
-    return `id:${concours.etablissementId}`;
+function mapParEtablissementLegacy(groups) {
+  return groups.map((group) => ({
+    etablissement: group.nom,
+    etablissementId: group.etablissementId,
+    nbConcours: group.nbConcours,
+    nbCandidats: group.totalCandidats,
+    concours: group.concours.map(mapParConcoursToLegacy),
+  }));
+}
+
+function handleStatsError(res, error, contextLabel) {
+  if (error.status === 400) {
+    return res.status(400).json({ error: error.message });
   }
-  const label = (concours.etablissement || 'Non renseigné').trim();
-  return `text:${label.toLowerCase()}`;
-}
-
-function getEtablissementGroupLabel(concours) {
-  if (concours.etablissementOrganisateur?.nom) {
-    return concours.etablissementOrganisateur.nom;
+  if (error.status === 403) {
+    return res.status(403).json({ error: error.message || 'Accès refusé' });
   }
-  return (concours.etablissement || 'Non renseigné').trim();
+  console.error(contextLabel, error);
+  return res.status(500).json({ error: 'Erreur lors de la recuperation des statistiques' });
 }
-
-function buildParEtablissement(concoursList, statistiques) {
-  const groups = new Map();
-
-  concoursList.forEach((concours, index) => {
-    const key = getEtablissementGroupKey(concours);
-    const stats = statistiques[index];
-
-    if (!groups.has(key)) {
-      groups.set(key, {
-        etablissement: getEtablissementGroupLabel(concours),
-        etablissementId: concours.etablissementId || null,
-        nbConcours: 0,
-        nbCandidats: 0,
-        concours: [],
-      });
-    }
-
-    const group = groups.get(key);
-    group.nbConcours += 1;
-    group.nbCandidats += Number(stats.total_inscrits);
-    group.concours.push(stats);
-  });
-
-  return Array.from(groups.values()).sort((a, b) =>
-    a.etablissement.localeCompare(b.etablissement, 'fr')
-  );
-}
-
-const concoursStatsInclude = {
-  inscriptions: {
-    select: {
-      dossierInscription: {
-        select: { statut: true },
-      },
-    },
-  },
-};
-
-const concoursStatsSelect = {
-  id: true,
-  libelle: true,
-  description: true,
-  dateDebut: true,
-  dateFin: true,
-  etablissement: true,
-  etablissementId: true,
-  etablissementOrganisateur: {
-    select: { id: true, nom: true, ville: true, type: true },
-  },
-};
 
 exports.getStatistiques = async (req, res) => {
   try {
-    const concoursList = await prisma.concours.findMany({
-      select: {
-        ...concoursStatsSelect,
-        ...concoursStatsInclude,
+    const filters = parseStatsFilters(req.query);
+    const stats = await statsExportService.collectStats(filters, null);
+    const statistiques = stats.parConcours.map(mapParConcoursToLegacy);
+
+    return res.json({
+      meta: stats.meta,
+      totaux: {
+        total_concours: statistiques.length,
+        total_inscrits: stats.totaux.totalCandidats,
+        total_valides: stats.totaux.acceptes,
+        total_rejetes: stats.totaux.rejetes,
+        total_attente: stats.totaux.enAttente,
       },
-      orderBy: { dateDebut: 'desc' },
+      statistiques,
+      parEtablissement: mapParEtablissementLegacy(stats.parEtablissement),
     });
-
-    const statistiques = concoursList.map(buildConcoursStats);
-    const parEtablissement = buildParEtablissement(concoursList, statistiques);
-
-    const totaux = {
-      total_concours: statistiques.length,
-      total_inscrits: statistiques.reduce((s, r) => s + Number(r.total_inscrits), 0),
-      total_valides: statistiques.reduce((s, r) => s + Number(r.dossiers_valides), 0),
-      total_rejetes: statistiques.reduce((s, r) => s + Number(r.dossiers_rejetes), 0),
-      total_attente: statistiques.reduce((s, r) => s + Number(r.en_attente), 0),
-    };
-
-    res.json({ totaux, statistiques, parEtablissement });
   } catch (error) {
-    console.error('Erreur DGES:', error);
-    res.status(500).json({ error: 'Erreur lors de la recuperation des statistiques' });
+    return handleStatsError(res, error, 'Erreur DGES:');
   }
 };
 
 exports.getStatistiquesConcours = async (req, res) => {
   try {
-    const { concoursId } = req.params;
-    const concours = await prisma.concours.findUnique({
-      where: { id: concoursId },
-      select: {
-        ...concoursStatsSelect,
-        ...concoursStatsInclude,
-      },
+    const filters = parseStatsFilters(req.query, {
+      concoursIdFromPath: req.params.concoursId,
     });
+    const stats = await statsExportService.collectStats(filters, null);
+    const row = stats.parConcours[0];
 
-    if (!concours) {
+    if (!row) {
       return res.status(404).json({ error: 'Concours non trouve' });
     }
 
-    res.json(buildConcoursStats(concours));
+    return res.json({
+      meta: stats.meta,
+      ...mapParConcoursToLegacy(row),
+    });
   } catch (error) {
-    console.error('Erreur DGES concours:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
+    return handleStatsError(res, error, 'Erreur DGES concours:');
   }
 };
 

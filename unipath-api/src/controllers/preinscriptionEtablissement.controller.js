@@ -351,6 +351,14 @@ exports.deciderPreinscriptionEtablissement = async (req, res) => {
       return res.status(400).json({ error: 'Statut de decision invalide' });
     }
 
+    if (statut === 'REJETE' && (!motifDecision || !String(motifDecision).trim())) {
+      return res.status(400).json({ error: 'Le motif de rejet est obligatoire' });
+    }
+
+    if (statut === 'VALIDE' && motifDecision) {
+      return res.status(400).json({ error: 'Aucun motif ne doit être fourni pour une validation' });
+    }
+
     const existing = await prisma.preinscriptionEtablissement.findUnique({
       where: { id },
       include: {
@@ -407,7 +415,7 @@ exports.deciderPreinscriptionEtablissement = async (req, res) => {
 
     const updateData = {
       statut,
-      motifDecision: motifDecision || null,
+      motifDecision: statut === 'REJETE' ? String(motifDecision).trim() : null,
       decidedAt: new Date(),
       decidedBy: etablissementId,
       inscriptionAcadId,

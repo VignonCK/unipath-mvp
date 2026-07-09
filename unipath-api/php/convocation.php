@@ -37,6 +37,11 @@ function buildNumeroConvocation($data, $concours) {
         return strtoupper(convocationCleanText($data['numeroConvocation']));
     }
 
+    $numeroInscription = $data['numeroInscription'] ?? ($data['inscription']['numeroInscription'] ?? null);
+    if (!empty($numeroInscription)) {
+        return strtoupper(convocationCleanText($numeroInscription));
+    }
+
     $libelle = $data['libelleConcours'] ?? $concours['libelle'] ?? '';
     $libelleTrimmed = preg_replace('/^concours\s*/i', '', trim($libelle));
     $firstWord = explode(' ', $libelleTrimmed)[0] ?? 'CONV';
@@ -45,15 +50,7 @@ function buildNumeroConvocation($data, $concours) {
         $sigle = 'CONV';
     }
 
-    $sequence = '000001';
-    $numeroInscription = $data['numeroInscription'] ?? ($data['inscription']['numeroInscription'] ?? null);
-    if (!empty($numeroInscription)) {
-        $parts = explode('-', $numeroInscription);
-        $lastPart = end($parts);
-        $sequence = $lastPart !== false && $lastPart !== '' ? $lastPart : '000001';
-    }
-
-    return "CONV-{$sigle}-2026-{$sequence}";
+    return "CONV-{$sigle}-2026-0001";
 }
 
 function renderConvocationPhotoFromBase64($pdf, $photoBase64, $photoMime, $photoX, $photoY, $photoW, $photoH) {
@@ -228,7 +225,7 @@ try {
     $pdf->Rect($leftMargin, $pdf->GetY(), $contentWidth, 7, 'FD');
     $pdf->SetFont('Helvetica', 'B', 10);
     $pdf->SetX($leftMargin + 2);
-    $pdf->Cell($contentWidth - 4, 7, convocationCleanText('Numéro convocation : ') . $numeroConvocation, 0, 1, 'L');
+    $pdf->Cell($contentWidth - 4, 7, convocationCleanText('Numéro de table : ') . $numeroConvocation, 0, 1, 'L');
     $pdf->Ln(1);
 
     renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Identification du candidat', 'blue', $compact);
@@ -295,22 +292,6 @@ try {
             $parts[] = $choisi['adresse'];
         }
         $centreAffiche = convocationCleanText(implode(' — ', array_filter($parts)));
-    } elseif (!empty($data['centresComposition']['centres']) && is_array($data['centresComposition']['centres'])) {
-        $villes = array_map(function ($c) {
-            return $c['ville'] ?? '';
-        }, $data['centresComposition']['centres']);
-        $villes = array_filter($villes);
-        if (!empty($villes)) {
-            $centreAffiche = convocationCleanText(implode(', ', $villes));
-        }
-    } elseif (!empty($concours['centresComposition']['centres']) && is_array($concours['centresComposition']['centres'])) {
-        $villes = array_map(function ($c) {
-            return $c['ville'] ?? '';
-        }, $concours['centresComposition']['centres']);
-        $villes = array_filter($villes);
-        if (!empty($villes)) {
-            $centreAffiche = convocationCleanText(implode(', ', $villes));
-        }
     } elseif (!empty($concours['lieuComposition'])) {
         $centreAffiche = convocationCleanText($concours['lieuComposition']);
     }

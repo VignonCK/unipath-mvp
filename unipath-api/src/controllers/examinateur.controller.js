@@ -123,7 +123,14 @@ exports.getDetailDossier = async (req, res) => {
     if (monVerdictRendu) {
       monVerdict = {
         verdict: dossier.verdict1,
-        motif: formatMotifForClient(dossier.verdict1Motif),
+        motif:
+          dossier.verdict1 === 'REJETE'
+            ? formatMotifForClient(dossier.verdict1Motif)
+            : null,
+        commentaireSousReserve:
+          dossier.verdict1 === 'SOUS_RESERVE'
+            ? formatMotifForClient(dossier.commentaireSousReserve)
+            : null,
         date: dossier.verdict1Date,
       };
       modificationsPossibles = 1 - dossier.verdict1ModifieCount;
@@ -158,7 +165,14 @@ exports.getDetailDossier = async (req, res) => {
           decisionControleur: dossier.decisionControleur,
           decisionControleurLabel:
             VERDICT_LABELS[dossier.decisionControleur] || dossier.decisionControleur,
-          motif: formatMotifForClient(dossier.decisionControleurMotif),
+          motif:
+            dossier.decisionControleur === 'REJETE'
+              ? formatMotifForClient(dossier.decisionControleurMotif)
+              : null,
+          commentaireSousReserve:
+            dossier.decisionControleur === 'SOUS_RESERVE'
+              ? formatMotifForClient(dossier.commentaireSousReserve)
+              : null,
           date: dossier.decisionControleurDate,
         }
       : null;
@@ -209,6 +223,7 @@ exports.getDetailDossier = async (req, res) => {
         rendu: monVerdictRendu,
         verdict: monVerdict?.verdict || null,
         motif: monVerdict?.motif || null,
+        commentaireSousReserve: monVerdict?.commentaireSousReserve || null,
         date: monVerdict?.date || null,
         modificationsPossibles,
       },
@@ -234,7 +249,7 @@ exports.getDetailDossier = async (req, res) => {
 exports.rendreVerdict = async (req, res) => {
   try {
     const { dossierInscriptionId } = req.params;
-    const { verdict, motif } = req.body;
+    const { verdict, motif, commentaireSousReserve } = req.body;
     const examinateurId = req.user.id;
 
     // Valider l'UUID
@@ -243,7 +258,7 @@ exports.rendreVerdict = async (req, res) => {
     }
 
     // Valider et sanitiser le verdict et le motif
-    const validation = validateAndSanitizeVerdict(verdict, motif);
+    const validation = validateAndSanitizeVerdict(verdict, motif, commentaireSousReserve);
     if (!validation.valid) {
       return res.status(400).json({ error: validation.error });
     }
@@ -271,6 +286,7 @@ exports.rendreVerdict = async (req, res) => {
       verdict1Par: examinateurId,
       verdict1: verdict,
       verdict1Motif: validation.sanitizedMotif,
+      commentaireSousReserve: validation.sanitizedCommentaireSousReserve,
       verdict1Date: new Date(),
       verdict1ModifieCount: 0,
     };
@@ -348,7 +364,7 @@ exports.rendreVerdict = async (req, res) => {
 exports.modifierVerdict = async (req, res) => {
   try {
     const { dossierInscriptionId } = req.params;
-    const { verdict, motif } = req.body;
+    const { verdict, motif, commentaireSousReserve } = req.body;
     const examinateurId = req.user.id;
 
     // Valider l'UUID
@@ -357,7 +373,7 @@ exports.modifierVerdict = async (req, res) => {
     }
 
     // Valider et sanitiser le verdict et le motif
-    const validation = validateAndSanitizeVerdict(verdict, motif);
+    const validation = validateAndSanitizeVerdict(verdict, motif, commentaireSousReserve);
     if (!validation.valid) {
       return res.status(400).json({ error: validation.error });
     }
@@ -385,6 +401,7 @@ exports.modifierVerdict = async (req, res) => {
     const updateData = {
       verdict1: verdict,
       verdict1Motif: validation.sanitizedMotif,
+      commentaireSousReserve: validation.sanitizedCommentaireSousReserve,
       verdict1Date: new Date(),
       verdict1ModifieCount: modifieCount + 1,
     };

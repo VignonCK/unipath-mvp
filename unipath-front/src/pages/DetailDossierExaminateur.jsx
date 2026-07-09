@@ -25,6 +25,7 @@ const DetailDossierExaminateur = () => {
 
   const [verdict, setVerdict] = useState('');
   const [motif, setMotif] = useState('');
+  const [commentaireSousReserve, setCommentaireSousReserve] = useState('');
   const [validationError, setValidationError] = useState('');
 
   const chargerDossier = useCallback(async () => {
@@ -45,6 +46,7 @@ const DetailDossierExaminateur = () => {
       if (data.monVerdict.rendu) {
         setVerdict(data.monVerdict.verdict);
         setMotif(data.monVerdict.motif || '');
+        setCommentaireSousReserve(data.monVerdict.commentaireSousReserve || '');
       }
     } catch (err) {
       setError(err.message);
@@ -63,15 +65,26 @@ const DetailDossierExaminateur = () => {
       return false;
     }
 
-    if ((verdict === 'REJETE' || verdict === 'SOUS_RESERVE') && (!motif || motif.trim().length < 10)) {
+    if (verdict === 'REJETE' && (!motif || motif.trim().length < 10)) {
       setValidationError(
-        'Le motif est obligatoire et doit contenir au moins 10 caractères pour un rejet ou une validation sous réserve'
+        'Le motif de rejet est obligatoire et doit contenir au moins 10 caractères'
       );
       return false;
     }
 
-    if (motif && motif.trim().length > 1000) {
-      setValidationError('Le motif ne peut pas dépasser 1000 caractères');
+    if (
+      verdict === 'SOUS_RESERVE'
+      && (!commentaireSousReserve || commentaireSousReserve.trim().length < 10)
+    ) {
+      setValidationError(
+        'Le commentaire sous réserve est obligatoire et doit contenir au moins 10 caractères'
+      );
+      return false;
+    }
+
+    const texteActif = verdict === 'REJETE' ? motif : commentaireSousReserve;
+    if (texteActif && texteActif.trim().length > 1000) {
+      setValidationError('Le texte ne peut pas dépasser 1000 caractères');
       return false;
     }
 
@@ -94,7 +107,11 @@ const DetailDossierExaminateur = () => {
       const method = dossier.monVerdict.rendu ? 'PUT' : 'POST';
       const response = await apiFetch(`/examinateur/dossiers/${dossierInscriptionId}/verdict`, {
         method,
-        body: JSON.stringify({ verdict, motif: motif.trim() }),
+        body: JSON.stringify({
+          verdict,
+          motif: verdict === 'REJETE' ? motif.trim() : null,
+          commentaireSousReserve: verdict === 'SOUS_RESERVE' ? commentaireSousReserve.trim() : null,
+        }),
       });
 
       if (!response.ok) {
@@ -244,9 +261,15 @@ const DetailDossierExaminateur = () => {
               Vous aviez arbitré « {dossier.retourArbitrage.verdictExaminateurLabel} », le contrôleur
               a rendu « {dossier.retourArbitrage.decisionControleurLabel} ».
             </p>
-            {dossier.retourArbitrage.motif && (
+            {dossier.retourArbitrage.motif && dossier.retourArbitrage.decisionControleur === 'REJETE' && (
               <p className="mt-3 whitespace-pre-wrap">
-                <strong>Motif :</strong> {dossier.retourArbitrage.motif}
+                <strong>Motif du rejet :</strong> {dossier.retourArbitrage.motif}
+              </p>
+            )}
+            {dossier.retourArbitrage.commentaireSousReserve
+              && dossier.retourArbitrage.decisionControleur === 'SOUS_RESERVE' && (
+              <p className="mt-3 whitespace-pre-wrap">
+                <strong>Conditions :</strong> {dossier.retourArbitrage.commentaireSousReserve}
               </p>
             )}
             <p className="mt-3 text-sm opacity-90">
@@ -301,7 +324,11 @@ const DetailDossierExaminateur = () => {
                   name="verdict"
                   value={v}
                   checked={verdict === v}
-                  onChange={(e) => setVerdict(e.target.value)}
+                  onChange={(e) => {
+                    setVerdict(e.target.value);
+                    if (e.target.value !== 'REJETE') setMotif('');
+                    if (e.target.value !== 'SOUS_RESERVE') setCommentaireSousReserve('');
+                  }}
                   disabled={submitting || success || lectureSeule || !peutAgir}
                   className="text-slate-700"
                 />
@@ -311,26 +338,41 @@ const DetailDossierExaminateur = () => {
           </div>
         </div>
 
-        <div className="mt-4">
-          <label className="block text-xs font-medium text-gray-500 mb-2">
-            Motif {(verdict === 'REJETE' || verdict === 'SOUS_RESERVE') && '*'}
-          </label>
-          <textarea
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            rows="6"
-            value={motif}
-            onChange={(e) => setMotif(e.target.value)}
-            placeholder={
-              verdict === 'SOUS_RESERVE'
-                ? 'Indiquez la pièce non conforme et la correction attendue (ex. : relevé illisible — merci de le remplacer). Min. 10 caractères.'
-                : verdict === 'REJETE'
-                  ? 'Motif obligatoire (minimum 10 caractères)'
-                  : 'Motif optionnel'
-            }
-            disabled={submitting || success || lectureSeule || !peutAgir}
-          />
-          <p className="text-xs text-gray-400 mt-1">{motif.trim().length} / 1000 caractères</p>
-        </div>
+        {verdict === 'REJETE' && (
+          <div className="mt-4">
+            <label className="block text-xs font-medium text-gray-500 mb-2">
+              Motif du rejet *
+            </label>
+            <textarea
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              rows="6"
+              value={motif}
+              onChange={(e) => setMotif(e.target.value)}
+              placeholder="Motif obligatoire (minimum 10 caractères)"
+              disabled={submitting || success || lectureSeule || !peutAgir}
+            />
+            <p className="text-xs text-gray-400 mt-1">{motif.trim().length} / 1000 caractères</p>
+          </div>
+        )}
+
+        {verdict === 'SOUS_RESERVE' && (
+          <div className="mt-4">
+            <label className="block text-xs font-medium text-gray-500 mb-2">
+              Conditions à remplir *
+            </label>
+            <textarea
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              rows="6"
+              value={commentaireSousReserve}
+              onChange={(e) => setCommentaireSousReserve(e.target.value)}
+              placeholder="Indiquez la pièce non conforme et la correction attendue (min. 10 caractères)."
+              disabled={submitting || success || lectureSeule || !peutAgir}
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              {commentaireSousReserve.trim().length} / 1000 caractères
+            </p>
+          </div>
+        )}
 
         {peutAgir && (
           <div className="mt-6 pt-4 border-t border-gray-100">

@@ -263,7 +263,7 @@ export default function DetailConcours() {
     } catch (error) {
       console.error('Erreur téléchargement convocation:', error);
       if (handleSessionError(error, navigate)) return;
-      setErreur('Erreur lors du téléchargement de la convocation.');
+      setErreur(error.message || 'Erreur lors du téléchargement de la convocation.');
     } finally {
       setTelechargement((prev) => ({ ...prev, convocation: false }));
     }
@@ -498,6 +498,16 @@ export default function DetailConcours() {
               </button>
               {' '}pour suivre l&apos;état de votre dossier.
             </p>
+            {STATUTS_CHOIX_CENTRE.includes(inscriptionExistante.statut)
+              && concoursHasCentres(centresRelational) && (
+              <ChoixCentreComposition
+                centresRelational={centresRelational}
+                centreChoisi={inscriptionExistante.centreChoisi}
+                statut={inscriptionExistante.statut}
+                onSave={handleSaveCentre}
+                busy={centreBusy}
+              />
+            )}
             <div className='flex flex-wrap gap-2 pt-1'>
               <button
                 type='button'
@@ -523,16 +533,6 @@ export default function DetailConcours() {
                 </button>
               )}
             </div>
-            {STATUTS_CHOIX_CENTRE.includes(inscriptionExistante.statut)
-              && concoursHasCentres(centresRelational) && (
-              <ChoixCentreComposition
-                centresRelational={centresRelational}
-                centreChoisi={inscriptionExistante.centreChoisi}
-                statut={inscriptionExistante.statut}
-                onSave={handleSaveCentre}
-                busy={centreBusy}
-              />
-            )}
           </div>
         )}
 

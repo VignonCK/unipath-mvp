@@ -20,10 +20,16 @@ const VERDICT_LABELS = {
   SOUS_RESERVE: 'Sous réserve',
 };
 
-function motifRequis(decision, verdictExaminateur) {
-  if (!decision) return false;
-  if (decision === 'REJETE' || decision === 'SOUS_RESERVE') return true;
-  return Boolean(verdictExaminateur && decision !== verdictExaminateur);
+function motifRequis(decision) {
+  return decision === 'REJETE';
+}
+
+function arbitrageRequis(decision, verdictExaminateur) {
+  return Boolean(verdictExaminateur && decision && decision !== verdictExaminateur && decision === 'VALIDE');
+}
+
+function commentaireSousReserveRequis(decision) {
+  return decision === 'SOUS_RESERVE';
 }
 
 function VerdictPanel({ titre, verdictData, divergent, onCorriger, allowCorrection = false }) {
@@ -50,10 +56,18 @@ function VerdictPanel({ titre, verdictData, divergent, onCorriger, allowCorrecti
           <InfoRow label="Date">
             {new Date(verdictData.date).toLocaleDateString('fr-FR')}
           </InfoRow>
-          {verdictData.motif && (
+          {verdictData.verdict === 'REJETE' && verdictData.motif && (
             <div className="pt-2">
-              <p className="text-xs font-medium text-gray-500 mb-1">Motif</p>
+              <p className="text-xs font-medium text-gray-500 mb-1">Motif du rejet</p>
               <p className="text-sm text-slate-800 whitespace-pre-wrap">{verdictData.motif}</p>
+            </div>
+          )}
+          {verdictData.verdict === 'SOUS_RESERVE' && verdictData.commentaireSousReserve && (
+            <div className="pt-2">
+              <p className="text-xs font-medium text-gray-500 mb-1">Conditions à remplir</p>
+              <p className="text-sm text-slate-800 whitespace-pre-wrap">
+                {verdictData.commentaireSousReserve}
+              </p>
             </div>
           )}
           {allowCorrection && onCorriger && (
@@ -86,11 +100,14 @@ const DetailDossierControleur = () => {
 
   const [decision, setDecision] = useState('');
   const [motif, setMotif] = useState('');
+  const [commentaireSousReserve, setCommentaireSousReserve] = useState('');
+  const [commentaireArbitrage, setCommentaireArbitrage] = useState('');
   const [validationError, setValidationError] = useState('');
 
   const [correctionSlot, setCorrectionSlot] = useState(null);
   const [correctionVerdict, setCorrectionVerdict] = useState('');
   const [correctionMotif, setCorrectionMotif] = useState('');
+  const [correctionCommentaireSousReserve, setCorrectionCommentaireSousReserve] = useState('');
   const [correctionError, setCorrectionError] = useState('');
   const [correctionSubmitting, setCorrectionSubmitting] = useState(false);
 
@@ -112,6 +129,7 @@ const DetailDossierControleur = () => {
       if (data.decisionControleur) {
         setDecision(data.decisionControleur.decision);
         setMotif(data.decisionControleur.motif || '');
+        setCommentaireSousReserve(data.decisionControleur.commentaireSousReserve || '');
       }
     } catch (err) {
       setError(err.message);
@@ -131,19 +149,41 @@ const DetailDossierControleur = () => {
     }
 
     const verdictExaminateur = dossier?.verdicts?.verdict1?.verdict;
-    const divergent = verdictExaminateur && decision !== verdictExaminateur;
 
-    if (motifRequis(decision, verdictExaminateur) && (!motif || motif.trim().length < 10)) {
+    if (motifRequis(decision) && (!motif || motif.trim().length < 10)) {
       setValidationError(
-        divergent
-          ? 'Un motif d\'au moins 10 caractères est obligatoire pour expliquer votre arbitrage à l\'examinateur.'
-          : 'Le motif est obligatoire et doit contenir au moins 10 caractères pour un rejet ou une validation sous réserve.'
+        'Le motif de rejet est obligatoire et doit contenir au moins 10 caractères.'
       );
       return false;
     }
 
-    if (motif && motif.trim().length > 1000) {
-      setValidationError('Le motif ne peut pas dépasser 1000 caractères');
+    if (
+      commentaireSousReserveRequis(decision)
+      && (!commentaireSousReserve || commentaireSousReserve.trim().length < 10)
+    ) {
+      setValidationError(
+        'Le commentaire sous réserve est obligatoire et doit contenir au moins 10 caractères.'
+      );
+      return false;
+    }
+
+    if (
+      arbitrageRequis(decision, verdictExaminateur)
+      && (!commentaireArbitrage || commentaireArbitrage.trim().length < 10)
+    ) {
+      setValidationError(
+        'Une explication d\'arbitrage d\'au moins 10 caractères est obligatoire lorsque votre décision diffère de celle de l\'examinateur.'
+      );
+      return false;
+    }
+
+    const texteActif = decision === 'REJETE'
+      ? motif
+      : decision === 'SOUS_RESERVE'
+        ? commentaireSousReserve
+        : commentaireArbitrage;
+    if (texteActif && texteActif.trim().length > 1000) {
+      setValidationError('Le texte ne peut pas dépasser 1000 caractères');
       return false;
     }
 
@@ -161,7 +201,14 @@ const DetailDossierControleur = () => {
       const method = dossier.decisionControleur ? 'PUT' : 'POST';
       const response = await apiFetch(`/controleur-commission/dossiers/${dossierInscriptionId}/decision`, {
         method,
-        body: JSON.stringify({ decision, motif: motif.trim() }),
+        body: JSON.stringify({
+          decision,
+          motif: decision === 'REJETE' ? motif.trim() : null,
+          commentaireSousReserve: decision === 'SOUS_RESERVE' ? commentaireSousReserve.trim() : null,
+          commentaireArbitrage: arbitrageRequis(decision, dossier?.verdicts?.verdict1?.verdict)
+            ? commentaireArbitrage.trim()
+            : null,
+        }),
       });
 
       if (!response.ok) {
@@ -185,6 +232,7 @@ const DetailDossierControleur = () => {
     setCorrectionSlot(numero);
     setCorrectionVerdict(verdictData.verdict);
     setCorrectionMotif(verdictData.motif || '');
+    setCorrectionCommentaireSousReserve(verdictData.commentaireSousReserve || '');
     setCorrectionError('');
   };
 
@@ -193,11 +241,15 @@ const DetailDossierControleur = () => {
       setCorrectionError('Veuillez sélectionner un verdict');
       return false;
     }
+    if (correctionVerdict === 'REJETE' && (!correctionMotif || correctionMotif.trim().length < 10)) {
+      setCorrectionError('Motif de rejet obligatoire (min. 10 caractères)');
+      return false;
+    }
     if (
-      (correctionVerdict === 'REJETE' || correctionVerdict === 'SOUS_RESERVE') &&
-      (!correctionMotif || correctionMotif.trim().length < 10)
+      correctionVerdict === 'SOUS_RESERVE'
+      && (!correctionCommentaireSousReserve || correctionCommentaireSousReserve.trim().length < 10)
     ) {
-      setCorrectionError('Motif obligatoire (min. 10 caractères) pour rejet ou sous réserve');
+      setCorrectionError('Commentaire sous réserve obligatoire (min. 10 caractères)');
       return false;
     }
     setCorrectionError('');
@@ -216,7 +268,9 @@ const DetailDossierControleur = () => {
           body: JSON.stringify({
             numeroVerdict: correctionSlot,
             verdict: correctionVerdict,
-            motif: correctionMotif.trim(),
+            motif: correctionVerdict === 'REJETE' ? correctionMotif.trim() : null,
+            commentaireSousReserve:
+              correctionVerdict === 'SOUS_RESERVE' ? correctionCommentaireSousReserve.trim() : null,
           }),
         }
       );
@@ -259,7 +313,9 @@ const DetailDossierControleur = () => {
   const arbitrageDivergent = Boolean(
     verdictExaminateur && decision && decision !== verdictExaminateur
   );
-  const motifObligatoire = motifRequis(decision, verdictExaminateur);
+  const motifObligatoire = motifRequis(decision);
+  const sousReserveObligatoire = commentaireSousReserveRequis(decision);
+  const arbitrageObligatoire = arbitrageRequis(decision, verdictExaminateur);
   const modInfo = dossier?.modificationControleur;
   const formulaireDecisionVerrouille = Boolean(
     dossier?.decisionControleur && !modInfo?.peutModifier
@@ -382,7 +438,11 @@ const DetailDossierControleur = () => {
                       name="correctionVerdict"
                       value={v}
                       checked={correctionVerdict === v}
-                      onChange={(e) => setCorrectionVerdict(e.target.value)}
+                      onChange={(e) => {
+                        setCorrectionVerdict(e.target.value);
+                        if (e.target.value !== 'REJETE') setCorrectionMotif('');
+                        if (e.target.value !== 'SOUS_RESERVE') setCorrectionCommentaireSousReserve('');
+                      }}
                       disabled={correctionSubmitting}
                       className="text-slate-700"
                     />
@@ -391,16 +451,32 @@ const DetailDossierControleur = () => {
                 ))}
               </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-2">Motif</label>
-              <textarea
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                rows="4"
-                value={correctionMotif}
-                onChange={(e) => setCorrectionMotif(e.target.value)}
-                disabled={correctionSubmitting}
-              />
-            </div>
+            {correctionVerdict === 'REJETE' && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-2">Motif du rejet *</label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  rows="4"
+                  value={correctionMotif}
+                  onChange={(e) => setCorrectionMotif(e.target.value)}
+                  disabled={correctionSubmitting}
+                />
+              </div>
+            )}
+            {correctionVerdict === 'SOUS_RESERVE' && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-2">
+                  Conditions à remplir *
+                </label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  rows="4"
+                  value={correctionCommentaireSousReserve}
+                  onChange={(e) => setCorrectionCommentaireSousReserve(e.target.value)}
+                  disabled={correctionSubmitting}
+                />
+              </div>
+            )}
             <div className="flex gap-3 flex-wrap">
               <button
                 type="button"
@@ -531,13 +607,13 @@ const DetailDossierControleur = () => {
           </ControleurAlert>
         )}
 
-        {arbitrageDivergent && (
+        {arbitrageDivergent && decision === 'VALIDE' && (
           <ControleurAlert type="warning">
             <span>⚠️</span>
             <span>
               Votre décision ({VERDICT_LABELS[decision]}) diffère de celle de l&apos;examinateur (
-              {VERDICT_LABELS[verdictExaminateur]}). Un motif est obligatoire : il sera transmis à
-              l&apos;examinateur pour ses prochaines évaluations.
+              {VERDICT_LABELS[verdictExaminateur]}). Une explication d&apos;arbitrage est obligatoire :
+              elle sera transmise à l&apos;examinateur.
             </span>
           </ControleurAlert>
         )}
@@ -552,7 +628,12 @@ const DetailDossierControleur = () => {
                   name="decision"
                   value={v}
                   checked={decision === v}
-                  onChange={(e) => setDecision(e.target.value)}
+                  onChange={(e) => {
+                    setDecision(e.target.value);
+                    if (e.target.value !== 'REJETE') setMotif('');
+                    if (e.target.value !== 'SOUS_RESERVE') setCommentaireSousReserve('');
+                    if (e.target.value !== 'VALIDE') setCommentaireArbitrage('');
+                  }}
                   disabled={submitting || success || formulaireDecisionVerrouille}
                   className="text-slate-700"
                 />
@@ -562,28 +643,60 @@ const DetailDossierControleur = () => {
           </div>
         </div>
 
-        <div className="mt-4">
-          <label className="block text-xs font-medium text-gray-500 mb-2">
-            Motif {motifObligatoire && '*'}
-          </label>
-          <textarea
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            rows="6"
-            value={motif}
-            onChange={(e) => setMotif(e.target.value)}
-            placeholder={
-              arbitrageDivergent
-                ? 'Expliquez pourquoi vous arbitrez différemment de l\'examinateur (min. 10 caractères, envoyé à l\'examinateur)'
-                : decision === 'SOUS_RESERVE'
-                  ? 'Indiquez la pièce non conforme et la correction attendue (ex. : relevé illisible — merci de le remplacer). Min. 10 caractères.'
-                  : decision === 'REJETE'
-                    ? 'Motif obligatoire (minimum 10 caractères)'
-                    : 'Motif optionnel'
-            }
-            disabled={submitting || success || formulaireDecisionVerrouille}
-          />
-          <p className="text-xs text-gray-400 mt-1">{motif.trim().length} / 1000 caractères</p>
-        </div>
+        {decision === 'REJETE' && (
+          <div className="mt-4">
+            <label className="block text-xs font-medium text-gray-500 mb-2">
+              Motif du rejet {motifObligatoire && '*'}
+            </label>
+            <textarea
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              rows="6"
+              value={motif}
+              onChange={(e) => setMotif(e.target.value)}
+              placeholder="Motif obligatoire (minimum 10 caractères)"
+              disabled={submitting || success || formulaireDecisionVerrouille}
+            />
+            <p className="text-xs text-gray-400 mt-1">{motif.trim().length} / 1000 caractères</p>
+          </div>
+        )}
+
+        {decision === 'SOUS_RESERVE' && (
+          <div className="mt-4">
+            <label className="block text-xs font-medium text-gray-500 mb-2">
+              Conditions à remplir {sousReserveObligatoire && '*'}
+            </label>
+            <textarea
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              rows="6"
+              value={commentaireSousReserve}
+              onChange={(e) => setCommentaireSousReserve(e.target.value)}
+              placeholder="Indiquez la pièce non conforme et la correction attendue (min. 10 caractères)."
+              disabled={submitting || success || formulaireDecisionVerrouille}
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              {commentaireSousReserve.trim().length} / 1000 caractères
+            </p>
+          </div>
+        )}
+
+        {decision === 'VALIDE' && arbitrageObligatoire && (
+          <div className="mt-4">
+            <label className="block text-xs font-medium text-gray-500 mb-2">
+              Explication de l&apos;arbitrage *
+            </label>
+            <textarea
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              rows="6"
+              value={commentaireArbitrage}
+              onChange={(e) => setCommentaireArbitrage(e.target.value)}
+              placeholder="Expliquez pourquoi vous arbitrez différemment de l'examinateur (min. 10 caractères)."
+              disabled={submitting || success || formulaireDecisionVerrouille}
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              {commentaireArbitrage.trim().length} / 1000 caractères
+            </p>
+          </div>
+        )}
 
         {peutSoumettreDecision && (
         <div className="mt-6 pt-4 border-t border-gray-100">

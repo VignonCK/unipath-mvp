@@ -11,6 +11,7 @@ const {
   verdictsDivergents,
   buildDecisionControleurUpdate,
   getVerdictControleur,
+  getVerdictExaminateur,
   isArbitrageDivergent,
 } = require('../utils/verdict-workflow.helper');
 const { notifierExaminateurArbitrageDivergent } = require('../utils/arbitrage-examinateur.helper');
@@ -39,6 +40,27 @@ async function assertDossierAccessible(req, dossierInscriptionId) {
   const scope = await resolveCommissionScope(req.user.id);
   if (!scope) return true;
   return assertDossierDansScope(dossierInscriptionId, scope.concoursIds);
+}
+
+function applyDecisionCommentFields(updateData, decision, validation) {
+  updateData.commentaireRejet = null;
+  updateData.commentaireSousReserve = null;
+
+  if (decision === 'REJETE') {
+    updateData.commentaireRejet = validation.sanitizedMotif;
+  } else if (decision === 'SOUS_RESERVE') {
+    updateData.commentaireSousReserve = validation.sanitizedCommentaireSousReserve;
+  }
+}
+
+function getTexteNotificationDecision(decision, validation) {
+  if (decision === 'REJETE') return validation.sanitizedMotif;
+  if (decision === 'SOUS_RESERVE') return validation.sanitizedCommentaireSousReserve;
+  return null;
+}
+
+function getMotifArbitrage(validation) {
+  return validation.sanitizedCommentaireArbitrage || validation.sanitizedMotif || null;
 }
 
 /**
@@ -415,6 +437,7 @@ exports.getDetailDossier = async (req, res) => {
       membres.map((e) => [e.id, { nom: e.nom, prenom: e.prenom, sousRole: e.sousRole }])
     );
     const verdictControleur = getVerdictControleur(dossier);
+    const verdictExaminateur = getVerdictExaminateur(dossier);
 
     res.json({
       dossierInscription: {
@@ -465,18 +488,20 @@ exports.getDetailDossier = async (req, res) => {
         quittance: { url: dossier.quittanceUrl, statut: dossier.quittanceUrl ? 'fournie' : 'manquante' },
       },
       verdicts: {
-        verdict1: dossier.verdict1Par
+        verdict1: verdictExaminateur
           ? {
-              verdict: dossier.verdict1,
-              motif: formatMotifForClient(dossier.verdict1Motif),
-              date: dossier.verdict1Date,
-              examinateur: membresMap[dossier.verdict1Par],
+              verdict: verdictExaminateur.verdict,
+              motif: verdictExaminateur.motif,
+              commentaireSousReserve: verdictExaminateur.commentaireSousReserve,
+              date: verdictExaminateur.date,
+              examinateur: membresMap[verdictExaminateur.par],
             }
           : null,
         verdict2: verdictControleur
           ? {
               verdict: verdictControleur.verdict,
               motif: verdictControleur.motif,
+              commentaireSousReserve: verdictControleur.commentaireSousReserve,
               date: verdictControleur.date,
               controleur: membresMap[verdictControleur.par],
               examinateur: membresMap[verdictControleur.par],
@@ -487,7 +512,14 @@ exports.getDetailDossier = async (req, res) => {
       decisionControleur: dossier.decisionControleur
         ? {
             decision: dossier.decisionControleur,
-            motif: formatMotifForClient(dossier.decisionControleurMotif),
+            motif:
+              dossier.decisionControleur === 'REJETE'
+                ? formatMotifForClient(dossier.decisionControleurMotif || dossier.commentaireRejet)
+                : null,
+            commentaireSousReserve:
+              dossier.decisionControleur === 'SOUS_RESERVE'
+                ? formatMotifForClient(dossier.commentaireSousReserve)
+                : null,
             date: dossier.decisionControleurDate,
             par: dossier.decisionControleurPar,
           }
@@ -506,7 +538,7 @@ exports.getDetailDossier = async (req, res) => {
 exports.modifierVerdictExaminateur = async (req, res) => {
   try {
     const { dossierInscriptionId } = req.params;
-    const { numeroVerdict, verdict, motif } = req.body;
+    const { numeroVerdict, verdict, motif, commentaireSousReserve } = req.body;
     const controleurId = req.user.id;
 
     if (!validateUUID(dossierInscriptionId)) {
@@ -520,7 +552,7 @@ exports.modifierVerdictExaminateur = async (req, res) => {
       });
     }
 
-    const validation = validateAndSanitizeVerdict(verdict, motif);
+    const validation = validateAndSanitizeVerdict(verdict, motif, commentaireSousReserve);
     if (!validation.valid) {
       return res.status(400).json({ error: validation.error });
     }
@@ -549,6 +581,7 @@ exports.modifierVerdictExaminateur = async (req, res) => {
     const updateData = {
       verdict1: verdict,
       verdict1Motif: validation.sanitizedMotif,
+      commentaireSousReserve: validation.sanitizedCommentaireSousReserve,
       verdict1Date: new Date(),
     };
 
@@ -610,7 +643,7 @@ exports.modifierVerdictExaminateur = async (req, res) => {
 exports.rendreDecision = async (req, res) => {
   try {
     const { dossierInscriptionId } = req.params;
-    const { decision, motif } = req.body;
+    const { decision, motif, commentaireSousReserve, commentaireArbitrage } = req.body;
     const controleurId = req.user.id;
 
     // Valider l'UUID
@@ -631,7 +664,13 @@ exports.rendreDecision = async (req, res) => {
       return res.status(403).json({ error: 'Accès refusé à ce dossier' });
     }
 
-    const validation = validateDecisionControleur(dossier, decision, motif);
+    const validation = validateDecisionControleur(
+      dossier,
+      decision,
+      motif,
+      commentaireSousReserve,
+      commentaireArbitrage,
+    );
     if (!validation.valid) {
       return res.status(400).json({ error: validation.error });
     }
@@ -660,23 +699,19 @@ exports.rendreDecision = async (req, res) => {
     }
 
     // Préparer les données de mise à jour
+    const texteNotification = getTexteNotificationDecision(decision, validation);
     const updateData = {
       ...buildDecisionControleurUpdate(controleurId, decision, validation.sanitizedMotif),
       statut: nouveauStatut,
       decisionControleurModifieCount: 0,
     };
 
-    // Copier le motif vers les anciens champs pour compatibilité
-    if (decision === 'REJETE') {
-      updateData.commentaireRejet = validation.sanitizedMotif;
-    } else if (decision === 'SOUS_RESERVE') {
-      updateData.commentaireSousReserve = validation.sanitizedMotif;
-    }
+    applyDecisionCommentFields(updateData, decision, validation);
 
     updateData.historiqueStatuts = appendHistorique(dossier.historiqueStatuts, {
       statut: nouveauStatut,
       date: new Date().toISOString(),
-      commentaire: validation.sanitizedMotif || `Decision controleur: ${decision}`,
+      commentaire: texteNotification || `Decision controleur: ${decision}`,
     });
 
     // Transaction : mettre à jour le dossier + enregistrer l'action
@@ -691,7 +726,12 @@ exports.rendreDecision = async (req, res) => {
           utilisateurId: controleurId,
           dossierInscriptionId,
           typeAction: 'DECISION_CONTROLEUR_RENDUE',
-          details: { decision, motif: validation.sanitizedMotif, nombreVerdictsPresents },
+          details: {
+            decision,
+            motif: validation.sanitizedMotif,
+            commentaireSousReserve: validation.sanitizedCommentaireSousReserve,
+            nombreVerdictsPresents,
+          },
           ipAddress: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
           userAgent: req.headers['user-agent'],
         },
@@ -714,7 +754,7 @@ exports.rendreDecision = async (req, res) => {
         data: {
           dossierInscriptionId,
           decision,
-          motif: validation.sanitizedMotif,
+          motif: texteNotification,
         },
       },
     });
@@ -725,7 +765,7 @@ exports.rendreDecision = async (req, res) => {
         inscription: dossier.inscription,
         concours: dossier.inscription.concours,
         decision,
-        motif: validation.sanitizedMotif,
+        motif: getMotifArbitrage(validation),
       });
     } else if (dossier.verdict1Par) {
       await prisma.notification.create({
@@ -751,7 +791,7 @@ exports.rendreDecision = async (req, res) => {
         concours: dossier.inscription.concours,
         inscription: dossier.inscription,
         decision,
-        motif: validation.sanitizedMotif,
+        motif: texteNotification,
       });
     } catch (emailError) {
       console.error('Erreur envoi email:', emailError);
@@ -762,6 +802,7 @@ exports.rendreDecision = async (req, res) => {
       decision: {
         decision,
         motif: validation.sanitizedMotif,
+        commentaireSousReserve: validation.sanitizedCommentaireSousReserve,
         date: result.decisionControleurDate,
       },
       dossierInscription: {
@@ -782,7 +823,7 @@ exports.rendreDecision = async (req, res) => {
 exports.modifierDecision = async (req, res) => {
   try {
     const { dossierInscriptionId } = req.params;
-    const { decision, motif } = req.body;
+    const { decision, motif, commentaireSousReserve, commentaireArbitrage } = req.body;
     const controleurId = req.user.id;
 
     // Valider l'UUID
@@ -812,12 +853,19 @@ exports.modifierDecision = async (req, res) => {
       return res.status(403).json({ error: checkModification.error });
     }
 
-    const validation = validateDecisionControleur(dossier, decision, motif);
+    const validation = validateDecisionControleur(
+      dossier,
+      decision,
+      motif,
+      commentaireSousReserve,
+      commentaireArbitrage,
+    );
     if (!validation.valid) {
       return res.status(400).json({ error: validation.error });
     }
 
     const ancienneDecision = dossier.decisionControleur;
+    const texteNotification = getTexteNotificationDecision(decision, validation);
 
     // Mapper la décision vers le statut
     let nouveauStatut;
@@ -842,12 +890,7 @@ exports.modifierDecision = async (req, res) => {
       decisionControleurModifieCount: (dossier.decisionControleurModifieCount ?? 0) + 1,
     };
 
-    // Copier le motif vers les anciens champs pour compatibilité
-    if (decision === 'REJETE') {
-      updateData.commentaireRejet = validation.sanitizedMotif;
-    } else if (decision === 'SOUS_RESERVE') {
-      updateData.commentaireSousReserve = validation.sanitizedMotif;
-    }
+    applyDecisionCommentFields(updateData, decision, validation);
 
     // Transaction : mettre à jour le dossier + enregistrer l'action
     const result = await prisma.$transaction(async (tx) => {
@@ -865,6 +908,7 @@ exports.modifierDecision = async (req, res) => {
             ancienneDecision,
             nouvelleDecision: decision,
             motif: validation.sanitizedMotif,
+            commentaireSousReserve: validation.sanitizedCommentaireSousReserve,
           },
           ipAddress: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
           userAgent: req.headers['user-agent'],
@@ -880,7 +924,7 @@ exports.modifierDecision = async (req, res) => {
         inscription: dossier.inscription,
         concours: dossier.inscription.concours,
         decision,
-        motif: validation.sanitizedMotif,
+        motif: getMotifArbitrage(validation),
       });
     } else if (dossier.verdict1Par && decision !== ancienneDecision) {
       await prisma.notification.create({
@@ -907,7 +951,7 @@ exports.modifierDecision = async (req, res) => {
           concours: dossier.inscription.concours,
           inscription: dossier.inscription,
           decision,
-          motif: validation.sanitizedMotif,
+          motif: texteNotification,
         });
       } catch (emailErr) {
         console.error('Erreur email modification décision:', emailErr);
@@ -920,6 +964,7 @@ exports.modifierDecision = async (req, res) => {
         ancienneDecision,
         nouvelleDecision: decision,
         motif: validation.sanitizedMotif,
+        commentaireSousReserve: validation.sanitizedCommentaireSousReserve,
         date: result.decisionControleurDate,
       },
       dossierInscription: {

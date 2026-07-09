@@ -11,6 +11,7 @@ const {
 const { candidateSerieMatchesConcours } = require('../utils/series.helper');
 const { validateCentresComposition } = require('../utils/centres-composition.helper');
 const { normalizePieceNom } = require('../constants/pieces.constants');
+const { deriveSigleFromLibelleConcours } = require('../utils/numero-inscription.helper');
 
 /** piece.id → champ Dossier Prisma (fallback si sourceDossier absent). */
 const DOSSIER_FIELD_MAP = {
@@ -303,6 +304,7 @@ exports.createConcours = async (req, res) => {
   try {
     const {
       libelle,
+      sigle,
       etablissement,
       etablissementId,
       dateDebut,
@@ -398,6 +400,7 @@ exports.createConcours = async (req, res) => {
 
     const createData = {
         libelle,
+        sigle: sigle ? deriveSigleFromLibelleConcours(sigle) : deriveSigleFromLibelleConcours(libelle),
         etablissement: etablissement || null,
         dateDebut: new Date(dateDebutDepot),
         dateFin: new Date(dateFinDepot),
@@ -440,6 +443,7 @@ exports.updateConcours = async (req, res) => {
     const { id } = req.params;
     const {
       libelle,
+      sigle,
       etablissement,
       etablissementId,
       dateDebut,
@@ -471,7 +475,12 @@ exports.updateConcours = async (req, res) => {
     let hasInscriptions = existing._count.inscriptions > 0;
     let piecesModified = false;
 
-    if (libelle !== undefined) updateData.libelle = libelle;
+    if (libelle !== undefined) {
+      updateData.libelle = libelle;
+      if (!existing.sigle) {
+        updateData.sigle = deriveSigleFromLibelleConcours(libelle);
+      }
+    }
     if (etablissement !== undefined) updateData.etablissement = etablissement;
     if (description !== undefined) updateData.description = description || null;
     if (fraisParticipation !== undefined) {

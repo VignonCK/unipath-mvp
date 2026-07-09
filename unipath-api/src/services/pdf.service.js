@@ -5,6 +5,10 @@ const { promisify } = require('util');
 const prisma = require('../prisma');
 const { supabaseAdmin } = require('../supabase');
 const {
+  enrichDossierInscriptionForPdf,
+  peutEnvoyerConvocationPdf,
+} = require('../utils/centres-composition.helper');
+const {
   BUCKET_DOSSIERS_CANDIDATS,
   extractStorageRelativePath,
 } = require('../utils/storage.helper');
@@ -342,32 +346,29 @@ class PDFService {
     const outputFile = path.join(this.tempDir, `convocation-${candidat.matricule}.pdf`);
 
     try {
+      const concoursId = concours?.id ?? inscription?.concoursId;
+      const dossierInscription = enrichDossierInscriptionForPdf(
+        inscription?.dossierInscription ?? null,
+      );
+      const convocationCheck = await peutEnvoyerConvocationPdf(
+        { concoursId, concours, dossierInscription },
+        prisma,
+      );
+      if (!convocationCheck.ok) {
+        const err = new Error(
+          'Veuillez choisir votre centre de composition avant de générer la convocation.',
+        );
+        err.code = 'CENTRE_NON_CHOISI';
+        throw err;
+      }
+
       console.log('[Convocation] inscription.numeroInscription:', inscription?.numeroInscription);
       console.log('[Convocation] inscription.concours.libelle:', inscription?.concours?.libelle);
       console.log('[Convocation] inscription.id:', inscription?.id);
 
-      // Extraire le sigle depuis le libellé du concours
-      // Ex: "Concours EPAC 2026 - Génie Civil" → "EPAC"
-      const libelle = inscription?.concours?.libelle || concours?.libelle || '';
-      const sigle = libelle
-        .replace(/concours\s*/i, '')
-        .trim()
-        .split(/\s+/)[0]
-        .toUpperCase()
-        .replace(/[^A-Z0-9]/g, '')
-        .slice(0, 6) || 'CONV';
-
-      // Extraire le numéro séquentiel depuis numeroInscription
-      // Ex: "INS-2026-000001" → "000001"
       const numeroInscription = inscription?.numeroInscription ?? data.numeroInscription ?? null;
-      let sequence = '000001';
-      if (numeroInscription) {
-        const parts = numeroInscription.split('-');
-        sequence = parts[parts.length - 1] || '000001';
-      }
-
-      const numeroConvocation = `CONV-${sigle}-2026-${sequence}`;
-      console.log('[Convocation] numeroConvocation généré:', numeroConvocation);
+      const numeroConvocation = numeroInscription;
+      console.log('[Convocation] numeroConvocation:', numeroConvocation);
 
       const photoCandidateUrls = collectPhotoCandidateUrls({
         photo: candidat?.dossier?.photo || candidat?.photoPath || candidat?.photo,
@@ -387,7 +388,7 @@ class PDFService {
         dateFinComposition: concours?.dateFinComposition || null,
         heureComposition: concours?.heureComposition || '8h au plus tard',
         centresComposition: concours?.centresComposition || null,
-        centreCompositionChoisi: inscription?.dossierInscription?.centreCompositionChoisi || null,
+        centreCompositionChoisi: dossierInscription?.centreCompositionChoisi || null,
         photoBase64,
         photoMime,
       };

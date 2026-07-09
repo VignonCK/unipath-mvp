@@ -44,6 +44,12 @@ router.post(
   checkRole(['CANDIDAT']),
   inscriptionController.choisirCentreComposition,
 );
+router.post(
+  '/:inscriptionId/centre',
+  protect,
+  checkRole(['CANDIDAT']),
+  inscriptionController.choisirCentreComposition,
+);
 router.put('/:inscriptionId/pieces-extras', protect, checkRole(['CANDIDAT']), inscriptionController.updatePiecesExtras);
 router.post('/:inscriptionId/quittance', protect, checkRole(['CANDIDAT']), upload.single('quittance'), inscriptionController.uploadQuittanceInscription);
 router.delete('/:inscriptionId', protect, checkRole(['CANDIDAT']), inscriptionController.annulerInscription);

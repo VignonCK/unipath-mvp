@@ -95,6 +95,22 @@ function buildEmailDataDecision({ candidat, concours, inscription, motif }) {
 
 async function genererPdfConvocation(inscriptionRecord, candidat, concours) {
   const inscriptionForPdf = await resolveInscriptionForConvocationPdf(inscriptionRecord);
+  const convocationCheck = await peutEnvoyerConvocationPdf(
+    {
+      concoursId: inscriptionForPdf?.concoursId || concours?.id,
+      concours: inscriptionForPdf?.concours || concours,
+      dossierInscription: inscriptionForPdf?.dossierInscription,
+    },
+    prisma,
+  );
+  if (!convocationCheck.ok) {
+    const err = new Error(
+      'Veuillez choisir votre centre de composition avant de générer la convocation.',
+    );
+    err.code = 'CENTRE_NON_CHOISI';
+    throw err;
+  }
+
   const pdfResult = await pdfService.genererConvocation(
     buildGenererConvocationPayload(inscriptionForPdf, candidat, concours),
   );
@@ -113,6 +129,10 @@ async function envoyerConvocationAuCandidat({ candidat, concours, inscription })
     pdfPath = generatedPath;
     await emailService.envoyerEmailValidation(emailData, pdfPath);
   } catch (err) {
+    if (err.code === 'CENTRE_NON_CHOISI') {
+      console.warn('Convocation non envoyee : centre de composition non choisi');
+      return;
+    }
     console.error('Erreur PDF convocation, envoi sans pièce jointe:', err);
     await emailService.envoyerEmailValidation(emailData, null);
   } finally {

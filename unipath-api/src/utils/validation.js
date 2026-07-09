@@ -10,41 +10,65 @@ const validateVerdict = (verdict) => {
   return verdictsValides.includes(verdict);
 };
 
-/**
- * Valide qu'un motif est fourni et valide pour les verdicts REJETE et SOUS_RESERVE
- * @param {string} verdict - Le verdict
- * @param {string} motif - Le motif à valider
- * @returns {{valid: boolean, error: string|null}} Résultat de la validation
- */
-const validateMotif = (verdict, motif) => {
-  // Le motif est obligatoire pour REJETE et SOUS_RESERVE
-  if (verdict === 'REJETE' || verdict === 'SOUS_RESERVE') {
-    if (!motif || typeof motif !== 'string') {
-      return {
-        valid: false,
-        error: `Le motif est obligatoire pour un ${verdict === 'REJETE' ? 'rejet' : 'validation sous réserve'}`,
-      };
-    }
+const MIN_TEXTE_DECISION = 10;
+const MAX_TEXTE_DECISION = 1000;
 
-    // Le motif doit contenir au moins 10 caractères
-    const motifTrimmed = motif.trim();
-    if (motifTrimmed.length < 10) {
-      return {
-        valid: false,
-        error: `Le motif doit contenir au moins 10 caractères (actuellement: ${motifTrimmed.length})`,
-      };
-    }
+function validateTexteDecision(texte, { label, obligatoire }) {
+  if (!obligatoire) {
+    return { valid: true, error: null };
+  }
 
-    // Le motif ne doit pas dépasser 1000 caractères
-    if (motifTrimmed.length > 1000) {
-      return {
-        valid: false,
-        error: `Le motif ne peut pas dépasser 1000 caractères (actuellement: ${motifTrimmed.length})`,
-      };
-    }
+  if (!texte || typeof texte !== 'string') {
+    return {
+      valid: false,
+      error: `${label} est obligatoire`,
+    };
+  }
+
+  const trimmed = texte.trim();
+  if (trimmed.length < MIN_TEXTE_DECISION) {
+    return {
+      valid: false,
+      error: `${label} doit contenir au moins ${MIN_TEXTE_DECISION} caractères (actuellement: ${trimmed.length})`,
+    };
+  }
+
+  if (trimmed.length > MAX_TEXTE_DECISION) {
+    return {
+      valid: false,
+      error: `${label} ne peut pas dépasser ${MAX_TEXTE_DECISION} caractères (actuellement: ${trimmed.length})`,
+    };
   }
 
   return { valid: true, error: null };
+}
+
+/**
+ * Valide le motif de rejet (obligatoire uniquement pour REJETE).
+ */
+const validateMotif = (verdict, motif) => {
+  if (verdict !== 'REJETE') {
+    return { valid: true, error: null };
+  }
+
+  return validateTexteDecision(motif, {
+    label: 'Le motif de rejet',
+    obligatoire: true,
+  });
+};
+
+/**
+ * Valide le commentaire sous réserve (obligatoire uniquement pour SOUS_RESERVE).
+ */
+const validateCommentaireSousReserve = (verdict, commentaireSousReserve) => {
+  if (verdict !== 'SOUS_RESERVE') {
+    return { valid: true, error: null };
+  }
+
+  return validateTexteDecision(commentaireSousReserve, {
+    label: 'Le commentaire sous réserve',
+    obligatoire: true,
+  });
 };
 
 const { decodeHtmlEntities, sanitizeMotif, formatMotifForClient } = require('./motif.helper');
@@ -73,7 +97,6 @@ const validateEmail = (email) => {
     return false;
   }
 
-  // Validation simple et robuste pour les besoins applicatifs
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 };
 
@@ -96,77 +119,108 @@ const validateParams = (data, requiredParams = []) => {
 };
 
 /**
- * Valide et sanitise un verdict et son motif
- * @param {string} verdict - Le verdict à valider
- * @param {string} motif - Le motif à valider et sanitiser
- * @returns {{valid: boolean, error: string|null, sanitizedMotif: string}} Résultat de la validation
+ * Valide et sanitise un verdict, son motif (rejet) et son commentaire sous réserve.
  */
-const validateAndSanitizeVerdict = (verdict, motif) => {
-  // Valider le verdict
+const validateAndSanitizeVerdict = (verdict, motif, commentaireSousReserve = null) => {
   if (!validateVerdict(verdict)) {
     return {
       valid: false,
       error: 'Verdict invalide. Valeurs autorisées: VALIDE, REJETE, SOUS_RESERVE',
       sanitizedMotif: null,
+      sanitizedCommentaireSousReserve: null,
     };
   }
 
-  // Valider le motif
+  if (verdict === 'VALIDE') {
+    return {
+      valid: true,
+      error: null,
+      sanitizedMotif: null,
+      sanitizedCommentaireSousReserve: null,
+    };
+  }
+
+  const sousReserveTexte = commentaireSousReserve ?? (verdict === 'SOUS_RESERVE' ? motif : null);
+
   const motifValidation = validateMotif(verdict, motif);
   if (!motifValidation.valid) {
     return {
       valid: false,
       error: motifValidation.error,
       sanitizedMotif: null,
+      sanitizedCommentaireSousReserve: null,
     };
   }
 
-  // Sanitiser le motif
-  const sanitizedMotif = motif ? sanitizeMotif(motif) : null;
+  const sousReserveValidation = validateCommentaireSousReserve(verdict, sousReserveTexte);
+  if (!sousReserveValidation.valid) {
+    return {
+      valid: false,
+      error: sousReserveValidation.error,
+      sanitizedMotif: null,
+      sanitizedCommentaireSousReserve: null,
+    };
+  }
 
   return {
     valid: true,
     error: null,
-    sanitizedMotif,
+    sanitizedMotif: verdict === 'REJETE' && motif ? sanitizeMotif(motif) : null,
+    sanitizedCommentaireSousReserve:
+      verdict === 'SOUS_RESERVE' && sousReserveTexte ? sanitizeMotif(sousReserveTexte) : null,
   };
 };
 
 /**
  * Valide une décision du contrôleur (verdict + motif, y compris arbitrage divergent).
  */
-const validateDecisionControleur = (dossier, decision, motif) => {
-  const base = validateAndSanitizeVerdict(decision, motif);
+const validateDecisionControleur = (
+  dossier,
+  decision,
+  motif,
+  commentaireSousReserve = null,
+  commentaireArbitrage = null,
+) => {
+  const base = validateAndSanitizeVerdict(decision, motif, commentaireSousReserve);
   if (!base.valid) {
     return base;
   }
 
   const { isArbitrageDivergent } = require('./verdict-workflow.helper');
 
-  if (isArbitrageDivergent(dossier?.verdict1, decision)) {
-    const motifTrimmed = (motif || '').trim();
-    if (motifTrimmed.length < 10) {
+  if (isArbitrageDivergent(dossier?.verdict1, decision) && decision === 'VALIDE') {
+    const explication = (commentaireArbitrage || motif || '').trim();
+    const arbitrageValidation = validateTexteDecision(explication, {
+      label: "L'explication d'arbitrage",
+      obligatoire: true,
+    });
+    if (!arbitrageValidation.valid) {
       return {
         valid: false,
         error:
-          'Lorsque votre décision diffère de celle de l\'examinateur, un motif d\'au moins 10 caractères est obligatoire pour lui expliquer votre arbitrage.',
+          "Lorsque votre décision diffère de celle de l'examinateur, une explication d'au moins 10 caractères est obligatoire.",
         sanitizedMotif: null,
+        sanitizedCommentaireSousReserve: null,
+        sanitizedCommentaireArbitrage: null,
       };
     }
-    if (motifTrimmed.length > 1000) {
-      return {
-        valid: false,
-        error: `Le motif ne peut pas dépasser 1000 caractères (actuellement: ${motifTrimmed.length})`,
-        sanitizedMotif: null,
-      };
-    }
+
+    return {
+      ...base,
+      sanitizedCommentaireArbitrage: sanitizeMotif(explication),
+    };
   }
 
-  return base;
+  return {
+    ...base,
+    sanitizedCommentaireArbitrage: null,
+  };
 };
 
 module.exports = {
   validateVerdict,
   validateMotif,
+  validateCommentaireSousReserve,
   sanitizeMotif,
   formatMotifForClient,
   decodeHtmlEntities,

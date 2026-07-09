@@ -44,6 +44,7 @@ const filiereAdminRoutes = require('./routes/filiereAdmin.routes');
 const campagneRoutes = require('./routes/campagne.routes');
 const { centreRouter, concoursCentresRouter } = require('./routes/centreComposition.routes');
 const uploadsRoutes = require('./routes/uploads.routes');
+const statsRoutes = require('./routes/stats.routes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/candidats', candidatRoutes);
@@ -77,6 +78,7 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/etablissement/campagnes', campagneAdminRoutes);
 app.use('/api/etablissement/filieres', filiereAdminRoutes);
 app.use('/api/campagnes', campagneRoutes);
+app.use('/api/stats', statsRoutes);
 app.use('/api', uploadsRoutes);
 
 // ── Health check ────────────────────────────────────────────────

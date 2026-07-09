@@ -96,6 +96,9 @@ model Concours {
   dateFinDepot         DateTime?
   dateDebutComposition DateTime?
   dateFinComposition   DateTime?
+  sigle                    String?
+  inscriptionCompteur      Int           @default(0)
+  inscriptionCompteurAnnee Int?
   createdAt            DateTime      @default(now())
   criteresEligibilite  Json?
   inscriptions         Inscription[]

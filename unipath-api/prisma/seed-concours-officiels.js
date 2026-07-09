@@ -144,6 +144,7 @@ function toConcoursRecord(item, universites, metadata) {
 
   return {
     libelle: `Concours ${item.sigle} 2026`,
+    sigle: item.sigle,
     etablissement,
     dateDebut: dateDebutDepot,
     dateFin: dateFinDepot,

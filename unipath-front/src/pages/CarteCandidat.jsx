@@ -2,27 +2,41 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { candidatService, dossierService } from '../services/api';
+import { candidatService, dossierService, inscriptionService } from '../services/api';
 import { BentoCard } from '../components/AcademicLayout';
 
 const VERIFY_BASE_URL = 'https://unipath-mvp.vercel.app/verify';
 const CURRENT_YEAR = new Date().getFullYear();
+const REJET_STATUTS = ['REJETE', 'REJETE_PAR_COMMISSION'];
 
 function buildVerifyUrl(matricule) {
   return matricule ? `${VERIFY_BASE_URL}/${matricule}` : VERIFY_BASE_URL;
 }
 
+function pickNumeroInscriptionRecent(inscriptions = []) {
+  const actives = inscriptions
+    .filter((ins) => ins?.numeroInscription && !REJET_STATUTS.includes(ins.statut))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  return actives[0]?.numeroInscription || null;
+}
+
 export default function CarteCandidat() {
   const navigate = useNavigate();
   const [candidat, setCandidat] = useState(null);
+  const [numeroInscription, setNumeroInscription] = useState(null);
   const [loading, setLoading] = useState(true);
   const [photoUrl, setPhotoUrl] = useState(null);
 
   useEffect(() => {
     const loadCarte = async () => {
       try {
-        const data = await candidatService.getProfil();
+        const [data, inscriptions] = await Promise.all([
+          candidatService.getProfil(),
+          inscriptionService.getMesInscriptions().catch(() => []),
+        ]);
         setCandidat(data);
+        setNumeroInscription(pickNumeroInscriptionRecent(inscriptions));
 
         if (data.dossier?.photo) {
           try {
@@ -85,6 +99,13 @@ export default function CarteCandidat() {
               </div>
             </div>
           </div>
+
+          {numeroInscription && (
+            <div className='px-8 py-3 bg-blue-950/40 border-b border-white/10'>
+              <p className='text-xs text-blue-200 uppercase tracking-wide'>N° de table (concours le plus récent)</p>
+              <p className='text-lg font-mono font-bold text-white mt-0.5'>{numeroInscription}</p>
+            </div>
+          )}
 
           <div className='p-8'>
             <div className='flex flex-col md:flex-row gap-8 mb-8'>

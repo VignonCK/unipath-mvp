@@ -303,6 +303,12 @@ export const inscriptionService = {
   getStatutCorrectionsSousReserve: (inscriptionId) =>
     request(`/inscriptions/${inscriptionId}/corrections-sous-reserve`),
 
+  choisirCentre: (inscriptionId, data) =>
+    request(`/inscriptions/${inscriptionId}/centre`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   choisirCentreComposition: (inscriptionId, data) =>
     request(`/inscriptions/${inscriptionId}/centre-composition`, {
       method: 'POST',
@@ -416,13 +422,71 @@ export const commissionService = {
 };
 
 // ── DGES ──────────────────────────────────────────────────────────
-export const dgesService = {
-  // Récupère les statistiques de TOUS les concours
-  // Retourne : { totaux: {...}, statistiques: [...] }
-  getStatistiques: () => request('/dges/statistiques'),
+function buildStatsQueryString(params = {}) {
+  const qs = new URLSearchParams();
+  const allowed = ['sexe', 'concoursId', 'etablissementId', 'statut', 'centreId', 'anneeAcademique'];
+  for (const key of allowed) {
+    const value = params[key];
+    if (value != null && value !== '') {
+      qs.set(key, value);
+    }
+  }
+  const str = qs.toString();
+  return str ? `?${str}` : '';
+}
 
-  // Récupère les statistiques d'UN seul concours par son ID
-  getStatistiquesConcours: (id) => request(`/dges/statistiques/${id}`),
+export const dgesService = {
+  getStatistiques: (params = {}) =>
+    request(`/dges/statistiques${buildStatsQueryString(params)}`),
+
+  getStatistiquesConcours: (id, params = {}) =>
+    request(`/dges/statistiques/${id}${buildStatsQueryString(params)}`),
+
+  exportStats: async (format, params = {}) => {
+    const token = localStorage.getItem('token');
+    const qs = new URLSearchParams({ format });
+    const allowed = ['sexe', 'concoursId', 'etablissementId', 'statut', 'centreId', 'anneeAcademique'];
+    for (const key of allowed) {
+      const value = params[key];
+      if (value != null && value !== '') {
+        qs.set(key, value);
+      }
+    }
+
+    const response = await fetch(`${BASE_URL}/stats/export?${qs.toString()}`, {
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+    });
+
+    if (redirectToLoginOn401(response.status)) {
+      return;
+    }
+
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type') || '';
+      let message = 'Erreur lors de l\'export';
+      if (contentType.includes('application/json')) {
+        const err = await response.json();
+        message = err.error || message;
+      }
+      throw new Error(message);
+    }
+
+    const contentDisposition = response.headers.get('content-disposition');
+    const fallback = `stats-inscriptions.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+    const match = contentDisposition?.match(/filename="?([^";\n]+)"?/);
+    const filename = match ? match[1] : fallback;
+    const blob = await response.blob();
+    const objectUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(objectUrl);
+  },
 
   listerAdminsEtablissement: (etablissementId) =>
     request(`/dges/etablissements/${etablissementId}/admins`),

@@ -1,7 +1,7 @@
 const fs = require('fs');
 const prisma = require('../prisma');
 const { supabaseAdmin } = require('../supabase');
-const { genererNumeroInscriptionUnique } = require('../utils/numero-inscription.helper');
+const { genererNumeroInscriptionPourConcours } = require('../utils/numero-inscription.helper');
 const { envoyerPreInscriptionApresCreation } = require('../utils/inscription-email.helper');
 const { candidateSerieMatchesConcours } = require('../utils/series.helper');
 const { computeInscriptionCompletude, profilCandidatComplet } = require('../utils/dossier-submission.helper');
@@ -281,6 +281,14 @@ exports.soumettreDossierComplet = async (req, res) => {
           },
         });
 
+        if (!inscriptionExistante.numeroInscription) {
+          const numeroInscription = await genererNumeroInscriptionPourConcours(tx, concoursId);
+          await tx.inscription.update({
+            where: { id: inscriptionExistante.id },
+            data: { numeroInscription },
+          });
+        }
+
         const dejaSoumis = await tx.actionHistory.findFirst({
           where: {
             dossierInscriptionId,
@@ -312,8 +320,10 @@ exports.soumettreDossierComplet = async (req, res) => {
       });
     } else {
       const result = await prisma.$transaction(async (tx) => {
+        const numeroInscription = await genererNumeroInscriptionPourConcours(tx, concoursId);
+
         const newInscription = await tx.inscription.create({
-          data: { candidatId, concoursId },
+          data: { candidatId, concoursId, numeroInscription },
         });
 
         const dossierInscription = await tx.dossierInscription.create({
@@ -354,10 +364,8 @@ exports.soumettreDossierComplet = async (req, res) => {
         return { inscription: newInscription, dossierInscription };
       });
 
-      const numeroInscription = await genererNumeroInscriptionUnique();
-      inscription = await prisma.inscription.update({
+      inscription = await prisma.inscription.findUnique({
         where: { id: result.inscription.id },
-        data: { numeroInscription },
         include: { concours: true, dossierInscription: true },
       });
     }

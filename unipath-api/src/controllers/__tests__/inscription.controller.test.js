@@ -12,7 +12,7 @@ jest.mock('../../prisma', () => ({
 jest.mock('../../supabase', () => ({ supabaseAdmin: {} }));
 
 jest.mock('../../utils/numero-inscription.helper', () => ({
-  genererNumeroInscriptionUnique: jest.fn().mockResolvedValue('2026-0001'),
+  genererNumeroInscriptionPourConcours: jest.fn().mockResolvedValue('ENAM-2026-0001'),
 }));
 
 jest.mock('../../utils/inscription-email.helper', () => ({

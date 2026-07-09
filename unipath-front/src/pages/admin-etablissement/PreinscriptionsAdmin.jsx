@@ -12,6 +12,7 @@ export default function PreinscriptionsAdmin() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [sousReserveModal, setSousReserveModal] = useState({ open: false, id: null, commentaire: '' });
+  const [rejetModal, setRejetModal] = useState({ open: false, id: null, motif: '' });
 
   const charger = () => {
     setLoading(true);
@@ -42,10 +43,14 @@ export default function PreinscriptionsAdmin() {
     }
   };
 
-  const demanderRejet = async (id) => {
-    const motifDecision = window.prompt('Motif de la décision :', '') || '';
-    if (!motifDecision.trim()) return;
-    await decider(id, 'REJETE', { motifDecision: motifDecision.trim() });
+  const ouvrirRejet = (id) => {
+    setRejetModal({ open: true, id, motif: '' });
+  };
+
+  const confirmerRejet = async () => {
+    if (!rejetModal.id || !rejetModal.motif.trim()) return;
+    await decider(rejetModal.id, 'REJETE', { motifDecision: rejetModal.motif.trim() });
+    setRejetModal({ open: false, id: null, motif: '' });
   };
 
   const ouvrirSousReserve = (id) => {
@@ -129,7 +134,7 @@ export default function PreinscriptionsAdmin() {
                         <div className="flex flex-wrap gap-2">
                           <button type="button" onClick={() => decider(d.id, 'VALIDE')} className="px-2 py-1 text-xs font-semibold bg-green-600 text-white rounded hover:bg-green-700" title="Crée l'inscription académique">Valider</button>
                           <button type="button" onClick={() => ouvrirSousReserve(d.id)} className="px-2 py-1 text-xs font-semibold bg-amber-500 text-white rounded hover:bg-amber-600">Sous réserve</button>
-                          <button type="button" onClick={() => demanderRejet(d.id)} className="px-2 py-1 text-xs font-semibold bg-red-600 text-white rounded hover:bg-red-700">Rejeter</button>
+                          <button type="button" onClick={() => ouvrirRejet(d.id)} className="px-2 py-1 text-xs font-semibold bg-red-600 text-white rounded hover:bg-red-700">Rejeter</button>
                         </div>
                       </td>
                     </tr>
@@ -140,6 +145,45 @@ export default function PreinscriptionsAdmin() {
           </BentoCard>
         )}
       </div>
+
+      {rejetModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="font-semibold text-gray-900">Rejeter la pré-inscription</h3>
+            </div>
+            <div className="px-6 py-5">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Motif du rejet <span className="text-red-600">*</span>
+              </label>
+              <textarea
+                value={rejetModal.motif}
+                onChange={(e) => setRejetModal((m) => ({ ...m, motif: e.target.value }))}
+                placeholder="Expliquez pourquoi la candidature n'est pas retenue…"
+                rows={5}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm resize-none"
+              />
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setRejetModal({ open: false, id: null, motif: '' })}
+                className="text-sm border border-gray-200 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={confirmerRejet}
+                disabled={!rejetModal.motif.trim()}
+                className="text-sm bg-red-600 text-white px-5 py-2 rounded-lg hover:bg-red-700 disabled:opacity-60"
+              >
+                Confirmer le rejet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {sousReserveModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">

@@ -22,35 +22,53 @@ function verdictsDivergents(dossier) {
 
 function buildDecisionControleurUpdate(controleurId, decision, motif) {
   const now = new Date();
+  const motifStocke = decision === 'REJETE' ? motif : null;
+
   return {
     decisionControleurPar: controleurId,
     decisionControleur: decision,
-    decisionControleurMotif: motif,
+    decisionControleurMotif: motifStocke,
     decisionControleurDate: now,
     verdict2Par: controleurId,
     verdict2: decision,
-    verdict2Motif: motif,
+    verdict2Motif: motifStocke,
     verdict2Date: now,
   };
 }
 
 function getVerdictExaminateur(dossier) {
   if (!dossier.verdict1Par) return null;
+
   return {
     verdict: dossier.verdict1,
     par: dossier.verdict1Par,
     date: dossier.verdict1Date,
-    motif: formatMotifForClient(dossier.verdict1Motif),
+    motif:
+      dossier.verdict1 === 'REJETE'
+        ? formatMotifForClient(dossier.verdict1Motif)
+        : null,
+    commentaireSousReserve:
+      dossier.verdict1 === 'SOUS_RESERVE'
+        ? formatMotifForClient(dossier.commentaireSousReserve)
+        : null,
   };
 }
 
 function getVerdictControleur(dossier) {
   if (!dossier.decisionControleur) return null;
+
   return {
     verdict: dossier.decisionControleur,
     par: dossier.decisionControleurPar,
     date: dossier.decisionControleurDate,
-    motif: formatMotifForClient(dossier.decisionControleurMotif),
+    motif:
+      dossier.decisionControleur === 'REJETE'
+        ? formatMotifForClient(dossier.decisionControleurMotif || dossier.commentaireRejet)
+        : null,
+    commentaireSousReserve:
+      dossier.decisionControleur === 'SOUS_RESERVE'
+        ? formatMotifForClient(dossier.commentaireSousReserve)
+        : null,
   };
 }
 

@@ -68,9 +68,10 @@ export default function ChoixCentreComposition({
   return (
     <form onSubmit={handleSubmit} className='rounded-xl border border-blue-200 bg-blue-50/60 p-4 space-y-3'>
       <div>
-        <p className='font-semibold text-blue-900 text-sm'>Choisissez votre centre de composition</p>
+        <p className='text-xs font-semibold uppercase tracking-wide text-blue-700'>Étape obligatoire</p>
+        <p className='font-semibold text-blue-900 text-sm mt-1'>Choix du centre de composition</p>
         <p className='text-xs text-blue-800 mt-1'>
-          Obligatoire avant de télécharger votre convocation.
+          Sélectionnez votre centre avant de télécharger votre convocation officielle.
         </p>
       </div>
 

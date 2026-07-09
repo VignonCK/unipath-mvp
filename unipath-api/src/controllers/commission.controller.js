@@ -185,15 +185,21 @@ exports.updateStatut = async (req, res) => {
       });
     }
 
-    if (statut === 'REJETE' && !commentaireRejet) {
+    if (statut === 'REJETE' && !commentaireRejet?.trim()) {
       return res.status(400).json({
         error: 'Le commentaire de rejet est obligatoire',
       });
     }
 
-    if (statut === 'SOUS_RESERVE' && !commentaireSousReserve) {
+    if (statut === 'SOUS_RESERVE' && !commentaireSousReserve?.trim()) {
       return res.status(400).json({
         error: 'Le commentaire de validation sous réserve est obligatoire',
+      });
+    }
+
+    if (statut === 'VALIDE' && (commentaireRejet || commentaireSousReserve)) {
+      return res.status(400).json({
+        error: 'Aucun commentaire ne doit être fourni pour une validation',
       });
     }
 
