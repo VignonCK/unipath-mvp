@@ -127,4 +127,48 @@ const verifierSousRole = (sousRolesAutorises) => {
   };
 };
 
-module.exports = { protect, protectOptional, verifierSousRole };
+/**
+ * Middleware pour vérifier le sous-rôle staff établissement (AdminEtablissement.sousRole).
+ * Deny-by-default si pas de scope établissement.
+ */
+const verifierSousRoleEtablissement = (sousRolesAutorises) => {
+  return async (req, res, next) => {
+    try {
+      if (!req.user?.id) {
+        return res.status(401).json({ error: 'Authentification requise' });
+      }
+      if (req.userRole !== 'ADMIN_ETABLISSEMENT') {
+        return res.status(403).json({ error: 'Accès réservé au personnel d\'établissement' });
+      }
+
+      const staff = await prisma.adminEtablissement.findUnique({
+        where: { id: req.user.id },
+        select: { sousRole: true, etablissementId: true, nom: true, prenom: true },
+      });
+
+      if (!staff) {
+        return res.status(403).json({ error: 'Profil administrateur d\'établissement introuvable' });
+      }
+      if (!staff.etablissementId) {
+        return res.status(403).json({ error: 'Accès refusé : établissement non rattaché au compte' });
+      }
+      if (!sousRolesAutorises.includes(staff.sousRole)) {
+        return res.status(403).json({
+          error: 'Accès refusé. Sous-rôle établissement non autorisé pour cette action.',
+        });
+      }
+
+      req.etablissementId = staff.etablissementId;
+      req.user.etablissementId = staff.etablissementId;
+      req.user.sousRole = staff.sousRole;
+      req.sousRoleEtablissement = staff.sousRole;
+      req.staffEtablissement = staff;
+      next();
+    } catch (error) {
+      console.error('Erreur verifierSousRoleEtablissement:', error);
+      return res.status(500).json({ error: 'Erreur serveur lors de la vérification du sous-rôle' });
+    }
+  };
+};
+
+module.exports = { protect, protectOptional, verifierSousRole, verifierSousRoleEtablissement };

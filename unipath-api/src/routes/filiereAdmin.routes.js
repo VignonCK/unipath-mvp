@@ -1,28 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/auth.middleware');
+const { protect, verifierSousRoleEtablissement } = require('../middleware/auth.middleware');
 const { checkRole } = require('../middleware/role.middleware');
 const filiereController = require('../controllers/filiere.controller');
 
-router.post(
-  '/',
+const adminOnly = [
   protect,
   checkRole(['ADMIN_ETABLISSEMENT']),
-  filiereController.creerFiliereAdmin
-);
+  verifierSousRoleEtablissement(['ADMIN']),
+];
 
-router.put(
-  '/:id',
-  protect,
-  checkRole(['ADMIN_ETABLISSEMENT']),
-  filiereController.modifierFiliereAdmin
-);
-
-router.delete(
-  '/:id',
-  protect,
-  checkRole(['ADMIN_ETABLISSEMENT']),
-  filiereController.supprimerFiliereAdmin
-);
+router.post('/', ...adminOnly, filiereController.creerFiliereAdmin);
+router.put('/:id', ...adminOnly, filiereController.modifierFiliereAdmin);
+router.delete('/:id', ...adminOnly, filiereController.supprimerFiliereAdmin);
 
 module.exports = router;

@@ -52,13 +52,13 @@ async function resolveUserContext(userId, email) {
   const adminEtablissement = prisma.adminEtablissement
     ? await prisma.adminEtablissement.findUnique({
         where: { id: userId },
-        select: { role: true, nom: true, prenom: true, etablissementId: true },
+        select: { role: true, sousRole: true, nom: true, prenom: true, etablissementId: true },
       })
     : null;
   if (adminEtablissement) {
     return {
       role: adminEtablissement.role,
-      sousRole: null,
+      sousRole: adminEtablissement.sousRole || 'ADMIN',
       profile: adminEtablissement,
       etablissementId: adminEtablissement.etablissementId,
     };

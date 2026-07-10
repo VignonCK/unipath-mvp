@@ -60,7 +60,7 @@ exports.creerAdmin = async (req, res) => {
       email: emailNormalise,
       password: motDePasseTemporaire,
       email_confirm: true,
-      user_metadata: buildAdminEtablissementMetadata(etablissementId),
+      user_metadata: buildAdminEtablissementMetadata(etablissementId, 'ADMIN'),
     });
 
     if (authError) {
@@ -79,6 +79,7 @@ exports.creerAdmin = async (req, res) => {
         email: emailNormalise,
         telephone: telephone?.trim() || null,
         role: 'ADMIN_ETABLISSEMENT',
+        sousRole: 'ADMIN',
         etablissementId,
       },
       include: {
@@ -156,6 +157,7 @@ exports.listerAdmins = async (req, res) => {
         email: true,
         telephone: true,
         role: true,
+        sousRole: true,
         createdAt: true,
         updatedAt: true,
       },

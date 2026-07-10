@@ -12,10 +12,14 @@ export default function CandidaturesAdmin() {
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [filters, setFilters] = useState({ annee: '' });
 
   useEffect(() => {
+    setLoading(true);
+    setError('');
+    const yearParams = filters.annee ? { anneeAcademique: filters.annee } : {};
     Promise.all([
-      applicationService.getDemandesEtablissement(),
+      applicationService.getDemandesEtablissement(yearParams),
       preinscriptionEtablissementService.getDemandesEtablissement('EN_ATTENTE'),
     ])
       .then(([appsData, preinData]) => {
@@ -24,7 +28,7 @@ export default function CandidaturesAdmin() {
       })
       .catch((err) => setError(err.message || 'Erreur de chargement'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [filters]);
 
   return (
     <AdminEtablissementLayout>
@@ -52,6 +56,21 @@ export default function CandidaturesAdmin() {
             </button>
           </div>
         )}
+
+        <BentoCard className="p-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Année académique</label>
+              <input
+                type="text"
+                placeholder="2025-2026"
+                value={filters.annee}
+                onChange={(e) => setFilters((p) => ({ ...p, annee: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+              />
+            </div>
+          </div>
+        </BentoCard>
 
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>

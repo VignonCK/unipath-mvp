@@ -1,56 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/auth.middleware');
+const { protect, verifierSousRoleEtablissement } = require('../middleware/auth.middleware');
 const { checkRole } = require('../middleware/role.middleware');
 const campagneController = require('../controllers/campagne.controller');
 
-router.post(
-  '/',
+const adminOnly = [
   protect,
   checkRole(['ADMIN_ETABLISSEMENT']),
-  campagneController.creerCampagne
-);
+  verifierSousRoleEtablissement(['ADMIN']),
+];
 
-router.get(
-  '/',
-  protect,
-  checkRole(['ADMIN_ETABLISSEMENT']),
-  campagneController.listerMesCampagnes
-);
-
-router.get(
-  '/:id',
-  protect,
-  checkRole(['ADMIN_ETABLISSEMENT']),
-  campagneController.getCampagneById
-);
-
-router.put(
-  '/:id',
-  protect,
-  checkRole(['ADMIN_ETABLISSEMENT']),
-  campagneController.modifierCampagne
-);
-
-router.delete(
-  '/:id',
-  protect,
-  checkRole(['ADMIN_ETABLISSEMENT']),
-  campagneController.supprimerCampagne
-);
-
-router.patch(
-  '/:id/publier',
-  protect,
-  checkRole(['ADMIN_ETABLISSEMENT']),
-  campagneController.publierCampagne
-);
-
-router.patch(
-  '/:id/cloturer',
-  protect,
-  checkRole(['ADMIN_ETABLISSEMENT']),
-  campagneController.cloturerCampagne
-);
+router.post('/', ...adminOnly, campagneController.creerCampagne);
+router.get('/', ...adminOnly, campagneController.listerMesCampagnes);
+router.get('/:id', ...adminOnly, campagneController.getCampagneById);
+router.put('/:id', ...adminOnly, campagneController.modifierCampagne);
+router.delete('/:id', ...adminOnly, campagneController.supprimerCampagne);
+router.patch('/:id/publier', ...adminOnly, campagneController.publierCampagne);
+router.patch('/:id/cloturer', ...adminOnly, campagneController.cloturerCampagne);
 
 module.exports = router;

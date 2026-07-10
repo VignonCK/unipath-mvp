@@ -1,7 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const controller = require('../controllers/application.controller');
-const { protect } = require('../middleware/auth.middleware');
+const { protect, verifierSousRoleEtablissement } = require('../middleware/auth.middleware');
 const { checkRole } = require('../middleware/role.middleware');
 
 const router = express.Router();
@@ -19,13 +19,25 @@ const upload = multer({
   },
 });
 
+const staffView = [
+  protect,
+  checkRole(['ADMIN_ETABLISSEMENT']),
+  verifierSousRoleEtablissement(['ADMIN', 'SUPERVISEUR', 'CONTROLEUR']),
+];
+
+const adminOnly = [
+  protect,
+  checkRole(['ADMIN_ETABLISSEMENT']),
+  verifierSousRoleEtablissement(['ADMIN']),
+];
+
 router.post('/', protect, checkRole(['CANDIDAT']), controller.createApplication);
 router.get('/mine', protect, checkRole(['CANDIDAT']), controller.getMyApplications);
 
-router.get('/etablissement/applications', protect, checkRole(['ADMIN_ETABLISSEMENT']), controller.getApplicationsForEtablissement);
-router.get('/etablissement/requirements', protect, checkRole(['ADMIN_ETABLISSEMENT']), controller.getMySchoolRequirements);
-router.post('/etablissement/requirements', protect, checkRole(['ADMIN_ETABLISSEMENT']), controller.upsertSchoolRequirement);
-router.delete('/etablissement/requirements/:id', protect, checkRole(['ADMIN_ETABLISSEMENT']), controller.deleteSchoolRequirement);
+router.get('/etablissement/applications', ...staffView, controller.getApplicationsForEtablissement);
+router.get('/etablissement/requirements', ...adminOnly, controller.getMySchoolRequirements);
+router.post('/etablissement/requirements', ...adminOnly, controller.upsertSchoolRequirement);
+router.delete('/etablissement/requirements/:id', ...adminOnly, controller.deleteSchoolRequirement);
 
 router.get('/requirements/etablissement/:etablissementId', protect, controller.getSchoolRequirements);
 router.get('/:id', protect, controller.getApplicationById);

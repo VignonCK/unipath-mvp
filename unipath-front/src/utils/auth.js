@@ -46,6 +46,12 @@ export const SOUS_ROLES_COMMISSION = {
   CONTROLEUR: 'CONTROLEUR',
 };
 
+export const SOUS_ROLES_ETABLISSEMENT = {
+  ADMIN: 'ADMIN',
+  SUPERVISEUR: 'SUPERVISEUR',
+  CONTROLEUR: 'CONTROLEUR',
+};
+
 /**
  * Récupère le token d'authentification
  * @returns {string|null} Token ou null si non connecté
@@ -88,7 +94,10 @@ export function getUserRole() {
 
 export function getUserSousRole() {
   const user = getUser();
-  return user?.sousRole || null;
+  if (user?.sousRole) return user.sousRole;
+  // Rétrocompat : anciens comptes admin sans sousRole en localStorage
+  if (user?.role === ROLES.ADMIN_ETABLISSEMENT) return SOUS_ROLES_ETABLISSEMENT.ADMIN;
+  return null;
 }
 
 export function hasSousRole(allowedSousRoles) {
@@ -175,6 +184,15 @@ export function getDefaultRoute(role, sousRole) {
     if (sousRole === SOUS_ROLES_COMMISSION.EXAMINATEUR) return '/examinateur/dossiers';
     if (sousRole === SOUS_ROLES_COMMISSION.CONTROLEUR) return '/controleur-commission/tableau-de-bord';
     return '/commission';
+  }
+  if (role === ROLES.ADMIN_ETABLISSEMENT) {
+    if (sousRole === SOUS_ROLES_ETABLISSEMENT.CONTROLEUR) {
+      return '/admin-etablissement/preinscriptions';
+    }
+    if (sousRole === SOUS_ROLES_ETABLISSEMENT.SUPERVISEUR) {
+      return '/admin-etablissement/preinscriptions';
+    }
+    return '/admin-etablissement/campagnes';
   }
   return DEFAULT_ROUTES[role] || '/login';
 }

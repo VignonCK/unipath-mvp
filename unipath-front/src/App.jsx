@@ -45,6 +45,7 @@ import DetailCandidatureAdmin from './pages/admin-etablissement/DetailCandidatur
 import PreinscriptionsAdmin from './pages/admin-etablissement/PreinscriptionsAdmin';
 import ValidationQuittances from './pages/admin-etablissement/ValidationQuittances';
 import EtudiantsAdmin from './pages/admin-etablissement/EtudiantsAdmin';
+import PersonnelAdmin from './pages/admin-etablissement/PersonnelAdmin';
 import ResetPassword from './pages/ResetPassword';
 import PageCampagnesInscription from './pages/campagnes/PageCampagnesInscription';
 import DetailCampagneCandidat from './pages/campagnes/DetailCampagneCandidat';
@@ -410,7 +411,7 @@ function App() {
         <Route
           path='/admin-etablissement/campagnes'
           element={
-            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']} allowedSousRoles={['ADMIN']}>
               <MesCampagnes />
             </ProtectedRoute>
           }
@@ -419,7 +420,7 @@ function App() {
         <Route
           path='/admin-etablissement/campagnes/nouvelle'
           element={
-            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']} allowedSousRoles={['ADMIN']}>
               <CampagneForm />
             </ProtectedRoute>
           }
@@ -428,7 +429,7 @@ function App() {
         <Route
           path='/admin-etablissement/campagnes/:id/modifier'
           element={
-            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']} allowedSousRoles={['ADMIN']}>
               <CampagneForm />
             </ProtectedRoute>
           }
@@ -437,7 +438,7 @@ function App() {
         <Route
           path='/admin-etablissement/campagnes/:id'
           element={
-            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']} allowedSousRoles={['ADMIN']}>
               <DetailCampagneAdmin />
             </ProtectedRoute>
           }
@@ -446,7 +447,7 @@ function App() {
         <Route
           path='/admin-etablissement/etablissement'
           element={
-            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']} allowedSousRoles={['ADMIN']}>
               <MonEtablissementAdmin />
             </ProtectedRoute>
           }
@@ -493,6 +494,18 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
               <EtudiantsAdmin />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/admin-etablissement/personnel'
+          element={
+            <ProtectedRoute
+              allowedRoles={['ADMIN_ETABLISSEMENT']}
+              allowedSousRoles={['ADMIN', 'SUPERVISEUR']}
+            >
+              <PersonnelAdmin />
             </ProtectedRoute>
           }
         />

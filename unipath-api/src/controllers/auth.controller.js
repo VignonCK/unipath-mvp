@@ -290,6 +290,7 @@ exports.login = async (req, res) => {
         where: { id: userId },
         select: {
           role: true,
+          sousRole: true,
           nom: true,
           prenom: true,
           email: true,
@@ -300,6 +301,7 @@ exports.login = async (req, res) => {
 
       if (adminEtablissement) {
         role = adminEtablissement.role;
+        sousRole = adminEtablissement.sousRole || 'ADMIN';
         userData = adminEtablissement;
       }
     }
@@ -419,6 +421,7 @@ exports.changeInitialPassword = async (req, res) => {
           telephone: true,
           etablissementId: true,
           role: true,
+          sousRole: true,
         },
       });
       if (!profile) {

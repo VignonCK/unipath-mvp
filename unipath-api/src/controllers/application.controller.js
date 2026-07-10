@@ -9,6 +9,7 @@ const {
   canAdminAccessApplication,
 } = require('../utils/admin-etablissement.helper');
 const { candidateSerieMatchesConcours } = require('../utils/series.helper');
+const { getPiecesACorrigerCodes } = require('../utils/preinscription.helper');
 
 const REQUIRED_PROFILE_FIELDS = {
   nom: (c) => c?.nom,
@@ -421,8 +422,12 @@ exports.getApplicationsForEtablissement = async (req, res) => {
       return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
     }
 
+    const anneeAcademique = req.query.anneeAcademique || req.query.annee;
     const applications = await prisma.application.findMany({
-      where: { etablissementId },
+      where: {
+        etablissementId,
+        ...(anneeAcademique ? { anneeAcademique: String(anneeAcademique) } : {}),
+      },
       include: {
         candidat: {
           select: {
@@ -774,6 +779,13 @@ exports.uploadApplicationDocument = async (req, res) => {
       where: { id },
       include: {
         etablissement: { select: { id: true } },
+        preinscription: {
+          select: {
+            id: true,
+            statut: true,
+            piecesACorriger: true,
+          },
+        },
       },
     });
     if (!application) {
@@ -781,6 +793,20 @@ exports.uploadApplicationDocument = async (req, res) => {
     }
     if (application.candidatId !== userId) {
       return res.status(403).json({ error: 'Acces refuse' });
+    }
+
+    // Guard SOUS_RESERVE : remplacement uniquement si code ∈ piecesACorriger
+    const preinscription = application.preinscription;
+    const isSousReserve = preinscription?.statut === 'SOUS_RESERVE';
+    if (isSousReserve) {
+      const codesAutorises = getPiecesACorrigerCodes(preinscription.piecesACorriger);
+      if (!codesAutorises.includes(String(code).trim())) {
+        return res.status(403).json({
+          error: 'Cette pièce n\'est pas autorisée à être modifiée : elle n\'a pas été mise sous réserve',
+          code,
+          piecesACorriger: codesAutorises,
+        });
+      }
     }
 
     const requirement = await prisma.schoolRequirement.findFirst({
@@ -826,18 +852,25 @@ exports.uploadApplicationDocument = async (req, res) => {
       },
     });
 
-    const completion = await computeCompletion(id);
-    await prisma.application.update({
-      where: { id },
-      data: {
-        status: completion?.isComplete ? 'READY_FOR_PREINSCRIPTION' : 'PENDING_DOCUMENTS',
-      },
-    });
+    // Ne pas rétrograder le statut Application pendant une correction SOUS_RESERVE
+    if (!isSousReserve) {
+      const completion = await computeCompletion(id);
+      await prisma.application.update({
+        where: { id },
+        data: {
+          status: completion?.isComplete ? 'READY_FOR_PREINSCRIPTION' : 'PENDING_DOCUMENTS',
+        },
+      });
+      return res.json({
+        message: 'Document ajoute au dossier avec succes',
+        document,
+        completion,
+      });
+    }
 
     return res.json({
-      message: 'Document ajoute au dossier avec succes',
+      message: 'Document corrigé avec succès',
       document,
-      completion,
     });
   } catch (error) {
     console.error('Erreur uploadApplicationDocument:', error);

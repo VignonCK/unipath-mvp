@@ -3,6 +3,7 @@ import { authService } from '../services/api';
 import { countAlertesNonVues } from '../utils/concoursAlertes';
 import { detectModuleFromPath, MODULES, ROUTES } from '../constants/routes';
 import NotificationCenter from './NotificationCenter';
+import BottomTabNav from './BottomTabNav';
 
 function initiales(prenom, nom) {
   return `${(prenom || '?')[0]}${(nom || '?')[0]}`.toUpperCase();
@@ -14,7 +15,7 @@ const TAB_NAV = {
       label: 'Mes concours',
       path: ROUTES.concours.home,
       activePrefixes: [ROUTES.concours.home, '/concours/inscription'],
-      showInscriptionBadge: true,
+      badgeKey: 'concours',
     },
     {
       label: 'Ouverts',
@@ -42,7 +43,7 @@ const TAB_NAV = {
       label: 'Dossiers',
       path: ROUTES.parcours.dossiers,
       activePrefixes: [ROUTES.parcours.dossiers],
-      showDossiersBadge: true,
+      badgeKey: 'dossiers',
     },
     {
       label: 'Inscriptions',
@@ -69,79 +70,6 @@ function countDossiersEnCours(candidat) {
   }).length;
 }
 
-function isTabActive(item, pathname) {
-  if (item.activePrefixes) {
-    return item.activePrefixes.some(
-      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-    );
-  }
-  return pathname === item.path || pathname.startsWith(`${item.path}/`);
-}
-
-function DashboardStyleTab({ label, active, badge, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex flex-col items-center gap-0.5 py-2 rounded-xl transition min-w-0 w-full ${
-        active ? 'text-blue-900' : 'text-gray-500 hover:text-blue-900'
-      }`}
-    >
-      <span
-        className={`w-8 sm:w-10 h-1 rounded-full transition shrink-0 ${
-          active ? 'bg-orange-500' : 'bg-transparent'
-        }`}
-      />
-      <span className={`inline-flex items-center gap-1 max-w-full px-0.5 ${active ? 'text-blue-900' : ''}`}>
-        <span className="text-[10px] sm:text-xs font-semibold truncate">{label}</span>
-        {badge != null && badge > 0 && (
-          <span className="shrink-0 min-w-[1rem] h-4 px-1 rounded-full bg-orange-500 text-white text-[9px] font-bold flex items-center justify-center">
-            {badge > 9 ? '9+' : badge}
-          </span>
-        )}
-      </span>
-    </button>
-  );
-}
-
-function ModuleBottomNav({ module, location, navigate, candidat }) {
-  const tabs = TAB_NAV[module];
-  if (!tabs?.length) return null;
-
-  const nbInscriptions = candidat?.inscriptions?.length ?? 0;
-  const nbAlertesConcours = countAlertesNonVues(candidat?.inscriptions);
-  const concoursBadge = nbAlertesConcours > 0 ? nbAlertesConcours : nbInscriptions;
-  const nbDossiersEnCours = countDossiersEnCours(candidat);
-
-  return (
-    <nav className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-[env(safe-area-inset-bottom)]">
-      <div className="max-w-6xl mx-auto px-2 sm:px-4">
-        <div
-          className="grid gap-0.5 py-2"
-          style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
-        >
-          {tabs.map((item) => {
-            const active = isTabActive(item, location.pathname);
-            let badge = null;
-            if (item.showInscriptionBadge && concoursBadge > 0) badge = concoursBadge;
-            if (item.showDossiersBadge && nbDossiersEnCours > 0) badge = nbDossiersEnCours;
-
-            return (
-              <DashboardStyleTab
-                key={item.label}
-                label={item.label}
-                active={active}
-                badge={badge}
-                onClick={() => navigate(item.path)}
-              />
-            );
-          })}
-        </div>
-      </div>
-    </nav>
-  );
-}
-
 export default function CandidatLayout({ children, candidat, photoUrl, module: moduleProp }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -150,6 +78,12 @@ export default function CandidatLayout({ children, candidat, photoUrl, module: m
   const nom = `${candidat?.prenom || ''} ${candidat?.nom || ''}`.trim();
   const inModule = module === MODULES.CONCOURS || module === MODULES.PARCOURS;
   const isHub = module === MODULES.HUB;
+  const tabs = TAB_NAV[module] || [];
+
+  const nbInscriptions = candidat?.inscriptions?.length ?? 0;
+  const nbAlertesConcours = countAlertesNonVues(candidat?.inscriptions);
+  const concoursBadge = nbAlertesConcours > 0 ? nbAlertesConcours : nbInscriptions;
+  const nbDossiersEnCours = countDossiersEnCours(candidat);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -229,11 +163,13 @@ export default function CandidatLayout({ children, candidat, photoUrl, module: m
       </main>
 
       {inModule && (
-        <ModuleBottomNav
-          module={module}
-          location={location}
-          navigate={navigate}
-          candidat={candidat}
+        <BottomTabNav
+          tabs={tabs}
+          getBadge={(item) => {
+            if (item.badgeKey === 'concours' && concoursBadge > 0) return concoursBadge;
+            if (item.badgeKey === 'dossiers' && nbDossiersEnCours > 0) return nbDossiersEnCours;
+            return null;
+          }}
         />
       )}
     </div>

@@ -182,6 +182,21 @@ function parseDocumentsCompl(documentsCompl) {
   return [];
 }
 
+function getPiecesACorrigerCodes(piecesACorriger) {
+  if (!Array.isArray(piecesACorriger)) return [];
+  return piecesACorriger
+    .map((p) => (typeof p === 'string' ? p.trim() : String(p?.code || '').trim()))
+    .filter(Boolean);
+}
+
+function getPieceLabel(piecesACorriger, code, fallbackDoc) {
+  if (Array.isArray(piecesACorriger)) {
+    const entry = piecesACorriger.find((p) => (typeof p === 'string' ? p : p?.code) === code);
+    if (entry && typeof entry === 'object' && entry.label) return entry.label;
+  }
+  return fallbackDoc?.label || code;
+}
+
 function statusIndex(status) {
   const idx = STATUS_ORDER.indexOf(status);
   return idx === -1 ? 0 : idx;
@@ -291,6 +306,10 @@ export default function DemandeInscription() {
   const [preinBusy, setPreinBusy] = useState(false);
   const [preinMessage, setPreinMessage] = useState('');
   const [preinError, setPreinError] = useState('');
+  /** @type {[Record<string, { applicationId: string, documents: any[] }>, Function]} */
+  const [correctionBundles, setCorrectionBundles] = useState({});
+  const [correctionFiles, setCorrectionFiles] = useState({});
+  const [correctionBusyCode, setCorrectionBusyCode] = useState('');
 
   const [inscriptionsAcad, setInscriptionsAcad] = useState([]);
   const [loadingInscriptionsAcad, setLoadingInscriptionsAcad] = useState(true);
@@ -401,6 +420,43 @@ export default function DemandeInscription() {
       setLoadingPreinscriptions(false);
     }
   }, []);
+
+  const loadCorrectionBundles = useCallback(async (preinsList, appsList) => {
+    const sousReserve = (preinsList || []).filter((p) => p.statut === 'SOUS_RESERVE');
+    if (sousReserve.length === 0) {
+      setCorrectionBundles({});
+      return;
+    }
+    const next = {};
+    await Promise.all(
+      sousReserve.map(async (p) => {
+        const app =
+          (appsList || []).find((a) => a.preinscriptionId === p.id) ||
+          (appsList || []).find(
+            (a) =>
+              a.etablissementId === p.etablissementId &&
+              a.filiereId === p.filiereId &&
+              a.anneeAcademique === p.anneeAcademique,
+          );
+        if (!app?.id) return;
+        try {
+          const data = await applicationService.getById(app.id);
+          next[p.id] = {
+            applicationId: app.id,
+            documents: data.application?.documents || [],
+          };
+        } catch {
+          next[p.id] = { applicationId: app.id, documents: [] };
+        }
+      }),
+    );
+    setCorrectionBundles(next);
+  }, []);
+
+  useEffect(() => {
+    if (!preinscriptions.length || !applications.length) return;
+    loadCorrectionBundles(preinscriptions, applications);
+  }, [preinscriptions, applications, loadCorrectionBundles]);
 
   const loadInscriptionsAcad = useCallback(async () => {
     setLoadingInscriptionsAcad(true);
@@ -611,10 +667,34 @@ export default function DemandeInscription() {
       const data = await preinscriptionEtablissementService.resoumettre(id);
       setPreinMessage(data.message || 'Dossier resoumis');
       await loadPreinscriptions();
+      await loadApplications();
     } catch (err) {
       setPreinError(err.message || 'Erreur resoumission');
     } finally {
       setPreinBusy(false);
+    }
+  };
+
+  const uploadPieceCorrection = async (preinscriptionId, code) => {
+    const bundle = correctionBundles[preinscriptionId];
+    const file = correctionFiles[`${preinscriptionId}:${code}`];
+    if (!bundle?.applicationId || !file) return;
+    try {
+      setCorrectionBusyCode(code);
+      setPreinError('');
+      setPreinMessage('');
+      await applicationService.uploadDocument(bundle.applicationId, code, file);
+      setCorrectionFiles((prev) => {
+        const next = { ...prev };
+        delete next[`${preinscriptionId}:${code}`];
+        return next;
+      });
+      setPreinMessage('Pièce corrigée avec succès');
+      await loadCorrectionBundles(preinscriptions, applications);
+    } catch (err) {
+      setPreinError(err.message || 'Erreur upload de la pièce');
+    } finally {
+      setCorrectionBusyCode('');
     }
   };
 
@@ -991,9 +1071,23 @@ export default function DemandeInscription() {
                 {!loadingPreinscriptions && preinscriptions.length > 0 && (
                   <div className='grid gap-4 md:grid-cols-2'>
                     {preinscriptions.map((p) => {
-                      const pieces = parseDocumentsCompl(p.documentsCompl);
                       const cardStyle = getStatusCardStyle(p.statut, 'preinscription');
                       const actionMessage = PREINSCRIPTION_ACTION_MESSAGES[p.statut];
+                      const codesACorriger = getPiecesACorrigerCodes(p.piecesACorriger);
+                      const bundle = correctionBundles[p.id];
+                      const docs = bundle?.documents || [];
+                      const docsByCode = Object.fromEntries(docs.map((d) => [d.code, d]));
+                      const allTargetedProvided =
+                        codesACorriger.length > 0 &&
+                        codesACorriger.every((code) => docsByCode[code]?.status === 'PROVIDED');
+                      const displayDocs =
+                        docs.length > 0
+                          ? docs.filter((d) => d.source !== 'PROFILE_AUTO')
+                          : codesACorriger.map((code) => ({
+                              code,
+                              label: getPieceLabel(p.piecesACorriger, code),
+                              status: 'A_CORRIGER',
+                            }));
 
                       return (
                         <div
@@ -1018,56 +1112,99 @@ export default function DemandeInscription() {
                           {p.statut === 'SOUS_RESERVE' && (
                             <div className='mt-4 space-y-3'>
                               <div className='rounded-xl border border-amber-200 bg-amber-50 p-4'>
-                                <p className='text-sm font-semibold text-amber-900'>Action requise</p>
+                                <p className='text-sm font-semibold text-amber-900'>Conditions / motif</p>
                                 <p className='mt-1 whitespace-pre-wrap text-sm text-amber-800'>
-                                  {p.commentaireAdmin || 'Veuillez compléter votre dossier avec les documents demandés.'}
+                                  {p.commentaireAdmin || 'Veuillez corriger les pièces indiquées ci-dessous.'}
                                 </p>
                               </div>
 
-                              {pieces.length > 0 && (
-                                <div>
-                                  <p className='mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500'>
-                                    Documents déposés
-                                  </p>
-                                  <ul className='space-y-1'>
-                                    {pieces.map((doc) => (
-                                      <li key={doc.id || doc.url}>
-                                        <a
-                                          href={doc.url}
-                                          target='_blank'
-                                          rel='noopener noreferrer'
-                                          className='text-sm font-medium text-blue-800 hover:underline'
-                                        >
-                                          {doc.nom || 'Document'}
-                                        </a>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
+                              <div>
+                                <p className='mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500'>
+                                  Pièces du dossier
+                                </p>
+                                <ul className='space-y-3'>
+                                  {displayDocs.map((doc) => {
+                                    const targeted = codesACorriger.includes(doc.code);
+                                    const fileKey = `${p.id}:${doc.code}`;
+                                    const chosen = correctionFiles[fileKey];
+                                    return (
+                                      <li
+                                        key={doc.id || doc.code}
+                                        className={`rounded-xl border p-3 ${
+                                          targeted ? 'border-amber-300 bg-amber-50/40' : 'border-gray-100 bg-gray-50'
+                                        }`}
+                                      >
+                                        <div className='flex flex-wrap items-start justify-between gap-2'>
+                                          <div>
+                                            <p className='text-sm font-medium text-gray-900'>
+                                              {doc.label || doc.code}
+                                            </p>
+                                            <p className='text-xs text-gray-400 font-mono'>{doc.code}</p>
+                                          </div>
+                                          <div className='flex flex-wrap items-center gap-2'>
+                                            {targeted && (
+                                              <span className='rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900'>
+                                                à corriger
+                                              </span>
+                                            )}
+                                            <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-gray-600 border border-gray-200'>
+                                              {doc.status || '—'}
+                                            </span>
+                                          </div>
+                                        </div>
 
-                              <div className='flex flex-wrap gap-2'>
-                                <button
-                                  type='button'
-                                  onClick={() => {
-                                    setDocModal({ open: true, preinscriptionId: p.id });
-                                    setDocFichier(null);
-                                  }}
-                                  disabled={preinBusy}
-                                  className='rounded-xl bg-blue-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60'
-                                >
-                                  Ajouter un document
-                                </button>
-                                <button
-                                  type='button'
-                                  onClick={() => resoumettreDossier(p.id)}
-                                  disabled={preinBusy || pieces.length === 0}
-                                  className='rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60'
-                                  title={pieces.length === 0 ? 'Ajoutez au moins un document avant de resoumettre' : undefined}
-                                >
-                                  Resoumettre mon dossier
-                                </button>
+                                        {targeted ? (
+                                          <div className='mt-3 flex flex-wrap items-center gap-2'>
+                                            <label className='cursor-pointer rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-50'>
+                                              {chosen ? chosen.name : 'Choisir un fichier'}
+                                              <input
+                                                type='file'
+                                                accept='application/pdf,image/png,image/jpeg'
+                                                className='hidden'
+                                                onChange={(e) => {
+                                                  const file = e.target.files?.[0] || null;
+                                                  setCorrectionFiles((prev) => ({ ...prev, [fileKey]: file }));
+                                                }}
+                                              />
+                                            </label>
+                                            <button
+                                              type='button'
+                                              onClick={() => uploadPieceCorrection(p.id, doc.code)}
+                                              disabled={preinBusy || correctionBusyCode === doc.code || !chosen}
+                                              className='rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50'
+                                            >
+                                              {correctionBusyCode === doc.code ? 'Envoi…' : 'Remplacer'}
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <p className='mt-2 text-xs text-gray-500'>
+                                            Pièce verrouillée — non modifiable
+                                          </p>
+                                        )}
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
                               </div>
+
+                              <button
+                                type='button'
+                                onClick={() => resoumettreDossier(p.id)}
+                                disabled={preinBusy || !allTargetedProvided}
+                                className='rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50'
+                                title={
+                                  !allTargetedProvided
+                                    ? 'Corrigez toutes les pièces marquées « à corriger » avant de resoumettre'
+                                    : undefined
+                                }
+                              >
+                                Resoumettre le dossier
+                              </button>
+                              {!allTargetedProvided && (
+                                <p className='text-xs text-amber-800'>
+                                  Bouton actif uniquement lorsque toutes les pièces ciblées sont en statut PROVIDED.
+                                </p>
+                              )}
                             </div>
                           )}
                         </div>

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { campagneService } from '../../services/api';
+import { campagneService, inscriptionAcadService } from '../../services/api';
 import CandidatLayout from '../../components/CandidatLayout';
 import { BentoCard } from '../../components/AcademicLayout';
 import { ROUTES } from '../../constants/routes';
+import { isEligibleReinscription } from '../../utils/anneeAcademique';
 
 function formatDate(d) {
   return new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -13,24 +14,31 @@ export default function DetailCampagneCandidat() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [campagne, setCampagne] = useState(null);
+  const [inscriptions, setInscriptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    campagneService
-      .getById(id)
-      .then((data) => setCampagne(data.campagne))
+    setLoading(true);
+    Promise.all([
+      campagneService.getById(id),
+      inscriptionAcadService.getMesInscriptions().catch(() => ({ inscriptions: [] })),
+    ])
+      .then(([campagneData, inscData]) => {
+        setCampagne(campagneData.campagne);
+        setInscriptions(inscData.inscriptions || []);
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [id]);
 
-  const postuler = (cf) => {
+  const postuler = (cf, { reinscription = false } = {}) => {
     navigate(ROUTES.parcours.dossiers, {
       state: {
         etablissementId: campagne.etablissement?.id,
         filiereId: cf.filiereId || cf.filiere?.id,
         anneeAcademique: campagne.anneeAcademique,
-        niveau: '1',
+        ...(reinscription ? {} : { niveau: '1' }),
         campagneFiliereId: cf.id,
       },
     });
@@ -96,21 +104,32 @@ export default function DetailCampagneCandidat() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {(campagne.filieres || []).map((cf) => (
-                  <tr key={cf.id}>
-                    <td className="px-4 py-4 font-medium">{cf.filiere?.nom}</td>
-                    <td className="px-4 py-4 text-gray-600">{cf.filiere?.niveau || '—'}</td>
-                    <td className="px-4 py-4">{cf.fraisDossier?.toLocaleString('fr-FR')} FCFA</td>
-                    <td className="px-4 py-4">{cf.placesDisponibles ?? '—'}</td>
-                    <td className="px-4 py-4">{(cf.seriesAcceptees || []).join(', ') || 'Toutes'}</td>
-                    <td className="px-4 py-4 text-gray-600 max-w-xs">{cf.criteresSelection || '—'}</td>
-                    <td className="px-4 py-4">
-                      <button type="button" onClick={() => postuler(cf)} className="px-3 py-1.5 text-xs font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-600 whitespace-nowrap">
-                        Postuler
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {(campagne.filieres || []).map((cf) => {
+                  const filiereId = cf.filiereId || cf.filiere?.id;
+                  const eligible = isEligibleReinscription(inscriptions, {
+                    filiereId,
+                    anneeCampagne: campagne.anneeAcademique,
+                  });
+                  return (
+                    <tr key={cf.id}>
+                      <td className="px-4 py-4 font-medium">{cf.filiere?.nom}</td>
+                      <td className="px-4 py-4 text-gray-600">{cf.filiere?.niveau || '—'}</td>
+                      <td className="px-4 py-4">{cf.fraisDossier?.toLocaleString('fr-FR')} FCFA</td>
+                      <td className="px-4 py-4">{cf.placesDisponibles ?? '—'}</td>
+                      <td className="px-4 py-4">{(cf.seriesAcceptees || []).join(', ') || 'Toutes'}</td>
+                      <td className="px-4 py-4 text-gray-600 max-w-xs">{cf.criteresSelection || '—'}</td>
+                      <td className="px-4 py-4">
+                        <button
+                          type="button"
+                          onClick={() => postuler(cf, { reinscription: eligible })}
+                          className="px-3 py-1.5 text-xs font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-600 whitespace-nowrap"
+                        >
+                          {eligible ? 'Se réinscrire' : 'Postuler'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

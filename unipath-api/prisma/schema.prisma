@@ -449,6 +449,7 @@ model PreinscriptionEtablissement {
   niveau                Int
   statut                StatutPreinscriptionEtablissement @default(EN_ATTENTE)
   commentaireAdmin      String?
+  piecesACorriger       Json?
   documentsCompl        Json?
   historiqueStatuts     Json?
   motifDecision         String?
@@ -532,6 +533,12 @@ enum Role {
 enum SousRoleCommission {
   MEMBRE
   EXAMINATEUR
+  CONTROLEUR
+}
+
+enum SousRoleEtablissement {
+  ADMIN
+  SUPERVISEUR
   CONTROLEUR
 }
 
@@ -636,18 +643,20 @@ enum TypeDiplome {
 }
 
 model AdminEtablissement {
-  id              String        @id @default(uuid())
+  id              String                 @id @default(uuid())
   nom             String
   prenom          String
-  email           String        @unique
+  email           String                 @unique
   telephone       String?
-  role            Role          @default(ADMIN_ETABLISSEMENT)
+  role            Role                   @default(ADMIN_ETABLISSEMENT)
+  sousRole        SousRoleEtablissement  @default(ADMIN)
   etablissementId String
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  etablissement   Etablissement          @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
 
   @@index([etablissementId])
+  @@index([etablissementId, sousRole])
 }
 
 model Application {
@@ -810,6 +819,7 @@ enum ApplicationDocSource {
 enum ApplicationDocStatus {
   PENDING
   PROVIDED
+  A_CORRIGER
 }
 
 enum RequirementType {

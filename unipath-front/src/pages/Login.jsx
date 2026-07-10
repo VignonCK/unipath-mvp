@@ -88,7 +88,7 @@ export default function Login() {
       } else if (role === 'ETUDIANT' || role === 'CANDIDAT') navigate('/dashboard');
       else if (role === 'DGES') navigate('/dashboard-dges');
       else if (role === 'CONTROLEUR') navigate('/controleur-commission/tableau-de-bord');
-      else if (role === 'ADMIN_ETABLISSEMENT') navigate('/admin-etablissement/campagnes');
+      else if (role === 'ADMIN_ETABLISSEMENT') navigate(getDefaultRoute(role, sousRole));
       else navigate('/dashboard');
     } catch (err) {
       // Vérifier si l'erreur est due à un email non confirmé

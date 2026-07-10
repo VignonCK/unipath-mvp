@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { candidatService, etablissementService, resolvePublicAssetUrl } from '../../services/api';
+import { candidatService, etablissementService, inscriptionAcadService, resolvePublicAssetUrl } from '../../services/api';
 import { handleSessionError } from '../../utils/auth';
 import CandidatLayout from '../../components/CandidatLayout';
 import EcolesPriveesNav from '../../components/EcolesPriveesNav';
 import { ROUTES } from '../../constants/routes';
 import { BentoCard } from '../../components/AcademicLayout';
+import { isEligibleReinscription } from '../../utils/anneeAcademique';
 
 function formatDate(value) {
   if (!value) return '—';
@@ -76,6 +77,7 @@ export default function EtablissementDetail() {
   const navigate = useNavigate();
   const [candidat, setCandidat] = useState(null);
   const [etablissement, setEtablissement] = useState(null);
+  const [inscriptions, setInscriptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -84,12 +86,14 @@ export default function EtablissementDetail() {
       try {
         setLoading(true);
         setError('');
-        const [profil, data] = await Promise.all([
+        const [profil, data, inscData] = await Promise.all([
           candidatService.getProfil(),
           etablissementService.getById(id),
+          inscriptionAcadService.getMesInscriptions().catch(() => ({ inscriptions: [] })),
         ]);
         setCandidat(profil);
         setEtablissement(data.etablissement || null);
+        setInscriptions(inscData.inscriptions || []);
       } catch (err) {
         if (handleSessionError(err, navigate)) return;
         setError(err?.message || 'Erreur de chargement');
@@ -108,13 +112,13 @@ export default function EtablissementDetail() {
 
   const campagnesActives = useMemo(() => etablissement?.campagnes || [], [etablissement]);
 
-  const postuler = (campagne, cf) => {
+  const postuler = (campagne, cf, { reinscription = false } = {}) => {
     navigate(ROUTES.parcours.dossiers, {
       state: {
         etablissementId: etablissement.id,
         filiereId: cf.filiereId || cf.filiere?.id,
         anneeAcademique: campagne.anneeAcademique,
-        niveau: '1',
+        ...(reinscription ? {} : { niveau: '1' }),
         campagneFiliereId: cf.id,
       },
     });
@@ -261,7 +265,13 @@ export default function EtablissementDetail() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {(campagne.filieres || []).map((cf) => (
+                        {(campagne.filieres || []).map((cf) => {
+                          const filiereId = cf.filiereId || cf.filiere?.id;
+                          const eligible = isEligibleReinscription(inscriptions, {
+                            filiereId,
+                            anneeCampagne: campagne.anneeAcademique,
+                          });
+                          return (
                           <tr key={cf.id}>
                             <td className="px-4 py-3 font-medium">{cf.filiere?.nom || '—'}</td>
                             <td className="px-4 py-3">{formatFcfa(cf.fraisDossier)}</td>
@@ -270,14 +280,15 @@ export default function EtablissementDetail() {
                             <td className="px-4 py-3">
                               <button
                                 type="button"
-                                onClick={() => postuler(campagne, cf)}
+                                onClick={() => postuler(campagne, cf, { reinscription: eligible })}
                                 className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-600 whitespace-nowrap"
                               >
-                                Postuler
+                                {eligible ? 'Se réinscrire' : 'Postuler'}
                               </button>
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

@@ -7,6 +7,7 @@ const {
   appendHistorique,
   appendDocument,
   hasDocumentsCompl,
+  getPiecesACorrigerCodes,
   newDocumentId,
   PREINSCRIPTION_INCLUDE,
 } = require('../utils/preinscription.helper');
@@ -179,6 +180,7 @@ exports.getDemandesEtablissement = async (req, res) => {
   try {
     const etablissementId = getAdminEtablissementId(req);
     const { statut } = req.query;
+    const anneeAcademique = req.query.anneeAcademique || req.query.annee;
     if (!etablissementId) {
       return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
     }
@@ -186,6 +188,7 @@ exports.getDemandesEtablissement = async (req, res) => {
     const where = {
       etablissementId,
       ...(statut ? { statut } : {}),
+      ...(anneeAcademique ? { anneeAcademique: String(anneeAcademique) } : {}),
     };
 
     const demandes = await prisma.preinscriptionEtablissement.findMany({
@@ -286,7 +289,17 @@ exports.resoumettrePreinscription = async (req, res) => {
 
     const existing = await prisma.preinscriptionEtablissement.findUnique({
       where: { id },
-      include: PREINSCRIPTION_INCLUDE,
+      include: {
+        ...PREINSCRIPTION_INCLUDE,
+        applicationSource: {
+          select: {
+            id: true,
+            documents: {
+              select: { id: true, code: true, label: true, status: true },
+            },
+          },
+        },
+      },
     });
 
     if (!existing) {
@@ -298,10 +311,42 @@ exports.resoumettrePreinscription = async (req, res) => {
     if (existing.statut !== 'SOUS_RESERVE') {
       return res.status(400).json({ error: 'Seul un dossier sous reserve peut etre resoumis' });
     }
-    if (!hasDocumentsCompl(existing.documentsCompl)) {
-      return res.status(400).json({ error: 'Au moins un document complementaire doit etre uploade avant la resoumission' });
+
+    const codesACorriger = getPiecesACorrigerCodes(existing.piecesACorriger);
+
+    if (codesACorriger.length > 0) {
+      // Nouveau flow : toutes les pièces ciblées doivent être PROVIDED
+      const docsByCode = new Map(
+        (existing.applicationSource?.documents || []).map((d) => [d.code, d]),
+      );
+      const piecesEncoreEnAttente = codesACorriger
+        .map((code) => {
+          const doc = docsByCode.get(code);
+          if (!doc || doc.status !== 'PROVIDED') {
+            return {
+              code,
+              label: doc?.label || code,
+              status: doc?.status || 'MANQUANT',
+            };
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      if (piecesEncoreEnAttente.length > 0) {
+        return res.status(400).json({
+          error: 'Certaines pièces mises sous réserve n\'ont pas encore été corrigées',
+          piecesEncoreEnAttente,
+        });
+      }
+    } else if (!hasDocumentsCompl(existing.documentsCompl)) {
+      // Ancien flow (dossiers SOUS_RESERVE sans piecesACorriger)
+      return res.status(400).json({
+        error: 'Au moins un document complementaire doit etre uploade avant la resoumission',
+      });
     }
 
+    // Garde piecesACorriger pour historique (non vidé)
     const preinscription = await prisma.preinscriptionEtablissement.update({
       where: { id },
       data: {
@@ -309,7 +354,8 @@ exports.resoumettrePreinscription = async (req, res) => {
         historiqueStatuts: appendHistorique(existing.historiqueStatuts, {
           statut: 'EN_ATTENTE',
           date: new Date().toISOString(),
-          commentaire: 'Resoumission candidat',
+          commentaire: 'Resoumission candidat après correction des pièces',
+          piecesCorrigees: codesACorriger,
         }),
       },
       include: PREINSCRIPTION_INCLUDE,
@@ -342,7 +388,7 @@ exports.deciderPreinscriptionEtablissement = async (req, res) => {
   try {
     const etablissementId = getAdminEtablissementId(req);
     const { id } = req.params;
-    const { statut, motifDecision, commentaireAdmin } = req.body;
+    const { statut, motifDecision, commentaireAdmin, piecesACorriger } = req.body;
 
     if (!etablissementId) {
       return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
@@ -359,6 +405,21 @@ exports.deciderPreinscriptionEtablissement = async (req, res) => {
       return res.status(400).json({ error: 'Aucun motif ne doit être fourni pour une validation' });
     }
 
+    if (statut === 'SOUS_RESERVE') {
+      if (!commentaireAdmin || !String(commentaireAdmin).trim()) {
+        return res.status(400).json({ error: 'Le commentaire / conditions est obligatoire pour une mise sous réserve' });
+      }
+      if (!Array.isArray(piecesACorriger) || piecesACorriger.length === 0) {
+        return res.status(400).json({
+          error: 'Au moins une pièce à corriger (piecesACorriger) est obligatoire pour une mise sous réserve',
+        });
+      }
+      const invalidCodes = piecesACorriger.filter((c) => typeof c !== 'string' || !c.trim());
+      if (invalidCodes.length > 0) {
+        return res.status(400).json({ error: 'piecesACorriger doit être un tableau de codes (string) non vides' });
+      }
+    }
+
     const existing = await prisma.preinscriptionEtablissement.findUnique({
       where: { id },
       include: {
@@ -371,6 +432,23 @@ exports.deciderPreinscriptionEtablissement = async (req, res) => {
         etablissement: {
           select: { id: true, nom: true },
         },
+        applicationSource: {
+          select: {
+            id: true,
+            documents: {
+              select: {
+                id: true,
+                code: true,
+                label: true,
+                source: true,
+                status: true,
+                schoolRequirement: {
+                  select: { requirementType: true },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -382,6 +460,66 @@ exports.deciderPreinscriptionEtablissement = async (req, res) => {
     }
     if (existing.statut !== 'EN_ATTENTE') {
       return res.status(400).json({ error: 'Cette pre-inscription a deja ete traitee' });
+    }
+
+    let piecesACorrigerPayload = null;
+    let documentIdsToFlag = [];
+
+    if (statut === 'SOUS_RESERVE') {
+      const application = existing.applicationSource;
+      if (!application) {
+        return res.status(400).json({
+          error: 'Aucune candidature (Application) liée à cette pré-inscription — impossible de cibler des pièces',
+        });
+      }
+
+      const codes = [...new Set(piecesACorriger.map((c) => String(c).trim()))];
+      const docsByCode = new Map(application.documents.map((d) => [d.code, d]));
+      const resolved = [];
+      const missing = [];
+      const profileAutoRejected = [];
+
+      for (const code of codes) {
+        const doc = docsByCode.get(code);
+        if (!doc) {
+          missing.push(code);
+          continue;
+        }
+        const isProfileAuto =
+          doc.source === 'PROFILE_AUTO' ||
+          doc.schoolRequirement?.requirementType === 'PROFILE_FIELD';
+        if (isProfileAuto) {
+          profileAutoRejected.push(code);
+          continue;
+        }
+        // Accepter DOCUMENT_UPLOAD / STUDENT_UPLOAD (et SYSTEM_GENERATED hors profil)
+        resolved.push({
+          code: doc.code,
+          label: doc.label,
+          documentId: doc.id,
+        });
+        documentIdsToFlag.push(doc.id);
+      }
+
+      if (profileAutoRejected.length > 0) {
+        return res.status(400).json({
+          error: 'Les pièces de type PROFILE_AUTO / PROFILE_FIELD ne peuvent pas être mises sous réserve',
+          codesRejetes: profileAutoRejected,
+        });
+      }
+      if (missing.length > 0) {
+        return res.status(400).json({
+          error: 'Certaines pièces demandées sont introuvables sur le dossier',
+          codesIntrouvables: missing,
+        });
+      }
+      if (resolved.length === 0) {
+        return res.status(400).json({
+          error: 'Au moins une pièce DOCUMENT_UPLOAD valide est obligatoire dans piecesACorriger',
+        });
+      }
+
+      piecesACorrigerPayload = resolved;
     }
 
     let inscriptionAcadId = null;
@@ -422,18 +560,29 @@ exports.deciderPreinscriptionEtablissement = async (req, res) => {
     };
 
     if (statut === 'SOUS_RESERVE') {
-      updateData.commentaireAdmin = commentaireAdmin || null;
+      updateData.commentaireAdmin = String(commentaireAdmin).trim();
+      updateData.piecesACorriger = piecesACorrigerPayload;
       updateData.historiqueStatuts = appendHistorique(existing.historiqueStatuts, {
         statut: 'SOUS_RESERVE',
         date: new Date().toISOString(),
-        commentaire: commentaireAdmin || null,
+        commentaire: String(commentaireAdmin).trim(),
+        piecesACorriger: piecesACorrigerPayload.map((p) => p.code),
       });
     }
 
-    const preinscription = await prisma.preinscriptionEtablissement.update({
-      where: { id },
-      data: updateData,
-      include: PREINSCRIPTION_INCLUDE,
+    const preinscription = await prisma.$transaction(async (tx) => {
+      if (documentIdsToFlag.length > 0) {
+        await tx.applicationDocument.updateMany({
+          where: { id: { in: documentIdsToFlag } },
+          data: { status: 'A_CORRIGER' },
+        });
+      }
+
+      return tx.preinscriptionEtablissement.update({
+        where: { id },
+        data: updateData,
+        include: PREINSCRIPTION_INCLUDE,
+      });
     });
 
     if (statut === 'SOUS_RESERVE') {
@@ -446,7 +595,7 @@ exports.deciderPreinscriptionEtablissement = async (req, res) => {
           candidatPrenom: preinscription.candidat.prenom,
           etablissementNom: preinscription.etablissement.nom,
           numeroPreinscription: preinscription.numeroPreinscription,
-          commentaireAdmin: commentaireAdmin || null,
+          commentaireAdmin: String(commentaireAdmin).trim(),
         });
       } catch (emailErr) {
         console.error('Erreur envoi email sous reserve:', emailErr);

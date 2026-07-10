@@ -280,6 +280,11 @@ exports.getEtudiantsEtablissement = async (req, res) => {
 exports.getStatistiquesEtablissement = async (req, res) => {
   try {
     const { id } = req.params;
+    const { hasSousRoleEtablissement, STAFF_STATS_ROLES } = require('../utils/admin-etablissement.helper');
+
+    if (!hasSousRoleEtablissement(req, STAFF_STATS_ROLES)) {
+      return res.status(403).json({ error: 'Accès aux statistiques réservé aux administrateurs et superviseurs' });
+    }
 
     if (!adminOwnsEtablissement(req, id)) {
       return res.status(403).json({ error: 'Vous n\'avez pas accès aux statistiques de cet établissement' });
@@ -287,23 +292,92 @@ exports.getStatistiquesEtablissement = async (req, res) => {
 
     const etablissement = await prisma.etablissement.findUnique({
       where: { id },
-      select: { nom: true },
+      select: { id: true, nom: true, type: true },
     });
 
     if (!etablissement) {
       return res.status(404).json({ error: 'Etablissement non trouve' });
     }
 
-    const stats = await prisma.$queryRaw`
-      SELECT *
-      FROM v_statistiques_module2
-      WHERE etablissement = ${etablissement.nom}
-      ORDER BY annee ASC, filiere ASC
-    `;
+    // Agrégation Prisma (évite la dépendance à v_statistiques_module2)
+    const rows = await prisma.inscriptionAcademique.groupBy({
+      by: ['filiereId', 'anneeAcademique', 'statut'],
+      where: { etablissementId: id },
+      _count: { _all: true },
+    });
+
+    const filiereIds = [...new Set(rows.map((r) => r.filiereId))];
+    const filieres = filiereIds.length
+      ? await prisma.filiere.findMany({
+          where: { id: { in: filiereIds } },
+          select: { id: true, nom: true, niveau: true },
+        })
+      : [];
+    const filiereById = new Map(filieres.map((f) => [f.id, f]));
+
+    const grouped = new Map();
+    for (const row of rows) {
+      const filiere = filiereById.get(row.filiereId);
+      const key = `${row.filiereId}|${row.anneeAcademique || ''}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          etablissement: etablissement.nom,
+          type: etablissement.type,
+          filiere: filiere?.nom || 'Filière inconnue',
+          niveau: filiere?.niveau || null,
+          annee: row.anneeAcademique,
+          total_inscrits: 0,
+          valides: 0,
+          redoublants: 0,
+          taux_reussite: 0,
+        });
+      }
+      const bucket = grouped.get(key);
+      const count = row._count._all;
+      bucket.total_inscrits += count;
+      if (row.statut === 'VALIDE') bucket.valides += count;
+      if (row.statut === 'REDOUBLANT') bucket.redoublants += count;
+    }
+
+    const statistiques = [...grouped.values()]
+      .map((row) => ({
+        ...row,
+        taux_reussite: row.total_inscrits > 0
+          ? Math.round((row.valides / row.total_inscrits) * 10000) / 100
+          : 0,
+      }))
+      .sort((a, b) => {
+        const anneeCmp = String(a.annee || '').localeCompare(String(b.annee || ''), 'fr');
+        if (anneeCmp !== 0) return anneeCmp;
+        return String(a.filiere || '').localeCompare(String(b.filiere || ''), 'fr');
+      });
+
+    // Inclure aussi les filières sans inscription (total 0) pour un tableau exploitable
+    const filieresSansInscription = await prisma.filiere.findMany({
+      where: {
+        etablissementId: id,
+        ...(filiereIds.length ? { id: { notIn: filiereIds } } : {}),
+      },
+      select: { nom: true, niveau: true },
+      orderBy: { nom: 'asc' },
+    });
+    for (const f of filieresSansInscription) {
+      statistiques.push({
+        etablissement: etablissement.nom,
+        type: etablissement.type,
+        filiere: f.nom,
+        niveau: f.niveau,
+        annee: null,
+        total_inscrits: 0,
+        valides: 0,
+        redoublants: 0,
+        taux_reussite: 0,
+      });
+    }
 
     return res.json({
       message: 'Statistiques recuperees avec succes',
-      statistiques: stats,
+      statistiques,
     });
   } catch (error) {
     console.error('Erreur getStatistiquesEtablissement:', error);

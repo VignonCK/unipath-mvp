@@ -528,6 +528,19 @@ export const dgesService = {
     }),
 };
 
+export const staffEtablissementService = {
+  lister: () => request('/etablissement/staff'),
+  creer: (data) =>
+    request('/etablissement/staff', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  supprimer: (staffId) =>
+    request(`/etablissement/staff/${staffId}`, {
+      method: 'DELETE',
+    }),
+};
+
 export const campagneAdminService = {
   getAll: (statut = '') =>
     request(`/etablissement/campagnes${statut ? `?statut=${statut}` : ''}`),
@@ -656,8 +669,15 @@ export const preinscriptionEtablissementService = {
   getMesPreinscriptions: () => request('/preinscriptions-etablissement/mes-preinscriptions'),
   telechargerFiche: (id) =>
     telechargerPDF(`${BASE_URL}/preinscriptions-etablissement/${id}/pdf`, `fiche_preinscription_${id}.pdf`),
-  getDemandesEtablissement: (statut = '') =>
-    request(`/preinscriptions-etablissement/etablissement/demandes${statut ? `?statut=${statut}` : ''}`),
+  getDemandesEtablissement: (statut = '', params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (statut) searchParams.set('statut', statut);
+    if (params.anneeAcademique || params.annee) {
+      searchParams.set('anneeAcademique', params.anneeAcademique || params.annee);
+    }
+    const query = searchParams.toString();
+    return request(`/preinscriptions-etablissement/etablissement/demandes${query ? `?${query}` : ''}`);
+  },
   decider: (id, payload) =>
     request(`/preinscriptions-etablissement/${id}/decision`, {
       method: 'PATCH',
@@ -736,7 +756,14 @@ export const applicationService = {
     }),
   telechargerFiche: (id) =>
     telechargerPDF(`${BASE_URL}/applications/${id}/fiche-preinscription`, `fiche_preinscription_${id}.pdf`),
-  getDemandesEtablissement: () => request('/applications/etablissement/applications'),
+  getDemandesEtablissement: (params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.anneeAcademique || params.annee) {
+      searchParams.set('anneeAcademique', params.anneeAcademique || params.annee);
+    }
+    const query = searchParams.toString();
+    return request(`/applications/etablissement/applications${query ? `?${query}` : ''}`);
+  },
   getMyRequirementsEtablissement: () => request('/applications/etablissement/requirements'),
   upsertRequirementEtablissement: (payload) =>
     request('/applications/etablissement/requirements', {

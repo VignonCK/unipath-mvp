@@ -26,6 +26,14 @@ function hasDocumentsCompl(documentsCompl) {
   return parseDocumentsCompl(documentsCompl).pieces.length > 0;
 }
 
+/** Extract piece codes from piecesACorriger JSON (string[] or {code}[]). */
+function getPiecesACorrigerCodes(piecesACorriger) {
+  if (!Array.isArray(piecesACorriger)) return [];
+  return piecesACorriger
+    .map((p) => (typeof p === 'string' ? p.trim() : String(p?.code || '').trim()))
+    .filter(Boolean);
+}
+
 function newDocumentId() {
   return crypto.randomUUID();
 }
@@ -55,6 +63,7 @@ module.exports = {
   parseDocumentsCompl,
   appendDocument,
   hasDocumentsCompl,
+  getPiecesACorrigerCodes,
   newDocumentId,
   PREINSCRIPTION_INCLUDE,
 };

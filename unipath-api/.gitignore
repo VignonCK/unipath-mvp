@@ -8,3 +8,10 @@ node_modules
 /tmp/
 .vercel
 .env*.local
+
+# Identifiants de démo (ne pas versionner)
+COMPTES_DEMO.txt
+
+# Artefacts runtime locaux
+/temp/
+/uploads/

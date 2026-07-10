@@ -4,9 +4,10 @@ function getTempPasswordExpiresAt(fromDate = new Date()) {
   return new Date(fromDate.getTime() + TEMP_PASSWORD_VALIDITY_HOURS * 60 * 60 * 1000);
 }
 
-function buildAdminEtablissementMetadata(etablissementId) {
+function buildAdminEtablissementMetadata(etablissementId, sousRole = 'ADMIN') {
   return {
     role: 'ADMIN_ETABLISSEMENT',
+    sousRole,
     etablissementId,
     mustChangePassword: true,
     tempPasswordExpiresAt: getTempPasswordExpiresAt().toISOString(),
