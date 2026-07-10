@@ -4,10 +4,13 @@ const prisma = require('../prisma');
 const {
   metaFiltersFromParsed,
   buildInscriptionWhere,
+  buildCampagneApplicationWhere,
 } = require('../utils/stats-filters.helper');
 
 const ACCEPTES = ['VALIDE', 'VALIDE_PAR_COMMISSION'];
 const REJETES = ['REJETE', 'REJETE_PAR_COMMISSION'];
+const PREINSCRIPTION_ACCEPTES = ['VALIDE'];
+const PREINSCRIPTION_REJETES = ['REJETE'];
 
 const HEADER_FILL = {
   type: 'pattern',
@@ -19,6 +22,16 @@ function categorizeStatut(statut) {
   if (ACCEPTES.includes(statut)) return 'acceptes';
   if (REJETES.includes(statut)) return 'rejetes';
   return 'enAttente';
+}
+
+function categorizePreinscriptionStatut(statut) {
+  if (PREINSCRIPTION_ACCEPTES.includes(statut)) return 'acceptes';
+  if (PREINSCRIPTION_REJETES.includes(statut)) return 'rejetes';
+  return 'enAttente';
+}
+
+function resolvePreinscriptionStatut(application) {
+  return application.preinscription?.statut || 'EN_ATTENTE';
 }
 
 function getEtablissementLabel(concours) {
@@ -157,6 +170,133 @@ function buildParEtablissement(parConcours) {
   return [...groups.values()].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
 }
 
+function buildCampagneStatsRow(campagne, applications) {
+  const counts = { acceptes: 0, rejetes: 0, enAttente: 0 };
+  for (const app of applications) {
+    const statut = resolvePreinscriptionStatut(app);
+    counts[categorizePreinscriptionStatut(statut)] += 1;
+  }
+
+  const totalCandidats = applications.length;
+  const tauxValidationPct = totalCandidats > 0
+    ? Math.round((counts.acceptes / totalCandidats) * 10000) / 100
+    : 0;
+
+  return {
+    campagneId: campagne.id,
+    titre: campagne.titre,
+    anneeAcademique: campagne.anneeAcademique,
+    statutCampagne: campagne.statut,
+    etablissement: campagne.etablissement?.nom || 'Non renseigné',
+    etablissementId: campagne.etablissementId,
+    ville: campagne.etablissement?.ville || null,
+    totalCandidats,
+    acceptes: counts.acceptes,
+    rejetes: counts.rejetes,
+    enAttente: counts.enAttente,
+    tauxValidationPct,
+  };
+}
+
+function buildParEtablissementPrive(parCampagne) {
+  const groups = new Map();
+
+  for (const stats of parCampagne) {
+    const key = stats.etablissementId
+      ? `id:${stats.etablissementId}`
+      : `text:${stats.etablissement.toLowerCase()}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        etablissementId: stats.etablissementId,
+        nom: stats.etablissement,
+        ville: stats.ville,
+        nbCampagnes: 0,
+        totalCandidats: 0,
+        acceptes: 0,
+        rejetes: 0,
+        enAttente: 0,
+        campagnes: [],
+      });
+    }
+
+    const group = groups.get(key);
+    group.nbCampagnes += 1;
+    group.totalCandidats += stats.totalCandidats;
+    group.acceptes += stats.acceptes;
+    group.rejetes += stats.rejetes;
+    group.enAttente += stats.enAttente;
+    group.campagnes.push(stats);
+  }
+
+  return [...groups.values()].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+}
+
+async function collectCampagneStats(filters = {}, scope = null) {
+  if (filters.concoursId || filters.centreId) {
+    return {
+      totaux: { totalCandidats: 0, acceptes: 0, rejetes: 0, enAttente: 0 },
+      parCampagne: [],
+      parEtablissement: [],
+    };
+  }
+
+  if (!assertEtablissementInScope(filters, scope)) {
+    const err = new Error('Accès refusé pour les filtres demandés');
+    err.status = 403;
+    throw err;
+  }
+
+  const applicationWhere = buildCampagneApplicationWhere(filters, scope);
+  const applications = await prisma.application.findMany({
+    where: applicationWhere,
+    include: {
+      preinscription: { select: { statut: true } },
+      campagneFiliere: {
+        include: {
+          campagne: {
+            include: {
+              etablissement: { select: { id: true, nom: true, ville: true, type: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const campagneMap = new Map();
+  const appsByCampagne = new Map();
+
+  for (const app of applications) {
+    const campagne = app.campagneFiliere?.campagne;
+    if (!campagne) continue;
+
+    if (!campagneMap.has(campagne.id)) {
+      campagneMap.set(campagne.id, campagne);
+      appsByCampagne.set(campagne.id, []);
+    }
+    appsByCampagne.get(campagne.id).push(app);
+  }
+
+  const parCampagne = [...campagneMap.values()]
+    .map((campagne) => buildCampagneStatsRow(campagne, appsByCampagne.get(campagne.id) || []))
+    .sort((a, b) => a.titre.localeCompare(b.titre, 'fr'));
+
+  const parEtablissement = buildParEtablissementPrive(parCampagne);
+
+  const totaux = parCampagne.reduce(
+    (acc, row) => ({
+      totalCandidats: acc.totalCandidats + row.totalCandidats,
+      acceptes: acc.acceptes + row.acceptes,
+      rejetes: acc.rejetes + row.rejetes,
+      enAttente: acc.enAttente + row.enAttente,
+    }),
+    { totalCandidats: 0, acceptes: 0, rejetes: 0, enAttente: 0 },
+  );
+
+  return { totaux, parCampagne, parEtablissement };
+}
+
 function buildConcoursWhere(filters = {}, scope = null) {
   const where = {};
 
@@ -240,6 +380,7 @@ async function collectStats(filters = {}, scope = null) {
 
   const parConcours = concoursList.map(buildConcoursStats);
   const parEtablissement = buildParEtablissement(parConcours);
+  const campagnes = await collectCampagneStats(filters, scope);
 
   const totaux = parConcours.reduce(
     (acc, row) => ({
@@ -259,6 +400,7 @@ async function collectStats(filters = {}, scope = null) {
     totaux,
     parConcours,
     parEtablissement,
+    campagnes,
   };
 }
 
@@ -373,6 +515,60 @@ async function generateExcel(stats) {
   }
   autoFitWorksheet(sheetCentres);
   sheetCentres.views = [{ state: 'frozen', ySplit: 1 }];
+
+  const sheetCampagnes = workbook.addWorksheet('Synthèse campagnes');
+  sheetCampagnes.addRow([
+    'Établissement',
+    'Campagne',
+    'Année académique',
+    'Total candidatures',
+    'Validées',
+    'Rejetées',
+    'En attente',
+    'Taux validation %',
+  ]);
+  styleHeaderRow(sheetCampagnes.getRow(1));
+
+  for (const row of stats.campagnes?.parCampagne || []) {
+    sheetCampagnes.addRow([
+      row.etablissement,
+      row.titre,
+      row.anneeAcademique,
+      row.totalCandidats,
+      row.acceptes,
+      row.rejetes,
+      row.enAttente,
+      row.tauxValidationPct,
+    ]);
+  }
+  autoFitWorksheet(sheetCampagnes);
+  sheetCampagnes.views = [{ state: 'frozen', ySplit: 1 }];
+
+  const sheetEtabPrive = workbook.addWorksheet('EP privés par établissement');
+  sheetEtabPrive.addRow([
+    'Établissement',
+    'Ville',
+    'Nb campagnes',
+    'Total candidatures',
+    'Validées',
+    'Rejetées',
+    'En attente',
+  ]);
+  styleHeaderRow(sheetEtabPrive.getRow(1));
+
+  for (const row of stats.campagnes?.parEtablissement || []) {
+    sheetEtabPrive.addRow([
+      row.nom,
+      row.ville || '',
+      row.nbCampagnes,
+      row.totalCandidats,
+      row.acceptes,
+      row.rejetes,
+      row.enAttente,
+    ]);
+  }
+  autoFitWorksheet(sheetEtabPrive);
+  sheetEtabPrive.views = [{ state: 'frozen', ySplit: 1 }];
 
   return workbook.xlsx.writeBuffer();
 }
@@ -507,14 +703,86 @@ async function generatePdf(stats) {
       doc.font('Helvetica-Oblique').fontSize(10).text('Aucune donnée pour les filtres sélectionnés.');
     }
 
+    const campagneRows = stats.campagnes?.parCampagne || [];
+    if (campagneRows.length > 0) {
+      doc.addPage();
+      doc.font('Helvetica-Bold').fontSize(13).text('Campagnes d\'inscription (établissements privés)');
+      doc.moveDown(0.5);
+      doc.font('Helvetica').fontSize(11);
+      doc.text(`Total candidatures : ${stats.campagnes.totaux.totalCandidats}`);
+      doc.text(`Validées : ${stats.campagnes.totaux.acceptes}`);
+      doc.text(`Rejetées : ${stats.campagnes.totaux.rejetes}`);
+      doc.text(`En attente : ${stats.campagnes.totaux.enAttente}`);
+      doc.moveDown(0.8);
+
+      const campagneColumns = [
+        { label: 'Établissement', width: pageWidth * 0.24 },
+        { label: 'Campagne', width: pageWidth * 0.28 },
+        { label: 'Total', width: pageWidth * 0.1 },
+        { label: 'Validées', width: pageWidth * 0.12 },
+        { label: 'Rejetées', width: pageWidth * 0.12 },
+        { label: 'Attente', width: pageWidth * 0.12 },
+      ];
+
+      const drawCampagneHeader = () => {
+        const y = doc.y;
+        let x = doc.page.margins.left;
+        doc.font('Helvetica-Bold').fontSize(9);
+        for (const col of campagneColumns) {
+          doc.rect(x, y, col.width, 18).fillAndStroke('#D1FAE5', '#6EE7B7');
+          doc.fillColor('#111827').text(col.label, x + 4, y + 5, {
+            width: col.width - 8,
+            lineBreak: false,
+          });
+          x += col.width;
+        }
+        doc.fillColor('#000000');
+        doc.y = y + 20;
+      };
+
+      const ensureCampagneSpace = (height = 18) => {
+        if (doc.y + height > doc.page.height - doc.page.margins.bottom) {
+          doc.addPage();
+          drawCampagneHeader();
+        }
+      };
+
+      drawCampagneHeader();
+      doc.font('Helvetica').fontSize(8.5);
+      for (const row of campagneRows) {
+        ensureCampagneSpace(18);
+        const y = doc.y;
+        let x = doc.page.margins.left;
+        const values = [
+          row.etablissement,
+          row.titre,
+          String(row.totalCandidats),
+          String(row.acceptes),
+          String(row.rejetes),
+          String(row.enAttente),
+        ];
+        for (let i = 0; i < campagneColumns.length; i += 1) {
+          doc.rect(x, y, campagneColumns[i].width, 16).stroke('#E5E7EB');
+          doc.text(truncateText(doc, values[i], campagneColumns[i].width - 8), x + 4, y + 4, {
+            width: campagneColumns[i].width - 8,
+            lineBreak: false,
+          });
+          x += campagneColumns[i].width;
+        }
+        doc.y = y + 18;
+      }
+    }
+
     doc.end();
   });
 }
 
 module.exports = {
   collectStats,
+  collectCampagneStats,
   generateExcel,
   generatePdf,
   categorizeStatut,
+  categorizePreinscriptionStatut,
   buildConcoursStats,
 };

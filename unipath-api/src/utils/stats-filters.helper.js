@@ -120,10 +120,37 @@ function buildInscriptionWhere(filters = {}) {
   return where;
 }
 
+function buildCampagneApplicationWhere(filters = {}, scope = null) {
+  const where = {
+    campagneFiliereId: { not: null },
+    etablissement: { type: 'PRIVE' },
+  };
+
+  const etablissementId = filters.etablissementId || scope?.etablissementId || null;
+  if (etablissementId) {
+    where.etablissementId = etablissementId;
+  }
+
+  if (filters.anneeAcademique) {
+    where.anneeAcademique = filters.anneeAcademique;
+  }
+
+  if (filters.sexe) {
+    where.candidat = { sexe: filters.sexe };
+  }
+
+  if (filters._statutPrisma) {
+    where.preinscription = { statut: filters._statutPrisma };
+  }
+
+  return where;
+}
+
 module.exports = {
   STATUT_ALIASES,
   parseStatsFilters,
   metaFiltersFromParsed,
   buildInscriptionWhere,
+  buildCampagneApplicationWhere,
   resolveStatutPrismaFilter,
 };

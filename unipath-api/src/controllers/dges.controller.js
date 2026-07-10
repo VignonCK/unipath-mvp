@@ -28,6 +28,37 @@ function mapParEtablissementLegacy(groups) {
   }));
 }
 
+function mapParCampagneToLegacy(row) {
+  return {
+    campagne_id: row.campagneId,
+    campagne: row.titre,
+    anneeAcademique: row.anneeAcademique,
+    statutCampagne: row.statutCampagne,
+    etablissementId: row.etablissementId,
+    etablissement: row.etablissement,
+    ville: row.ville,
+    total_candidatures: row.totalCandidats,
+    valides: row.acceptes,
+    rejetes: row.rejetes,
+    en_attente: row.enAttente,
+    taux_validation_pct: row.tauxValidationPct,
+  };
+}
+
+function mapParEtablissementPriveLegacy(groups) {
+  return groups.map((group) => ({
+    etablissement: group.nom,
+    etablissementId: group.etablissementId,
+    ville: group.ville,
+    nbCampagnes: group.nbCampagnes,
+    nbCandidatures: group.totalCandidats,
+    valides: group.acceptes,
+    rejetes: group.rejetes,
+    en_attente: group.enAttente,
+    campagnes: group.campagnes.map(mapParCampagneToLegacy),
+  }));
+}
+
 function handleStatsError(res, error, contextLabel) {
   if (error.status === 400) {
     return res.status(400).json({ error: error.message });
@@ -44,6 +75,7 @@ exports.getStatistiques = async (req, res) => {
     const filters = parseStatsFilters(req.query);
     const stats = await statsExportService.collectStats(filters, null);
     const statistiques = stats.parConcours.map(mapParConcoursToLegacy);
+    const statistiquesCampagnes = stats.campagnes.parCampagne.map(mapParCampagneToLegacy);
 
     return res.json({
       meta: stats.meta,
@@ -56,6 +88,15 @@ exports.getStatistiques = async (req, res) => {
       },
       statistiques,
       parEtablissement: mapParEtablissementLegacy(stats.parEtablissement),
+      totauxCampagnes: {
+        total_campagnes: statistiquesCampagnes.length,
+        total_candidatures: stats.campagnes.totaux.totalCandidats,
+        total_valides: stats.campagnes.totaux.acceptes,
+        total_rejetes: stats.campagnes.totaux.rejetes,
+        total_attente: stats.campagnes.totaux.enAttente,
+      },
+      statistiquesCampagnes,
+      parEtablissementPrive: mapParEtablissementPriveLegacy(stats.campagnes.parEtablissement),
     });
   } catch (error) {
     return handleStatsError(res, error, 'Erreur DGES:');

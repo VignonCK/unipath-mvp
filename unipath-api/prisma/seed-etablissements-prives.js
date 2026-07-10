@@ -1,5 +1,277 @@
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 const { PrismaClient } = require('@prisma/client');
+const { supabaseAdmin } = require('../src/supabase');
+
 const prisma = new PrismaClient();
+
+const DEMO_PASSWORD = 'Test2026!';
+const DEMO_ANNEE = '2026-2027';
+const DEMO_DOC_BASE = 'https://example.com/demo/unipath';
+
+const DEMO_CANDIDATS = [
+  { index: 1, nom: 'AGOSSOU', prenom: 'Koffi', sexe: 'M', serie: 'G1', statut: 'VALIDE', etablissementEmail: 'contact@esae.bj', filiereCode: 'ESAE-SE-L', submittedAt: '2026-07-05T10:30:00.000Z', lieuNaiss: 'Cotonou', dateNaiss: '2004-03-12' },
+  { index: 2, nom: 'HOUNGBO', prenom: 'Mireille', sexe: 'F', serie: 'G2', statut: 'VALIDE', etablissementEmail: 'contact@irgib.bj', filiereCode: 'IRGIB-GTIC-L', submittedAt: '2026-07-08T14:15:00.000Z', lieuNaiss: 'Porto-Novo', dateNaiss: '2005-06-22' },
+  { index: 3, nom: 'KPADONOU', prenom: 'Romuald', sexe: 'M', serie: 'G3', statut: 'REJETE', motif: 'Relevé de notes non conforme aux exigences de la filière.', etablissementEmail: 'contact@iscg-benin.bj', filiereCode: 'ISCG-BF-L', submittedAt: '2026-07-10T09:00:00.000Z', lieuNaiss: 'Parakou', dateNaiss: '2003-11-08' },
+  { index: 4, nom: 'DANSOU', prenom: 'Élodie', sexe: 'F', serie: 'A', statut: 'REJETE', motif: 'Pièce d\'identité illisible ou expirée.', etablissementEmail: 'contact@isma-benin.bj', filiereCode: 'ISMA-JC-L', submittedAt: '2026-07-12T16:45:00.000Z', lieuNaiss: 'Abomey-Calavi', dateNaiss: '2005-01-30' },
+  { index: 5, nom: 'TOSSOU', prenom: 'Yves', sexe: 'M', serie: 'C', statut: 'EN_ATTENTE', etablissementEmail: 'contact@hecm-benin.bj', filiereCode: 'HECM-ME-L', submittedAt: '2026-07-15T11:20:00.000Z', lieuNaiss: 'Bohicon', dateNaiss: '2004-09-17' },
+  { index: 6, nom: 'BIAOU', prenom: 'Aïcha', sexe: 'F', serie: 'D', statut: 'EN_ATTENTE', etablissementEmail: 'contact@pigier-benin.bj', filiereCode: 'PIGIER-RGL-L', submittedAt: '2026-07-18T08:50:00.000Z', lieuNaiss: 'Cotonou', dateNaiss: '2006-02-14' },
+  { index: 7, nom: 'GANDONOU', prenom: 'Serge', sexe: 'M', serie: 'G1', statut: 'SOUS_RESERVE', motif: 'Merci de fournir une attestation de réussite au BAC complémentaire.', etablissementEmail: 'contact@ism-adonai.bj', filiereCode: 'ISMA-GE-L', submittedAt: '2026-07-20T13:10:00.000Z', lieuNaiss: 'Ouidah', dateNaiss: '2004-07-03' },
+  { index: 8, nom: 'ADJOLO', prenom: 'Ayélé', sexe: 'F', serie: 'G2', statut: 'SOUS_RESERVE', motif: 'Photo d\'identité non conforme aux normes requises.', etablissementEmail: 'contact@uatm-gasa.bj', filiereCode: 'UATM-GI-L', submittedAt: '2026-07-22T15:40:00.000Z', lieuNaiss: 'Natitingou', dateNaiss: '2005-12-01' },
+  { index: 9, nom: 'ZANNOU', prenom: 'Marcel', sexe: 'M', serie: 'B', statut: 'VALIDE', etablissementEmail: 'contact@esm-benin.bj', filiereCode: 'ESM-MAE-L', submittedAt: '2026-07-25T10:05:00.000Z', lieuNaiss: 'Cotonou', dateNaiss: '2003-05-19' },
+  { index: 10, nom: 'KOUASSI', prenom: 'Nadia', sexe: 'F', serie: 'G3', statut: 'VALIDE', etablissementEmail: 'contact@ucao-benin.bj', filiereCode: 'UCAO-SEG-L', submittedAt: '2026-07-28T17:25:00.000Z', lieuNaiss: 'Lokossa', dateNaiss: '2004-10-11' },
+  { index: 11, nom: 'DOSSOU', prenom: 'Kévin', sexe: 'M', serie: 'G1', statut: 'REJETE', motif: 'Dossier incomplet : absence de certificat de scolarité.', etablissementEmail: 'contact@iup-benin.bj', filiereCode: 'IUP-SG-L', submittedAt: '2026-08-01T09:35:00.000Z', lieuNaiss: 'Porto-Novo', dateNaiss: '2005-04-27' },
+  { index: 12, nom: 'AHOUANDJINOU', prenom: 'Prisca', sexe: 'F', serie: 'A', statut: 'EN_ATTENTE', etablissementEmail: 'contact@esep-leberger.bj', filiereCode: 'ESEP-GC-L', submittedAt: '2026-08-05T12:00:00.000Z', lieuNaiss: 'Cotonou', dateNaiss: '2006-08-09' },
+  { index: 13, nom: 'SOSSOU', prenom: 'Patrick', sexe: 'M', serie: 'C', statut: 'SOUS_RESERVE', motif: 'Relevé de notes du BAC en attente de validation par l\'établissement.', etablissementEmail: 'contact@esae.bj', filiereCode: 'ESAE-AF-L', submittedAt: '2026-08-08T14:55:00.000Z', lieuNaiss: 'Abomey', dateNaiss: '2004-12-23' },
+  { index: 14, nom: 'OGOUNCHILE', prenom: 'Christelle', sexe: 'F', serie: 'D', statut: 'SOUS_RESERVE', motif: 'Acte de naissance à fournir en version certifiée conforme.', etablissementEmail: 'contact@irgib.bj', filiereCode: 'IRGIB-AA-L', submittedAt: '2026-08-10T11:15:00.000Z', lieuNaiss: 'Parakou', dateNaiss: '2005-03-06' },
+  { index: 15, nom: 'BOCO', prenom: 'Raphaël', sexe: 'M', serie: 'G2', statut: 'EN_ATTENTE', etablissementEmail: 'contact@hecm-benin.bj', filiereCode: 'HECM-CI-L', submittedAt: '2026-08-12T16:30:00.000Z', lieuNaiss: 'Cotonou', dateNaiss: '2004-06-18' },
+];
+
+async function ensureSupabaseUser(email) {
+  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password: DEMO_PASSWORD,
+    email_confirm: true,
+  });
+
+  if (!authError) {
+    return authData.user.id;
+  }
+
+  const dejaExistant =
+    authError.message.includes('already registered') ||
+    authError.message.includes('already been registered');
+  if (!dejaExistant) {
+    throw authError;
+  }
+
+  const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (listError) throw listError;
+  const existing = listData.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+  if (!existing) {
+    throw new Error(`Utilisateur ${email} introuvable dans Supabase Auth`);
+  }
+  return existing.id;
+}
+
+async function resolveCampagneFiliere(etablissementEmail, filiereCode) {
+  const etablissement = await prisma.etablissement.findUnique({ where: { email: etablissementEmail } });
+  if (!etablissement) {
+    throw new Error(`Établissement introuvable : ${etablissementEmail}`);
+  }
+
+  const filiere = await prisma.filiere.findFirst({
+    where: { code: filiereCode, etablissementId: etablissement.id },
+  });
+  if (!filiere) {
+    throw new Error(`Filière ${filiereCode} introuvable pour ${etablissementEmail}`);
+  }
+
+  const campagne = await prisma.campagneInscription.findFirst({
+    where: { etablissementId: etablissement.id, anneeAcademique: DEMO_ANNEE },
+    include: { filieres: true },
+  });
+  if (!campagne) {
+    throw new Error(`Campagne ${DEMO_ANNEE} introuvable pour ${etablissementEmail}`);
+  }
+
+  const campagneFiliere = campagne.filieres.find((cf) => cf.filiereId === filiere.id);
+  if (!campagneFiliere) {
+    throw new Error(`CampagneFiliere introuvable : ${filiereCode} / ${DEMO_ANNEE}`);
+  }
+
+  return { etablissement, filiere, campagneFiliere };
+}
+
+async function seedDemoCandidats() {
+  console.log('\n--- Candidats démo CampagneInscription (établissements privés) ---');
+
+  const stats = { candidats: 0, applications: 0, preinscriptions: 0 };
+
+  for (const demo of DEMO_CANDIDATS) {
+    const email = `harrydedji+candidat${demo.index}@gmail.com`;
+    const matricule = `DEMO-2026-${String(demo.index).padStart(3, '0')}`;
+    const numeroApplication = `DEMO-APP-2026-${String(demo.index).padStart(3, '0')}`;
+    const numeroPreinscription = `DEMO-PE-2026-${String(demo.index).padStart(3, '0')}`;
+    const telephone = `+22961${String(100000 + demo.index).slice(1)}`;
+
+    const userId = await ensureSupabaseUser(email);
+    const { etablissement, filiere, campagneFiliere } = await resolveCampagneFiliere(
+      demo.etablissementEmail,
+      demo.filiereCode
+    );
+
+    const candidat = await prisma.candidat.upsert({
+      where: { email },
+      update: {
+        nom: demo.nom,
+        prenom: demo.prenom,
+        sexe: demo.sexe,
+        serie: demo.serie,
+        nationalite: 'Béninoise',
+        telephone,
+        dateNaiss: new Date(demo.dateNaiss),
+        lieuNaiss: demo.lieuNaiss,
+        emailConfirme: true,
+        role: 'ETUDIANT',
+      },
+      create: {
+        id: userId,
+        email,
+        matricule,
+        nom: demo.nom,
+        prenom: demo.prenom,
+        sexe: demo.sexe,
+        serie: demo.serie,
+        nationalite: 'Béninoise',
+        telephone,
+        dateNaiss: new Date(demo.dateNaiss),
+        lieuNaiss: demo.lieuNaiss,
+        emailConfirme: true,
+        role: 'ETUDIANT',
+      },
+    });
+    stats.candidats += 1;
+
+    await prisma.dossier.upsert({
+      where: { candidatId: candidat.id },
+      update: {
+        acteNaissance: `${DEMO_DOC_BASE}/acte-${demo.index}.pdf`,
+        carteIdentite: `${DEMO_DOC_BASE}/cni-${demo.index}.pdf`,
+        photo: `${DEMO_DOC_BASE}/photo-${demo.index}.jpg`,
+        releve: `${DEMO_DOC_BASE}/releve-${demo.index}.pdf`,
+      },
+      create: {
+        candidatId: candidat.id,
+        acteNaissance: `${DEMO_DOC_BASE}/acte-${demo.index}.pdf`,
+        carteIdentite: `${DEMO_DOC_BASE}/cni-${demo.index}.pdf`,
+        photo: `${DEMO_DOC_BASE}/photo-${demo.index}.jpg`,
+        releve: `${DEMO_DOC_BASE}/releve-${demo.index}.pdf`,
+      },
+    });
+
+    const submittedAt = new Date(demo.submittedAt);
+    const decidedAt = ['VALIDE', 'REJETE', 'SOUS_RESERVE'].includes(demo.statut) ? submittedAt : null;
+
+    const application = await prisma.application.upsert({
+      where: { numeroApplication },
+      update: {
+        etablissementId: etablissement.id,
+        filiereId: filiere.id,
+        campagneFiliereId: campagneFiliere.id,
+        anneeAcademique: DEMO_ANNEE,
+        niveau: 1,
+        status: 'FICHE_GENERATED',
+      },
+      create: {
+        numeroApplication,
+        candidatId: candidat.id,
+        etablissementId: etablissement.id,
+        filiereId: filiere.id,
+        campagneFiliereId: campagneFiliere.id,
+        anneeAcademique: DEMO_ANNEE,
+        niveau: 1,
+        status: 'FICHE_GENERATED',
+        createdAt: submittedAt,
+      },
+    });
+    stats.applications += 1;
+
+    const demoDocs = [
+      { code: 'ACTE_NAISSANCE', label: 'Acte de naissance', url: `${DEMO_DOC_BASE}/acte-${demo.index}.pdf` },
+      { code: 'CARTE_IDENTITE', label: 'Carte d\'identité', url: `${DEMO_DOC_BASE}/cni-${demo.index}.pdf` },
+      { code: 'PHOTO', label: 'Photo d\'identité', url: `${DEMO_DOC_BASE}/photo-${demo.index}.jpg` },
+      { code: 'RELEVE_NOTES', label: 'Relevé de notes', url: `${DEMO_DOC_BASE}/releve-${demo.index}.pdf` },
+    ];
+
+    for (const doc of demoDocs) {
+      await prisma.applicationDocument.upsert({
+        where: { applicationId_code: { applicationId: application.id, code: doc.code } },
+        update: { status: 'PROVIDED', documentUrl: doc.url, source: 'STUDENT_UPLOAD' },
+        create: {
+          applicationId: application.id,
+          code: doc.code,
+          label: doc.label,
+          source: 'STUDENT_UPLOAD',
+          documentUrl: doc.url,
+          status: 'PROVIDED',
+        },
+      });
+    }
+
+    const existingPayment = await prisma.payment.findFirst({
+      where: { applicationId: application.id, paymentType: 'DOSSIER_FEES' },
+    });
+    if (existingPayment) {
+      await prisma.payment.update({
+        where: { id: existingPayment.id },
+        data: { status: 'CONFIRMED', amount: campagneFiliere.fraisDossier },
+      });
+    } else {
+      await prisma.payment.create({
+        data: {
+          applicationId: application.id,
+          paymentType: 'DOSSIER_FEES',
+          amount: campagneFiliere.fraisDossier,
+          paymentMethod: 'PLATFORM_GATEWAY',
+          status: 'CONFIRMED',
+          externalRef: `DEMO-PAY-2026-${String(demo.index).padStart(3, '0')}`,
+        },
+      });
+    }
+
+    const preinscription = await prisma.preinscriptionEtablissement.upsert({
+      where: { numeroPreinscription },
+      update: {
+        candidatId: candidat.id,
+        filiereId: filiere.id,
+        etablissementId: etablissement.id,
+        anneeAcademique: DEMO_ANNEE,
+        niveau: 1,
+        statut: demo.statut,
+        motifDecision: demo.statut === 'REJETE' ? demo.motif : null,
+        commentaireAdmin: demo.statut === 'SOUS_RESERVE' ? demo.motif : null,
+        decidedAt,
+        decidedBy: decidedAt ? 'seed-demo' : null,
+      },
+      create: {
+        numeroPreinscription,
+        candidatId: candidat.id,
+        filiereId: filiere.id,
+        etablissementId: etablissement.id,
+        anneeAcademique: DEMO_ANNEE,
+        niveau: 1,
+        statut: demo.statut,
+        motifDecision: demo.statut === 'REJETE' ? demo.motif : null,
+        commentaireAdmin: demo.statut === 'SOUS_RESERVE' ? demo.motif : null,
+        decidedAt,
+        decidedBy: decidedAt ? 'seed-demo' : null,
+        createdAt: submittedAt,
+      },
+    });
+    stats.preinscriptions += 1;
+
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { preinscriptionId: preinscription.id },
+    });
+
+    console.log(
+      `   ✅ ${demo.prenom} ${demo.nom} → ${etablissement.nom.split(' ')[0]}… (${demo.statut})`
+    );
+  }
+
+  const totalCandidats = await prisma.candidat.count({ where: { matricule: { startsWith: 'DEMO-2026-' } } });
+  const totalApps = await prisma.application.count({ where: { numeroApplication: { startsWith: 'DEMO-APP-2026-' } } });
+  const totalPe = await prisma.preinscriptionEtablissement.count({
+    where: { numeroPreinscription: { startsWith: 'DEMO-PE-2026-' } },
+  });
+
+  console.log(`\nRésumé démo : ${totalCandidats} candidat(s), ${totalApps} application(s), ${totalPe} préinscription(s).`);
+  console.log('Mot de passe commun : Test2026!');
+  console.log('Emails : harrydedji+candidat1@gmail.com … harrydedji+candidat15@gmail.com');
+
+  return stats;
+}
 
 async function main() {
   console.log('Seeding établissements privés agréés du Bénin...');
@@ -288,6 +560,8 @@ async function main() {
   }
 
   console.log('\nTerminé : 12 EPES agréés du Bénin seedés avec succès.');
+
+  await seedDemoCandidats();
 }
 
 main()
