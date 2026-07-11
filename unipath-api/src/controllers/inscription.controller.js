@@ -15,7 +15,8 @@ const {
   DOSSIER_CENTRE_INCLUDE,
   dossierCentreDejaChoisi,
   flattenCentreChoisi,
-  concoursHasCentres,
+  concoursHasCentresActifs,
+  resolveHasCentresActifs,
 } = require('../utils/centres-composition.helper');
 const { mapCommentairesFromDossier } = require('../utils/dossier-inscription-mapper');
 const {
@@ -25,6 +26,10 @@ const {
   isStatutSousReserveActif,
   isStatutSousReserveEnCours,
 } = require('../utils/sous-reserve.helper');
+const {
+  allPiecesCibleesCorrigees,
+  getPiecesACorrigerCodes,
+} = require('../utils/pieces-concours-sous-reserve.helper');
 
 /**
  * @deprecated Utiliser POST /api/inscriptions/soumettre (soumettreDossierComplet).
@@ -424,8 +429,7 @@ exports.getMesInscriptions = async (req, res) => {
       concours: ins.concours
         ? {
             ...ins.concours,
-            hasCentresActifs: (ins.concours.centresActifs?.length > 0)
-              || concoursHasCentres(ins.concours.centresComposition),
+            hasCentresActifs: resolveHasCentresActifs(ins.concours, ins.concours.centresActifs),
             centresActifs: undefined,
           }
         : ins.concours,
@@ -953,15 +957,28 @@ exports.getStatutCorrectionsSousReserve = async (req, res) => {
 
     const dossier = inscription.dossierInscription;
     const peutCorriger = isStatutSousReserveActif(dossier.statut);
-    const correctionsEffectuees = peutCorriger && (
-      await hasCorrectionApresSousReserve(prisma, dossier.id, dossier)
-      || hasDocumentsCompl(dossier.documentsCompl)
-    );
+    const codesCibles = getPiecesACorrigerCodes(dossier.piecesACorriger);
+    let correctionsEffectuees = false;
+    let toutesPiecesCibleesCorrigees = null;
+
+    if (peutCorriger) {
+      if (codesCibles.length > 0) {
+        toutesPiecesCibleesCorrigees = allPiecesCibleesCorrigees(dossier.piecesACorriger);
+        correctionsEffectuees = Boolean(toutesPiecesCibleesCorrigees);
+      } else {
+        correctionsEffectuees = (
+          await hasCorrectionApresSousReserve(prisma, dossier.id, dossier)
+          || hasDocumentsCompl(dossier.documentsCompl)
+        );
+      }
+    }
 
     return res.json({
       statut: dossier.statut,
       dateDecision: getDateDecisionSousReserve(dossier),
       correctionsEffectuees: Boolean(correctionsEffectuees),
+      toutesPiecesCibleesCorrigees,
+      piecesACorriger: dossier.piecesACorriger ?? null,
       peutCorriger,
       enAttenteControleur: dossier.statut === 'SOUS_RESERVE_PAR_COMMISSION',
     });
@@ -993,15 +1010,25 @@ exports.resoumettreDossierConcours = async (req, res) => {
     }
 
     const dossierInscription = inscription.dossierInscription;
-    const correctionEffectuee = await hasCorrectionApresSousReserve(
-      prisma,
-      dossierInscription.id,
-      dossierInscription,
-    ) || hasDocumentsCompl(dossierInscription.documentsCompl);
+    const codesCibles = getPiecesACorrigerCodes(dossierInscription.piecesACorriger);
+    let correctionEffectuee = false;
+
+    if (codesCibles.length > 0) {
+      correctionEffectuee = allPiecesCibleesCorrigees(dossierInscription.piecesACorriger);
+    } else {
+      correctionEffectuee = await hasCorrectionApresSousReserve(
+        prisma,
+        dossierInscription.id,
+        dossierInscription,
+      ) || hasDocumentsCompl(dossierInscription.documentsCompl);
+    }
 
     if (!correctionEffectuee) {
       return res.status(400).json({
-        error: 'Remplacez au moins une piece non conforme (indiquee dans le motif) avant de resoumettre votre dossier.',
+        error: codesCibles.length > 0
+          ? 'Remplacez toutes les pièces indiquées comme à corriger avant de resoumettre votre dossier.'
+          : 'Remplacez au moins une piece non conforme (indiquee dans le motif) avant de resoumettre votre dossier.',
+        piecesACorriger: codesCibles,
       });
     }
 
@@ -1102,6 +1129,17 @@ exports.choisirCentreComposition = async (req, res) => {
       }
       return res.status(400).json({
         error: 'Le centre de composition ne peut etre choisi qu\'apres validation de votre dossier',
+      });
+    }
+
+    const hasCentres = await concoursHasCentresActifs(
+      inscription.concoursId,
+      inscription.concours,
+      prisma,
+    );
+    if (!hasCentres) {
+      return res.status(400).json({
+        error: 'Ce concours ne propose pas de centre de composition',
       });
     }
 

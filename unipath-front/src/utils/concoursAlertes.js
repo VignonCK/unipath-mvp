@@ -4,9 +4,7 @@ export function countAlertesConcours(inscriptions = []) {
 }
 
 function needsCentreChoice(ins) {
-  const hasCentres = ins?.concours?.hasCentresActifs
-    || (Array.isArray(ins?.concours?.centresComposition?.centres)
-      && ins.concours.centresComposition.centres.length > 0);
+  const hasCentres = Boolean(ins?.concours?.hasCentresActifs);
   const centreChoisi = ins?.centreChoisi;
   const aChoisi = Boolean(centreChoisi?.concoursCentreId || centreChoisi?.nom);
   return hasCentres

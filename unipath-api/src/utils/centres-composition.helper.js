@@ -54,6 +54,23 @@ function concoursHasCentres(centresComposition) {
   return Array.isArray(centresComposition?.centres) && centresComposition.centres.length > 0;
 }
 
+/** Concours avec au moins un centre relationnel actif (source de vérité). */
+function concoursHasCentresRelationnels(centresActifs) {
+  return Array.isArray(centresActifs) && centresActifs.length > 0;
+}
+
+/**
+ * Indique si le concours exige un choix de centre.
+ * Priorité au modèle relationnel ; le JSON legacy ne sert qu'en secours (concours non migrés).
+ */
+function resolveHasCentresActifs(concours, centresActifsRelational = null) {
+  const relational = centresActifsRelational ?? concours?.centresActifs;
+  if (concoursHasCentresRelationnels(relational)) {
+    return true;
+  }
+  return concoursHasCentres(concours?.centresComposition);
+}
+
 function resolveChoixCentre(centresComposition, { ville, nom }) {
   const villeNorm = String(ville || '').trim().toLowerCase();
   const nomNorm = String(nom || '').trim().toLowerCase();
@@ -168,16 +185,15 @@ function centreCompositionEstChoisi(dossierInscription) {
 }
 
 async function concoursHasCentresActifs(concoursId, concours, prismaClient) {
-  if (concoursHasCentres(concours?.centresComposition)) {
-    return true;
+  if (concoursId && prismaClient) {
+    const count = await prismaClient.concourscentreComposition.count({
+      where: { concoursId, estActif: true },
+    });
+    if (count > 0) {
+      return true;
+    }
   }
-  if (!concoursId || !prismaClient) {
-    return false;
-  }
-  const count = await prismaClient.concourscentreComposition.count({
-    where: { concoursId, estActif: true },
-  });
-  return count > 0;
+  return concoursHasCentres(concours?.centresComposition);
 }
 
 async function peutEnvoyerConvocationPdf({ concoursId, concours, dossierInscription }, prismaClient) {
@@ -196,6 +212,8 @@ module.exports = {
   normalizeCentresComposition,
   validateCentresComposition,
   concoursHasCentres,
+  concoursHasCentresRelationnels,
+  resolveHasCentresActifs,
   concoursHasCentresActifs,
   centreCompositionEstChoisi,
   peutEnvoyerConvocationPdf,

@@ -3,11 +3,36 @@ const prisma = require('../prisma');
 const { isEtudiantRole } = require('../constants/roles.constants');
 const { isStatutSousReserveActif } = require('../utils/sous-reserve.helper');
 const {
+  isPieceAutoriseeSousReserve,
+  markPieceCorrigee,
+  getPiecesACorrigerCodes,
+} = require('../utils/pieces-concours-sous-reserve.helper');
+const {
   BUCKET_DOSSIERS_CANDIDATS,
   sanitizeStorageRelativePath,
   createDossiersCandidatsSignedUrl,
   SIGNED_URL_DEFAULT_EXPIRES_IN,
 } = require('../utils/storage.helper');
+
+async function applyPieceCorrigeeSurDossier(dossierInscription, typePiece) {
+  if (!dossierInscription || !isStatutSousReserveActif(dossierInscription.statut)) {
+    return dossierInscription;
+  }
+  if (!isPieceAutoriseeSousReserve(dossierInscription.piecesACorriger, typePiece)) {
+    const err = new Error(
+      `Cette pièce n'est pas dans la liste à corriger (${getPiecesACorrigerCodes(dossierInscription.piecesACorriger).join(', ') || 'aucune'})`,
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+  const codes = getPiecesACorrigerCodes(dossierInscription.piecesACorriger);
+  if (codes.length === 0) return dossierInscription;
+
+  return prisma.dossierInscription.update({
+    where: { id: dossierInscription.id },
+    data: { piecesACorriger: markPieceCorrigee(dossierInscription.piecesACorriger, typePiece) },
+  });
+}
 
 const uploadToSupabase = async (file, candidatId, typePiece) => {
   const ext = file.originalname.split('.').pop();
@@ -136,6 +161,23 @@ exports.uploadPiece = async (req, res) => {
           return res.status(400).json({ error: sousReserveCheck.error });
         }
 
+        if (inscriptionId) {
+          const insHint = await prisma.inscription.findFirst({
+            where: { id: inscriptionId, candidatId: targetCandidatId },
+            include: { dossierInscription: { select: { statut: true, piecesACorriger: true } } },
+          });
+          if (
+            insHint?.dossierInscription
+            && isStatutSousReserveActif(insHint.dossierInscription.statut)
+            && !isPieceAutoriseeSousReserve(insHint.dossierInscription.piecesACorriger, typePiece)
+          ) {
+            return res.status(400).json({
+              error: 'Cette pièce n\'est pas dans la liste des pièces à corriger',
+              piecesACorriger: getPiecesACorrigerCodes(insHint.dossierInscription.piecesACorriger),
+            });
+          }
+        }
+
         const dossier = await prisma.dossier.upsert({
           where: { candidatId: targetCandidatId },
           update: { [typePiece]: storagePath },
@@ -148,18 +190,27 @@ exports.uploadPiece = async (req, res) => {
         // Récupérer toutes les inscriptions du candidat pour impact multi-concours
         const inscriptions = await prisma.inscription.findMany({
           where: { candidatId: targetCandidatId },
-          include: { 
+          include: {
             concours: { select: { libelle: true } },
-            dossierInscription: { select: { id: true, statut: true } }
-          }
+            dossierInscription: { select: { id: true, statut: true, piecesACorriger: true } },
+          },
         });
 
-        // Enregistrer l'action pour chaque dossier sous réserve actif
+        // Enregistrer l'action + marquer pièce corrigée pour chaque dossier sous réserve actif
         for (const inscription of inscriptions) {
           if (
             inscription.dossierInscription
             && isStatutSousReserveActif(inscription.dossierInscription.statut)
           ) {
+            try {
+              await applyPieceCorrigeeSurDossier(inscription.dossierInscription, typePiece);
+            } catch (pieceErr) {
+              if (pieceErr.statusCode === 400) {
+                // Pièce non ciblée sur ce dossier : ignorer (impact multi-concours)
+                continue;
+              }
+              throw pieceErr;
+            }
             await prisma.actionHistory.create({
               data: {
                 utilisateurId: candidatId,
@@ -167,8 +218,8 @@ exports.uploadPiece = async (req, res) => {
                 typeAction: 'PIECE_BASE_MISE_A_JOUR',
                 details: { typePiece, url: storagePath },
                 ipAddress: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
-                userAgent: req.headers['user-agent']
-              }
+                userAgent: req.headers['user-agent'],
+              },
             });
           }
         }
@@ -210,14 +261,20 @@ exports.uploadPiece = async (req, res) => {
         if (!correctionCheck.ok) {
           return res.status(400).json({ error: correctionCheck.error });
         }
+        if (!isPieceAutoriseeSousReserve(inscription.dossierInscription.piecesACorriger, 'quittance')) {
+          return res.status(400).json({
+            error: 'La quittance n\'est pas dans la liste des pièces à corriger',
+            piecesACorriger: getPiecesACorrigerCodes(inscription.dossierInscription.piecesACorriger),
+          });
+        }
 
-        // Mettre à jour le dossier d'inscription
-        const dossierInscription = await prisma.dossierInscription.update({
+        let dossierInscription = await prisma.dossierInscription.update({
           where: { inscriptionId },
-          data: { quittanceUrl: storagePath }
+          data: { quittanceUrl: storagePath },
         });
+        dossierInscription = await applyPieceCorrigeeSurDossier(dossierInscription, 'quittance')
+          || dossierInscription;
 
-        // Enregistrer l'action
         await prisma.actionHistory.create({
           data: {
             utilisateurId: candidatId,
@@ -225,15 +282,15 @@ exports.uploadPiece = async (req, res) => {
             typeAction: 'QUITTANCE_AJOUTEE',
             details: { url: storagePath },
             ipAddress: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
-            userAgent: req.headers['user-agent']
-          }
+            userAgent: req.headers['user-agent'],
+          },
         });
 
         return res.json({
           message: 'Quittance uploadee avec succes',
           url: storagePath,
           signedUrl,
-          dossierInscription
+          dossierInscription,
         });
       }
 
@@ -259,17 +316,23 @@ exports.uploadPiece = async (req, res) => {
       if (!extraCheck.ok) {
         return res.status(400).json({ error: extraCheck.error });
       }
+      if (!isPieceAutoriseeSousReserve(inscription.dossierInscription.piecesACorriger, typePiece)) {
+        return res.status(400).json({
+          error: 'Cette pièce n\'est pas dans la liste des pièces à corriger',
+          piecesACorriger: getPiecesACorrigerCodes(inscription.dossierInscription.piecesACorriger),
+        });
+      }
 
-      // Mettre à jour piecesExtras
-      const piecesExtras = inscription.dossierInscription.piecesExtras || {};
+      const piecesExtras = { ...(inscription.dossierInscription.piecesExtras || {}) };
       piecesExtras[typePiece] = storagePath;
 
-      const dossierInscription = await prisma.dossierInscription.update({
+      let dossierInscription = await prisma.dossierInscription.update({
         where: { inscriptionId },
-        data: { piecesExtras }
+        data: { piecesExtras },
       });
+      dossierInscription = await applyPieceCorrigeeSurDossier(dossierInscription, typePiece)
+        || dossierInscription;
 
-      // Enregistrer l'action
       await prisma.actionHistory.create({
         data: {
           utilisateurId: candidatId,
@@ -277,15 +340,15 @@ exports.uploadPiece = async (req, res) => {
           typeAction: 'PIECE_EXTRA_AJOUTEE',
           details: { typePiece, url: storagePath },
           ipAddress: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
-          userAgent: req.headers['user-agent']
-        }
+          userAgent: req.headers['user-agent'],
+        },
       });
 
       return res.json({
         message: `${typePiece} uploadee avec succes`,
         url: storagePath,
         signedUrl,
-        dossierInscription
+        dossierInscription,
       });
 
     } catch (error) {

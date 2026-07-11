@@ -67,10 +67,13 @@ export default function DashboardDGES() {
 
   useEffect(() => {
     concoursService.getAll()
-      .then(setConcoursList)
+      .then((rows) => setConcoursList(Array.isArray(rows) ? rows : []))
       .catch(() => setConcoursList([]));
     etablissementService.getPrives()
-      .then((rows) => setEtablissementsPrives(rows || []))
+      .then((data) => {
+        const rows = Array.isArray(data) ? data : (data?.etablissements || []);
+        setEtablissementsPrives(rows);
+      })
       .catch(() => setEtablissementsPrives([]));
     loadStats(EMPTY_FILTERS);
   }, [loadStats]);
@@ -83,7 +86,7 @@ export default function DashboardDGES() {
     centreCompositionService.getConcoursCentres(draftFilters.concoursId)
       .then((rows) => {
         const unique = new Map();
-        (rows || []).forEach((row) => {
+        (Array.isArray(rows) ? rows : []).forEach((row) => {
           if (row.centreId && row.centre) {
             unique.set(row.centreId, row.centre);
           }
@@ -95,12 +98,12 @@ export default function DashboardDGES() {
 
   const etablissementOptions = useMemo(() => {
     const map = new Map();
-    concoursList.forEach((c) => {
+    (Array.isArray(concoursList) ? concoursList : []).forEach((c) => {
       const id = c.etablissementId || c.etablissementOrganisateur?.id;
       const nom = c.etablissementOrganisateur?.nom || c.etablissement || 'Non renseigné';
       if (id) map.set(id, nom);
     });
-    (etablissementsPrives || []).forEach((e) => {
+    (Array.isArray(etablissementsPrives) ? etablissementsPrives : []).forEach((e) => {
       if (e.id) map.set(e.id, e.nom);
     });
     return [...map.entries()]

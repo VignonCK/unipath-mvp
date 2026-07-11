@@ -1,6 +1,6 @@
 // src/controllers/candidat.controller.js
 const prisma = require('../prisma');
-const { DOSSIER_CENTRE_INCLUDE, flattenCentreChoisi, concoursHasCentres } = require('../utils/centres-composition.helper');
+const { DOSSIER_CENTRE_INCLUDE, flattenCentreChoisi, resolveHasCentresActifs } = require('../utils/centres-composition.helper');
 const { mapCommentairesFromDossier } = require('../utils/dossier-inscription-mapper');
 
 exports.getProfil = async (req, res) => {
@@ -51,8 +51,7 @@ exports.getProfil = async (req, res) => {
       concours: ins.concours
         ? {
             ...ins.concours,
-            hasCentresActifs: (ins.concours.centresActifs?.length > 0)
-              || concoursHasCentres(ins.concours.centresComposition),
+            hasCentresActifs: resolveHasCentresActifs(ins.concours, ins.concours.centresActifs),
             centresActifs: undefined,
           }
         : ins.concours,

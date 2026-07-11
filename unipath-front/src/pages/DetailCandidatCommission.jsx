@@ -5,6 +5,15 @@ import { commissionService, dossierService } from '../services/api';
 import DocumentViewer from '../components/DocumentViewer';
 import HistoriqueActions from '../components/HistoriqueActions';
 import CommissionLayout from '../components/CommissionLayout';
+import { buildPiecesDeposeesConcours } from '../utils/piecesConcoursSousReserve';
+
+const emptySousReserveModal = () => ({
+  open: false,
+  commentaire: '',
+  selectedCodes: [],
+  pieces: [],
+  piecesError: '',
+});
 
 function initiales(prenom, nom) {
   return `${(prenom || '?')[0]}${(nom || '?')[0]}`.toUpperCase();
@@ -32,7 +41,7 @@ export default function DetailCandidatCommission() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ text: '', type: 'info' });
   const [rejetModal, setRejetModal] = useState({ open: false, commentaire: '' });
-  const [sousReserveModal, setSousReserveModal] = useState({ open: false, commentaire: '' });
+  const [sousReserveModal, setSousReserveModal] = useState(emptySousReserveModal);
   const [documentViewer, setDocumentViewer] = useState({ open: false, url: '', name: '', type: '' });
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
 
@@ -67,11 +76,12 @@ export default function DetailCandidatCommission() {
     chargerInscription();
   }, [chargerInscription]);
 
-  const handleDecision = async (statut, commentaireRejet = null, commentaireSousReserve = null) => {
+  const handleDecision = async (statut, commentaireRejet = null, commentaireSousReserve = null, piecesACorriger = null) => {
     try {
       const payload = { statut };
       if (commentaireRejet) payload.commentaireRejet = commentaireRejet;
       if (commentaireSousReserve) payload.commentaireSousReserve = commentaireSousReserve;
+      if (piecesACorriger) payload.piecesACorriger = piecesACorriger;
       
       await commissionService.updateStatut(inscriptionId, payload);
       
@@ -88,7 +98,7 @@ export default function DetailCandidatCommission() {
       
       // Fermer les modales
       setRejetModal({ open: false, commentaire: '' });
-      setSousReserveModal({ open: false, commentaire: '' });
+      setSousReserveModal(emptySousReserveModal());
     } catch (err) {
       showMessage(err.message, 'error');
     }
@@ -102,13 +112,41 @@ export default function DetailCandidatCommission() {
     handleDecision('REJETE', rejetModal.commentaire, null);
   };
 
+  const ouvrirSousReserve = () => {
+    const pieces = buildPiecesDeposeesConcours(inscription);
+    setSousReserveModal({
+      open: true,
+      commentaire: '',
+      selectedCodes: [],
+      pieces,
+      piecesError: pieces.length === 0 ? 'Aucune pièce déposée sélectionnable sur ce dossier.' : '',
+    });
+  };
+
+  const togglePieceSousReserve = (code) => {
+    setSousReserveModal((m) => {
+      const selected = m.selectedCodes.includes(code)
+        ? m.selectedCodes.filter((c) => c !== code)
+        : [...m.selectedCodes, code];
+      return { ...m, selectedCodes: selected };
+    });
+  };
+
   const confirmerSousReserve = () => {
     if (!sousReserveModal.commentaire.trim()) {
       showMessage('Le commentaire est obligatoire', 'error');
       return;
     }
-    handleDecision('SOUS_RESERVE', null, sousReserveModal.commentaire);
+    if (sousReserveModal.selectedCodes.length === 0) {
+      showMessage('Sélectionnez au moins une pièce à corriger', 'error');
+      return;
+    }
+    handleDecision('SOUS_RESERVE', null, sousReserveModal.commentaire, sousReserveModal.selectedCodes);
   };
+
+  const canConfirmSousReserve =
+    Boolean(sousReserveModal.commentaire.trim()) &&
+    sousReserveModal.selectedCodes.length > 0;
 
   const ouvrirDocument = async (url, name, type = '') => {
     if (!url) {
@@ -372,7 +410,7 @@ export default function DetailCandidatCommission() {
               </button>
               <div className='grid grid-cols-2 gap-3'>
                 <button
-                  onClick={() => setSousReserveModal({ open: true, commentaire: '' })}
+                  onClick={ouvrirSousReserve}
                   className='bg-slate-600 text-white py-3 rounded-lg text-sm font-medium hover:bg-slate-700 transition flex items-center justify-center gap-2'
                 >
                   <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -463,35 +501,71 @@ export default function DetailCandidatCommission() {
       {/* Modale sous réserve */}
       {sousReserveModal.open && (
         <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50'>
-          <div className='bg-white rounded-lg shadow-2xl w-full max-w-md'>
+          <div className='bg-white rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col'>
             <div className='px-6 py-4 border-b border-gray-200'>
               <h3 className='font-semibold text-gray-900'>Accepter sous réserve</h3>
-            </div>
-            <div className='px-6 py-5'>
-              <label className='block text-sm font-medium text-gray-700 mb-2'>
-                Conditions à remplir <span className='text-slate-600'>*</span>
-              </label>
-              <textarea
-                value={sousReserveModal.commentaire}
-                onChange={(e) => setSousReserveModal(m => ({ ...m, commentaire: e.target.value }))}
-                placeholder='Indiquez la pièce non conforme et la correction attendue (ex. : relevé illisible — merci de le remplacer)'
-                rows={5}
-                className='w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-slate-500 resize-none'
-              />
-              <p className='text-xs text-gray-500 mt-2'>
-                Ce message indique au candidat quelle pièce remplacer ; il sera transmis par email.
+              <p className='text-xs text-gray-500 mt-1'>
+                Sélectionnez les pièces à corriger et précisez les conditions pour le candidat.
               </p>
+            </div>
+            <div className='px-6 py-5 space-y-5 overflow-y-auto'>
+              <div>
+                <p className='block text-sm font-medium text-gray-700 mb-2'>
+                  Pièces à corriger <span className='text-slate-600'>*</span>
+                </p>
+                {sousReserveModal.piecesError ? (
+                  <p className='text-sm text-red-600'>{sousReserveModal.piecesError}</p>
+                ) : (
+                  <ul className='space-y-2 rounded-xl border border-gray-200 p-3 max-h-48 overflow-y-auto'>
+                    {sousReserveModal.pieces.map((piece) => (
+                      <li key={piece.code}>
+                        <label className='flex items-start gap-3 cursor-pointer text-sm text-gray-800'>
+                          <input
+                            type='checkbox'
+                            className='mt-0.5 rounded border-gray-300'
+                            checked={sousReserveModal.selectedCodes.includes(piece.code)}
+                            onChange={() => togglePieceSousReserve(piece.code)}
+                          />
+                          <span>
+                            <span className='font-medium'>{piece.label}</span>
+                            <span className='block text-xs text-gray-400 font-mono'>{piece.code}</span>
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {sousReserveModal.selectedCodes.length === 0 && !sousReserveModal.piecesError && (
+                  <p className='text-xs text-amber-700 mt-2'>Cochez au moins une pièce.</p>
+                )}
+              </div>
+              <div>
+                <label className='block text-sm font-medium text-gray-700 mb-2'>
+                  Conditions à remplir <span className='text-slate-600'>*</span>
+                </label>
+                <textarea
+                  value={sousReserveModal.commentaire}
+                  onChange={(e) => setSousReserveModal(m => ({ ...m, commentaire: e.target.value }))}
+                  placeholder='Indiquez la pièce non conforme et la correction attendue (ex. : relevé illisible — merci de le remplacer)'
+                  rows={5}
+                  className='w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-slate-500 resize-none'
+                />
+                <p className='text-xs text-gray-500 mt-2'>
+                  Ce message indique au candidat quelle pièce remplacer ; il sera transmis par email.
+                </p>
+              </div>
             </div>
             <div className='px-6 py-4 border-t border-gray-200 flex gap-3 justify-end'>
               <button
-                onClick={() => setSousReserveModal({ open: false, commentaire: '' })}
+                onClick={() => setSousReserveModal(emptySousReserveModal())}
                 className='text-sm border border-gray-200 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-50 transition'
               >
                 Annuler
               </button>
               <button
                 onClick={confirmerSousReserve}
-                className='text-sm bg-slate-700 text-white px-5 py-2 rounded-lg hover:bg-slate-800 transition'
+                disabled={!canConfirmSousReserve}
+                className='text-sm bg-slate-700 text-white px-5 py-2 rounded-lg hover:bg-slate-800 transition disabled:opacity-60'
               >
                 Confirmer
               </button>

@@ -4,23 +4,19 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { candidatService, convocationService, inscriptionService, centreCompositionService } from '../services/api';
 import CandidatLayout from '../components/CandidatLayout';
 import { BentoCard } from '../components/AcademicLayout';
-import ChoixCentreComposition, { concoursHasCentres, formatCentreChoisi } from '../components/concours/ChoixCentreComposition';
+import ChoixCentreComposition, { formatCentreChoisi } from '../components/concours/ChoixCentreComposition';
+import {
+  concoursRequireCentreChoice,
+  resolveCentreChoisi,
+} from '../utils/centresComposition';
 import { ROUTES } from '../constants/routes';
 import CorrectionPiecesSousReserve from '../components/CorrectionPiecesSousReserve';
+import {
+  getPieceLabel,
+  getPiecesACorrigerCodes,
+} from '../utils/piecesConcoursSousReserve';
 
 const STATUTS_CHOIX_CENTRE = ['VALIDE_PAR_COMMISSION', 'VALIDE'];
-
-function resolveCentreChoisi(inscription) {
-  if (!inscription) return null;
-  return inscription.centreChoisi
-    ?? inscription.dossierInscription?.centreCompositionChoisi
-    ?? null;
-}
-
-function inscriptionHasCentreChoisi(inscription) {
-  const c = resolveCentreChoisi(inscription);
-  return Boolean(c?.concoursCentreId || c?.nom);
-}
 
 const SOUS_RESERVE_MOTIF_FALLBACK =
   'Certaines pièces de votre dossier ne sont pas conformes. Consultez le motif ci-dessous, remplacez la ou les pièces concernées, puis resoumettez votre dossier.';
@@ -134,7 +130,7 @@ export default function DetailInscription() {
   const handleConvocation = async () => {
     const centreChoisi = resolveCentreChoisi(inscription);
     if (
-      concoursHasCentres(centresRelational)
+      concoursRequireCentreChoice(inscription?.concours, centresRelational)
       && !centreChoisi
     ) {
       showMessage('Choisissez d\'abord votre centre de composition.', 'error');
@@ -304,7 +300,7 @@ export default function DetailInscription() {
           <div className='bg-blue-50 border-l-4 border-blue-500 px-5 py-4 rounded-xl'>
             <p className='font-semibold text-blue-900 text-sm'>Dossier validé par la commission</p>
             <p className='text-blue-800 text-xs mt-1'>
-              {concoursHasCentres(centresRelational)
+              {concoursRequireCentreChoice(inscription?.concours, centresRelational)
                 ? 'Choisissez votre centre de composition ci-dessous en attendant la validation finale.'
                 : 'Votre dossier est en attente de validation finale par le contrôleur.'}
             </p>
@@ -312,7 +308,7 @@ export default function DetailInscription() {
         )}
 
         {STATUTS_CHOIX_CENTRE.includes(inscription.statut)
-          && concoursHasCentres(centresRelational) && (
+          && concoursRequireCentreChoice(inscription?.concours, centresRelational) && (
           <ChoixCentreComposition
             centresRelational={centresRelational}
             centreChoisi={centreChoisi}
@@ -331,7 +327,7 @@ export default function DetailInscription() {
               <div>
                 <p className='font-semibold text-green-800 text-sm'>Félicitations ! Votre dossier a été validé</p>
                 <p className='text-green-700 text-xs mt-1'>
-                  {concoursHasCentres(centresRelational) && !centreChoisi
+                  {concoursRequireCentreChoice(inscription?.concours, centresRelational) && !centreChoisi
                     ? 'Vous êtes convoqué(e) à l\'examen. Choisissez d\'abord votre centre de composition (étape ci-dessus), puis téléchargez votre convocation.'
                     : 'Vous êtes convoqué(e) à l\'examen. Téléchargez votre convocation ci-dessous et présentez-vous avec une pièce d\'identité valide.'}
                 </p>
@@ -373,6 +369,13 @@ export default function DetailInscription() {
                 {inscription.commentaireSousReserve}
               </p>
             )}
+            {getPiecesACorrigerCodes(inscription.piecesACorriger).length > 0 && (
+              <ul className='mt-3 space-y-1 text-sm text-amber-900'>
+                {getPiecesACorrigerCodes(inscription.piecesACorriger).map((code) => (
+                  <li key={code}>• {getPieceLabel(inscription.piecesACorriger, code)}</li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 
@@ -387,6 +390,13 @@ export default function DetailInscription() {
                 <p className='text-orange-900 text-sm mt-3 font-medium whitespace-pre-wrap'>
                   {inscription.commentaireSousReserve || SOUS_RESERVE_MOTIF_FALLBACK}
                 </p>
+                {getPiecesACorrigerCodes(inscription.piecesACorriger).length > 0 && (
+                  <ul className='mt-3 space-y-1 text-sm text-orange-900'>
+                    {getPiecesACorrigerCodes(inscription.piecesACorriger).map((code) => (
+                      <li key={code}>• {getPieceLabel(inscription.piecesACorriger, code)}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               <CorrectionPiecesSousReserve
@@ -395,6 +405,7 @@ export default function DetailInscription() {
                 concours={inscription.concours}
                 quittanceUrl={inscription.quittanceUrl}
                 piecesExtras={inscription.piecesExtras}
+                piecesACorriger={inscription.piecesACorriger}
                 onCorrectionChange={setPeutResoumettre}
                 onError={(msg) => showMessage(msg, 'error')}
               />
@@ -405,7 +416,13 @@ export default function DetailInscription() {
                   onClick={resoumettreDossier}
                   disabled={actionBusy || !peutResoumettre}
                   className='px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition disabled:opacity-50'
-                  title={!peutResoumettre ? 'Remplacez au moins une pièce non conforme avant de resoumettre' : undefined}
+                  title={
+                    !peutResoumettre
+                      ? (getPiecesACorrigerCodes(inscription.piecesACorriger).length > 0
+                        ? 'Remplacez toutes les pièces à corriger avant de resoumettre'
+                        : 'Remplacez au moins une pièce non conforme avant de resoumettre')
+                      : undefined
+                  }
                 >
                   Resoumettre mon dossier
                 </button>
@@ -470,7 +487,7 @@ export default function DetailInscription() {
                         Centre : {formatCentreChoisi(centreChoisi)}
                       </p>
                     )}
-                    {concoursHasCentres(centresRelational)
+                    {concoursRequireCentreChoice(inscription?.concours, centresRelational)
                       && !centreChoisi && (
                       <p className='text-xs text-red-600 mt-1'>Choisissez votre centre de composition d&apos;abord.</p>
                     )}
@@ -480,7 +497,7 @@ export default function DetailInscription() {
                   onClick={handleConvocation}
                   disabled={
                     telechargement.convocation
-                    || (concoursHasCentres(centresRelational)
+                    || (concoursRequireCentreChoice(inscription?.concours, centresRelational)
                       && !centreChoisi)
                   }
                   className='px-4 py-2 bg-orange-500 text-white rounded-lg text-xs font-semibold hover:bg-orange-600 transition disabled:opacity-50 flex items-center gap-2'

@@ -10,6 +10,7 @@ function mapCommentairesFromDossier(dossier) {
       commentaireRejet: null,
       commentaireSousReserve: null,
       commentaireControleur: null,
+      piecesACorriger: null,
     };
   }
 
@@ -23,6 +24,9 @@ function mapCommentairesFromDossier(dossier) {
       ? formatMotifForClient(dossier.commentaireSousReserve)
       : null,
     commentaireControleur: formatMotifForClient(dossier.commentaireControleur),
+    piecesACorriger: SOUS_RESERVE_STATUTS.includes(statut)
+      ? (dossier.piecesACorriger ?? null)
+      : null,
   };
 }
 
@@ -45,6 +49,7 @@ function mapDossierInscriptionToInscription(dossier) {
     dossierInscriptionId: dossier.id,
     quittanceUrl: dossier.quittanceUrl,
     piecesExtras: dossier.piecesExtras,
+    piecesACorriger: dossier.piecesACorriger ?? null,
     documentsCompl: dossier.documentsCompl,
     centreCompositionChoisi: dossier.centreCompositionChoisi,
     doubleVerdict: {

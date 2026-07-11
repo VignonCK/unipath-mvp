@@ -1,6 +1,7 @@
 const prisma = require('../prisma');
 const { mapDossierInscriptionToInscription } = require('../utils/dossier-inscription-mapper');
 const { appendHistorique } = require('../utils/preinscription.helper');
+const { resolvePiecesACorrigerPayload } = require('../utils/pieces-concours-sous-reserve.helper');
 
 const STATUTS_VALIDES = [
   'EN_ATTENTE',
@@ -176,7 +177,7 @@ exports.updateNote = async (req, res) => {
 exports.updateStatut = async (req, res) => {
   try {
     const { inscriptionId } = req.params;
-    const { statut, commentaireRejet, commentaireSousReserve } = req.body;
+    const { statut, commentaireRejet, commentaireSousReserve, piecesACorriger } = req.body;
     const membreCommissionId = req.user?.id;
 
     if (!['VALIDE', 'REJETE', 'SOUS_RESERVE'].includes(statut)) {
@@ -213,10 +214,30 @@ exports.updateStatut = async (req, res) => {
 
     const dossier = await prisma.dossierInscription.findUnique({
       where: { inscriptionId },
+      include: {
+        inscription: {
+          include: { candidat: true, concours: true },
+        },
+      },
     });
 
     if (!dossier) {
       return res.status(404).json({ error: 'Dossier d\'inscription non trouvé' });
+    }
+
+    let piecesACorrigerPayload = null;
+    if (statut === 'SOUS_RESERVE') {
+      const resolved = resolvePiecesACorrigerPayload(
+        piecesACorriger,
+        dossier.inscription?.concours,
+      );
+      if (!resolved.ok) {
+        return res.status(400).json({
+          error: resolved.error,
+          codesIntrouvables: resolved.codesIntrouvables,
+        });
+      }
+      piecesACorrigerPayload = resolved.payload;
     }
 
     const dossierUpdated = await prisma.dossierInscription.update({
@@ -225,6 +246,7 @@ exports.updateStatut = async (req, res) => {
         statut: nouveauStatut,
         commentaireRejet: statut === 'REJETE' ? commentaireRejet : null,
         commentaireSousReserve: statut === 'SOUS_RESERVE' ? commentaireSousReserve : null,
+        piecesACorriger: statut === 'SOUS_RESERVE' ? piecesACorrigerPayload : null,
         decisionCommissionPar: membreCommissionId,
         decisionCommissionDate: new Date(),
         historiqueStatuts: appendHistorique(dossier.historiqueStatuts, {
@@ -235,6 +257,9 @@ exports.updateStatut = async (req, res) => {
             : statut === 'REJETE'
               ? commentaireRejet
               : `Decision commission: ${statut}`,
+          ...(statut === 'SOUS_RESERVE'
+            ? { piecesACorriger: piecesACorrigerPayload.map((p) => p.code) }
+            : {}),
         }),
       },
       include: {

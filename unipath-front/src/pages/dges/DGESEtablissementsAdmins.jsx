@@ -1,5 +1,4 @@
 import { Fragment, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { concoursService, dgesService, etablissementService } from '../../services/api';
 import DGESLayout from '../../components/DGESLayout';
 import { BentoCard } from '../../components/AcademicLayout';
@@ -22,7 +21,6 @@ function formatConcoursDates(concours) {
 }
 
 export default function DGESEtablissementsAdmins() {
-  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('PRIVE');
   const [etablissements, setEtablissements] = useState([]);
   const [publicEtablissements, setPublicEtablissements] = useState([]);
@@ -343,13 +341,6 @@ export default function DGESEtablissementsAdmins() {
                             <td className="px-6 py-4 text-gray-600">{etab.ville}</td>
                             <td className="px-6 py-4 text-gray-700 font-semibold">{concours.length}</td>
                             <td className="px-6 py-4 text-right space-x-3 whitespace-nowrap">
-                              <button
-                                type="button"
-                                onClick={() => navigate(`/dges/etablissements/${etab.id}/commission`)}
-                                className="text-sm font-semibold text-blue-900 hover:text-orange-500 transition"
-                              >
-                                Gérer la commission
-                              </button>
                               <button
                                 type="button"
                                 onClick={() =>

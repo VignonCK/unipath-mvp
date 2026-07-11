@@ -148,6 +148,7 @@ model DossierInscription {
   decisionControleurModifieCount Int @default(0)
   commentaireRejet        String?
   commentaireSousReserve  String?
+  piecesACorriger         Json?
   documentsCompl          Json?
   centreCompositionChoisi Json? /// @deprecated — utiliser concoursCentreId
   concoursCentreId      String?

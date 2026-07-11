@@ -12,6 +12,7 @@
     "create-commission-roles": "node scripts/create-commission-sous-roles.js",
     "seed:roles": "node prisma/seed-roles.js",
     "seed:concours-officiels": "node prisma/seed-concours-officiels.js",
+    "seed:centres-composition": "node scripts/seed-centres-composition-concours.js",
     "seed:etablissements-publics": "node scripts/seed-etablissements-publics.js"
   },
   "keywords": [],

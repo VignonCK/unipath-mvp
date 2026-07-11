@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { convertLegacyId, DOSSIER_PERSONNEL_FIELDS, PIECES_PREDEFINIES } from '../constants/pieces';
 import { dossierService, inscriptionService, ouvrirPiece } from '../services/api';
+import {
+  getPieceCorrectionStatus,
+  getPiecesACorrigerCodes,
+} from '../utils/piecesConcoursSousReserve';
 
 const QUITTANCE = { key: 'quittance', label: 'Quittance de paiement', uploadType: 'quittance', accept: '.pdf' };
 
@@ -36,6 +40,7 @@ export default function CorrectionPiecesSousReserve({
   concours,
   quittanceUrl,
   piecesExtras = {},
+  piecesACorriger = null,
   onCorrectionChange,
   onError,
 }) {
@@ -44,6 +49,7 @@ export default function CorrectionPiecesSousReserve({
   const [uploadBusy, setUploadBusy] = useState(null);
   const [correctionsSession, setCorrectionsSession] = useState(0);
   const [correctionsServeur, setCorrectionsServeur] = useState(false);
+  const [toutesCorrigees, setToutesCorrigees] = useState(false);
   const [localQuittance, setLocalQuittance] = useState(quittanceUrl);
   const [localExtras, setLocalExtras] = useState(piecesExtras);
 
@@ -53,11 +59,16 @@ export default function CorrectionPiecesSousReserve({
       dossierService.getDossierPersonnel(candidatId),
       inscriptionService.getStatutCorrectionsSousReserve(inscriptionId).catch(() => ({
         correctionsEffectuees: false,
+        toutesPiecesCibleesCorrigees: null,
       })),
     ]);
     setDossierPersonnel(dp);
     const effectuees = Boolean(status.correctionsEffectuees);
     setCorrectionsServeur(effectuees);
+    setToutesCorrigees(
+      status.toutesPiecesCibleesCorrigees === true
+      || (status.toutesPiecesCibleesCorrigees == null && effectuees),
+    );
     return effectuees;
   }, [candidatId, inscriptionId]);
 
@@ -80,8 +91,17 @@ export default function CorrectionPiecesSousReserve({
   }, [refreshEtat]);
 
   useEffect(() => {
-    onCorrectionChange?.(correctionsSession > 0 || correctionsServeur);
-  }, [correctionsSession, correctionsServeur, onCorrectionChange]);
+    const codesCibles = getPiecesACorrigerCodes(piecesACorriger);
+    const peutResoumettre = codesCibles.length > 0
+      ? toutesCorrigees
+      : (correctionsSession > 0 || correctionsServeur);
+    onCorrectionChange?.(peutResoumettre);
+  }, [correctionsSession, correctionsServeur, toutesCorrigees, piecesACorriger, onCorrectionChange]);
+
+  const codesACorriger = useMemo(
+    () => getPiecesACorrigerCodes(piecesACorriger),
+    [piecesACorriger],
+  );
 
   const handleUpload = async (piece, file) => {
     if (!file) return;
@@ -126,6 +146,9 @@ export default function CorrectionPiecesSousReserve({
   }));
 
   const allPieces = [...basePieces, quittancePiece, ...extraPieces];
+  const piecesAffichees = codesACorriger.length > 0
+    ? allPieces.filter((p) => codesACorriger.includes(p.key))
+    : allPieces;
 
   if (loading) {
     return (
@@ -138,18 +161,25 @@ export default function CorrectionPiecesSousReserve({
   return (
     <div className='space-y-3'>
       <p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>
-        Pièces de votre dossier — remplacez celles signalées comme non conformes
+        {codesACorriger.length > 0
+          ? 'Pièces à corriger — remplacez uniquement celles listées ci-dessous'
+          : 'Pièces de votre dossier — remplacez celles signalées comme non conformes'}
       </p>
       <ul className='space-y-2'>
-        {allPieces.map((piece) => (
+        {piecesAffichees.map((piece) => {
+          const statutCible = getPieceCorrectionStatus(piecesACorriger, piece.key);
+          const corrigee = statutCible === 'PROVIDED';
+          return (
           <li
             key={piece.key}
-            className='flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3'
+            className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
+              corrigee ? 'border-green-200 bg-green-50' : 'border-orange-200 bg-orange-50/40'
+            }`}
           >
             <div className='min-w-0'>
               <p className='text-sm font-medium text-gray-900'>{piece.label}</p>
-              <p className={`text-xs mt-0.5 ${piece.statut === 'fournie' ? 'text-green-700' : 'text-amber-700'}`}>
-                {piece.statut === 'fournie' ? 'Pièce déposée' : 'Pièce manquante'}
+              <p className={`text-xs mt-0.5 ${corrigee ? 'text-green-700' : 'text-orange-700'}`}>
+                {corrigee ? 'Pièce corrigée' : 'À remplacer'}
               </p>
             </div>
             <div className='flex items-center gap-2 flex-shrink-0'>
@@ -178,8 +208,12 @@ export default function CorrectionPiecesSousReserve({
               </label>
             </div>
           </li>
-        ))}
+          );
+        })}
       </ul>
+      {codesACorriger.length > 0 && piecesAffichees.length === 0 && (
+        <p className='text-sm text-amber-700'>Aucune pièce ciblée trouvée dans votre dossier.</p>
+      )}
     </div>
   );
 }

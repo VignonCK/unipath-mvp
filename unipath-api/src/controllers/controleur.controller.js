@@ -1,6 +1,7 @@
 const prisma = require('../prisma');
 const { mapDossierInscriptionToInscription } = require('../utils/dossier-inscription-mapper');
 const { envoyerEmailDecisionFinale } = require('../utils/email-decision.helper');
+const { resolvePiecesACorrigerPayload } = require('../utils/pieces-concours-sous-reserve.helper');
 
 const STATUTS_EN_ATTENTE = [
   'VALIDE_PAR_COMMISSION',
@@ -42,7 +43,7 @@ exports.getDossiersEnAttente = async (req, res) => {
 exports.validerDecision = async (req, res) => {
   try {
     const { inscriptionId } = req.params;
-    const { action, commentaireControleur } = req.body;
+    const { action, commentaireControleur, piecesACorriger } = req.body;
     const controleurId = req.user?.id;
 
     const actionsValides = ['CONFIRMER', 'VALIDER', 'REJETER', 'SOUS_RESERVE'];
@@ -67,6 +68,7 @@ exports.validerDecision = async (req, res) => {
 
     let nouveauStatut;
     let typeEmail;
+    let piecesACorrigerPayload = undefined;
 
     if (action === 'CONFIRMER') {
       const mapping = {
@@ -83,6 +85,7 @@ exports.validerDecision = async (req, res) => {
       }
 
       typeEmail = nouveauStatut;
+      // Conserve piecesACorriger déjà posé par la commission
     } else {
       const actionToStatut = {
         VALIDER: 'VALIDE',
@@ -91,16 +94,37 @@ exports.validerDecision = async (req, res) => {
       };
       nouveauStatut = actionToStatut[action];
       typeEmail = nouveauStatut;
+
+      if (action === 'SOUS_RESERVE') {
+        const resolved = resolvePiecesACorrigerPayload(
+          piecesACorriger,
+          dossier.inscription?.concours,
+        );
+        if (!resolved.ok) {
+          return res.status(400).json({
+            error: resolved.error,
+            codesIntrouvables: resolved.codesIntrouvables,
+          });
+        }
+        piecesACorrigerPayload = resolved.payload;
+      } else {
+        piecesACorrigerPayload = null;
+      }
+    }
+
+    const updateData = {
+      statut: nouveauStatut,
+      decisionControleurPar: controleurId,
+      decisionControleurDate: new Date(),
+      commentaireControleur: action !== 'CONFIRMER' ? commentaireControleur : null,
+    };
+    if (piecesACorrigerPayload !== undefined) {
+      updateData.piecesACorriger = piecesACorrigerPayload;
     }
 
     const dossierUpdated = await prisma.dossierInscription.update({
       where: { id: dossier.id },
-      data: {
-        statut: nouveauStatut,
-        decisionControleurPar: controleurId,
-        decisionControleurDate: new Date(),
-        commentaireControleur: action !== 'CONFIRMER' ? commentaireControleur : null,
-      },
+      data: updateData,
       include: {
         inscription: {
           include: { candidat: true, concours: true },
