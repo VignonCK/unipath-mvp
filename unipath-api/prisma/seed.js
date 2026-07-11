@@ -118,8 +118,8 @@ async function main() {
       },
       {
         etablissementId: esgt.id,
-        code: 'lettre_motivation',
-        label: 'Lettre de motivation',
+        code: 'lettre_demande_inscription',
+        label: "Lettre de demande d'inscription",
         requirementType: 'DOCUMENT_UPLOAD',
         profileFieldKey: null,
         isRequired: true,
