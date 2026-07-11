@@ -1,6 +1,7 @@
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 const { PrismaClient } = require('@prisma/client');
 const { supabaseAdmin } = require('../src/supabase');
+const { upsertDefaultSchoolRequirements } = require('../src/utils/default-school-requirements.helper');
 
 const prisma = new PrismaClient();
 
@@ -557,6 +558,9 @@ async function main() {
       });
       console.log('   └─ Campagne 2026-2027 créée ✅');
     }
+
+    await upsertDefaultSchoolRequirements(prisma, etablissement.id);
+    console.log('   └─ Exigences dossier (5 pièces) ✅');
   }
 
   console.log('\nTerminé : 12 EPES agréés du Bénin seedés avec succès.');

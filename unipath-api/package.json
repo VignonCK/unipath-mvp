@@ -13,7 +13,8 @@
     "seed:roles": "node prisma/seed-roles.js",
     "seed:concours-officiels": "node prisma/seed-concours-officiels.js",
     "seed:centres-composition": "node scripts/seed-centres-composition-concours.js",
-    "seed:etablissements-publics": "node scripts/seed-etablissements-publics.js"
+    "seed:etablissements-publics": "node scripts/seed-etablissements-publics.js",
+    "seed:school-requirements": "node scripts/seed-school-requirements-default.js"
   },
   "keywords": [],
   "author": "Groupe 4 de SGBD (GIT) — EPAC: 2025-2026",
