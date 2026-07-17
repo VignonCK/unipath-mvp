@@ -3,6 +3,7 @@ const emailService = require('../services/email.service');
 const pdfService = require('../services/pdf.service');
 const fs = require('fs');
 const path = require('path');
+const { runInBackground } = require('../utils/background-task');
 
 const getEtablissementLogoRelativePath = (etablissementId) => {
   if (!etablissementId) return '';
@@ -115,19 +116,19 @@ exports.getMonReleve = async (req, res) => {
     });
 
     if (candidat?.email) {
-      try {
-        await emailService.envoyerEmailReleveAcademique({
-          userId: candidat.id,
-          candidatId: candidat.id,
-          candidatEmail: candidat.email,
-          candidatNom: candidat.nom,
-          candidatPrenom: candidat.prenom,
-          totalInscriptions: releve.length,
-          moyenneGlobale: calculerMoyenneGlobale(releve),
-        });
-      } catch (emailError) {
-        console.error('Erreur envoi email releve academique:', emailError);
-      }
+      runInBackground(
+        () =>
+          emailService.envoyerEmailReleveAcademique({
+            userId: candidat.id,
+            candidatId: candidat.id,
+            candidatEmail: candidat.email,
+            candidatNom: candidat.nom,
+            candidatPrenom: candidat.prenom,
+            totalInscriptions: releve.length,
+            moyenneGlobale: calculerMoyenneGlobale(releve),
+          }),
+        'releve-academique-email'
+      );
     }
 
     return res.json({
@@ -226,19 +227,19 @@ exports.telechargerMonRelevePdf = async (req, res) => {
     });
 
     if (candidat.email) {
-      try {
-        await emailService.envoyerEmailReleveAcademique({
-          userId: candidat.id,
-          candidatId: candidat.id,
-          candidatEmail: candidat.email,
-          candidatNom: candidat.nom,
-          candidatPrenom: candidat.prenom,
-          totalInscriptions: releve.length,
-          moyenneGlobale,
-        });
-      } catch (emailError) {
-        console.error('Erreur envoi email releve academique (PDF):', emailError);
-      }
+      runInBackground(
+        () =>
+          emailService.envoyerEmailReleveAcademique({
+            userId: candidat.id,
+            candidatId: candidat.id,
+            candidatEmail: candidat.email,
+            candidatNom: candidat.nom,
+            candidatPrenom: candidat.prenom,
+            totalInscriptions: releve.length,
+            moyenneGlobale,
+          }),
+        'releve-pdf-email'
+      );
     }
   } catch (error) {
     console.error('Erreur telechargerMonRelevePdf:', error);

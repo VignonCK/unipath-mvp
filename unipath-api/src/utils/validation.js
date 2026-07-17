@@ -47,7 +47,25 @@ const validateMotif = (verdict, motif) => {
   return { valid: true, error: null };
 };
 
-const { decodeHtmlEntities, sanitizeMotif, formatMotifForClient } = require('./motif.helper');
+/**
+ * Sanitise un motif pour éviter les injections XSS
+ * Échappe les caractères HTML dangereux
+ * @param {string} motif - Le motif à sanitiser
+ * @returns {string} Le motif sanitisé
+ */
+const sanitizeMotif = (motif) => {
+  if (!motif || typeof motif !== 'string') {
+    return '';
+  }
+
+  return motif
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;');
+};
 
 /**
  * Valide qu'un identifiant est un UUID valide
@@ -131,6 +149,8 @@ const validateAndSanitizeVerdict = (verdict, motif) => {
   };
 };
 
+const { isArbitrageDivergent } = require('./verdict-workflow.helper');
+
 /**
  * Valide une décision du contrôleur (verdict + motif, y compris arbitrage divergent).
  */
@@ -139,8 +159,6 @@ const validateDecisionControleur = (dossier, decision, motif) => {
   if (!base.valid) {
     return base;
   }
-
-  const { isArbitrageDivergent } = require('./verdict-workflow.helper');
 
   if (isArbitrageDivergent(dossier?.verdict1, decision)) {
     const motifTrimmed = (motif || '').trim();
@@ -168,8 +186,6 @@ module.exports = {
   validateVerdict,
   validateMotif,
   sanitizeMotif,
-  formatMotifForClient,
-  decodeHtmlEntities,
   validateUUID,
   validateEmail,
   validateParams,

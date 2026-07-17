@@ -20,6 +20,7 @@ const ListeDossiersControleur = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filtreActif, setFiltreActif] = useState(searchParams.get('filtre') || '');
+  const concoursId = searchParams.get('concoursId') || '';
   const [pagination, setPagination] = useState({ total: 0, limite: 50, offset: 0, pages: 0 });
 
   const chargerDossiers = useCallback(async () => {
@@ -36,6 +37,10 @@ const ListeDossiersControleur = () => {
         params.append('filtre', filtreActif);
       }
 
+      if (concoursId) {
+        params.append('concoursId', concoursId);
+      }
+
       const response = await apiFetch(`/controleur-commission/dossiers?${params}`);
 
       if (!response.ok) {
@@ -50,7 +55,7 @@ const ListeDossiersControleur = () => {
     } finally {
       setLoading(false);
     }
-  }, [filtreActif, pagination.limite, pagination.offset]);
+  }, [filtreActif, concoursId, pagination.limite, pagination.offset]);
 
   useEffect(() => {
     chargerDossiers();
@@ -58,7 +63,10 @@ const ListeDossiersControleur = () => {
 
   const changerFiltre = (nouveauFiltre) => {
     setFiltreActif(nouveauFiltre);
-    setSearchParams(nouveauFiltre ? { filtre: nouveauFiltre } : {});
+    const next = {};
+    if (nouveauFiltre) next.filtre = nouveauFiltre;
+    if (concoursId) next.concoursId = concoursId;
+    setSearchParams(next);
     setPagination((prev) => ({ ...prev, offset: 0 }));
   };
 
@@ -100,7 +108,7 @@ const ListeDossiersControleur = () => {
             className={filterBtnClass(filtreActif === '1_verdict')}
             onClick={() => changerFiltre('1_verdict')}
           >
-            1 verdict (examinateur)
+            À arbitrer (rejet / sous-réserve)
           </button>
           <button
             type="button"
@@ -115,6 +123,13 @@ const ListeDossiersControleur = () => {
             onClick={() => changerFiltre('divergents')}
           >
             Divergents
+          </button>
+          <button
+            type="button"
+            className={filterBtnClass(filtreActif === 'valides_examinateur')}
+            onClick={() => changerFiltre('valides_examinateur')}
+          >
+            Validés examinateur
           </button>
           <button
             type="button"
@@ -199,6 +214,10 @@ const ListeDossiersControleur = () => {
                           par {dossier.verdicts.verdict2.nomControleur || dossier.verdicts.verdict2.nomExaminateur}
                         </span>
                       </div>
+                    ) : dossier.validationExaminateurFinale ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        Non requis (validé examinateur)
+                      </span>
                     ) : (
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
                         En attente arbitrage

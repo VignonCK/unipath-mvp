@@ -1,117 +1,84 @@
-// prisma/seed-roles.js
-// Script pour créer des comptes de test pour chaque rôle
-
+// prisma/seed-roles.js — Comptes de test (auth locale)
+const crypto = require('crypto');
 const { PrismaClient } = require('@prisma/client');
-const { createClient } = require('@supabase/supabase-js');
+const authService = require('../src/services/auth.service');
 require('dotenv').config();
 
 const prisma = new PrismaClient();
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+
+async function createTestAccount({ email, password, profilType, createProfile }) {
+  const existing = await authService.findCompteByEmail(email);
+  if (existing) {
+    console.log(`⚠️  ${email} existe déjà, ignoré`);
+    return;
+  }
+
+  const profileId = crypto.randomUUID();
+  await createProfile(profileId);
+  await authService.createCompte({
+    email,
+    password,
+    profilType,
+    profilId: profileId,
+    emailConfirme: true,
+  });
+  console.log(`✅ ${email} / ${password}`);
+}
 
 async function main() {
   console.log('🌱 Création des comptes de test...\n');
 
-  // 1. Créer un compte CANDIDAT
-  try {
-    console.log('📝 Création du compte CANDIDAT...');
-    const { data: candidatAuth, error: candidatError } = await supabase.auth.admin.createUser({
-      email: 'candidat@test.com',
-      password: 'password123',
-      email_confirm: true,
-    });
-
-    if (candidatError) {
-      console.log('⚠️  Candidat existe déjà ou erreur:', candidatError.message);
-    } else {
-      await prisma.candidat.create({
+  await createTestAccount({
+    email: 'candidat@test.com',
+    password: 'password123',
+    profilType: 'CANDIDAT',
+    createProfile: (id) =>
+      prisma.candidat.create({
         data: {
-          id: candidatAuth.user.id,
+          id,
           email: 'candidat@test.com',
           nom: 'TEST',
           prenom: 'Candidat',
           telephone: '+22997000001',
-          matricule: 'TEMP',
+          matricule: `TEST-${Date.now()}`,
           role: 'CANDIDAT',
+          emailConfirme: true,
         },
-      });
-      console.log('✅ Compte CANDIDAT créé');
-      console.log('   Email: candidat@test.com');
-      console.log('   Password: password123\n');
-    }
-  } catch (error) {
-    console.log('⚠️  Erreur candidat:', error.message, '\n');
-  }
+      }),
+  });
 
-  // 2. Créer un compte DGES
-  try {
-    console.log('📝 Création du compte DGES...');
-    const { data: dgesAuth, error: dgesError } = await supabase.auth.admin.createUser({
-      email: 'dges@test.com',
-      password: 'password123',
-      email_confirm: true,
-    });
-
-    if (dgesError) {
-      console.log('⚠️  DGES existe déjà ou erreur:', dgesError.message);
-    } else {
-      await prisma.administrateurDGES.create({
+  await createTestAccount({
+    email: 'dges@test.com',
+    password: 'password123',
+    profilType: 'DGES',
+    createProfile: (id) =>
+      prisma.administrateurDGES.create({
         data: {
-          id: dgesAuth.user.id,
+          id,
           email: 'dges@test.com',
           nom: 'TEST',
           prenom: 'DGES',
           telephone: '+22997000003',
           role: 'DGES',
         },
-      });
-      console.log('✅ Compte DGES créé');
-      console.log('   Email: dges@test.com');
-      console.log('   Password: password123\n');
-    }
-  } catch (error) {
-    console.log('⚠️  Erreur DGES:', error.message, '\n');
-  }
+      }),
+  });
 
-  // 3. Commission : 2 examinateurs + 1 contrôleur (double verdict)
-  const sousRoleAccounts = [
-    {
-      email: 'examinateur@test.com',
-      prenom: 'Examinateur',
-      telephone: '+22997000004',
-      sousRole: 'EXAMINATEUR',
-    },
-    {
-      email: 'examinateur2@test.com',
-      prenom: 'Examinateur2',
-      telephone: '+22997000006',
-      sousRole: 'EXAMINATEUR',
-    },
-    {
-      email: 'controleur-commission@test.com',
-      prenom: 'Controleur',
-      telephone: '+22997000005',
-      sousRole: 'CONTROLEUR',
-    },
+  const commissionAccounts = [
+    { email: 'examinateur@test.com', prenom: 'Examinateur', telephone: '+22997000004', sousRole: 'EXAMINATEUR' },
+    { email: 'examinateur2@test.com', prenom: 'Examinateur2', telephone: '+22997000006', sousRole: 'EXAMINATEUR' },
+    { email: 'controleur-commission@test.com', prenom: 'Controleur', telephone: '+22997000005', sousRole: 'CONTROLEUR' },
   ];
 
-  for (const account of sousRoleAccounts) {
-    try {
-      console.log(`📝 Création du compte ${account.sousRole}...`);
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: account.email,
-        password: 'password123',
-        email_confirm: true,
-      });
-
-      if (authError) {
-        console.log(`⚠️  ${account.sousRole} existe déjà ou erreur:`, authError.message);
-      } else {
-        await prisma.membreCommission.create({
+  for (const account of commissionAccounts) {
+    await createTestAccount({
+      email: account.email,
+      password: 'password123',
+      profilType: 'COMMISSION',
+      createProfile: (id) =>
+        prisma.membreCommission.create({
           data: {
-            id: authData.user.id,
+            id,
             email: account.email,
             nom: 'TEST',
             prenom: account.prenom,
@@ -119,23 +86,11 @@ async function main() {
             role: 'COMMISSION',
             sousRole: account.sousRole,
           },
-        });
-        console.log(`✅ Compte ${account.sousRole} créé`);
-        console.log(`   Email: ${account.email}`);
-        console.log('   Password: password123\n');
-      }
-    } catch (error) {
-      console.log(`⚠️  Erreur ${account.sousRole}:`, error.message, '\n');
-    }
+        }),
+    });
   }
 
-  console.log('✨ Seed terminé!\n');
-  console.log('📌 Récapitulatif des comptes de test:');
-  console.log('   CANDIDAT              → candidat@test.com / password123');
-  console.log('   EXAMINATEUR 1         → examinateur@test.com / password123');
-  console.log('   EXAMINATEUR 2         → examinateur2@test.com / password123');
-  console.log('   CONTROLEUR COMMISSION → controleur-commission@test.com / password123');
-  console.log('   DGES                  → dges@test.com / password123\n');
+  console.log('\n✨ Seed terminé!\n');
 }
 
 main()

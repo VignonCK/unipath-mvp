@@ -7,8 +7,10 @@ import Register from './pages/Register';
 import AuthCallback from './pages/AuthCallback';
 import EmailConfirmation from './pages/EmailConfirmation';
 import DashboardCommission from './pages/DashboardCommission';
+import MesConcoursCommission from './pages/MesConcoursCommission';
 import DetailCandidatCommission from './pages/DetailCandidatCommission';
 import DashboardDGES from './pages/DashboardDGES';
+import DashboardDEC from './pages/DashboardDEC';
 import GestionConcours from './pages/GestionConcours';
 import GestionNotes from './pages/GestionNotes';
 import ClassementConcours from './pages/ClassementConcours';
@@ -33,6 +35,8 @@ import DashboardEtudiant from './pages/DashboardEtudiant';
 import DemandeInscription from './pages/DemandeInscription';
 import MesInscriptionsAcademiques from './pages/MesInscriptionsAcademiques';
 import DGESEtablissementsAdmins from './pages/dges/DGESEtablissementsAdmins';
+import DECEtablissementsPublics from './pages/dec/DECEtablissementsPublics';
+import DECAnneesAcademiques from './pages/dec/DECAnneesAcademiques';
 import DGESCommissionEtablissement from './pages/dges/DGESCommissionEtablissement';
 import MesCampagnes from './pages/admin-etablissement/MesCampagnes';
 import CampagneForm from './pages/admin-etablissement/CampagneForm';
@@ -278,6 +282,15 @@ function App() {
         />
 
         <Route
+          path='/commission/mes-concours'
+          element={
+            <ProtectedRoute allowedRoles={['COMMISSION']}>
+              <MesConcoursCommission />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path='/commission/changer-mot-de-passe'
           element={
             <ProtectedRoute allowedRoles={['COMMISSION']}>
@@ -304,11 +317,11 @@ function App() {
           }
         />
 
-        {/* Routes protégées - EXAMINATEUR (sous-rôle de COMMISSION) */}
+        {/* Espace examinateur (accès résolu par affectation concours) */}
         <Route
           path='/examinateur/dossiers'
           element={
-            <ProtectedRoute allowedRoles={['COMMISSION']} allowedSousRoles={['EXAMINATEUR']}>
+            <ProtectedRoute allowedRoles={['COMMISSION']}>
               <ListeDossiersExaminateur />
             </ProtectedRoute>
           }
@@ -317,17 +330,17 @@ function App() {
         <Route
           path='/examinateur/dossiers/:dossierInscriptionId'
           element={
-            <ProtectedRoute allowedRoles={['COMMISSION']} allowedSousRoles={['EXAMINATEUR']}>
+            <ProtectedRoute allowedRoles={['COMMISSION']}>
               <DetailDossierExaminateur />
             </ProtectedRoute>
           }
         />
 
-        {/* Routes protégées - CONTROLEUR (sous-rôle de COMMISSION) */}
+        {/* Espace contrôleur (accès résolu par affectation concours) */}
         <Route
           path='/controleur-commission/tableau-de-bord'
           element={
-            <ProtectedRoute allowedRoles={['COMMISSION']} allowedSousRoles={['CONTROLEUR']}>
+            <ProtectedRoute allowedRoles={['COMMISSION']}>
               <TableauDeBordControleur />
             </ProtectedRoute>
           }
@@ -336,7 +349,7 @@ function App() {
         <Route
           path='/controleur-commission/dossiers'
           element={
-            <ProtectedRoute allowedRoles={['COMMISSION']} allowedSousRoles={['CONTROLEUR']}>
+            <ProtectedRoute allowedRoles={['COMMISSION']}>
               <ListeDossiersControleur />
             </ProtectedRoute>
           }
@@ -345,7 +358,7 @@ function App() {
         <Route
           path='/controleur-commission/dossiers/:dossierInscriptionId'
           element={
-            <ProtectedRoute allowedRoles={['COMMISSION']} allowedSousRoles={['CONTROLEUR']}>
+            <ProtectedRoute allowedRoles={['COMMISSION']}>
               <DetailDossierControleur />
             </ProtectedRoute>
           }
@@ -354,27 +367,18 @@ function App() {
         <Route
           path='/controleur-commission/dossiers-sans-verdict'
           element={
-            <ProtectedRoute allowedRoles={['COMMISSION']} allowedSousRoles={['CONTROLEUR']}>
+            <ProtectedRoute allowedRoles={['COMMISSION']}>
               <DossiersSansVerdictControleur />
             </ProtectedRoute>
           }
         />
 
-        {/* Routes protégées - DGES uniquement */}
+        {/* Routes protégées - DGES (module 2) */}
         <Route
           path='/dashboard-dges'
           element={
             <ProtectedRoute allowedRoles={['DGES']}>
               <DashboardDGES />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path='/gestion-concours'
-          element={
-            <ProtectedRoute allowedRoles={['DGES']}>
-              <GestionConcours />
             </ProtectedRoute>
           }
         />
@@ -388,10 +392,47 @@ function App() {
           }
         />
 
+        {/* Routes protégées - DEC (module 1) */}
+        <Route
+          path='/dashboard-dec'
+          element={
+            <ProtectedRoute allowedRoles={['DEC']}>
+              <DashboardDEC />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/gestion-concours'
+          element={
+            <ProtectedRoute allowedRoles={['DEC']}>
+              <GestionConcours />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/dec-etablissements-publics'
+          element={
+            <ProtectedRoute allowedRoles={['DEC']}>
+              <DECEtablissementsPublics />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/dec-annees-academiques'
+          element={
+            <ProtectedRoute allowedRoles={['DEC']}>
+              <DECAnneesAcademiques />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path='/dges/etablissements/:etablissementId/commission'
           element={
-            <ProtectedRoute allowedRoles={['DGES']}>
+            <ProtectedRoute allowedRoles={['DEC']}>
               <DGESCommissionEtablissement />
             </ProtectedRoute>
           }

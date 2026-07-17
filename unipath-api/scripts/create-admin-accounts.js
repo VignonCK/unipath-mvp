@@ -1,14 +1,14 @@
 /**
  * Script pour créer les comptes administrateurs (Commission et DGES)
- * Usage: node scripts/create-admin-accounts.js
+ * Usage: npm run create-admins
  */
 
 require('dotenv').config();
-const { supabase } = require('../src/supabase');
+const crypto = require('crypto');
+const authService = require('../src/services/auth.service');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-// Credentials pré-définis pour les comptes administrateurs
 const ADMIN_ACCOUNTS = [
   {
     type: 'COMMISSION',
@@ -26,6 +26,14 @@ const ADMIN_ACCOUNTS = [
     prenom: 'MESRS',
     telephone: '+22997000002',
   },
+  {
+    type: 'DEC',
+    email: 'dec@mesrs.bj',
+    password: 'DEC2026!',
+    nom: 'DEC',
+    prenom: 'MESRS',
+    telephone: '+22997000008',
+  },
 ];
 
 async function createAdminAccounts() {
@@ -35,28 +43,19 @@ async function createAdminAccounts() {
     try {
       console.log(`📝 Création du compte ${account.type}...`);
       console.log(`   Email: ${account.email}`);
-      console.log(`   Mot de passe: ${account.password}`);
 
-      // 1. Créer le compte Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: account.email,
-        password: account.password,
-        email_confirm: true, // Confirmer l'email automatiquement
-      });
-
-      if (authError) {
-        if (authError.message.includes('already registered')) {
-          console.log(`   ⚠️  Compte déjà existant, passage au suivant...\n`);
-          continue;
-        }
-        throw authError;
+      const existing = await authService.findCompteByEmail(account.email);
+      if (existing) {
+        console.log('   ⚠️  Compte déjà existant, passage au suivant...\n');
+        continue;
       }
 
-      // 2. Créer l'entrée dans la table appropriée
+      const profileId = crypto.randomUUID();
+
       if (account.type === 'COMMISSION') {
         await prisma.membreCommission.create({
           data: {
-            id: authData.user.id,
+            id: profileId,
             email: account.email,
             nom: account.nom,
             prenom: account.prenom,
@@ -68,7 +67,7 @@ async function createAdminAccounts() {
       } else if (account.type === 'DGES') {
         await prisma.administrateurDGES.create({
           data: {
-            id: authData.user.id,
+            id: profileId,
             email: account.email,
             nom: account.nom,
             prenom: account.prenom,
@@ -76,7 +75,26 @@ async function createAdminAccounts() {
             role: 'DGES',
           },
         });
+      } else if (account.type === 'DEC') {
+        await prisma.administrateurDEC.create({
+          data: {
+            id: profileId,
+            email: account.email,
+            nom: account.nom,
+            prenom: account.prenom,
+            telephone: account.telephone,
+            role: 'DEC',
+          },
+        });
       }
+
+      await authService.createCompte({
+        email: account.email,
+        password: account.password,
+        profilType: account.type,
+        profilId: profileId,
+        emailConfirme: true,
+      });
 
       console.log(`   ✅ Compte ${account.type} créé avec succès\n`);
     } catch (error) {
@@ -89,21 +107,17 @@ async function createAdminAccounts() {
   console.log('✅ Création des comptes terminée !');
   console.log('');
   console.log('📋 CREDENTIALS À CONSERVER :');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   ADMIN_ACCOUNTS.forEach((account) => {
     console.log(`\n${account.type}:`);
     console.log(`  Email    : ${account.email}`);
     console.log(`  Password : ${account.password}`);
   });
-  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('⚠️  IMPORTANT : Changez ces mots de passe en production !');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
   await prisma.$disconnect();
   process.exit(0);
 }
 
-// Exécuter le script
 createAdminAccounts().catch((error) => {
   console.error('❌ Erreur fatale:', error);
   process.exit(1);

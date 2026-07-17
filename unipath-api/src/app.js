@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const app = express();
 
 // ── Middlewares ─────────────────────────────────────────────────
@@ -10,12 +11,10 @@ app.use(cors({
     /\.vercel\.app$/,
   ],
   credentials: true,
-  exposedHeaders: ['Content-Disposition'],
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-// Fichiers locaux : routes authentifiées (/api/uploads) et publiques (/api/public) — voir uploads.routes.js
-// app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // ── Routes ──────────────────────────────────────────────────────
 const authRoutes = require('./routes/auth.routes');
@@ -26,6 +25,7 @@ const commissionRoutes = require('./routes/commission.routes');
 const controleurRoutes = require('./routes/controleur.routes');
 const dossierRoutes = require('./routes/dossier.routes');
 const dgesRoutes = require('./routes/dges.routes');
+const decRoutes = require('./routes/dec.routes');
 const completionRoutes = require('./routes/completion.routes');
 const historyRoutes = require('./routes/history.routes');
 const notificationRoutes = require('./routes/notifications.routes');
@@ -40,10 +40,8 @@ const parcoursRoutes = require('./routes/parcours.routes');
 const preinscriptionEtablissementRoutes = require('./routes/preinscriptionEtablissement.routes');
 const applicationRoutes = require('./routes/application.routes');
 const campagneAdminRoutes = require('./routes/campagneAdmin.routes');
-const filiereAdminRoutes = require('./routes/filiereAdmin.routes');
 const campagneRoutes = require('./routes/campagne.routes');
 const { centreRouter, concoursCentresRouter } = require('./routes/centreComposition.routes');
-const uploadsRoutes = require('./routes/uploads.routes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/candidats', candidatRoutes);
@@ -60,6 +58,7 @@ app.use('/api/dossier', (req, res, next) => {
 });
 app.use('/api/dossier', dossierRoutes);
 app.use('/api/dges', dgesRoutes);
+app.use('/api/dec', decRoutes);
 app.use('/api/completion', completionRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/notifications', notificationRoutes);
@@ -75,43 +74,15 @@ app.use('/api/parcours', parcoursRoutes);
 app.use('/api/preinscriptions-etablissement', preinscriptionEtablissementRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/etablissement/campagnes', campagneAdminRoutes);
-app.use('/api/etablissement/filieres', filiereAdminRoutes);
 app.use('/api/campagnes', campagneRoutes);
-app.use('/api', uploadsRoutes);
 
 // ── Health check ────────────────────────────────────────────────
-app.get('/health', async (req, res) => {
-  const payload = {
-    status: 'OK',
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
     message: 'UniPath API fonctionne !',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    database: 'unknown',
-  };
-
-  try {
-    if (process.env.NODE_ENV === 'test') {
-      payload.database = 'skipped';
-      return res.json(payload);
-    }
-
-    const prisma = require('./prisma');
-    const { pingDatabase } = require('./utils/prisma-retry.helper');
-    await pingDatabase(prisma, { retries: 2, baseDelayMs: 300 });
-    payload.database = 'connected';
-    return res.json(payload);
-  } catch (error) {
-    payload.status = 'DEGRADED';
-    payload.database = 'unreachable';
-    payload.databaseError = error.code || error.message;
-    return res.status(503).json(payload);
-  }
-});
-
-// ── 404 API (évite les pages HTML Express en dev) ───────────────
-app.use('/api', (req, res) => {
-  res.status(404).json({
-    error: `Route API introuvable: ${req.method} ${req.originalUrl}`,
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 

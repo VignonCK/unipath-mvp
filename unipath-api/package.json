@@ -12,7 +12,9 @@
     "create-commission-roles": "node scripts/create-commission-sous-roles.js",
     "seed:roles": "node prisma/seed-roles.js",
     "seed:concours-officiels": "node prisma/seed-concours-officiels.js",
-    "seed:etablissements-publics": "node scripts/seed-etablissements-publics.js"
+    "seed:etablissements-publics": "node scripts/seed-etablissements-publics.js",
+    "seed:annees-academiques": "node scripts/seed-annees-academiques.js",
+    "seed:communes": "node scripts/seed-communes-benin.js"
   },
   "keywords": [],
   "author": "Groupe 4 de SGBD (GIT) — EPAC: 2025-2026",
@@ -20,12 +22,13 @@
   "type": "commonjs",
   "dependencies": {
     "@prisma/client": "^5.22.0",
-    "@supabase/supabase-js": "^2.103.0",
     "axios": "^1.16.0",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
     "install": "^0.13.0",
+    "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
     "node-cron": "^4.2.1",
     "nodemailer": "^8.0.6",

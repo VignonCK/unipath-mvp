@@ -1,0 +1,247 @@
+================================================================================
+UNIPATH — GUIDE D'UTILISATION — MODULE 1 : CONCOURS UNIVERSITAIRES
+================================================================================
+Date : 09/07/2026
+================================================================================
+
+Ce guide explique comment utiliser le Module 1 sur la plateforme UniPath, selon
+votre profil utilisateur.
+
+
+================================================================================
+1. ACCÉDER AU MODULE
+================================================================================
+
+  1. Connectez-vous sur http://localhost:5173/login
+  2. Depuis le tableau de bord (/dashboard), cliquez sur la carte
+     « Module 1 — Concours universitaires »
+  3. Vous arrivez sur /concours (accueil du module)
+
+  Navigation : l'onglet « Concours » reste visible en haut tant que vous êtes
+  dans le module (/concours/*).
+
+
+================================================================================
+2. GUIDE CANDIDAT
+================================================================================
+
+2.1 Préparer son dossier personnel (prérequis)
+---------------------------------------------
+  Avant de s'inscrire à un concours, complétez votre dossier personnel :
+    Menu → Mon compte (/mon-compte)
+
+  Documents à fournir :
+    - Acte de naissance (PDF)
+    - Carte nationale d'identité (PDF/JPEG)
+    - Photo d'identité (JPEG/PNG)
+    - Relevé de notes du BAC (PDF)
+
+  Ces pièces seront réutilisées automatiquement lors des inscriptions concours.
+
+
+2.2 Découvrir les concours ouverts
+----------------------------------
+  Menu : Concours → Concours ouverts (/concours/ouverts)
+
+  Pour chaque concours vous voyez :
+    - Nom et établissement organisateur
+    - Dates de dépôt et de composition
+    - Frais de participation
+    - Séries du BAC acceptées
+
+  Cliquez sur un concours pour voir le détail complet.
+
+
+2.3 S'inscrire à un concours
+----------------------------
+  Sur la page détail (/concours/ouverts/:id) :
+    1. Vérifiez votre éligibilité (série BAC, dates)
+    2. Cliquez « S'inscrire au concours »
+    3. Un numéro d'inscription vous est attribué (ex. INS-2026-000001)
+
+  Vous êtes redirigé vers la page de suivi d'inscription.
+
+
+2.4 Déposer son dossier
+-----------------------
+  Page : /concours/inscription/:inscriptionId
+
+  Étapes à compléter :
+    [1] Pièces personnelles — vérifier que le dossier est complet
+    [2] Quittance — uploader la quittance de paiement des frais de concours (PDF)
+    [3] Pièces complémentaires — selon les exigences du concours
+    [4] Centre de composition — choisir votre centre d'épreuve
+    [5] Soumettre — valider l'envoi définitif du dossier
+
+  Après soumission, le statut passe à « En attente ».
+
+
+2.5 Suivre son dossier
+----------------------
+  Statuts possibles affichés :
+    En attente        → dossier en cours d'examen
+    Sous réserve      → pièces à corriger (voir commentaire)
+    Validé            → dossier accepté
+    Rejeté            → dossier refusé (voir motif)
+
+  En cas de « Sous réserve » :
+    - Lire le commentaire de la commission
+    - Corriger les pièces signalées
+    - Resoumettre le dossier
+
+  Notifications : icône cloche en haut à droite.
+
+
+2.6 Télécharger ses documents
+-----------------------------
+  Une fois validé :
+    - Fiche de préinscription (PDF) — disponible dès validation
+    - Convocation (PDF) — disponible avant la date de composition
+
+  Boutons de téléchargement sur la page d'inscription.
+
+
+2.7 Consulter le classement
+---------------------------
+  /concours/ouverts/:id/classement
+  Classement des candidats par note d'examen (si publié).
+
+
+================================================================================
+3. GUIDE DGES (gestion des concours)
+================================================================================
+
+3.1 Accès
+---------
+  Connexion avec un compte DGES → /dashboard-dges
+  Menu : Gestion des concours (/gestion-concours)
+
+
+3.2 Créer un concours
+---------------------
+  Bouton « Nouveau concours »
+
+  Champs obligatoires :
+    - Libellé (ex. « Concours ESGT 2026 »)
+    - Établissement organisateur
+    - Date début / fin de dépôt
+    - Date de composition
+    - Frais de participation (FCFA)
+    - Séries BAC acceptées
+    - Matières d'épreuve
+
+  Configuration avancée :
+    - Pièces requises (quittance, acte naissance, photo, etc.)
+    - Pièces personnalisées supplémentaires
+    - Centres de composition
+
+
+3.3 Modifier ou supprimer
+-------------------------
+  Liste des concours → icône modifier / supprimer
+  Attention : la suppression est définitive si aucune inscription.
+
+
+3.4 Statistiques
+----------------
+  /dashboard-dges : vue nationale
+  Par concours : nombre d'inscrits, dossiers par statut, taux de validation
+
+
+================================================================================
+4. GUIDE COMMISSION
+================================================================================
+
+4.1 Dashboard (/commission)
+-------------------------
+  Liste de tous les dossiers avec filtres :
+    Tous | En attente | Validés | Rejetés | Sous réserve
+
+  Cliquer sur un dossier pour voir le détail.
+
+
+4.2 Examiner un dossier (/commission/candidat/:id)
+--------------------------------------------------
+  - Visualiser toutes les pièces (PDF, images)
+  - Lire l'historique des actions
+  - Actions :
+      Valider le dossier
+      Rejeter (motif obligatoire)
+      Mettre sous réserve (commentaire obligatoire)
+
+
+4.3 Saisir les notes (/commission/notes)
+----------------------------------------
+  Pour chaque inscription validée :
+    Saisir la note d'examen (0 à 20)
+    La note alimente le classement du concours
+
+
+================================================================================
+5. GUIDE EXAMINATEUR
+================================================================================
+
+  Connexion avec un compte commission de type EXAMINATEUR.
+
+  /examinateur/dossiers
+    Liste des dossiers en attente de premier examen.
+
+  /examinateur/dossiers/:id
+    Rendre le verdict :
+      VALIDE        — dossier conforme
+      REJETE        — dossier non recevable (motif)
+      SOUS_RESERVE  — pièces manquantes ou incorrectes
+
+  Modification possible tant que le contrôleur n'a pas arbitré.
+
+
+================================================================================
+6. GUIDE CONTRÔLEUR
+================================================================================
+
+6.1 Contrôleur commission (/controleur-commission)
+--------------------------------------------------
+  Tableau de bord : statistiques de divergence examinateur/contrôleur
+
+  /controleur-commission/dossiers
+    Tous les dossiers avec double verdict
+
+  /controleur-commission/dossiers/divergents
+    Cas où examinateur et contrôleur ne sont pas d'accord
+
+  Arbitrage :
+    Confirmer ou corriger le verdict examinateur
+    Rendre la décision finale : VALIDE | REJETE | SOUS_RESERVE
+
+6.2 Contrôleur autonome
+-----------------------
+  Validation finale de la décision commission avant notification au candidat.
+
+
+================================================================================
+7. SCHÉMA DU PARCOURS CANDIDAT
+================================================================================
+
+  [Hub] → [Concours ouverts] → [Détail concours] → [S'inscrire]
+       → [Déposer dossier] → [Soumettre]
+       → [Attendre décision] ──→ Sous réserve → [Corriger] → [Resoumettre]
+                              ──→ Validé → [Télécharger convocation]
+                              ──→ Rejeté → [Consulter motif]
+
+
+================================================================================
+8. COMPTES DE TEST
+================================================================================
+
+  Candidat     : harrydedji+candidat1@gmail.com / UniPath2026!
+  DGES         : dges@test.com / UniPath2026!
+  Commission   : commission@test.com / UniPath2026!
+  Examinateur  : examinateur@test.com / UniPath2026!
+  Contrôleur   : controleur-commission@test.com / UniPath2026!
+
+  Liste complète : comptes_connexion_unipath.txt
+
+
+================================================================================
+FIN DU GUIDE — MODULE 1
+================================================================================

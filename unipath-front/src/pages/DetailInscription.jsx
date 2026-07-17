@@ -8,7 +8,7 @@ import ChoixCentreComposition, { concoursHasCentres, formatCentreChoisi } from '
 import { ROUTES } from '../constants/routes';
 import CorrectionPiecesSousReserve from '../components/CorrectionPiecesSousReserve';
 
-const STATUTS_CHOIX_CENTRE = ['VALIDE_PAR_COMMISSION', 'VALIDE'];
+const STATUTS_CHOIX_CENTRE = ['EN_ATTENTE'];
 
 function resolveCentreChoisi(inscription) {
   if (!inscription) return null;
@@ -304,21 +304,19 @@ export default function DetailInscription() {
           <div className='bg-blue-50 border-l-4 border-blue-500 px-5 py-4 rounded-xl'>
             <p className='font-semibold text-blue-900 text-sm'>Dossier validé par la commission</p>
             <p className='text-blue-800 text-xs mt-1'>
-              {concoursHasCentres(centresRelational)
-                ? 'Choisissez votre centre de composition ci-dessous en attendant la validation finale.'
-                : 'Votre dossier est en attente de validation finale par le contrôleur.'}
+              Votre dossier est en attente de validation finale par le contrôleur.
             </p>
           </div>
         )}
 
-        {STATUTS_CHOIX_CENTRE.includes(inscription.statut)
-          && concoursHasCentres(centresRelational) && (
+        {concoursHasCentres(centresRelational) && (
           <ChoixCentreComposition
             centresRelational={centresRelational}
             centreChoisi={centreChoisi}
             statut={inscription.statut}
             onSave={handleSaveCentre}
             busy={centreBusy}
+            readOnly={!STATUTS_CHOIX_CENTRE.includes(inscription.statut)}
           />
         )}
 

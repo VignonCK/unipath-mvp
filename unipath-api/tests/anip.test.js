@@ -9,21 +9,9 @@ const mockState = {
   matriculeCounter: 0,
 };
 
-jest.mock('../src/supabase', () => ({
-  supabase: {
-    auth: {
-      signUp: jest.fn(async () => {
-        mockState.userCounter += 1;
-        return {
-          data: { user: { id: `mock-user-${mockState.userCounter}` } },
-          error: null,
-        };
-      }),
-      signInWithPassword: jest.fn(),
-      resetPasswordForEmail: jest.fn(),
-    },
-  },
-  supabaseAdmin: {},
+jest.mock('../src/services/auth.service', () => ({
+  findCompteByEmail: jest.fn(async () => null),
+  createCompte: jest.fn(async ({ profilId }) => ({ id: profilId, profilId })),
 }));
 
 jest.mock('../src/utils/matricule.helper', () => ({

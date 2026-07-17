@@ -1,0 +1,391 @@
+================================================================================
+UNIPATH — GUIDE D'UTILISATION DU MODULE FRONTEND (unipath-front)
+================================================================================
+Date : 09/07/2026
+URL  : http://localhost:5173
+================================================================================
+
+Ce guide couvre l'installation, la navigation et l'utilisation de l'interface
+web UniPath pour chaque type d'utilisateur.
+
+
+================================================================================
+PARTIE 1 — INSTALLATION ET DÉMARRAGE
+================================================================================
+
+PRÉREQUIS
+---------
+  - Node.js 18+
+  - unipath-api démarré sur http://localhost:3001
+
+INSTALLATION
+------------
+  cd unipath-front
+  copy .env.example .env
+  npm install
+
+Configurer .env :
+  VITE_API_URL=http://localhost:3001/api
+
+DÉMARRAGE
+---------
+  npm run dev
+
+Ouvrir le navigateur : http://localhost:5173
+
+BUILD PRODUCTION
+----------------
+  npm run build
+  npm run preview
+
+
+================================================================================
+PARTIE 2 — PAGES PUBLIQUES
+================================================================================
+
+ACCUEIL (/)
+-----------
+  Page de présentation UniPath.
+  Liens vers Connexion et Inscription.
+
+INSCRIPTION (/register)
+-----------------------
+  Étape 1 : email, mot de passe, confirmation
+  Étape 2 : nom, prénom, ANIP, série BAC, téléphone, date/lieu naissance
+  Après inscription : message pour confirmer l'email avant connexion
+
+CONNEXION (/login)
+------------------
+  Saisir email + mot de passe.
+  Lien "Mot de passe oublié" : envoie un email de réinitialisation.
+  Lien "Renvoyer confirmation" si email non confirmé.
+
+  Après connexion, redirection automatique selon le rôle :
+    Candidat    → /dashboard
+    Commission  → /commission (ou interface examinateur/contrôleur)
+    DGES        → /dashboard-dges
+    Admin étab. → /admin-etablissement/campagnes
+
+CONFIRMATION EMAIL (/auth/confirm?token=...)
+---------------------------------------------
+  Cliquer le lien reçu par email après inscription.
+  Redirection vers /login une fois confirmé.
+
+RÉINITIALISATION MOT DE PASSE (/reset-password?token=...)
+--------------------------------------------------------
+  Saisir le nouveau mot de passe (2 fois).
+  Retour à /login après succès.
+
+
+================================================================================
+PARTIE 3 — CANDIDAT / ÉTUDIANT
+================================================================================
+
+TABLEAU DE BORD (/dashboard)
+----------------------------
+  Hub principal avec deux modules :
+    [Concours]           → inscriptions aux concours MESRS
+    [Parcours académique] → établissements privés et inscriptions
+
+  Affiche aussi le pourcentage de complétude du profil.
+
+MON COMPTE (/mon-compte)
+------------------------
+  Modifier : nom, prénom, téléphone, série, etc.
+  Uploader le dossier personnel :
+    - Acte de naissance
+    - Carte d'identité
+    - Photo d'identité
+    - Relevé de notes BAC
+
+  Ces documents sont réutilisés pour les inscriptions concours.
+
+
+--- MODULE CONCOURS ---
+
+ACCUEIL CONCOURS (/concours)
+----------------------------
+  Vue d'ensemble : concours en cours, inscriptions actives, alertes.
+
+CONCOURS OUVERTS (/concours/ouverts)
+------------------------------------
+  Liste des concours disponibles.
+  Filtres par domaine, dates, établissement organisateur.
+
+DÉTAIL CONCOURS (/concours/ouverts/:id)
+---------------------------------------
+  Informations : dates, frais, séries acceptées, matières d'épreuve.
+  Pièces requises pour le dossier.
+  Bouton "S'inscrire" si éligible.
+
+INSCRIPTION EN COURS (/concours/inscription/:inscriptionId)
+---------------------------------------------------------
+  Étapes :
+    1. Vérifier pièces personnelles (dossier)
+    2. Uploader quittance de paiement des frais
+    3. Ajouter pièces complémentaires si demandées
+    4. Choisir centre de composition
+    5. Soumettre le dossier
+
+  Statuts possibles :
+    EN_ATTENTE, VALIDE, REJETE, SOUS_RESERVE
+
+  Si SOUS_RESERVE : corriger les pièces signalées et resoumettre.
+
+  Téléchargements disponibles :
+    - Fiche de préinscription (PDF)
+    - Convocation (PDF, si validé)
+
+CLASSEMENT (/concours/ouverts/:id/classement)
+---------------------------------------------
+  Classement des candidats par note (si autorisé).
+
+CARTE CANDIDAT (/ma-carte)
+--------------------------
+  Carte avec matricule, photo, QR code de vérification.
+
+
+--- MODULE PARCOURS ACADÉMIQUE ---
+
+ACCUEIL PARCOURS (/parcours)
+----------------------------
+  Navigation vers établissements, campagnes, dossiers, inscriptions.
+
+ÉTABLISSEMENTS PRIVÉS (/parcours/etablissements)
+------------------------------------------------
+  Catalogue des écoles privées.
+  Détail : filières, frais, conditions.
+
+CAMPAGNES (/parcours/campagnes)
+-------------------------------
+  Campagnes d'inscription ouvertes par les établissements.
+  Permet de postuler directement via une campagne.
+
+DEMANDE D'INSCRIPTION (/parcours/dossiers)
+------------------------------------------
+  Workflow candidature en plusieurs étapes :
+
+  Étape 1 — Choix établissement et filière
+  Étape 2 — Paiement frais de dossier (bouton "Payer (mock)")
+  Étape 3 — Upload des documents requis par l'établissement
+  Étape 4 — Finalisation et envoi
+
+  Suivre le statut : BROUILLON → SOUMISE → EN_EXAMEN → ...
+
+MES INSCRIPTIONS (/parcours/mes-inscriptions)
+---------------------------------------------
+  Liste des inscriptions académiques confirmées.
+  Upload quittance bancaire pour les droits d'inscription si demandé.
+
+RELEVÉ DE NOTES (/parcours/releve)
+----------------------------------
+  Consultation du relevé par semestre.
+  Téléchargement PDF du relevé académique.
+
+
+================================================================================
+PARTIE 4 — COMMISSION
+================================================================================
+
+DASHBOARD COMMISSION (/commission)
+----------------------------------
+  Liste des dossiers avec filtres :
+    EN_ATTENTE | VALIDE | REJETE | SOUS_RESERVE
+
+  Actions sur un dossier :
+    - Valider
+    - Rejeter (avec motif)
+    - Mettre sous réserve (avec commentaire)
+
+DÉTAIL CANDIDAT (/commission/candidat/:inscriptionId)
+-----------------------------------------------------
+  Voir toutes les pièces du dossier.
+  Consulter l'historique des actions.
+  Prévisualiser les documents (PDF).
+
+GESTION DES NOTES (/commission/notes)
+-------------------------------------
+  Saisir ou modifier la note d'examen (0 à 20) par inscription.
+
+
+--- SOUS-RÔLE EXAMINATEUR ---
+
+DOSSIERS À ÉVALUER (/examinateur/dossiers)
+------------------------------------------
+  Liste des dossiers en attente de premier verdict.
+
+VERDICT (/examinateur/dossiers/:id)
+-----------------------------------
+  Choisir : VALIDE | REJETE | SOUS_RESERVE
+  Ajouter un motif si nécessaire.
+  Possibilité de modifier tant que le contrôleur n'a pas arbitré.
+
+
+--- SOUS-RÔLE CONTRÔLEUR ---
+
+TABLEAU DE BORD (/controleur-commission/tableau-de-bord)
+--------------------------------------------------------
+  KPIs : dossiers traités, divergences, alignements.
+
+DOSSIERS (/controleur-commission/dossiers)
+------------------------------------------
+  Tous les dossiers avec statut des verdicts.
+
+ARBITRAGE (/controleur-commission/dossiers/:id)
+---------------------------------------------
+  Comparer verdict examinateur vs décision souhaitée.
+  Corriger le verdict examinateur si nécessaire.
+  Rendre la décision finale d'arbitrage.
+
+DOSSIERS SANS VERDICT (/controleur-commission/dossiers-sans-verdict)
+--------------------------------------------------------------------
+  Dossiers en attente depuis plus de 2 jours (alerte).
+
+
+================================================================================
+PARTIE 5 — DGES
+================================================================================
+
+DASHBOARD (/dashboard-dges)
+---------------------------
+  Statistiques nationales :
+    - Nombre de candidats, inscriptions, dossiers par statut
+    - Graphiques par concours
+    - Taux de validation
+
+GESTION CONCOURS (/gestion-concours)
+------------------------------------
+  Créer un nouveau concours :
+    libellé, établissement, dates, frais, séries, matières, pièces requises
+
+  Modifier ou supprimer un concours existant.
+  Configurer les centres de composition.
+  Configurer les pièces requises (prédéfinies + personnalisées).
+
+GESTION ÉTABLISSEMENTS (/dges-etablissements-admins)
+----------------------------------------------------
+  Créer des établissements (public/privé).
+  Créer des comptes admin établissement.
+  Gérer les membres commission par établissement.
+
+
+================================================================================
+PARTIE 6 — ADMINISTRATEUR ÉTABLISSEMENT
+================================================================================
+
+Première connexion : changement de mot de passe obligatoire.
+
+CAMPAGNES (/admin-etablissement/campagnes)
+------------------------------------------
+  Créer une campagne : titre, année, dates ouverture/clôture, filières.
+  États : BROUILLON → PUBLIEE → CLOTUREE
+  Actions : publier, modifier, clôturer, supprimer.
+
+MON ÉTABLISSEMENT (/admin-etablissement/etablissement)
+------------------------------------------------------
+  Modifier profil : nom, adresse, email, description.
+  Uploader le logo.
+  Gérer les filières (CRUD).
+
+CANDIDATURES (/admin-etablissement/candidatures)
+------------------------------------------------
+  Liste des applications soumises par les candidats.
+  Consulter détail : documents, statut paiement.
+
+PRÉINSCRIPTIONS (/admin-etablissement/preinscriptions)
+------------------------------------------------------
+  Valider, refuser ou demander compléments sur une préinscription.
+  Motif de décision obligatoire si refus.
+
+VALIDATION QUITTANCES (/admin-etablissement/validation-quittances)
+------------------------------------------------------------------
+  Approuver ou rejeter les quittances bancaires uploadées.
+  Une fois validée, l'inscription académique peut être finalisée.
+
+ÉTUDIANTS (/admin-etablissement/etudiants)
+------------------------------------------
+  Liste des étudiants inscrits dans l'établissement.
+
+SÉCURITÉ (/admin-etablissement/securite)
+---------------------------------------
+  Changer le mot de passe du compte admin.
+
+
+================================================================================
+PARTIE 7 — WORKFLOWS VISUELS
+================================================================================
+
+WORKFLOW CONCOURS (candidat)
+  Accueil → Concours ouverts → Détail → S'inscrire →
+  Upload pièces → Soumettre → Suivre statut → Télécharger convocation
+
+WORKFLOW CONCOURS (commission)
+  Dashboard → Filtrer EN_ATTENTE → Examinateur verdict →
+  Contrôleur arbitre → Commission valide + note → Contrôleur final valide
+
+WORKFLOW PARCOURS (candidat)
+  Parcours → Établissements → Choisir filière →
+  Candidature → Payer (mock) → Documents → Finaliser →
+  Attendre décision → Upload quittance → Inscription confirmée
+
+WORKFLOW PARCOURS (admin établissement)
+  Campagne publiée → Candidatures reçues → Décision préinscription →
+  Validation quittance → Étudiant inscrit
+
+
+================================================================================
+PARTIE 8 — NOTIFICATIONS
+================================================================================
+
+  Icône cloche en haut à droite (layouts candidat et commission).
+  Notifications pour :
+    - Décisions sur dossier (validé, rejeté, sous réserve)
+    - Arbitrages divergents
+    - Préinscriptions acceptées/refusées
+  Marquer comme lu individuellement ou tout marquer lu.
+
+
+================================================================================
+PARTIE 9 — COMPTES DE TEST
+================================================================================
+
+  Voir : comptes_connexion_unipath.txt (racine du projet)
+
+  Exemples rapides :
+    Candidat     : harrydedji+candidat1@gmail.com / UniPath2026!
+    Commission   : commission@test.com / UniPath2026!
+    Examinateur  : examinateur@test.com / UniPath2026!
+    Contrôleur   : controleur-commission@test.com / UniPath2026!
+    DGES         : dges@test.com / UniPath2026!
+    Admin étab.  : jerzeyshop8@gmail.com / UniPath2026!
+
+
+================================================================================
+PARTIE 10 — DÉPANNAGE
+================================================================================
+
+  Page blanche / erreur réseau :
+    → Vérifier que unipath-api tourne sur le port 3001
+    → Vérifier VITE_API_URL dans .env
+
+  Déconnexion automatique :
+    → Token JWT expiré, se reconnecter
+
+  Upload échoue :
+    → Vérifier taille fichier et format (PDF, JPEG, PNG)
+    → Vérifier dossier uploads/ côté API
+
+  PDF ne se télécharge pas :
+    → Vérifier PHP installé côté API
+
+  Email de confirmation non reçu :
+    → Vérifier config SMTP dans unipath-api/.env
+    → Ou confirmer manuellement en base (emailConfirme = 1)
+
+  CORS error :
+    → L'API autorise localhost:5173 par défaut
+
+
+================================================================================
+FIN DU GUIDE — unipath-front
+================================================================================

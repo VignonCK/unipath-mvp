@@ -1,10 +1,7 @@
 const prisma = require('../prisma');
 const fs = require('fs');
 const path = require('path');
-const { getAdminEtablissementId, adminOwnsEtablissement } = require('../utils/admin-etablissement.helper');
-const { supabaseAdmin } = require('../supabase');
-const { FILIERE_PUBLIC_SELECT } = require('./filiere.controller');
-const { toPublicLogoUrl, resolveStoredLogoUrl } = require('../utils/uploads.helper');
+const authService = require('../services/auth.service');
 
 const LOGO_DIR = path.join(__dirname, '../../uploads/etablissements');
 
@@ -14,13 +11,13 @@ const ensureLogoDir = () => {
   }
 };
 
-const resolveLogoUrl = (etablissement) =>
-  resolveStoredLogoUrl(etablissement?.logoUrl, etablissement?.id);
-
-const enrichEtablissementPublic = (etablissement) => ({
-  ...etablissement,
-  logoUrl: resolveLogoUrl(etablissement),
-});
+const findEtablissementLogo = (etablissementId) => {
+  ensureLogoDir();
+  const files = fs.readdirSync(LOGO_DIR);
+  const logo = files.find((name) => name.startsWith(`logo-${etablissementId}.`));
+  if (!logo) return null;
+  return `/uploads/etablissements/${logo}`;
+};
 
 const normalizeChoixFilieres = (body = {}) => {
   const choix = [body.choix1, body.choix2, body.choix3]
@@ -61,7 +58,6 @@ exports.rechercherParFilieres = async (req, res) => {
       include: {
         filieres: {
           where: filiereFilter,
-          select: FILIERE_PUBLIC_SELECT,
           orderBy: { nom: 'asc' },
         },
       },
@@ -85,18 +81,7 @@ exports.rechercherParFilieres = async (req, res) => {
 
 exports.getAllEtablissements = async (req, res) => {
   try {
-    const { type } = req.query;
-    const where = {};
-
-    if (type) {
-      const typeUpper = String(type).toUpperCase();
-      if (['PUBLIC', 'PRIVE'].includes(typeUpper)) {
-        where.type = typeUpper;
-      }
-    }
-
     const etablissements = await prisma.etablissement.findMany({
-      where,
       orderBy: { nom: 'asc' },
       include: {
         _count: { select: { filieres: true, inscriptions: true } },
@@ -105,7 +90,7 @@ exports.getAllEtablissements = async (req, res) => {
 
     return res.json({
       message: 'Etablissements recuperes avec succes',
-      etablissements: etablissements.map(enrichEtablissementPublic),
+      etablissements,
     });
   } catch (error) {
     console.error('Erreur getAllEtablissements:', error);
@@ -120,7 +105,7 @@ exports.getEtablissementsPrives = async (req, res) => {
     const etablissements = await prisma.etablissement.findMany({
       where: { type: 'PRIVE' },
       include: {
-        filieres: { select: FILIERE_PUBLIC_SELECT, orderBy: { nom: 'asc' } },
+        filieres: { orderBy: { nom: 'asc' } },
         campagnes: {
           where: {
             statut: 'PUBLIEE',
@@ -131,7 +116,7 @@ exports.getEtablissementsPrives = async (req, res) => {
             filieres: {
               include: {
                 filiere: {
-                  select: FILIERE_PUBLIC_SELECT,
+                  select: { id: true, nom: true, code: true, niveau: true, dureeAnnees: true },
                 },
               },
               orderBy: { createdAt: 'asc' },
@@ -145,7 +130,7 @@ exports.getEtablissementsPrives = async (req, res) => {
 
     return res.json({
       message: 'Etablissements prives recuperes avec succes',
-      etablissements: etablissements.map(enrichEtablissementPublic),
+      etablissements,
     });
   } catch (error) {
     console.error('Erreur getEtablissementsPrives:', error);
@@ -157,7 +142,9 @@ exports.getEtablissementsPublics = async (req, res) => {
   try {
     const etablissements = await prisma.etablissement.findMany({
       where: { type: 'PUBLIC' },
-      select: { id: true, nom: true, ville: true },
+      include: {
+        _count: { select: { filieres: true, inscriptions: true } },
+      },
       orderBy: { nom: 'asc' },
     });
 
@@ -175,32 +162,11 @@ exports.getEtablissementById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const now = new Date();
-
     const etablissement = await prisma.etablissement.findUnique({
       where: { id },
       include: {
         filieres: {
-          select: FILIERE_PUBLIC_SELECT,
           orderBy: { nom: 'asc' },
-        },
-        campagnes: {
-          where: {
-            statut: 'PUBLIEE',
-            dateOuverture: { lte: now },
-            dateCloture: { gte: now },
-          },
-          include: {
-            filieres: {
-              include: {
-                filiere: {
-                  select: FILIERE_PUBLIC_SELECT,
-                },
-              },
-              orderBy: { createdAt: 'asc' },
-            },
-          },
-          orderBy: { dateCloture: 'asc' },
         },
       },
     });
@@ -211,7 +177,7 @@ exports.getEtablissementById = async (req, res) => {
 
     return res.json({
       message: 'Etablissement recupere avec succes',
-      etablissement: enrichEtablissementPublic(etablissement),
+      etablissement,
     });
   } catch (error) {
     console.error('Erreur getEtablissementById:', error);
@@ -223,10 +189,6 @@ exports.getEtudiantsEtablissement = async (req, res) => {
   try {
     const { id } = req.params;
     const { filiere, annee } = req.query;
-
-    if (req.userRole === 'ADMIN_ETABLISSEMENT' && !adminOwnsEtablissement(req, id)) {
-      return res.status(403).json({ error: 'Accès réservé à votre établissement' });
-    }
 
     const etablissement = await prisma.etablissement.findUnique({
       where: { id },
@@ -281,10 +243,6 @@ exports.getStatistiquesEtablissement = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!adminOwnsEtablissement(req, id)) {
-      return res.status(403).json({ error: 'Vous n\'avez pas accès aux statistiques de cet établissement' });
-    }
-
     const etablissement = await prisma.etablissement.findUnique({
       where: { id },
       select: { nom: true },
@@ -313,16 +271,16 @@ exports.getStatistiquesEtablissement = async (req, res) => {
 
 exports.getMonProfilEtablissement = async (req, res) => {
   try {
-    const etablissementId = getAdminEtablissementId(req);
+    const etablissementId = req.user?.id;
     if (!etablissementId) {
-      return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
+      return res.status(401).json({ error: 'Utilisateur non authentifie' });
     }
 
     const etablissement = await prisma.etablissement.findUnique({
       where: { id: etablissementId },
       include: {
         filieres: {
-          select: FILIERE_PUBLIC_SELECT,
+          select: { id: true, nom: true, code: true, niveau: true, dureeAnnees: true },
           orderBy: { nom: 'asc' },
         },
       },
@@ -336,7 +294,7 @@ exports.getMonProfilEtablissement = async (req, res) => {
       message: 'Profil etablissement recupere avec succes',
       etablissement: {
         ...etablissement,
-        logoUrl: resolveLogoUrl(etablissement),
+        logoUrl: findEtablissementLogo(etablissementId),
       },
     });
   } catch (error) {
@@ -347,49 +305,17 @@ exports.getMonProfilEtablissement = async (req, res) => {
 
 exports.updateMonProfilEtablissement = async (req, res) => {
   try {
-    const etablissementId = getAdminEtablissementId(req);
+    const etablissementId = req.user?.id;
     if (!etablissementId) {
-      return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
+      return res.status(401).json({ error: 'Utilisateur non authentifie' });
     }
 
-    const {
-      nom,
-      type,
-      ville,
-      adresse,
-      email,
-      telephone,
-      siteWeb,
-      description,
-      agrementMESRS,
-      anneeCreation,
-      facebook,
-      instagram,
-      linkedin,
-    } = req.body;
+    const { nom, type, ville, adresse, email } = req.body;
     const data = {};
     if (nom !== undefined) data.nom = nom;
     if (ville !== undefined) data.ville = ville;
     if (adresse !== undefined) data.adresse = adresse;
     if (email !== undefined) data.email = email;
-    if (telephone !== undefined) data.telephone = telephone?.trim() || null;
-    if (siteWeb !== undefined) data.siteWeb = siteWeb?.trim() || null;
-    if (description !== undefined) data.description = description?.trim() || null;
-    if (agrementMESRS !== undefined) data.agrementMESRS = agrementMESRS?.trim() || null;
-    if (facebook !== undefined) data.facebook = facebook?.trim() || null;
-    if (instagram !== undefined) data.instagram = instagram?.trim() || null;
-    if (linkedin !== undefined) data.linkedin = linkedin?.trim() || null;
-    if (anneeCreation !== undefined) {
-      if (anneeCreation === null || anneeCreation === '') {
-        data.anneeCreation = null;
-      } else {
-        const year = Number(anneeCreation);
-        if (!Number.isInteger(year) || year < 1800 || year > new Date().getFullYear()) {
-          return res.status(400).json({ error: 'anneeCreation doit etre une annee valide' });
-        }
-        data.anneeCreation = year;
-      }
-    }
     if (type !== undefined) {
       const typeUpper = String(type).toUpperCase();
       if (!['PUBLIC', 'PRIVE'].includes(typeUpper)) {
@@ -407,7 +333,7 @@ exports.updateMonProfilEtablissement = async (req, res) => {
       message: 'Profil etablissement mis a jour avec succes',
       etablissement: {
         ...etablissement,
-        logoUrl: resolveLogoUrl(etablissement),
+        logoUrl: findEtablissementLogo(etablissementId),
       },
     });
   } catch (error) {
@@ -421,9 +347,9 @@ exports.updateMonProfilEtablissement = async (req, res) => {
 
 exports.uploadMonLogoEtablissement = async (req, res) => {
   try {
-    const etablissementId = getAdminEtablissementId(req);
+    const etablissementId = req.user?.id;
     if (!etablissementId) {
-      return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
+      return res.status(401).json({ error: 'Utilisateur non authentifie' });
     }
 
     if (!req.file) {
@@ -451,15 +377,9 @@ exports.uploadMonLogoEtablissement = async (req, res) => {
 
     fs.renameSync(uploadedPath, targetPath);
 
-    const logoUrl = toPublicLogoUrl(targetFilename);
-    await prisma.etablissement.update({
-      where: { id: etablissementId },
-      data: { logoUrl },
-    });
-
     return res.json({
       message: 'Logo telecharge avec succes',
-      logoUrl,
+      logoUrl: `/uploads/etablissements/${targetFilename}`,
     });
   } catch (error) {
     if (req.file?.path && fs.existsSync(req.file.path)) {
@@ -473,6 +393,7 @@ exports.uploadMonLogoEtablissement = async (req, res) => {
 exports.createEtablissementDges = async (req, res) => {
   try {
     const { nom, type, ville, adresse, email } = req.body;
+    const role = req.userRole || req.user?.role;
 
     if (!nom?.trim() || !type || !ville?.trim()) {
       return res.status(400).json({ error: 'nom, type et ville sont obligatoires' });
@@ -481,6 +402,13 @@ exports.createEtablissementDges = async (req, res) => {
     const typeUpper = String(type).toUpperCase();
     if (!['PUBLIC', 'PRIVE'].includes(typeUpper)) {
       return res.status(400).json({ error: 'Le type doit etre PUBLIC ou PRIVE' });
+    }
+
+    if (role === 'DGES' && typeUpper !== 'PRIVE') {
+      return res.status(403).json({ error: 'La DGES ne peut créer que des établissements privés (module 2).' });
+    }
+    if (role === 'DEC' && typeUpper !== 'PUBLIC') {
+      return res.status(403).json({ error: 'La DEC ne peut créer que des établissements publics (module 1).' });
     }
 
     const emailNormalise = email?.trim() ? email.trim().toLowerCase() : null;
@@ -517,6 +445,7 @@ exports.createEtablissementDges = async (req, res) => {
 exports.deleteEtablissementDges = async (req, res) => {
   try {
     const { etablissementId } = req.params;
+    const role = req.userRole || req.user?.role;
 
     const etablissement = await prisma.etablissement.findUnique({
       where: { id: etablissementId },
@@ -529,20 +458,19 @@ exports.deleteEtablissementDges = async (req, res) => {
       return res.status(404).json({ error: 'Etablissement non trouve' });
     }
 
+    if (role === 'DGES' && etablissement.type !== 'PRIVE') {
+      return res.status(403).json({ error: 'La DGES ne peut supprimer que des établissements privés.' });
+    }
+    if (role === 'DEC' && etablissement.type !== 'PUBLIC') {
+      return res.status(403).json({ error: 'La DEC ne peut supprimer que des établissements publics.' });
+    }
+
     for (const admin of etablissement.admins) {
-      try {
-        await supabaseAdmin.auth.admin.deleteUser(admin.id);
-      } catch (err) {
-        console.error('Suppression compte admin Supabase:', admin.id, err.message);
-      }
+      await authService.deleteCompte(admin.id);
     }
 
     if (etablissement.email) {
-      try {
-        await supabaseAdmin.auth.admin.deleteUser(etablissementId);
-      } catch {
-        // L'id peut ne pas correspondre a un compte Supabase
-      }
+      await authService.deleteCompte(etablissementId);
     }
 
     ensureLogoDir();

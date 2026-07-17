@@ -5,6 +5,9 @@ const { protect } = require('../middleware/auth.middleware');
 const { checkRole } = require('../middleware/role.middleware');
 const commissionController = require('../controllers/commission.controller');
 
+// Espace unifié : concours affectés au membre (rôle résolu par concours)
+router.get('/mes-concours', protect, checkRole(['COMMISSION']), commissionController.getMesConcours);
+
 // Routes protégées - COMMISSION uniquement
 router.get('/dossiers', protect, checkRole(['COMMISSION']), commissionController.getDossiers);
 router.patch('/dossiers/:inscriptionId', protect, checkRole(['COMMISSION']), commissionController.updateStatut);

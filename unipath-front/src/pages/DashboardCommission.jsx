@@ -36,13 +36,10 @@ export default function DashboardCommission() {
   const [counts, setCounts] = useState({ EN_ATTENTE: 0, VALIDE: 0, REJETE: 0, SOUS_RESERVE: 0 });
   const [rejetModal, setRejetModal] = useState({ open: false, inscriptionId: null, commentaire: '' });
   const [sousReserveModal, setSousReserveModal] = useState({ open: false, inscriptionId: null, commentaire: '' });
-  const user = authService.getCurrentUser();
-  const sousRole = user?.sousRole;
-
+  // Interface unifiée : l'entrée principale est « Mes concours ».
   useEffect(() => {
-    if (sousRole === 'EXAMINATEUR') navigate('/examinateur/dossiers', { replace: true });
-    if (sousRole === 'CONTROLEUR') navigate('/controleur-commission/tableau-de-bord', { replace: true });
-  }, [sousRole, navigate]);
+    navigate('/commission/mes-concours', { replace: true });
+  }, [navigate]);
 
   const showMessage = (text, type = 'info') => {
     setMessage({ text, type });

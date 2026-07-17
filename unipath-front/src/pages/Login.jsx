@@ -70,7 +70,7 @@ export default function Login() {
       if (!data?.token || !data?.user?.role) {
         throw new Error('Réponse de connexion incomplète. Réessayez.');
       }
-      const { role, sousRole, mustChangePassword } = data.user;
+      const { role, mustChangePassword } = data.user;
       if (mustChangePassword) {
         if (role === 'ADMIN_ETABLISSEMENT') {
           navigate('/admin-etablissement/changer-mot-de-passe');
@@ -82,11 +82,11 @@ export default function Login() {
         }
       }
       if (role === 'COMMISSION') {
-        if (sousRole === 'EXAMINATEUR') navigate('/examinateur/dossiers');
-        else if (sousRole === 'CONTROLEUR') navigate('/controleur-commission/tableau-de-bord');
-        else navigate('/commission');
+        // Interface unifiée : tous les membres arrivent sur « Mes concours ».
+        navigate('/commission/mes-concours');
       } else if (role === 'ETUDIANT' || role === 'CANDIDAT') navigate('/dashboard');
       else if (role === 'DGES') navigate('/dashboard-dges');
+      else if (role === 'DEC') navigate('/dashboard-dec');
       else if (role === 'CONTROLEUR') navigate('/controleur-commission/tableau-de-bord');
       else if (role === 'ADMIN_ETABLISSEMENT') navigate('/admin-etablissement/campagnes');
       else navigate('/dashboard');

@@ -31,6 +31,45 @@ export function resolvePrivateUploadUrl(relativePath) {
   return `${BASE_URL}/uploads/${clean}`;
 }
 
+/** Téléchargement authentifié (PDF / CSV) */
+async function downloadAuthenticatedFile(endpoint, fallbackFilename) {
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${BASE_URL}${endpoint}`, {
+    headers: {
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+  });
+
+  if (redirectToLoginOn401(response.status)) {
+    return new Promise(() => {});
+  }
+
+  if (!response.ok) {
+    let message = `Erreur téléchargement (${response.status})`;
+    try {
+      const data = await response.json();
+      message = data.error || message;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
+  }
+
+  const disposition = response.headers.get('content-disposition') || '';
+  const match = disposition.match(/filename="?([^"]+)"?/i);
+  const filename = match?.[1] || fallbackFilename;
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  return { filename };
+}
+
 // ── Fonction générique de requête ────────────────────────────────
 async function request(endpoint, options = {}) {
   const token = localStorage.getItem('token');
@@ -167,6 +206,12 @@ export const authService = {
       body: JSON.stringify({ email }),
     }),
 
+  confirmResetPassword: (token, password) =>
+    request('/auth/reset-password/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    }),
+
   getCurrentUser: () => {
     try {
       const userStr = localStorage.getItem('user');
@@ -191,9 +236,17 @@ export const candidatService = {
 
 // ── Concours ─────────────────────────────────────────────────────
 export const concoursService = {
-  getAll: () => request('/concours'),
+  getAll: (params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.anneeAcademiqueId) searchParams.set('anneeAcademiqueId', params.anneeAcademiqueId);
+    if (params.toutesAnnees) searchParams.set('toutesAnnees', '1');
+    if (params.etablissementId) searchParams.set('etablissementId', params.etablissementId);
+    const query = searchParams.toString();
+    return request(`/concours${query ? `?${query}` : ''}`);
+  },
   getByEtablissement: (etablissementId) =>
     request(`/concours?etablissementId=${encodeURIComponent(etablissementId)}`),
+  getAnneeEnCours: () => request('/concours/annee-en-cours'),
   getById: (id) => request(`/concours/${id}`),
   getClassement: (id) => request(`/concours/${id}/classement`),
   
@@ -241,6 +294,12 @@ export const centreCompositionService = {
     const qs = new URLSearchParams(params).toString();
     return request(`/concours/${concoursId}/centres${qs ? `?${qs}` : ''}`);
   },
+
+  setCentresDuConcours: (concoursId, data) =>
+    request(`/concours/${concoursId}/centres`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 
   ajouterAuConcours: (concoursId, data) =>
     request(`/concours/${concoursId}/centres`, {
@@ -396,6 +455,9 @@ export async function ouvrirPiece(pieceUrl) {
 
 // ── Commission ───────────────────────────────────────────────────
 export const commissionService = {
+  // Espace unifié : concours affectés au membre (rôle résolu par concours)
+  getMesConcours: () => request('/commission/mes-concours'),
+
   getDossiers: (statut) =>
     request(`/commission/dossiers${statut ? `?statut=${statut}` : ''}`),
 
@@ -415,15 +477,8 @@ export const commissionService = {
     }),
 };
 
-// ── DGES ──────────────────────────────────────────────────────────
+// ── DGES (module 2 — établissements privés) ───────────────────────
 export const dgesService = {
-  // Récupère les statistiques de TOUS les concours
-  // Retourne : { totaux: {...}, statistiques: [...] }
-  getStatistiques: () => request('/dges/statistiques'),
-
-  // Récupère les statistiques d'UN seul concours par son ID
-  getStatistiquesConcours: (id) => request(`/dges/statistiques/${id}`),
-
   listerAdminsEtablissement: (etablissementId) =>
     request(`/dges/etablissements/${etablissementId}/admins`),
 
@@ -441,25 +496,102 @@ export const dgesService = {
   creerEtablissement: (data) =>
     request('/dges/etablissements', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, type: 'PRIVE' }),
     }),
 
   supprimerEtablissement: (etablissementId) =>
     request(`/dges/etablissements/${etablissementId}`, {
       method: 'DELETE',
     }),
+};
 
-  getCommissionEtablissement: (etablissementId) =>
-    request(`/dges/etablissements/${etablissementId}/commission`),
+// ── DEC (module 1 — concours / établissements publics) ────────────
+export const decService = {
+  getStatistiques: () => request('/dec/statistiques'),
+  getStatistiquesConcours: (id) => request(`/dec/statistiques/${id}`),
 
-  creerMembreCommission: (etablissementId, data) =>
-    request(`/dges/etablissements/${etablissementId}/commission`, {
+  getEtudeDossiersStatuses: (params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.anneeAcademiqueId) searchParams.set('anneeAcademiqueId', params.anneeAcademiqueId);
+    if (params.toutesAnnees) searchParams.set('toutesAnnees', '1');
+    const query = searchParams.toString();
+    return request(`/dec/concours/etude-dossiers${query ? `?${query}` : ''}`);
+  },
+  getEtudeDossiersStatus: (concoursId) =>
+    request(`/dec/concours/${concoursId}/etude-dossiers`),
+  lancerEtude: (concoursId) =>
+    request(`/dec/concours/${concoursId}/lancer-etude`, {
       method: 'POST',
+    }),
+  cloturerEtude: (concoursId) =>
+    request(`/dec/concours/${concoursId}/cloturer-etude`, {
+      method: 'POST',
+    }),
+  /** TEMP — tests : clôturer les inscriptions avant la date de fin */
+  cloturerInscriptionsTest: (concoursId) =>
+    request(`/dec/concours/${concoursId}/cloturer-inscriptions-test`, {
+      method: 'POST',
+    }),
+
+  listerCommunes: () => request('/dec/communes'),
+  listerNumerosTable: (concoursId) =>
+    request(`/dec/concours/${concoursId}/numeros-table`),
+  genererNumerosTable: (concoursId, regenerer = true) =>
+    request(`/dec/concours/${concoursId}/generer-numeros-table`, {
+      method: 'POST',
+      body: JSON.stringify({ regenerer }),
+    }),
+
+  listerMembresCommission: () => request('/dec/membres-commission'),
+  getAffectationsConcours: (concoursId) =>
+    request(`/dec/concours/${concoursId}/affectations`),
+  setAffectationsConcours: (concoursId, data) =>
+    request(`/dec/concours/${concoursId}/affectations`, {
+      method: 'PUT',
       body: JSON.stringify(data),
     }),
 
-  supprimerMembreCommission: (etablissementId, membreId) =>
-    request(`/dges/etablissements/${etablissementId}/commission/${membreId}`, {
+  getListeRetenus: (concoursId) =>
+    request(`/dec/concours/${concoursId}/liste-retenus`),
+  preparerListeRetenus: (concoursId) =>
+    request(`/dec/concours/${concoursId}/preparer-liste-retenus`, {
+      method: 'POST',
+    }),
+  envoyerConvocationsRetenus: (concoursId, regenererNumeros = true) =>
+    request(`/dec/concours/${concoursId}/envoyer-convocations`, {
+      method: 'POST',
+      body: JSON.stringify({ regenererNumeros }),
+    }),
+  telechargerListeRetenusPdf: (concoursId) =>
+    downloadAuthenticatedFile(
+      `/dec/concours/${concoursId}/liste-retenus/pdf`,
+      `liste-retenus-${concoursId}.pdf`
+    ),
+  telechargerListeRetenusExcel: (concoursId) =>
+    downloadAuthenticatedFile(
+      `/dec/concours/${concoursId}/liste-retenus/excel`,
+      `liste-retenus-${concoursId}.csv`
+    ),
+
+  listerAnneesAcademiques: () => request('/dec/annees-academiques'),
+  creerAnneeAcademique: (data) =>
+    request('/dec/annees-academiques', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  definirAnneeEnCours: (id) =>
+    request(`/dec/annees-academiques/${id}/en-cours`, {
+      method: 'PUT',
+    }),
+
+  creerEtablissement: (data) =>
+    request('/dec/etablissements', {
+      method: 'POST',
+      body: JSON.stringify({ ...data, type: 'PUBLIC' }),
+    }),
+
+  supprimerEtablissement: (etablissementId) =>
+    request(`/dec/etablissements/${etablissementId}`, {
       method: 'DELETE',
     }),
 };

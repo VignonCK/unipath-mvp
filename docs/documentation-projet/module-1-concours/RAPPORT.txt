@@ -1,0 +1,234 @@
+================================================================================
+UNIPATH — RAPPORT DU MODULE 1 : CONCOURS UNIVERSITAIRES
+================================================================================
+Date        : 09/07/2026
+Plateforme  : UniPath MVP
+Périmètre   : Concours d'entrée dans les universités et écoles supérieures
+================================================================================
+
+1. VUE D'ENSEMBLE
+--------------------------------------------------------------------------------
+
+Le Module 1 « Concours universitaires » est l'espace UniPath dédié aux candidats
+qui souhaitent passer un concours pour intégrer une formation supérieure.
+
+Sur la plateforme, il est accessible depuis le hub étudiant (/dashboard) sous
+l'intitulé « Module 1 — Concours universitaires ». Il couvre l'ensemble du cycle :
+découverte des concours, inscription, dépôt du dossier, validation par la
+commission, notation et obtention de la convocation.
+
+Contexte Bénin : le module gère les concours organisés par les établissements
+d'enseignement supérieur (publics et privés). Les concours officiels MESRS
+(ENSPD, ENEAM, ENSTIC, etc.) et les concours propres aux écoles privées sont
+traités dans le même flux technique.
+
+
+2. OBJECTIFS DU MODULE
+--------------------------------------------------------------------------------
+
+  - Centraliser la liste des concours ouverts
+  - Permettre l'inscription en ligne d'un candidat à un concours
+  - Collecter le dossier numérique (pièces personnelles + quittance + extras)
+  - Orchestrer la validation à plusieurs niveaux (examinateur, contrôleur, commission)
+  - Attribuer une note d'examen et établir un classement
+  - Générer les documents officiels (fiche de préinscription, convocation PDF)
+
+
+3. ACTEURS ET RÔLES
+--------------------------------------------------------------------------------
+
+  Acteur                    Rôle dans le module
+  ------------------------  --------------------------------------------------
+  Candidat / Étudiant       S'inscrit, dépose son dossier, suit le statut
+  DGES                      Crée et gère les concours (dates, pièces, frais)
+  Membre Commission         Revue globale des dossiers, statut final, notes
+  Examinateur               Premier examen du dossier (verdict 1)
+  Contrôleur (commission)   Arbitrage en cas de divergence avec l'examinateur
+  Contrôleur (autonome)     Validation finale de la décision commission
+
+  Accès frontend :
+    Candidat     → /concours/*
+    DGES         → /gestion-concours
+    Commission   → /commission/*, /examinateur/*, /controleur-commission/*
+
+
+4. ENTITÉS DE DONNÉES
+--------------------------------------------------------------------------------
+
+  Concours
+    Informations : libellé, établissement organisateur, dates (dépôt, composition),
+    frais de participation, séries BAC acceptées, matières d'épreuve,
+    pièces requises (JSON), centres de composition (JSON)
+
+  Inscription
+    Lien candidat ↔ concours, numéro d'inscription unique, note d'examen
+
+  DossierInscription
+    Pièces du dossier concours, quittance, statut, verdicts et décisions :
+      - verdict1 (examinateur)
+      - decisionControleur (arbitrage)
+      - statut commission (VALIDE / REJETE / SOUS_RESERVE / EN_ATTENTE)
+
+  Dossier (personnel)
+    Acte de naissance, CNI, photo, relevé BAC — partagé entre modules
+
+
+5. FONCTIONNALITÉS IMPLÉMENTÉES
+--------------------------------------------------------------------------------
+
+5.1 Côté candidat
+  [x] Liste des concours ouverts avec filtres
+  [x] Fiche détaillée (dates, frais, séries, matières, pièces)
+  [x] Création d'une inscription à un concours
+  [x] Dépôt du dossier complet (multipart)
+  [x] Upload quittance de paiement des frais de concours
+  [x] Upload pièces complémentaires personnalisées
+  [x] Choix du centre de composition
+  [x] Correction des pièces en cas de « sous réserve »
+  [x] Suivi du statut en temps réel
+  [x] Alertes sur le hub (dossiers à compléter, décisions reçues)
+  [x] Téléchargement fiche de préinscription (PDF)
+  [x] Téléchargement convocation (PDF, si validé)
+  [x] Consultation du classement par concours
+
+5.2 Côté DGES
+  [x] CRUD complet des concours
+  [x] Configuration des pièces requises (prédéfinies + personnalisées)
+  [x] Configuration des centres de composition
+  [x] Statistiques nationales et par concours
+
+5.3 Côté Commission
+  [x] Dashboard des dossiers filtrable par statut
+  [x] Consultation détaillée de chaque dossier
+  [x] Mise à jour du statut (valider / rejeter / sous réserve)
+  [x] Saisie de la note d'examen (0 à 20)
+  [x] Historique des actions (audit trail)
+  [x] Envoi de notifications au candidat
+
+5.4 Workflow examinateur / contrôleur
+  [x] Interface examinateur : verdict initial sur chaque dossier
+  [x] Interface contrôleur : tableau de bord, dossiers divergents
+  [x] Arbitrage et correction du verdict examinateur
+  [x] Alerte automatique (job cron) pour dossiers sans verdict > 2 jours
+  [x] Validation finale par contrôleur autonome
+
+5.5 Transverse
+  [x] Calcul de complétude du dossier (%)
+  [x] Notifications in-app et par email
+  [x] Export CSV de l'historique d'actions
+  [x] Stockage local des fichiers uploadés
+
+
+6. WORKFLOW MÉTIER (CHAÎNE DE VALIDATION)
+--------------------------------------------------------------------------------
+
+  Étape 1 — Candidat
+    Crée une inscription → soumet dossier + quittance
+
+  Étape 2 — Examinateur (sous-rôle commission)
+    Rend verdict1 : VALIDE | REJETE | SOUS_RESERVE
+
+  Étape 3 — Contrôleur commission
+    Compare avec verdict1, arbitre (decisionControleur)
+    Peut corriger le verdict examinateur
+
+  Étape 4 — Commission
+    Met à jour le statut global du dossier
+    Saisit la note d'examen
+
+  Étape 5 — Contrôleur autonome
+    Valide ou invalide la décision de la commission
+
+  Étape 6 — Candidat
+    Reçoit notification → télécharge convocation si VALIDE
+
+  Statuts possibles du dossier :
+    EN_ATTENTE
+    SOUS_RESERVE / SOUS_RESERVE_PAR_COMMISSION
+    VALIDE / VALIDE_PAR_COMMISSION
+    REJETE / REJETE_PAR_COMMISSION
+
+
+7. PAGES ET ROUTES FRONTEND
+--------------------------------------------------------------------------------
+
+  /concours                         Accueil module, stats personnelles
+  /concours/ouverts                 Catalogue des concours
+  /concours/ouverts/:id             Détail et inscription
+  /concours/inscription/:id         Suivi et dépôt dossier
+  /concours/ouverts/:id/classement  Classement
+
+  /gestion-concours                 Administration DGES
+  /commission                       Dashboard commission
+  /commission/notes                 Notes d'examen
+  /examinateur/dossiers             Interface examinateur
+  /controleur-commission/*          Interface contrôleur
+
+
+8. API BACKEND (ENDPOINTS PRINCIPAUX)
+--------------------------------------------------------------------------------
+
+  GET    /api/concours                    Liste / détail
+  POST   /api/concours                    Créer (DGES)
+  POST   /api/inscriptions                Inscrire un candidat
+  POST   /api/inscriptions/soumettre      Soumettre dossier complet
+  GET    /api/inscriptions/mes-inscriptions
+  PATCH  /api/commission/dossiers/:id     Statut commission
+  PATCH  /api/commission/notes/:id        Note
+  POST   /api/examinateur/dossiers/:id/verdict
+  POST   /api/controleur-commission/dossiers/:id/decision
+  PATCH  /api/controleur/dossiers/:id/valider
+  GET    /api/candidats/convocation/:id   PDF convocation
+
+
+9. FONCTIONNALITÉS PARTIELLES OU MANQUANTES
+--------------------------------------------------------------------------------
+
+  [ ] Paiement en ligne réel des frais de concours (quittance uploadée manuellement)
+  [ ] Centres de composition : stockés en JSON, pas de gestion relationnelle
+  [ ] Concours réservés strictement aux universités privées (le modèle accepte aussi
+      les concours MESRS des universités publiques)
+  [ ] Vérification automatique de l'éligibilité (série BAC, âge, etc.)
+  [ ] Composition en ligne / epreuves numériques
+
+
+10. DONNÉES ACTUELLES (APRÈS IMPORT)
+--------------------------------------------------------------------------------
+
+  Concours en base        : 24
+  Inscriptions            : 3
+  Dossiers inscription    : 3
+  Candidats               : 24
+
+  Exemples de concours : ENSPD 2026, ENEAM 2026, ENSTIC 2026, IFSIO 2026...
+
+
+11. POINTS FORTS
+--------------------------------------------------------------------------------
+
+  - Workflow de double validation robuste (examinateur + contrôleur)
+  - Traçabilité complète (historique d'actions, audit)
+  - Génération PDF intégrée
+  - Interface candidat claire avec alertes et suivi de statut
+  - Configuration flexible des pièces requises par concours
+
+
+12. LIMITES CONNUES
+--------------------------------------------------------------------------------
+
+  - Dépendance à PHP pour les PDF
+  - Fichiers hébergés localement (pas de CDN)
+  - Pas de paiement Mobile Money / carte bancaire
+  - Le module partage le dossier personnel (Module transverse) avec le Module 2
+
+
+13. CONCLUSION
+--------------------------------------------------------------------------------
+
+Le Module 1 est opérationnel et couvre le cycle complet d'un concours universitaire
+numérique, de la publication à la convocation. Il constitue le cœur métier historique
+de UniPath et est pleinement utilisable en environnement local.
+
+================================================================================
+FIN DU RAPPORT — MODULE 1 CONCOURS UNIVERSITAIRES
+================================================================================

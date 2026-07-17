@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 
 function groupByVille(centres = []) {
   const map = new Map();
@@ -31,7 +31,11 @@ export default function ChoixCentreComposition({
   const [selectedId, setSelectedId] = useState(() => centreChoisi?.concoursCentreId || centreChoisi?.id || '');
   const [error, setError] = useState('');
 
-  const centreVerrouille = statut === 'VALIDE' && Boolean(centreChoisi?.nom || centreChoisi?.concoursCentreId);
+  useEffect(() => {
+    setSelectedId(centreChoisi?.concoursCentreId || centreChoisi?.id || '');
+  }, [centreChoisi?.concoursCentreId, centreChoisi?.id]);
+
+  const centreVerrouille = readOnly || (statut !== 'EN_ATTENTE' && Boolean(centreChoisi?.nom || centreChoisi?.concoursCentreId));
 
   if (!centresRelational.length) return null;
 
@@ -54,13 +58,13 @@ export default function ChoixCentreComposition({
       <div className='rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900'>
         <div className='flex flex-wrap items-center gap-2'>
           <p className='font-semibold'>Centre de composition</p>
-          {centreVerrouille && (
+          {statut !== 'EN_ATTENTE' && (
             <span className='inline-flex items-center rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-semibold text-gray-700'>
               Verrouillé
             </span>
           )}
         </div>
-        <p className='mt-1'>{formatCentreChoisi(centreChoisi)}</p>
+        <p className='mt-1'>{formatCentreChoisi(centreChoisi) || 'Non renseigné'}</p>
       </div>
     );
   }
@@ -68,13 +72,13 @@ export default function ChoixCentreComposition({
   return (
     <form onSubmit={handleSubmit} className='rounded-xl border border-blue-200 bg-blue-50/60 p-4 space-y-3'>
       <div>
-        <p className='font-semibold text-blue-900 text-sm'>Choisissez votre centre de composition</p>
+        <p className='font-semibold text-blue-900 text-sm'>Centre de composition</p>
         <p className='text-xs text-blue-800 mt-1'>
-          Obligatoire avant de télécharger votre convocation.
+          Vous pouvez modifier votre choix tant que votre dossier est en attente d&apos;examen.
         </p>
       </div>
 
-      {centreChoisi?.nom && statut !== 'VALIDE' && (
+      {centreChoisi?.nom && (
         <p className='text-xs text-green-800 bg-green-50 border border-green-200 rounded-lg px-3 py-2'>
           Centre actuel : {formatCentreChoisi(centreChoisi)}
         </p>

@@ -1,0 +1,339 @@
+================================================================================
+UNIPATH — GUIDE D'UTILISATION DU MODULE API (unipath-api)
+================================================================================
+Date : 09/07/2026
+================================================================================
+
+Ce guide explique comment installer, configurer, démarrer et utiliser l'API UniPath
+en environnement local (Laragon + MySQL + phpMyAdmin).
+
+
+================================================================================
+PARTIE 1 — INSTALLATION ET DÉMARRAGE
+================================================================================
+
+PRÉREQUIS
+---------
+  - Node.js 18+ (recommandé 20+)
+  - MySQL (via Laragon)
+  - PHP 8+ avec FPDF (pour les PDF)
+  - Git
+
+ÉTAPE 1 : Base de données MySQL
+-------------------------------
+  1. Démarrer Laragon (Apache + MySQL)
+  2. Créer la base "unipath" dans phpMyAdmin
+  3. Copier le fichier d'environnement :
+       cd unipath-api
+       copy .env.example .env
+  4. Vérifier dans .env :
+       DATABASE_URL="mysql://root:@localhost:3306/unipath"
+       JWT_SECRET="votre-cle-secrete-longue"
+  5. Créer les tables :
+       npx prisma db push
+  6. (Optionnel) Importer les données Supabase :
+       Importer import_unipath_mysql.sql dans phpMyAdmin
+  7. (Optionnel) Créer les admins système :
+       npm run create-admins
+
+ÉTAPE 2 : Installation des dépendances
+--------------------------------------
+  cd unipath-api
+  npm install
+
+ÉTAPE 3 : Démarrer l'API
+------------------------
+  npm run dev
+
+  L'API écoute sur : http://localhost:3001
+  Test santé         : http://localhost:3001/health
+
+ÉTAPE 4 : Données de test (si pas d'import SQL)
+-----------------------------------------------
+  npx prisma db seed
+  npm run create-admins
+  npm run seed:concours-officiels
+
+
+================================================================================
+PARTIE 2 — UTILISATION PAR RÔLE (VIA API / POSTMAN)
+================================================================================
+
+Toutes les requêtes authentifiées nécessitent l'en-tête :
+  Authorization: Bearer <token_jwt>
+
+Le token est obtenu via POST /api/auth/login
+
+
+2.1 CANDIDAT / ÉTUDIANT
+-----------------------
+
+  Inscription :
+    POST /api/auth/register
+    Body : { email, password, nom, prenom, anip, serie, ... }
+
+  Connexion :
+    POST /api/auth/login
+    Body : { email, password }
+
+  Consulter son profil :
+    GET /api/candidats/profil
+
+  Uploader son dossier personnel :
+    POST /api/dossier/upload
+    (multipart : acteNaissance, carteIdentite, photo, releve)
+
+  --- Module Concours ---
+  Lister les concours ouverts :
+    GET /api/concours
+
+  S'inscrire à un concours :
+    POST /api/inscriptions
+    Body : { concoursId }
+
+  Soumettre le dossier complet :
+    POST /api/inscriptions/soumettre
+    (multipart avec pièces requises + quittance)
+
+  Voir ses inscriptions :
+    GET /api/inscriptions/mes-inscriptions
+
+  Télécharger convocation :
+    GET /api/candidats/convocation/:inscriptionId
+
+  --- Module Parcours ---
+  Lister les établissements :
+    GET /api/etablissements
+
+  Voir les campagnes publiées :
+    GET /api/campagnes
+
+  Créer une candidature (application) :
+    POST /api/applications
+    Body : { etablissementId, filiereId, anneeAcademique, niveau }
+
+  Payer les frais de dossier (mock) :
+    POST /api/applications/:id/payments/dossier-fees/mock-confirm
+
+  Uploader des documents :
+    POST /api/applications/:id/documents
+
+  Finaliser la candidature :
+    POST /api/applications/:id/finalize
+
+  Voir son parcours académique :
+    GET /api/parcours/mon-parcours
+
+  Télécharger relevé de notes :
+    GET /api/parcours/mon-releve/pdf
+
+
+2.2 COMMISSION (membre standard)
+--------------------------------
+
+  Connexion avec un compte MembreCommission (sousRole = MEMBRE)
+
+  Lister les dossiers :
+    GET /api/commission/dossiers?statut=EN_ATTENTE
+
+  Modifier le statut d'un dossier :
+    PATCH /api/commission/dossiers/:inscriptionId
+    Body : { statut, commentaireRejet?, commentaireSousReserve? }
+
+  Saisir une note d'examen :
+    PATCH /api/commission/notes/:inscriptionId
+    Body : { note: 15.5 }
+
+  Voir les statistiques DGES :
+    GET /api/dges/statistiques
+
+
+2.3 EXAMINATEUR (sous-rôle commission)
+--------------------------------------
+
+  Connexion avec sousRole = EXAMINATEUR
+
+  Dossiers à évaluer :
+    GET /api/examinateur/dossiers-a-evaluer
+
+  Rendre un verdict :
+    POST /api/examinateur/dossiers/:dossierInscriptionId/verdict
+    Body : { verdict: "VALIDE" | "REJETE" | "SOUS_RESERVE", motif? }
+
+  Modifier son verdict (tant que non verrouillé) :
+    PUT /api/examinateur/dossiers/:dossierInscriptionId/verdict
+
+
+2.4 CONTRÔLEUR COMMISSION (sous-rôle)
+-------------------------------------
+
+  Connexion avec sousRole = CONTROLEUR
+
+  Tableau de bord :
+    GET /api/controleur-commission/tableau-de-bord
+
+  Dossiers divergents (examinateur ≠ contrôleur) :
+    GET /api/controleur-commission/dossiers/divergents
+
+  Arbitrer un dossier :
+    POST /api/controleur-commission/dossiers/:id/decision
+    Body : { decision: "VALIDE" | "REJETE" | "SOUS_RESERVE", motif? }
+
+
+2.5 CONTRÔLEUR AUTONOME
+-----------------------
+
+  Connexion avec profilType = CONTROLEUR (table Controleur)
+
+  Dossiers en attente de validation finale :
+    GET /api/controleur/dossiers
+
+  Valider ou rejeter la décision commission :
+    PATCH /api/controleur/dossiers/:inscriptionId/valider
+    Body : { valide: true | false, motif? }
+
+
+2.6 DGES
+--------
+
+  Connexion avec profilType = DGES
+
+  Statistiques nationales :
+    GET /api/dges/statistiques
+
+  Créer un concours :
+    POST /api/concours
+    Body : { libelle, etablissement, dateDebut, dateFin, fraisParticipation, ... }
+
+  Modifier / supprimer un concours :
+    PUT /api/concours/:id
+    DELETE /api/concours/:id
+
+  Créer un établissement :
+    POST /api/dges/etablissements
+
+  Créer un admin établissement :
+    POST /api/dges/etablissements/:etablissementId/admins
+
+
+2.7 ADMIN ÉTABLISSEMENT
+-----------------------
+
+  Connexion avec profilType = ADMIN_ETABLISSEMENT
+
+  Gérer les campagnes :
+    GET  /api/etablissement/campagnes
+    POST /api/etablissement/campagnes
+    PATCH /api/etablissement/campagnes/:id/publier
+    PATCH /api/etablissement/campagnes/:id/cloturer
+
+
+2.8 ÉTABLISSEMENT (compte école)
+--------------------------------
+
+  Inscription :
+    POST /api/auth/register-etablissement
+
+  Profil et logo :
+    GET  /api/etablissements/mon/profil
+    PUT  /api/etablissements/mon/profil
+    POST /api/etablissements/mon/logo
+
+  Candidatures reçues :
+    GET /api/applications/etablissement/applications
+
+  Décider une préinscription :
+    PATCH /api/preinscriptions-etablissement/:id/decision
+    Body : { statut: "ACCEPTEE" | "REFUSEE", motifDecision? }
+
+
+================================================================================
+PARTIE 3 — WORKFLOW CONCOURS (RÉSUMÉ)
+================================================================================
+
+  1. Candidat crée une inscription et soumet son dossier
+  2. Examinateur rend verdict1 (VALIDE / REJETE / SOUS_RESERVE)
+  3. Contrôleur commission arbitre (decisionControleur)
+  4. Commission met à jour le statut et saisit la note
+  5. Contrôleur autonome valide la décision finale
+  6. Candidat reçoit notification + peut télécharger convocation
+
+
+================================================================================
+PARTIE 4 — WORKFLOW PARCOURS ACADÉMIQUE (RÉSUMÉ)
+================================================================================
+
+  1. Candidat parcourt les établissements / campagnes
+  2. Crée une application (candidature)
+  3. Paie les frais de dossier (mock) et upload les documents
+  4. Finalise la candidature
+  5. Établissement examine → préinscription → décision
+  6. Candidat upload quittance bancaire si accepté
+  7. Inscription académique créée → notes → relevé
+
+
+================================================================================
+PARTIE 5 — GESTION DES FICHIERS
+================================================================================
+
+  Uploads stockés dans : unipath-api/uploads/dossiers-candidats/
+  Accès HTTP           : http://localhost:3001/uploads/...
+
+  Après migration Supabase, copier les fichiers depuis le bucket
+  "dossiers-candidats" vers le dossier uploads/ local.
+
+
+================================================================================
+PARTIE 6 — EMAILS
+================================================================================
+
+  En développement, désactiver la file d'emails :
+    EMAIL_QUEUE_ENABLED=false
+
+  En production, configurer SMTP dans .env :
+    SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM
+
+  Types d'emails : confirmation, reset password, décisions dossier,
+  préinscription, alertes.
+
+
+================================================================================
+PARTIE 7 — DÉPANNAGE
+================================================================================
+
+  Erreur connexion MySQL :
+    → Vérifier Laragon démarré et DATABASE_URL correct
+
+  JWT invalid / 401 :
+    → Reconnecter via /api/auth/login
+
+  PDF non généré :
+    → Vérifier PHP installé et accessible dans le PATH
+
+  Fichiers introuvables :
+    → Vérifier uploads/ et chemins en base
+
+  Import SQL échoue :
+    → Exécuter npx prisma db push avant l'import
+    → Utiliser import_unipath_mysql.sql (pas le backup PostgreSQL)
+
+  Port 3001 occupé :
+    → Changer PORT dans .env
+
+
+================================================================================
+PARTIE 8 — COMPTES DE TEST
+================================================================================
+
+  Voir le fichier : comptes_connexion_unipath.txt (racine du projet)
+
+  Mot de passe par défaut (comptes importés) : UniPath2026!
+
+  Admins créés manuellement (npm run create-admins) :
+    commission@epac.bj  / Commission2026!
+    dges@mesrs.bj       / DGES2026!
+
+
+================================================================================
+FIN DU GUIDE — unipath-api
+================================================================================

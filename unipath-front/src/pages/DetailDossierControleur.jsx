@@ -261,10 +261,17 @@ const DetailDossierControleur = () => {
   );
   const motifObligatoire = motifRequis(decision, verdictExaminateur);
   const modInfo = dossier?.modificationControleur;
+  const validationExaminateurFinale = Boolean(dossier?.validationExaminateurFinale);
+  const peutRendreDecision = dossier?.permissions?.peutRendreDecision !== false
+    && !validationExaminateurFinale;
   const formulaireDecisionVerrouille = Boolean(
-    dossier?.decisionControleur && !modInfo?.peutModifier
+    validationExaminateurFinale
+    || (dossier?.decisionControleur && !modInfo?.peutModifier)
   );
-  const peutSoumettreDecision = !formulaireDecisionVerrouille;
+  const peutSoumettreDecision = !formulaireDecisionVerrouille && (peutRendreDecision || Boolean(modInfo?.peutModifier));
+  const examinateurNom = dossier?.verdicts?.verdict1?.examinateur
+    ? `${dossier.verdicts.verdict1.examinateur.nom || ''} ${dossier.verdicts.verdict1.examinateur.prenom || ''}`.trim()
+    : null;
 
   return (
     <ControleurPage>
@@ -328,6 +335,17 @@ const DetailDossierControleur = () => {
         </ControleurAlert>
       )}
 
+      {validationExaminateurFinale && (
+        <ControleurAlert type="success">
+          <span>✓</span>
+          <span>
+            <strong>Validé définitivement par l&apos;examinateur</strong>
+            {examinateurNom ? <> : {examinateurNom}</> : null}.
+            Aucun arbitrage de votre part n&apos;est requis — consultation uniquement.
+          </span>
+        </ControleurAlert>
+      )}
+
       <BentoCard className="p-5 bg-white">
         <h2 className="text-base font-semibold text-slate-800 mb-4">Informations du candidat</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
@@ -351,7 +369,7 @@ const DetailDossierControleur = () => {
             titre="Examinateur"
             verdictData={dossier.verdicts.verdict1}
             divergent={dossier.verdictsDivergents}
-            allowCorrection
+            allowCorrection={!validationExaminateurFinale && dossier?.permissions?.peutCorrigerVerdictExaminateur !== false}
             onCorriger={(v) => ouvrirCorrectionVerdict(1, v)}
           />
           <VerdictPanel
@@ -360,6 +378,13 @@ const DetailDossierControleur = () => {
             divergent={dossier.verdictsDivergents}
           />
         </div>
+
+        {validationExaminateurFinale && (
+          <p className="mt-3 text-sm text-gray-600">
+            Décision finale : validation par l&apos;examinateur
+            {examinateurNom ? ` (${examinateurNom})` : ''}.
+          </p>
+        )}
 
         {correctionSlot && (
           <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-4">
@@ -382,7 +407,10 @@ const DetailDossierControleur = () => {
                       name="correctionVerdict"
                       value={v}
                       checked={correctionVerdict === v}
-                      onChange={(e) => setCorrectionVerdict(e.target.value)}
+                      onChange={(e) => {
+                        setCorrectionVerdict(e.target.value);
+                        if (e.target.value === 'VALIDE') setCorrectionMotif('');
+                      }}
                       disabled={correctionSubmitting}
                       className="text-slate-700"
                     />
@@ -391,16 +419,18 @@ const DetailDossierControleur = () => {
                 ))}
               </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-2">Motif</label>
-              <textarea
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                rows="4"
-                value={correctionMotif}
-                onChange={(e) => setCorrectionMotif(e.target.value)}
-                disabled={correctionSubmitting}
-              />
-            </div>
+            {(correctionVerdict === 'REJETE' || correctionVerdict === 'SOUS_RESERVE') && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-2">Motif *</label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  rows="4"
+                  value={correctionMotif}
+                  onChange={(e) => setCorrectionMotif(e.target.value)}
+                  disabled={correctionSubmitting}
+                />
+              </div>
+            )}
             <div className="flex gap-3 flex-wrap">
               <button
                 type="button"
@@ -498,10 +528,24 @@ const DetailDossierControleur = () => {
 
       <BentoCard className="p-5 bg-white">
         <h2 className="text-base font-semibold text-slate-800 mb-4">
-          {dossier.decisionControleur ? 'Modifier ma décision' : 'Rendre ma décision'}
+          {validationExaminateurFinale
+            ? 'Décision finale'
+            : dossier.decisionControleur
+              ? 'Modifier ma décision'
+              : 'Rendre ma décision'}
         </h2>
 
-        {dossier.decisionControleur && modInfo?.peutModifier && (
+        {validationExaminateurFinale && (
+          <ControleurAlert type="info">
+            <span>ℹ️</span>
+            <span>
+              Aucun arbitrage n&apos;est requis. Le dossier a été validé par{' '}
+              <strong>{examinateurNom || 'l\'examinateur'}</strong>.
+            </span>
+          </ControleurAlert>
+        )}
+
+        {!validationExaminateurFinale && dossier.decisionControleur && modInfo?.peutModifier && (
           <ControleurAlert type="info">
             <span>ℹ️</span>
             <span>
@@ -512,7 +556,7 @@ const DetailDossierControleur = () => {
           </ControleurAlert>
         )}
 
-        {formulaireDecisionVerrouille && (
+        {!validationExaminateurFinale && formulaireDecisionVerrouille && (
           <ControleurAlert type="warning">
             <span>🔒</span>
             <span>
@@ -524,14 +568,14 @@ const DetailDossierControleur = () => {
           </ControleurAlert>
         )}
 
-        {validationError && (
+        {!validationExaminateurFinale && validationError && (
           <ControleurAlert type="error">
             <span>⚠️</span>
             <span>{validationError}</span>
           </ControleurAlert>
         )}
 
-        {arbitrageDivergent && (
+        {!validationExaminateurFinale && arbitrageDivergent && (
           <ControleurAlert type="warning">
             <span>⚠️</span>
             <span>
@@ -542,6 +586,8 @@ const DetailDossierControleur = () => {
           </ControleurAlert>
         )}
 
+        {!validationExaminateurFinale && (
+        <>
         <div className="mt-4">
           <label className="block text-xs font-medium text-gray-500 mb-2">Décision finale *</label>
           <div className="flex gap-4 flex-wrap">
@@ -552,7 +598,11 @@ const DetailDossierControleur = () => {
                   name="decision"
                   value={v}
                   checked={decision === v}
-                  onChange={(e) => setDecision(e.target.value)}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setDecision(next);
+                    if (next === 'VALIDE' && next === verdictExaminateur) setMotif('');
+                  }}
                   disabled={submitting || success || formulaireDecisionVerrouille}
                   className="text-slate-700"
                 />
@@ -562,28 +612,28 @@ const DetailDossierControleur = () => {
           </div>
         </div>
 
-        <div className="mt-4">
-          <label className="block text-xs font-medium text-gray-500 mb-2">
-            Motif {motifObligatoire && '*'}
-          </label>
-          <textarea
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            rows="6"
-            value={motif}
-            onChange={(e) => setMotif(e.target.value)}
-            placeholder={
-              arbitrageDivergent
-                ? 'Expliquez pourquoi vous arbitrez différemment de l\'examinateur (min. 10 caractères, envoyé à l\'examinateur)'
-                : decision === 'SOUS_RESERVE'
-                  ? 'Indiquez la pièce non conforme et la correction attendue (ex. : relevé illisible — merci de le remplacer). Min. 10 caractères.'
-                  : decision === 'REJETE'
-                    ? 'Motif obligatoire (minimum 10 caractères)'
-                    : 'Motif optionnel'
-            }
-            disabled={submitting || success || formulaireDecisionVerrouille}
-          />
-          <p className="text-xs text-gray-400 mt-1">{motif.trim().length} / 1000 caractères</p>
-        </div>
+        {motifObligatoire && (
+          <div className="mt-4">
+            <label className="block text-xs font-medium text-gray-500 mb-2">Motif *</label>
+            <textarea
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              rows="6"
+              value={motif}
+              onChange={(e) => setMotif(e.target.value)}
+              placeholder={
+                arbitrageDivergent
+                  ? 'Expliquez pourquoi vous arbitrez différemment de l\'examinateur (min. 10 caractères, envoyé à l\'examinateur)'
+                  : decision === 'SOUS_RESERVE'
+                    ? 'Indiquez la pièce non conforme et la correction attendue (ex. : relevé illisible — merci de le remplacer). Min. 10 caractères.'
+                    : 'Motif obligatoire (minimum 10 caractères)'
+              }
+              disabled={submitting || success || formulaireDecisionVerrouille}
+            />
+            <p className="text-xs text-gray-400 mt-1">{motif.trim().length} / 1000 caractères</p>
+          </div>
+        )}
+        </>
+        )}
 
         {peutSoumettreDecision && (
         <div className="mt-6 pt-4 border-t border-gray-100">

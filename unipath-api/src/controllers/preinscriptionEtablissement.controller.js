@@ -1,34 +1,8 @@
 const prisma = require('../prisma');
-const { getAdminEtablissementId, adminOwnsEtablissement } = require('../utils/admin-etablissement.helper');
 const emailService = require('../services/email.service');
 const pdfService = require('../services/pdf.service');
-const { uploadBufferToSupabase } = require('../utils/file-upload.helper');
-const {
-  appendHistorique,
-  appendDocument,
-  hasDocumentsCompl,
-  newDocumentId,
-  PREINSCRIPTION_INCLUDE,
-} = require('../utils/preinscription.helper');
 const fs = require('fs');
-
-async function notifierAdminsEtablissement(etablissementId, etablissementEmail, sendFn) {
-  const admins = await prisma.adminEtablissement.findMany({
-    where: { etablissementId },
-    select: { id: true, email: true },
-  });
-  const cibles = admins.length > 0
-    ? admins
-    : (etablissementEmail ? [{ id: null, email: etablissementEmail }] : []);
-
-  for (const admin of cibles) {
-    try {
-      await sendFn(admin);
-    } catch (err) {
-      console.error('Erreur notification admin etablissement:', err);
-    }
-  }
-}
+const { runInBackground } = require('../utils/background-task');
 
 const STATUTS_DECISION = ['VALIDE', 'SOUS_RESERVE', 'REJETE'];
 
@@ -58,11 +32,6 @@ const construirePayloadPdf = (preinscription) => ({
 });
 
 exports.creerPreinscriptionEtablissement = async (req, res) => {
-  return res.status(410).json({
-    error:
-      'La création directe de pré-inscription est désactivée. Passez par le dépôt de dossier via /api/applications.',
-  });
-
   try {
     const candidatId = req.user?.id;
     const { etablissementId, filiereId, anneeAcademique, niveau } = req.body;
@@ -115,32 +84,36 @@ exports.creerPreinscriptionEtablissement = async (req, res) => {
       },
     });
 
-    let pdfResult = null;
-    try {
-      pdfResult = await pdfService.genererFichePreinscriptionEtablissement(construirePayloadPdf(preinscription));
-      await emailService.envoyerEmailPreinscriptionEtablissement({
-        userId: preinscription.candidat.id,
-        candidatId: preinscription.candidat.id,
-        candidatEmail: preinscription.candidat.email,
-        candidatNom: preinscription.candidat.nom,
-        candidatPrenom: preinscription.candidat.prenom,
-        etablissementNom: preinscription.etablissement.nom,
-        filiereNom: preinscription.filiere.nom,
-        anneeAcademique: preinscription.anneeAcademique,
-        niveau: preinscription.niveau,
-        numeroPreinscription: preinscription.numeroPreinscription,
-      }, pdfResult.filePath);
+    runInBackground(async () => {
+      let pdfResult = null;
+      try {
+        pdfResult = await pdfService.genererFichePreinscriptionEtablissement(construirePayloadPdf(preinscription));
+        await emailService.envoyerEmailPreinscriptionEtablissement({
+          userId: preinscription.candidat.id,
+          candidatId: preinscription.candidat.id,
+          candidatEmail: preinscription.candidat.email,
+          candidatNom: preinscription.candidat.nom,
+          candidatPrenom: preinscription.candidat.prenom,
+          etablissementNom: preinscription.etablissement.nom,
+          filiereNom: preinscription.filiere.nom,
+          anneeAcademique: preinscription.anneeAcademique,
+          niveau: preinscription.niveau,
+          numeroPreinscription: preinscription.numeroPreinscription,
+        }, pdfResult.filePath);
 
-      // Le worker email lit la pièce jointe asynchronement.
-      setTimeout(() => {
-        pdfService.nettoyerPDF(pdfResult.filePath);
-      }, 10 * 60 * 1000);
-    } catch (emailErr) {
-      console.error('Erreur envoi fiche pre-inscription etablissement:', emailErr);
-    }
+        setTimeout(() => {
+          pdfService.nettoyerPDF(pdfResult.filePath);
+        }, 10 * 60 * 1000);
+      } catch (emailErr) {
+        console.error('Erreur envoi fiche pre-inscription etablissement:', emailErr);
+        if (pdfResult?.filePath) {
+          pdfService.nettoyerPDF(pdfResult.filePath);
+        }
+      }
+    }, 'preinscription-etablissement-email');
 
     return res.status(201).json({
-      message: 'Pre-inscription enregistree. La fiche a ete envoyee par email.',
+      message: 'Pre-inscription enregistree. La fiche sera envoyee par email sous peu.',
       preinscription,
     });
   } catch (error) {
@@ -177,10 +150,10 @@ exports.getMesPreinscriptionsEtablissement = async (req, res) => {
 
 exports.getDemandesEtablissement = async (req, res) => {
   try {
-    const etablissementId = getAdminEtablissementId(req);
+    const etablissementId = req.user?.id;
     const { statut } = req.query;
     if (!etablissementId) {
-      return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
+      return res.status(401).json({ error: 'Utilisateur non authentifie' });
     }
 
     const where = {
@@ -197,9 +170,6 @@ exports.getDemandesEtablissement = async (req, res) => {
         filiere: {
           select: { id: true, nom: true, code: true },
         },
-        applicationSource: {
-          select: { id: true, numeroApplication: true },
-        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -211,141 +181,14 @@ exports.getDemandesEtablissement = async (req, res) => {
   }
 };
 
-exports.ajouterDocumentComplementaire = async (req, res) => {
-  try {
-    const candidatId = req.user?.id;
-    const { id } = req.params;
-
-    if (!candidatId) {
-      return res.status(401).json({ error: 'Utilisateur non authentifie' });
-    }
-    if (!req.file) {
-      return res.status(400).json({ error: 'Aucun fichier fourni' });
-    }
-
-    const existing = await prisma.preinscriptionEtablissement.findUnique({
-      where: { id },
-    });
-
-    if (!existing) {
-      return res.status(404).json({ error: 'Pre-inscription non trouvee' });
-    }
-    if (existing.candidatId !== candidatId) {
-      return res.status(403).json({ error: 'Acces refuse' });
-    }
-    if (existing.statut !== 'SOUS_RESERVE') {
-      return res.status(400).json({ error: 'Des documents complementaires ne peuvent etre ajoutes que pour un dossier sous reserve' });
-    }
-
-    const ext = req.file.originalname.split('.').pop();
-    const storagePath = `preinscriptions/${id}/complements/${newDocumentId()}-${Date.now()}.${ext}`;
-    const url = await uploadBufferToSupabase(req.file.buffer, storagePath, req.file.mimetype);
-
-    const piece = {
-      id: newDocumentId(),
-      nom: req.file.originalname,
-      url,
-      mimeType: req.file.mimetype,
-      uploadedAt: new Date().toISOString(),
-    };
-
-    const preinscription = await prisma.preinscriptionEtablissement.update({
-      where: { id },
-      data: {
-        documentsCompl: appendDocument(existing.documentsCompl, piece),
-        historiqueStatuts: appendHistorique(existing.historiqueStatuts, {
-          statut: 'SOUS_RESERVE',
-          date: new Date().toISOString(),
-          commentaire: `Document complementaire ajoute : ${req.file.originalname}`,
-        }),
-      },
-      include: PREINSCRIPTION_INCLUDE,
-    });
-
-    return res.json({
-      message: 'Document ajoute avec succes',
-      preinscription,
-    });
-  } catch (error) {
-    console.error('Erreur ajouterDocumentComplementaire:', error);
-    if (error.message?.includes('Type de fichier')) {
-      return res.status(400).json({ error: error.message });
-    }
-    return res.status(500).json({ error: 'Erreur serveur' });
-  }
-};
-
-exports.resoumettrePreinscription = async (req, res) => {
-  try {
-    const candidatId = req.user?.id;
-    const { id } = req.params;
-
-    if (!candidatId) {
-      return res.status(401).json({ error: 'Utilisateur non authentifie' });
-    }
-
-    const existing = await prisma.preinscriptionEtablissement.findUnique({
-      where: { id },
-      include: PREINSCRIPTION_INCLUDE,
-    });
-
-    if (!existing) {
-      return res.status(404).json({ error: 'Pre-inscription non trouvee' });
-    }
-    if (existing.candidatId !== candidatId) {
-      return res.status(403).json({ error: 'Acces refuse' });
-    }
-    if (existing.statut !== 'SOUS_RESERVE') {
-      return res.status(400).json({ error: 'Seul un dossier sous reserve peut etre resoumis' });
-    }
-    if (!hasDocumentsCompl(existing.documentsCompl)) {
-      return res.status(400).json({ error: 'Au moins un document complementaire doit etre uploade avant la resoumission' });
-    }
-
-    const preinscription = await prisma.preinscriptionEtablissement.update({
-      where: { id },
-      data: {
-        statut: 'EN_ATTENTE',
-        historiqueStatuts: appendHistorique(existing.historiqueStatuts, {
-          statut: 'EN_ATTENTE',
-          date: new Date().toISOString(),
-          commentaire: 'Resoumission candidat',
-        }),
-      },
-      include: PREINSCRIPTION_INCLUDE,
-    });
-
-    await notifierAdminsEtablissement(
-      preinscription.etablissementId,
-      preinscription.etablissement.email,
-      (admin) => emailService.envoyerEmailAdminPreinscriptionResoumise({
-        adminId: admin.id,
-        adminEmail: admin.email,
-        candidatNom: preinscription.candidat.nom,
-        candidatPrenom: preinscription.candidat.prenom,
-        etablissementNom: preinscription.etablissement.nom,
-        numeroPreinscription: preinscription.numeroPreinscription,
-      }),
-    );
-
-    return res.json({
-      message: 'Dossier resoumis avec succes',
-      preinscription,
-    });
-  } catch (error) {
-    console.error('Erreur resoumettrePreinscription:', error);
-    return res.status(500).json({ error: 'Erreur serveur' });
-  }
-};
-
 exports.deciderPreinscriptionEtablissement = async (req, res) => {
   try {
-    const etablissementId = getAdminEtablissementId(req);
+    const etablissementId = req.user?.id;
     const { id } = req.params;
-    const { statut, motifDecision, commentaireAdmin } = req.body;
+    const { statut, motifDecision } = req.body;
 
     if (!etablissementId) {
-      return res.status(403).json({ error: 'Accès réservé aux administrateurs d\'établissement' });
+      return res.status(401).json({ error: 'Utilisateur non authentifie' });
     }
     if (!STATUTS_DECISION.includes(statut)) {
       return res.status(400).json({ error: 'Statut de decision invalide' });
@@ -405,45 +248,27 @@ exports.deciderPreinscriptionEtablissement = async (req, res) => {
       }
     }
 
-    const updateData = {
-      statut,
-      motifDecision: motifDecision || null,
-      decidedAt: new Date(),
-      decidedBy: etablissementId,
-      inscriptionAcadId,
-    };
-
-    if (statut === 'SOUS_RESERVE') {
-      updateData.commentaireAdmin = commentaireAdmin || null;
-      updateData.historiqueStatuts = appendHistorique(existing.historiqueStatuts, {
-        statut: 'SOUS_RESERVE',
-        date: new Date().toISOString(),
-        commentaire: commentaireAdmin || null,
-      });
-    }
-
     const preinscription = await prisma.preinscriptionEtablissement.update({
       where: { id },
-      data: updateData,
-      include: PREINSCRIPTION_INCLUDE,
+      data: {
+        statut,
+        motifDecision: motifDecision || null,
+        decidedAt: new Date(),
+        decidedBy: etablissementId,
+        inscriptionAcadId,
+      },
+      include: {
+        candidat: {
+          select: { id: true, nom: true, prenom: true, email: true },
+        },
+        filiere: {
+          select: { nom: true },
+        },
+        etablissement: {
+          select: { nom: true },
+        },
+      },
     });
-
-    if (statut === 'SOUS_RESERVE') {
-      try {
-        await emailService.envoyerEmailPreinscriptionSousReserveEtablissement({
-          userId: preinscription.candidat.id,
-          candidatId: preinscription.candidat.id,
-          candidatEmail: preinscription.candidat.email,
-          candidatNom: preinscription.candidat.nom,
-          candidatPrenom: preinscription.candidat.prenom,
-          etablissementNom: preinscription.etablissement.nom,
-          numeroPreinscription: preinscription.numeroPreinscription,
-          commentaireAdmin: commentaireAdmin || null,
-        });
-      } catch (emailErr) {
-        console.error('Erreur envoi email sous reserve:', emailErr);
-      }
-    }
 
     return res.json({
       message: 'Decision enregistree avec succes',
@@ -492,8 +317,8 @@ exports.telechargerFichePreinscriptionEtablissement = async (req, res) => {
     }
 
     const isOwnerEtudiant = preinscription.candidatId === userId;
-    const isAdminEtab = adminOwnsEtablissement(req, preinscription.etablissementId);
-    if (!isOwnerEtudiant && !isAdminEtab) {
+    const isOwnerEtablissement = userRole === 'ETABLISSEMENT' && preinscription.etablissementId === userId;
+    if (!isOwnerEtudiant && !isOwnerEtablissement) {
       return res.status(403).json({ error: 'Acces refuse' });
     }
 

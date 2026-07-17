@@ -1,6 +1,7 @@
 const prisma = require('../prisma');
 const { mapDossierInscriptionToInscription } = require('../utils/dossier-inscription-mapper');
 const { envoyerEmailDecisionFinale } = require('../utils/email-decision.helper');
+const { runInBackground } = require('../utils/background-task');
 
 const STATUTS_EN_ATTENTE = [
   'VALIDE_PAR_COMMISSION',
@@ -110,20 +111,23 @@ exports.validerDecision = async (req, res) => {
 
     const inscriptionUpdated = mapDossierInscriptionToInscription(dossierUpdated);
 
-    try {
-      await envoyerEmailDecisionFinale({
-        candidat: inscriptionUpdated.candidat,
-        concours: inscriptionUpdated.concours,
-        inscription: inscriptionUpdated,
-        decision: typeEmail,
-        motif: inscriptionUpdated.commentaireControleur || inscriptionUpdated.commentaireRejet || inscriptionUpdated.commentaireSousReserve,
-      });
-    } catch (emailError) {
-      console.error('Erreur envoi email:', emailError);
-    }
+    runInBackground(
+      () =>
+        envoyerEmailDecisionFinale({
+          candidat: inscriptionUpdated.candidat,
+          concours: inscriptionUpdated.concours,
+          inscription: inscriptionUpdated,
+          decision: typeEmail,
+          motif:
+            inscriptionUpdated.commentaireControleur
+            || inscriptionUpdated.commentaireRejet
+            || inscriptionUpdated.commentaireSousReserve,
+        }),
+      'controleur-decision-email'
+    );
 
     res.json({
-      message: 'Décision validée et email envoyé au candidat',
+      message: 'Décision validée. Un email sera envoyé au candidat.',
       inscription: inscriptionUpdated,
     });
   } catch (error) {

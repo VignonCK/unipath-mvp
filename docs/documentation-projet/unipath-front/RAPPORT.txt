@@ -1,0 +1,300 @@
+================================================================================
+UNIPATH — RAPPORT DU MODULE FRONTEND (unipath-front)
+================================================================================
+Date        : 09/07/2026
+Version     : 0.0.0
+Emplacement : c:\Projet SGBD\unipath-mvp\unipath-front
+================================================================================
+
+1. PRÉSENTATION GÉNÉRALE
+--------------------------------------------------------------------------------
+
+unipath-front est l'interface web (SPA) de la plateforme UniPath. Elle permet
+aux candidats, à la commission, au DGES et aux administrateurs d'établissement
+d'interagir avec le backend unipath-api.
+
+L'application est organisée autour de deux modules métier pour les étudiants :
+  - Module Concours (inscriptions aux concours universitaires MESRS)
+  - Module Parcours académique (établissements privés, campagnes, inscriptions)
+
+État actuel : application React complète, multi-rôles, connectée à l'API locale.
+
+
+2. STACK TECHNIQUE
+--------------------------------------------------------------------------------
+
+  Composant          Technologie
+  -----------------  ----------------------------------------------------------
+  Framework UI       React 19
+  Build / Dev        Vite 8
+  Routing            React Router DOM 7
+  Styles             Tailwind CSS 4 (design system "academic bento / glass")
+  HTTP               fetch natif (centralisé dans services/api.js)
+  Icônes             lucide-react
+  Graphiques         recharts (dashboard DGES)
+  QR Code            qrcode.react (carte candidat)
+  Animation          @lottiefiles/dotlottie-react (page login)
+  Tests E2E          Playwright
+  Déploiement        Vercel (vercel.json), Docker/nginx disponibles
+
+  Port dev           : 5173 (Vite)
+  API cible          : VITE_API_URL → http://localhost:3001/api
+
+
+3. ARCHITECTURE
+--------------------------------------------------------------------------------
+
+  src/main.jsx                 Point d'entrée React
+  src/App.jsx                  Router principal, toutes les routes
+  src/pages/                   Pages par rôle et par module
+  src/components/              Composants réutilisables et layouts
+  src/services/api.js          Couche API (tous les appels backend)
+  src/utils/auth.js            Gestion token JWT, redirections par rôle
+  src/constants/routes.js      Constantes de routes et modules
+  src/index.css                Styles globaux Tailwind
+  e2e/                         Tests Playwright
+
+
+4. STRUCTURE DES PAGES PAR RÔLE
+--------------------------------------------------------------------------------
+
+4.1 Pages publiques
+  /                     Accueil (landing)
+  /login                Connexion + reset password inline
+  /register             Inscription candidat (2 étapes)
+  /reset-password       Réinitialisation mot de passe
+  /auth/confirm         Confirmation email
+
+4.2 Candidat / Étudiant (40+ écrans)
+  Hub :
+    /dashboard          Accueil étudiant (choix module Concours / Parcours)
+    /mon-compte         Profil et dossier personnel
+    /ma-carte           Carte candidat avec QR code
+
+  Module Concours (/concours/*) :
+    /concours                    Accueil concours
+    /concours/ouverts            Liste des concours
+    /concours/ouverts/:id        Détail concours
+    /concours/inscription/:id    Suivi inscription
+    /concours/ouverts/:id/classement  Classement
+
+  Module Parcours (/parcours/*) :
+    /parcours                    Accueil parcours
+    /parcours/etablissements     Établissements privés
+    /parcours/campagnes          Campagnes d'inscription
+    /parcours/dossiers           Demande d'inscription (workflow application)
+    /parcours/mes-inscriptions   Inscriptions académiques
+    /parcours/releve             Relevé de notes
+
+4.3 Commission
+  /commission                      Dashboard dossiers
+  /commission/notes                Saisie des notes
+  /commission/candidat/:id           Détail candidat
+  /examinateur/dossiers              Liste examinateur
+  /examinateur/dossiers/:id          Verdict examinateur
+  /controleur-commission/*           Tableau de bord, arbitrage
+
+4.4 DGES
+  /dashboard-dges                  Statistiques nationales
+  /gestion-concours                CRUD concours
+  /dges-etablissements-admins      Gestion établissements
+
+4.5 Admin établissement
+  /admin-etablissement/campagnes           Campagnes CRUD
+  /admin-etablissement/candidatures        Candidatures reçues
+  /admin-etablissement/preinscriptions     Décisions préinscription
+  /admin-etablissement/validation-quittances Validation quittances
+  /admin-etablissement/etudiants           Liste étudiants
+  /admin-etablissement/etablissement       Profil établissement
+
+
+5. LAYOUTS ET COMPOSANTS CLÉS
+--------------------------------------------------------------------------------
+
+  Layouts :
+    CandidatLayout              Navigation module Concours / Parcours
+    CommissionLayout            Navigation commission
+    DGESLayout                  Navigation DGES
+    AdminEtablissementLayout    Navigation admin établissement
+    ControleurShell             UI examinateur / contrôleur
+    AcademicLayout              Design system (BentoCard, GlassBadge, etc.)
+
+  Composants métier :
+    ProtectedRoute              Garde d'authentification et rôles
+    DossierCompletion           Barre de complétude profil
+    PiecesConfiguration         Configuration pièces concours
+    ChoixCentreComposition      Choix centre de composition
+    CorrectionPiecesSousReserve Corrections sous réserve
+    HistoriqueActions           Journal d'audit dossier
+    NotificationCenter          Cloche notifications
+    DocumentViewer              Prévisualisation PDF
+    ParcoursInscriptionGuide    Guide workflow admin
+
+
+6. AUTHENTIFICATION FRONTEND
+--------------------------------------------------------------------------------
+
+  Mécanisme : JWT stocké dans localStorage (token + user)
+
+  Flux :
+    Inscription → message confirmation email → /login
+    Login → saveAuth() → redirection selon rôle (getDefaultRoute)
+    401 API → déconnexion automatique → /login
+    Reset password → email → /reset-password?token=...
+
+  Redirections par rôle :
+    CANDIDAT/ETUDIANT     → /dashboard
+    COMMISSION            → /commission (ou examinateur/controleur selon sousRole)
+    DGES                  → /dashboard-dges
+    ADMIN_ETABLISSEMENT   → /admin-etablissement/campagnes
+
+  Changement mot de passe obligatoire :
+    mustChangePassword → page dédiée avant accès au dashboard
+
+
+7. INTÉGRATION API
+--------------------------------------------------------------------------------
+
+  Fichier central : src/services/api.js
+
+  Services exposés :
+    authService, candidatService, concoursService, inscriptionService,
+    dossierService, commissionService, dgesService, campagneAdminService,
+    campagneService, etablissementService, applicationService,
+    inscriptionAcadService, preinscriptionEtablissementService,
+    parcoursService, completionService, historyService, etc.
+
+  Pattern :
+    - JSON via request() avec Bearer token automatique
+    - Multipart via fetch séparé pour uploads
+    - PDF via téléchargement blob
+
+  Configuration :
+    VITE_API_URL=http://localhost:3001/api  (dans .env)
+
+
+8. FONCTIONNALITÉS IMPLÉMENTÉES
+--------------------------------------------------------------------------------
+
+8.1 Public
+  [x] Page d'accueil
+  [x] Inscription candidat (ANIP, série, etc.)
+  [x] Connexion multi-rôles
+  [x] Confirmation email
+  [x] Réinitialisation mot de passe
+
+8.2 Candidat — Module Concours
+  [x] Parcourir concours ouverts
+  [x] Détail concours (pièces, dates, frais)
+  [x] Créer inscription et soumettre dossier
+  [x] Upload quittance et pièces complémentaires
+  [x] Choix centre de composition
+  [x] Corrections sous réserve
+  [x] Téléchargement fiche préinscription / convocation
+  [x] Classement
+  [x] Carte candidat QR
+
+8.3 Candidat — Module Parcours
+  [x] Catalogue établissements privés
+  [x] Campagnes d'inscription
+  [x] Workflow candidature multi-étapes (DemandeInscription)
+  [x] Paiement mock frais de dossier
+  [x] Upload documents requis
+  [x] Mes inscriptions académiques
+  [x] Relevé de notes (consultation + PDF)
+
+8.4 Commission
+  [x] Dashboard filtrable par statut
+  [x] Validation / rejet / sous-réserve
+  [x] Détail candidat + historique
+  [x] Saisie notes d'examen
+  [x] Interface examinateur (verdict)
+  [x] Interface contrôleur (arbitrage, divergences)
+
+8.5 DGES
+  [x] Dashboard statistiques (graphiques Recharts)
+  [x] CRUD concours complet
+  [x] Configuration pièces et centres de composition
+  [x] Gestion établissements et admins
+
+8.6 Admin établissement
+  [x] CRUD campagnes (brouillon → publiée → clôturée)
+  [x] Consultation candidatures
+  [x] Décisions préinscriptions
+  [x] Validation quittances bancaires
+  [x] Gestion filières et profil établissement
+  [x] Liste étudiants inscrits
+  [x] Changement mot de passe obligatoire
+
+8.7 Transverse
+  [x] Notifications in-app (cloche)
+  [x] Complétude dossier (%)
+  [x] Design system cohérent
+  [x] Tests E2E Playwright
+
+
+9. FONCTIONNALITÉS PARTIELLES OU MANQUANTES
+--------------------------------------------------------------------------------
+
+  [ ] Refresh token JWT — expiration → reconnexion manuelle
+  [ ] Paiement réel — bouton "Payer (mock)" visible
+  [ ] Inscription établissement — /register-etablissement redirige vers /login
+  [ ] Centres de composition — appels API possiblement obsolètes côté backend
+  [ ] Supabase — fichier supabase.js legacy, non utilisé
+  [ ] react-hook-form — dans package.json mais non utilisé
+  [ ] État global — pas de cache partagé (refetch par page)
+  [ ] Page 404 dédiée — redirection vers / pour routes inconnues
+  [ ] DashboardCandidat.jsx — orphelin, non routé
+  [ ] Carte candidat — URL de vérification hardcodée (vercel.app)
+
+
+10. MODULES MÉTIER (VUE PRODUIT)
+--------------------------------------------------------------------------------
+
+  MODULE 1 — CONCOURS
+    Public cible : candidats au BAC souhaitant s'inscrire aux concours MESRS
+    Parcours     : Découverte → Inscription → Dépôt dossier → Suivi → Convocation
+    Acteurs      : Candidat, Examinateur, Contrôleur, Commission, DGES
+
+  MODULE 2 — PARCOURS ACADÉMIQUE
+    Public cible : étudiants cherchant une inscription en école privée/supérieure
+    Parcours     : Établissements → Candidature → Paiement → Documents →
+                   Préinscription → Inscription → Relevé
+    Acteurs      : Candidat, Admin établissement, Établissement
+
+
+11. TESTS
+--------------------------------------------------------------------------------
+
+  E2E Playwright :
+    npm run test:e2e
+    npm run test:e2e:ui
+
+  Fichiers : e2e/*.spec.js
+
+
+12. DÉPLOIEMENT
+--------------------------------------------------------------------------------
+
+  Développement :
+    npm run dev     → http://localhost:5173
+
+  Production :
+    npm run build   → dossier dist/
+    npm run preview → prévisualisation build
+
+  Vercel : vercel.json avec rewrite SPA
+  Variable requise : VITE_API_URL pointant vers l'API de production
+
+
+13. CONCLUSION
+--------------------------------------------------------------------------------
+
+Le frontend UniPath est une SPA mature couvrant l'ensemble des rôles et des deux
+modules métier. L'interface est entièrement branchée sur l'API JWT locale.
+Les principales dettes techniques concernent les reliquats Supabase, les paiements
+mock et l'absence de refresh token.
+
+================================================================================
+FIN DU RAPPORT — unipath-front
+================================================================================

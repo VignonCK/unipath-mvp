@@ -1,4 +1,5 @@
 const prisma = require('../prisma');
+const { resolveCommuneCode } = require('../constants/communes-benin.constants');
 
 function mapConcoursCentreRow(row) {
   const inscritsCount = row._count?.dossiers ?? 0;
@@ -25,10 +26,12 @@ exports.creerCentre = async (req, res) => {
       return res.status(400).json({ error: 'Nom et ville requis' });
     }
 
+    const villeTrim = ville.trim();
     const centre = await prisma.centreComposition.create({
       data: {
         nom: nom.trim(),
-        ville: ville.trim(),
+        ville: villeTrim,
+        communeCode: resolveCommuneCode(villeTrim),
         adresse: adresse?.trim() || null,
         telephone: telephone?.trim() || null,
       },
@@ -47,7 +50,7 @@ exports.listerCentres = async (req, res) => {
     const where = {};
 
     if (ville?.trim()) {
-      where.ville = { contains: ville.trim(), mode: 'insensitive' };
+      where.ville = { contains: ville.trim() };
     }
     if (actif === 'true') where.actif = true;
     if (actif === 'false') where.actif = false;
@@ -74,11 +77,15 @@ exports.modifierCentre = async (req, res) => {
       return res.status(404).json({ error: 'Centre non trouvé' });
     }
 
+    const nextVille = ville != null ? String(ville).trim() : existing.ville;
     const centre = await prisma.centreComposition.update({
       where: { id },
       data: {
         ...(nom != null && { nom: String(nom).trim() }),
-        ...(ville != null && { ville: String(ville).trim() }),
+        ...(ville != null && {
+          ville: nextVille,
+          communeCode: resolveCommuneCode(nextVille),
+        }),
         ...(adresse !== undefined && { adresse: adresse?.trim() || null }),
         ...(telephone !== undefined && { telephone: telephone?.trim() || null }),
       },
@@ -116,8 +123,8 @@ exports.ajouterCentreAuConcours = async (req, res) => {
     const { concoursId } = req.params;
     const { centreId, anneeAcademique, capacite } = req.body;
 
-    if (!centreId || !anneeAcademique?.trim()) {
-      return res.status(400).json({ error: 'centreId et anneeAcademique requis' });
+    if (!centreId) {
+      return res.status(400).json({ error: 'centreId requis' });
     }
 
     const concours = await prisma.concours.findUnique({ where: { id: concoursId } });
@@ -130,11 +137,15 @@ exports.ajouterCentreAuConcours = async (req, res) => {
       return res.status(404).json({ error: 'Centre non trouvé' });
     }
 
-    const link = await prisma.concourscentreComposition.create({
+    const { defaultAnneeFromLibelle } = require('../utils/centres-composition.helper');
+    const annee = (anneeAcademique && String(anneeAcademique).trim())
+      || defaultAnneeFromLibelle(concours.libelle);
+
+    const link = await prisma.concoursCentreComposition.create({
       data: {
         concoursId,
         centreId,
-        anneeAcademique: anneeAcademique.trim(),
+        anneeAcademique: annee,
         capacite: capacite != null && capacite !== '' ? Number(capacite) : null,
       },
       include: { centre: true },
@@ -154,14 +165,23 @@ exports.retirerCentreDuConcours = async (req, res) => {
   try {
     const { concoursId, concourscentreId } = req.params;
 
-    const link = await prisma.concourscentreComposition.findFirst({
+    const link = await prisma.concoursCentreComposition.findFirst({
       where: { id: concourscentreId, concoursId },
     });
     if (!link) {
       return res.status(404).json({ error: 'Association concours-centre non trouvée' });
     }
 
-    await prisma.concourscentreComposition.delete({ where: { id: concourscentreId } });
+    const dossiersLies = await prisma.dossierInscription.count({
+      where: { concoursCentreId: concourscentreId },
+    });
+    if (dossiersLies > 0) {
+      return res.status(400).json({
+        error: 'Impossible de retirer ce centre : des candidats l\'ont déjà choisi. Désactivez-le plutôt.',
+      });
+    }
+
+    await prisma.concoursCentreComposition.delete({ where: { id: concourscentreId } });
 
     return res.json({ message: 'Centre retiré du concours' });
   } catch (error) {
@@ -175,7 +195,7 @@ exports.modifierConcoursCentre = async (req, res) => {
     const { concoursId, concourscentreId } = req.params;
     const { capacite, estActif } = req.body;
 
-    const link = await prisma.concourscentreComposition.findFirst({
+    const link = await prisma.concoursCentreComposition.findFirst({
       where: { id: concourscentreId, concoursId },
       include: {
         centre: true,
@@ -186,7 +206,7 @@ exports.modifierConcoursCentre = async (req, res) => {
       return res.status(404).json({ error: 'Association concours-centre non trouvée' });
     }
 
-    const updated = await prisma.concourscentreComposition.update({
+    const updated = await prisma.concoursCentreComposition.update({
       where: { id: concourscentreId },
       data: {
         ...(capacite !== undefined && {
@@ -211,7 +231,7 @@ exports.getCentresDuConcours = async (req, res) => {
   try {
     const { concoursId } = req.params;
     const { tous } = req.query;
-    const isDges = req.user?.role === 'DGES';
+    const isDges = req.user?.role === 'DGES' || req.userRole === 'DGES';
 
     const concours = await prisma.concours.findUnique({ where: { id: concoursId } });
     if (!concours) {
@@ -223,7 +243,7 @@ exports.getCentresDuConcours = async (req, res) => {
       where.estActif = true;
     }
 
-    const rows = await prisma.concourscentreComposition.findMany({
+    const rows = await prisma.concoursCentreComposition.findMany({
       where,
       include: {
         centre: true,
@@ -235,6 +255,95 @@ exports.getCentresDuConcours = async (req, res) => {
     return res.json(rows.map(mapConcoursCentreRow));
   } catch (error) {
     console.error('getCentresDuConcours error:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+/**
+ * Remplace la sélection de centres d'un concours (création / édition DGES).
+ * Body: { centreIds: string[], anneeAcademique?: string }
+ */
+exports.setCentresDuConcours = async (req, res) => {
+  try {
+    const { concoursId } = req.params;
+    const { centreIds, anneeAcademique } = req.body;
+
+    if (!Array.isArray(centreIds)) {
+      return res.status(400).json({ error: 'centreIds (tableau) requis' });
+    }
+
+    const concours = await prisma.concours.findUnique({ where: { id: concoursId } });
+    if (!concours) {
+      return res.status(404).json({ error: 'Concours non trouvé' });
+    }
+
+    const { defaultAnneeFromLibelle } = require('../utils/centres-composition.helper');
+    const annee = (anneeAcademique && String(anneeAcademique).trim())
+      || defaultAnneeFromLibelle(concours.libelle);
+
+    const uniqueIds = [...new Set(centreIds.filter(Boolean))];
+
+    if (uniqueIds.length > 0) {
+      const found = await prisma.centreComposition.count({
+        where: { id: { in: uniqueIds }, actif: true },
+      });
+      if (found !== uniqueIds.length) {
+        return res.status(400).json({ error: 'Un ou plusieurs centres sont invalides ou inactifs' });
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const existants = await tx.concoursCentreComposition.findMany({
+        where: { concoursId },
+        include: { _count: { select: { dossiers: true } } },
+      });
+
+      const toKeep = new Set();
+      for (const link of existants) {
+        if (uniqueIds.includes(link.centreId)) {
+          toKeep.add(link.centreId);
+          if (!link.estActif) {
+            await tx.concoursCentreComposition.update({
+              where: { id: link.id },
+              data: { estActif: true },
+            });
+          }
+        } else if (link._count.dossiers > 0) {
+          await tx.concoursCentreComposition.update({
+            where: { id: link.id },
+            data: { estActif: false },
+          });
+        } else {
+          await tx.concoursCentreComposition.delete({ where: { id: link.id } });
+        }
+      }
+
+      for (const centreId of uniqueIds) {
+        if (toKeep.has(centreId)) continue;
+        const already = existants.find((l) => l.centreId === centreId);
+        if (already) continue;
+        await tx.concoursCentreComposition.create({
+          data: {
+            concoursId,
+            centreId,
+            anneeAcademique: annee,
+          },
+        });
+      }
+    });
+
+    const rows = await prisma.concoursCentreComposition.findMany({
+      where: { concoursId },
+      include: {
+        centre: true,
+        _count: { select: { dossiers: true } },
+      },
+      orderBy: [{ centre: { ville: 'asc' } }, { centre: { nom: 'asc' } }],
+    });
+
+    return res.json(rows.map(mapConcoursCentreRow));
+  } catch (error) {
+    console.error('setCentresDuConcours error:', error);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 };

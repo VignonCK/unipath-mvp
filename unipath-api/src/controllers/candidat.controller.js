@@ -1,7 +1,9 @@
 // src/controllers/candidat.controller.js
 const prisma = require('../prisma');
-const { DOSSIER_CENTRE_INCLUDE, flattenCentreChoisi, concoursHasCentres } = require('../utils/centres-composition.helper');
-const { mapCommentairesFromDossier } = require('../utils/dossier-inscription-mapper');
+const {
+  DOSSIER_CENTRE_INCLUDE,
+  flattenCentreChoisi,
+} = require('../utils/centres-composition.helper');
 
 exports.getProfil = async (req, res) => {
   try {
@@ -23,7 +25,6 @@ exports.getProfil = async (req, res) => {
         role: true,
         createdAt: true,
         updatedAt: true,
-        // Ne pas exposer emailConfirme
         inscriptions: {
           include: {
             concours: {
@@ -31,13 +32,10 @@ exports.getProfil = async (req, res) => {
                 centresActifs: {
                   where: { estActif: true },
                   select: { id: true },
-                  take: 1,
                 },
               },
             },
-            dossierInscription: {
-              include: DOSSIER_CENTRE_INCLUDE,
-            },
+            dossierInscription: { include: DOSSIER_CENTRE_INCLUDE },
           },
         },
         dossier: true,
@@ -51,19 +49,17 @@ exports.getProfil = async (req, res) => {
       concours: ins.concours
         ? {
             ...ins.concours,
-            hasCentresActifs: (ins.concours.centresActifs?.length > 0)
-              || concoursHasCentres(ins.concours.centresComposition),
+            hasCentresActifs: (ins.concours.centresActifs?.length || 0) > 0,
             centresActifs: undefined,
           }
         : ins.concours,
       statut: ins.dossierInscription?.statut ?? 'EN_ATTENTE',
-      ...mapCommentairesFromDossier(ins.dossierInscription),
+      commentaireRejet: ins.dossierInscription?.commentaireRejet,
+      commentaireSousReserve: ins.dossierInscription?.commentaireSousReserve,
       quittanceUrl: ins.dossierInscription?.quittanceUrl ?? null,
       piecesExtras: ins.dossierInscription?.piecesExtras ?? {},
-      documentsCompl: ins.dossierInscription?.documentsCompl ?? null,
-      centreChoisi: flattenCentreChoisi(ins.dossierInscription),
-      centreCompositionChoisi: ins.dossierInscription?.centreCompositionChoisi ?? null,
       dossierInscriptionId: ins.dossierInscription?.id ?? null,
+      centreChoisi: flattenCentreChoisi(ins.dossierInscription),
     }));
 
     res.json({

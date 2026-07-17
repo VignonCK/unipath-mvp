@@ -1,24 +1,53 @@
 /**
- * Seed des établissements publics organisateurs de concours + liaison Concours.etablissementId
+ * Synchronise les établissements publics organisateurs de concours.
  * Usage: npm run seed:etablissements-publics
  */
-
 require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
 const ETABLISSEMENTS_PUBLICS = [
-  { nom: 'EPAC', ville: 'Abomey-Calavi', adresse: "Université d'Abomey-Calavi" },
-  { nom: 'INMeS', ville: 'Cotonou', adresse: 'Institut National Médico-Sanitaire' },
-  { nom: 'FAST', ville: 'Abomey-Calavi', adresse: 'Faculté des Sciences et Techniques' },
+  { nom: 'ANAPA', ville: 'Cotonou', adresse: "Agence Nationale de Promotion de l'Architecture" },
   { nom: 'ENAM', ville: 'Cotonou', adresse: "École Nationale d'Administration et de Magistrature" },
-  { nom: 'FADESP', ville: 'Abomey-Calavi', adresse: 'Faculté de Droit et de Sciences Politiques' },
-  { nom: 'FLASH', ville: 'Abomey-Calavi', adresse: 'Faculté des Lettres, Arts et Sciences Humaines' },
-  { nom: 'FSEA', ville: 'Abomey-Calavi', adresse: 'Faculté des Sciences Agronomiques' },
-  { nom: 'IFSIO', ville: 'Cotonou', adresse: "Institut de Formation Sociale et d'Ingénierie Organisationnelle" },
-  { nom: 'FSS', ville: 'Cotonou', adresse: 'Faculté des Sciences de la Santé' },
   { nom: 'ENEAM', ville: 'Cotonou', adresse: "École Nationale d'Économie Appliquée et de Management" },
+  { nom: 'ENSET', ville: 'Lokossa', adresse: "École Nationale Supérieure de l'Enseignement Technique" },
+  { nom: 'ENSGTI', ville: 'Abomey', adresse: 'École Nationale Supérieure de Génie des Technologies Industrielles' },
+  { nom: 'ENS Natitingou', ville: 'Natitingou', adresse: 'École Normale Supérieure de Natitingou' },
+  { nom: 'ENS Porto-Novo', ville: 'Porto-Novo', adresse: 'École Normale Supérieure de Porto-Novo' },
+  { nom: 'ENSPD', ville: 'Parakou', adresse: 'École Nationale de la Statistique, de la Planification et de la Démographie' },
+  { nom: 'ENSTIC', ville: 'Abomey-Calavi', adresse: "École Nationale des Sciences et Techniques de l'Information et de la Communication" },
+  { nom: 'EPAC', ville: 'Abomey-Calavi', adresse: "École Polytechnique d'Abomey-Calavi" },
+  { nom: 'ESMA', ville: 'Ketou', adresse: 'École Supérieure des Métiers de l’Agriculture' },
+  { nom: 'FADESP', ville: 'Abomey-Calavi', adresse: 'Faculté de Droit et de Sciences Politiques' },
+  { nom: 'FAST', ville: 'Abomey-Calavi', adresse: 'Faculté des Sciences et Techniques' },
+  { nom: 'FLASH', ville: 'Abomey-Calavi', adresse: 'Faculté des Lettres, Arts et Sciences Humaines' },
+  { nom: 'FSA', ville: 'Abomey-Calavi', adresse: 'Faculté des Sciences Agronomiques' },
+  { nom: 'FSEA', ville: 'Abomey-Calavi', adresse: 'Faculté des Sciences Économiques et de Gestion' },
+  { nom: 'FSS', ville: 'Cotonou', adresse: 'Faculté des Sciences de la Santé' },
+  { nom: 'IFRI', ville: 'Abomey-Calavi', adresse: 'Institut de Formation et de Recherche en Informatique' },
+  { nom: 'IFSIO', ville: 'Parakou', adresse: 'Institut de Formation en Soins Infirmiers et Obstétricaux' },
+  { nom: 'INEPS', ville: 'Porto-Novo', adresse: "Institut National de l'Éducation Physique et Sportive" },
+  { nom: 'INMeS', ville: 'Cotonou', adresse: 'Institut National Médico-Sanitaire' },
+  { nom: 'INSPEI', ville: 'Abomey', adresse: "Institut National Supérieur des Classes Préparatoires aux Études d'Ingénieurs" },
+  { nom: 'IPEN', ville: 'Cotonou', adresse: "Institut de Perfectionnement en Éducation et Nutrition" },
+  { nom: 'IUEP-MA', ville: 'Ketou', adresse: "Institut Universitaire d'Enseignement Professionnel aux Métiers de l'Agriculture" },
+  { nom: 'IUT-Lokossa', ville: 'Lokossa', adresse: 'Institut Universitaire de Technologie de Lokossa' },
+];
+
+const INVALID_PUBLIC_NOMS = [
+  'Abomey',
+  'Abomey-Calavi',
+  'Cotonou',
+  'Ketou',
+  'Lokossa',
+  'Natitingou',
+  'Parakou',
+  'Porto-Novo',
+  'Faculté des Sciences de la Santé',
+  'Institut National Medico',
+  "Institut Universitaire d'Enseignement Professionnel aux Metiers de l'Agriculture (IUEP",
+  'Institut Universitaire de Technologie de Lokossa (IUT',
 ];
 
 function normalizeText(value = '') {
@@ -37,47 +66,31 @@ function matchesEtablissementNom(concoursEtablissement, seedNom) {
   const hay = normalizeText(concoursEtablissement);
   const needle = normalizeText(seedNom);
   if (!hay || !needle) return false;
-
   const escaped = escapeRegex(needle);
-  const boundaryPattern = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i');
-  const parenthesisPattern = new RegExp(`\\(${escaped}\\)`, 'i');
-
-  return boundaryPattern.test(hay) || parenthesisPattern.test(hay) || hay.includes(needle);
+  return (
+    new RegExp(`\\(${escaped}\\)`, 'i').test(hay)
+    || new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(hay)
+    || hay === needle
+  );
 }
 
-function findMatchingEtablissement(concoursEtablissement, etablissementsByNom) {
-  const orderedNoms = [...etablissementsByNom.keys()].sort((a, b) => b.length - a.length);
-
-  for (const nom of orderedNoms) {
-    if (matchesEtablissementNom(concoursEtablissement, nom)) {
-      return etablissementsByNom.get(nom);
-    }
-  }
-
-  return null;
-}
-
-async function upsertEtablissementPublic(data) {
+async function upsertPublic(data) {
   const existing = await prisma.etablissement.findFirst({
-    where: {
-      nom: data.nom,
-      type: 'PUBLIC',
-    },
+    where: { nom: data.nom, type: 'PUBLIC' },
   });
 
   if (existing) {
-    const updated = await prisma.etablissement.update({
+    await prisma.etablissement.update({
       where: { id: existing.id },
       data: {
         ville: data.ville,
         adresse: data.adresse,
       },
     });
-    console.log(`  [existant] ${data.nom} (${updated.id}) — ville/adresse mises à jour si besoin`);
-    return updated;
+    return { created: false };
   }
 
-  const created = await prisma.etablissement.create({
+  await prisma.etablissement.create({
     data: {
       nom: data.nom,
       type: 'PUBLIC',
@@ -85,96 +98,51 @@ async function upsertEtablissementPublic(data) {
       adresse: data.adresse,
     },
   });
-  console.log(`  [créé]     ${data.nom} (${created.id})`);
-  return created;
-}
-
-async function seedEtablissementsPublics() {
-  console.log('\n=== Établissements publics (upsert) ===\n');
-
-  const etablissementsByNom = new Map();
-
-  for (const item of ETABLISSEMENTS_PUBLICS) {
-    const etablissement = await upsertEtablissementPublic(item);
-    etablissementsByNom.set(item.nom, etablissement);
-  }
-
-  return etablissementsByNom;
-}
-
-async function linkConcoursToEtablissements(etablissementsByNom) {
-  console.log('\n=== Liaison Concours → Etablissement ===\n');
-
-  const concoursList = await prisma.concours.findMany({
-    where: {
-      etablissementId: null,
-      etablissement: { not: null },
-    },
-    select: {
-      id: true,
-      libelle: true,
-      etablissement: true,
-    },
-  });
-
-  const matched = [];
-  const unmatched = [];
-
-  for (const concours of concoursList) {
-    const etablissement = findMatchingEtablissement(concours.etablissement, etablissementsByNom);
-
-    if (!etablissement) {
-      unmatched.push(concours);
-      continue;
-    }
-
-    await prisma.concours.update({
-      where: { id: concours.id },
-      data: { etablissementId: etablissement.id },
-    });
-
-    matched.push({
-      concoursId: concours.id,
-      libelle: concours.libelle,
-      etablissementTexte: concours.etablissement,
-      etablissementNom: etablissement.nom,
-    });
-  }
-
-  if (matched.length > 0) {
-    console.log(`Concours matchés (${matched.length}) :`);
-    matched.forEach((item) => {
-      console.log(`  ✓ ${item.libelle} → ${item.etablissementNom}`);
-      console.log(`    texte: ${item.etablissementTexte}`);
-    });
-  } else {
-    console.log('Aucun concours matché.');
-  }
-
-  if (unmatched.length > 0) {
-    console.log(`\nConcours non matchés (${unmatched.length}) :`);
-    unmatched.forEach((item) => {
-      console.log(`  ✗ ${item.libelle}`);
-      console.log(`    texte: ${item.etablissement}`);
-    });
-  } else {
-    console.log('\nTous les concours éligibles ont été matchés.');
-  }
-
-  return { matched, unmatched };
+  return { created: true };
 }
 
 async function main() {
-  console.log('Seed établissements publics organisateurs de concours...');
+  console.log('Synchronisation des établissements publics…\n');
 
-  const etablissementsByNom = await seedEtablissementsPublics();
-  const { matched, unmatched } = await linkConcoursToEtablissements(etablissementsByNom);
+  const deleted = await prisma.etablissement.deleteMany({
+    where: { type: 'PUBLIC', nom: { in: INVALID_PUBLIC_NOMS } },
+  });
+  if (deleted.count > 0) {
+    console.log(`Nettoyage : ${deleted.count} entrée(s) incorrecte(s) supprimée(s)\n`);
+  }
 
+  let created = 0;
+  let updated = 0;
+  for (const item of ETABLISSEMENTS_PUBLICS) {
+    const result = await upsertPublic(item);
+    if (result.created) {
+      created += 1;
+      console.log(`  [créé]     ${item.nom}`);
+    } else {
+      updated += 1;
+      console.log(`  [existant] ${item.nom}`);
+    }
+  }
+
+  const concours = await prisma.concours.findMany({
+    select: { libelle: true, etablissement: true },
+  });
+  const unmatched = concours.filter(
+    (c) => !ETABLISSEMENTS_PUBLICS.some((e) => matchesEtablissementNom(c.etablissement, e.nom))
+  );
+
+  const totalPublic = await prisma.etablissement.count({ where: { type: 'PUBLIC' } });
   console.log('\n=== Résumé ===');
-  console.log(`Établissements publics traités : ${ETABLISSEMENTS_PUBLICS.length}`);
-  console.log(`Concours liés             : ${matched.length}`);
-  console.log(`Concours non matchés      : ${unmatched.length}`);
-  console.log('');
+  console.log(`Référentiel               : ${ETABLISSEMENTS_PUBLICS.length}`);
+  console.log(`Créés                     : ${created}`);
+  console.log(`Mis à jour                : ${updated}`);
+  console.log(`Total PUBLIC en base      : ${totalPublic}`);
+  if (unmatched.length > 0) {
+    console.log(`\nConcours sans établissement référencé (${unmatched.length}) :`);
+    unmatched.forEach((c) => console.log(`  - ${c.libelle} | ${c.etablissement}`));
+  } else {
+    console.log('\nTous les concours correspondent à un établissement public du référentiel.');
+  }
 }
 
 main()

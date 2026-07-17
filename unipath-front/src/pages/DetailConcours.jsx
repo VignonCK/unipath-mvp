@@ -8,7 +8,7 @@ import ChoixCentreComposition, { concoursHasCentres } from '../components/concou
 import { ROUTES } from '../constants/routes';
 import { normalizePieceNom } from '../constants/pieces';
 
-const STATUTS_CHOIX_CENTRE = ['VALIDE_PAR_COMMISSION', 'VALIDE'];
+const STATUTS_CHOIX_CENTRE = ['EN_ATTENTE'];
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -223,6 +223,7 @@ export default function DetailConcours() {
   const [telechargement, setTelechargement] = useState({ fiche: false, convocation: false });
   const [centreBusy, setCentreBusy] = useState(false);
   const [centresRelational, setCentresRelational] = useState([]);
+  const [centreChoisiId, setCentreChoisiId] = useState('');
 
   const resolveInscriptionId = () => inscriptionId || getInscriptionExistante(candidat, id)?.id;
 
@@ -324,9 +325,15 @@ export default function DetailConcours() {
       && serieCandidatAcceptee(candidat, concours)
       && !depotEstFerme(concours)
       && !depotPasEncoreOuvert(concours)
-      && !profilIncomplet(candidat);
+      && !profilIncomplet(candidat)
+      && (!concoursHasCentres(centresRelational) || Boolean(centreChoisiId));
 
-    if (!pret) return;
+    if (!pret) {
+      if (concoursHasCentres(centresRelational) && !centreChoisiId) {
+        setErreur('Veuillez choisir un centre de composition avant de soumettre.');
+      }
+      return;
+    }
 
     setSoumissionEnCours(true);
     setErreur(null);
@@ -334,6 +341,9 @@ export default function DetailConcours() {
     try {
       const formData = new FormData();
       formData.append('concoursId', concours.id);
+      if (centreChoisiId) {
+        formData.append('concoursCentreId', centreChoisiId);
+      }
 
       Object.entries(fichiersLocaux).forEach(([pieceId, file]) => {
         formData.append(`piece_${pieceId}`, file);
@@ -523,6 +533,12 @@ export default function DetailConcours() {
                 </button>
               )}
             </div>
+            {inscriptionExistante.centreChoisi?.nom && (
+              <p className='text-xs text-green-800'>
+                Centre de composition : {inscriptionExistante.centreChoisi.nom}
+                {inscriptionExistante.centreChoisi.ville ? ` — ${inscriptionExistante.centreChoisi.ville}` : ''}
+              </p>
+            )}
             {STATUTS_CHOIX_CENTRE.includes(inscriptionExistante.statut)
               && concoursHasCentres(centresRelational) && (
               <ChoixCentreComposition
@@ -531,6 +547,18 @@ export default function DetailConcours() {
                 statut={inscriptionExistante.statut}
                 onSave={handleSaveCentre}
                 busy={centreBusy}
+              />
+            )}
+            {!STATUTS_CHOIX_CENTRE.includes(inscriptionExistante.statut)
+              && concoursHasCentres(centresRelational)
+              && inscriptionExistante.centreChoisi?.nom && (
+              <ChoixCentreComposition
+                centresRelational={centresRelational}
+                centreChoisi={inscriptionExistante.centreChoisi}
+                statut={inscriptionExistante.statut}
+                onSave={handleSaveCentre}
+                busy={centreBusy}
+                readOnly
               />
             )}
           </div>
@@ -771,6 +799,33 @@ export default function DetailConcours() {
           {depotFerme && !dossierSoumis && (
             <div className='bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-800'>
               La période de dépôt est terminée.
+            </div>
+          )}
+
+          {!dossierSoumis && concoursHasCentres(centresRelational) && (
+            <div className='rounded-xl border border-blue-200 bg-blue-50/60 p-4 space-y-2'>
+              <p className='font-semibold text-blue-900 text-sm'>Centre de composition *</p>
+              <p className='text-xs text-blue-800'>
+                Choisissez le lieu où vous composerez pour ce concours.
+              </p>
+              <select
+                value={centreChoisiId}
+                onChange={(e) => setCentreChoisiId(e.target.value)}
+                className='w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white'
+              >
+                <option value=''>— Sélectionner un centre —</option>
+                {centresRelational.map((item) => (
+                  <option
+                    key={item.id}
+                    value={item.id}
+                    disabled={item.capacite != null && item.placesRestantes <= 0}
+                  >
+                    {item.centre?.nom}
+                    {item.centre?.ville ? ` — ${item.centre.ville}` : ''}
+                    {item.capacite != null ? ` (${item.placesRestantes} place(s))` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 

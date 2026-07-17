@@ -1,4 +1,8 @@
-const STATUTS_CHOIX_CENTRE = ['VALIDE_PAR_COMMISSION', 'VALIDE'];
+/**
+ * Helpers centres de composition (catalogue relationnel + choix candidat).
+ */
+
+const STATUTS_CHOIX_CENTRE_MODIFIABLE = ['EN_ATTENTE'];
 
 function normalizeCentresComposition(raw) {
   if (raw == null) return null;
@@ -30,76 +34,13 @@ function normalizeCentresComposition(raw) {
   return { valid: true, data: normalized.centres.length > 0 ? normalized : null };
 }
 
-function validateCentresComposition(raw) {
-  if (raw == null || raw === '') {
-    return { valid: true, data: null };
-  }
-
-  const normalized = normalizeCentresComposition(raw);
-  if (!normalized.valid) return normalized;
-
-  const hasInput = Array.isArray(raw.centres) && raw.centres.some((c) =>
-    String(c?.ville || '').trim()
-    || (Array.isArray(c?.lieux) && c.lieux.some((l) => String(l?.nom || '').trim()))
-  );
-
-  if (!normalized.data && hasInput) {
-    return { valid: false, error: 'Chaque centre doit avoir une ville et au moins un lieu avec un nom' };
-  }
-
-  return { valid: true, data: normalized.data };
-}
-
-function concoursHasCentres(centresComposition) {
+function concoursHasCentresJson(centresComposition) {
   return Array.isArray(centresComposition?.centres) && centresComposition.centres.length > 0;
 }
 
-function resolveChoixCentre(centresComposition, { ville, nom }) {
-  const villeNorm = String(ville || '').trim().toLowerCase();
-  const nomNorm = String(nom || '').trim().toLowerCase();
-  if (!villeNorm || !nomNorm) {
-    return { valid: false, error: 'Ville et lieu de composition requis' };
-  }
-
-  const centres = centresComposition?.centres;
-  if (!Array.isArray(centres)) {
-    return { valid: false, error: 'Aucun centre de composition configuré pour ce concours' };
-  }
-
-  for (const centre of centres) {
-    if (String(centre.ville || '').trim().toLowerCase() !== villeNorm) continue;
-    for (const lieu of centre.lieux || []) {
-      if (String(lieu.nom || '').trim().toLowerCase() === nomNorm) {
-        return {
-          valid: true,
-          data: {
-            ville: centre.ville.trim(),
-            nom: lieu.nom.trim(),
-            adresse: (lieu.adresse || '').trim(),
-          },
-        };
-      }
-    }
-  }
-
-  return { valid: false, error: 'Centre de composition invalide pour ce concours' };
-}
-
-function formatCentreAffiche(centreChoisi) {
-  if (!centreChoisi?.ville || !centreChoisi?.nom) return null;
-  const parts = [centreChoisi.nom, centreChoisi.ville];
-  if (centreChoisi.adresse) parts.push(centreChoisi.adresse);
-  return parts.join(' — ');
-}
-
-function peutChoisirCentre(statut, centreDejaChoisi = false) {
-  if (statut === 'VALIDE_PAR_COMMISSION') {
-    return true;
-  }
-  if (statut === 'VALIDE') {
-    return !centreDejaChoisi;
-  }
-  return false;
+/** Choix / modification autorisés tant que le dossier est EN_ATTENTE. */
+function peutChoisirCentre(statut) {
+  return STATUTS_CHOIX_CENTRE_MODIFIABLE.includes(statut);
 }
 
 const DOSSIER_CENTRE_INCLUDE = {
@@ -110,10 +51,7 @@ const DOSSIER_CENTRE_INCLUDE = {
 
 function dossierCentreDejaChoisi(dossierInscription) {
   if (!dossierInscription) return false;
-  return Boolean(
-    dossierInscription.concoursCentreId
-    || dossierInscription.centreCompositionChoisi?.nom,
-  );
+  return Boolean(dossierInscription.concoursCentreId);
 }
 
 function flattenCentreChoisi(dossierInscription) {
@@ -132,21 +70,12 @@ function flattenCentreChoisi(dossierInscription) {
     };
   }
 
-  const json = dossierInscription.centreCompositionChoisi;
-  if (json?.nom) {
-    return {
-      nom: json.nom,
-      ville: json.ville || null,
-      adresse: json.adresse || null,
-    };
-  }
-
   return null;
 }
 
 function resolveCentreCompositionChoisiForPdf(dossierInscription) {
   const flat = flattenCentreChoisi(dossierInscription);
-  if (!flat?.nom) return dossierInscription?.centreCompositionChoisi || null;
+  if (!flat?.nom) return null;
   return {
     nom: flat.nom,
     ville: flat.ville,
@@ -163,18 +92,17 @@ function enrichDossierInscriptionForPdf(dossierInscription) {
 }
 
 function centreCompositionEstChoisi(dossierInscription) {
-  const enriched = enrichDossierInscriptionForPdf(dossierInscription);
-  return Boolean(enriched?.centreCompositionChoisi?.nom);
+  return Boolean(flattenCentreChoisi(dossierInscription)?.nom || dossierInscription?.concoursCentreId);
 }
 
 async function concoursHasCentresActifs(concoursId, concours, prismaClient) {
-  if (concoursHasCentres(concours?.centresComposition)) {
+  if (concoursHasCentresJson(concours?.centresComposition)) {
     return true;
   }
   if (!concoursId || !prismaClient) {
     return false;
   }
-  const count = await prismaClient.concourscentreComposition.count({
+  const count = await prismaClient.concoursCentreComposition.count({
     where: { concoursId, estActif: true },
   });
   return count > 0;
@@ -191,20 +119,27 @@ async function peutEnvoyerConvocationPdf({ concoursId, concours, dossierInscript
   return { ok: false, hasCentres: true, reason: 'CENTRE_NON_CHOISI' };
 }
 
+function defaultAnneeFromLibelle(libelle) {
+  const match = String(libelle || '').match(/20\d{2}/);
+  if (match) {
+    const y = parseInt(match[0], 10);
+    return `${y - 1}-${y}`;
+  }
+  return '2025-2026';
+}
+
 module.exports = {
-  STATUTS_CHOIX_CENTRE,
+  STATUTS_CHOIX_CENTRE_MODIFIABLE,
   normalizeCentresComposition,
-  validateCentresComposition,
-  concoursHasCentres,
+  concoursHasCentres: concoursHasCentresJson,
   concoursHasCentresActifs,
   centreCompositionEstChoisi,
   peutEnvoyerConvocationPdf,
-  resolveChoixCentre,
-  formatCentreAffiche,
   peutChoisirCentre,
   DOSSIER_CENTRE_INCLUDE,
   dossierCentreDejaChoisi,
   flattenCentreChoisi,
   resolveCentreCompositionChoisiForPdf,
   enrichDossierInscriptionForPdf,
+  defaultAnneeFromLibelle,
 };

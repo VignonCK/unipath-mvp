@@ -1,10 +1,9 @@
 const crypto = require('crypto');
 const prisma = require('../prisma');
-const { supabaseAdmin } = require('../supabase');
+const authService = require('../services/auth.service');
 const emailService = require('../services/email.service');
 const logger = require('../config/logger');
 const { buildFrontendUrl } = require('../utils/url.helper');
-const { buildAdminEtablissementMetadata, TEMP_PASSWORD_VALIDITY_HOURS } = require('../utils/admin-password.helper');
 
 function genererMotDePasseTemporaire() {
   return crypto.randomBytes(9).toString('base64url').slice(0, 12);
@@ -55,25 +54,11 @@ exports.creerAdmin = async (req, res) => {
     }
 
     const motDePasseTemporaire = genererMotDePasseTemporaire();
-
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: emailNormalise,
-      password: motDePasseTemporaire,
-      email_confirm: true,
-      user_metadata: buildAdminEtablissementMetadata(etablissementId),
-    });
-
-    if (authError) {
-      logger.error('[AdminEtablissement] Erreur création compte Supabase', {
-        error: authError.message,
-        etablissementId,
-      });
-      return res.status(400).json({ error: authError.message });
-    }
+    const adminId = crypto.randomUUID();
 
     const admin = await prisma.adminEtablissement.create({
       data: {
-        id: authData.user.id,
+        id: adminId,
         nom: nom.trim(),
         prenom: prenom.trim(),
         email: emailNormalise,
@@ -84,6 +69,14 @@ exports.creerAdmin = async (req, res) => {
       include: {
         etablissement: { select: { id: true, nom: true, ville: true } },
       },
+    });
+
+    await authService.createCompte({
+      email: emailNormalise,
+      password: motDePasseTemporaire,
+      profilType: 'ADMIN_ETABLISSEMENT',
+      profilId: adminId,
+      emailConfirme: true,
     });
 
     const loginUrl = buildFrontendUrl('/login');
@@ -99,10 +92,9 @@ exports.creerAdmin = async (req, res) => {
           <p>Un compte administrateur a été créé pour l'établissement <strong>${etablissement.nom}</strong>.</p>
           <p><strong>Email :</strong> ${emailNormalise}</p>
           <p><strong>Mot de passe temporaire :</strong> ${motDePasseTemporaire}</p>
-          <p><strong>Validité :</strong> ${TEMP_PASSWORD_VALIDITY_HOURS} heures à compter de la réception de cet email.</p>
-          <p>Connectez-vous sur <a href="${loginUrl}">${loginUrl}</a>. Vous devrez <strong>immédiatement définir un mot de passe personnel</strong> (le temporaire ne sera plus utilisable ensuite).</p>
+          <p>Connectez-vous sur <a href="${loginUrl}">${loginUrl}</a> et changez votre mot de passe dès la première connexion.</p>
         `,
-        textBody: `Bonjour ${admin.prenom} ${admin.nom}, votre compte admin UniPath pour ${etablissement.nom} : email ${emailNormalise}, mot de passe temporaire ${motDePasseTemporaire} (valable ${TEMP_PASSWORD_VALIDITY_HOURS}h). Connexion : ${loginUrl}. Vous devrez définir un mot de passe personnel à la première connexion.`,
+        textBody: `Bonjour ${admin.prenom} ${admin.nom}, votre compte admin UniPath pour ${etablissement.nom} : email ${emailNormalise}, mot de passe temporaire ${motDePasseTemporaire}. Connexion : ${loginUrl}`,
       });
     } catch (emailErr) {
       logger.error('[AdminEtablissement] Email credentials non envoyé', {
@@ -185,15 +177,7 @@ exports.supprimerAdmin = async (req, res) => {
     }
 
     await prisma.adminEtablissement.delete({ where: { id: adminId } });
-
-    try {
-      await supabaseAdmin.auth.admin.deleteUser(adminId);
-    } catch (supabaseErr) {
-      logger.error('[AdminEtablissement] Suppression Supabase échouée', {
-        adminId,
-        error: supabaseErr.message,
-      });
-    }
+    await authService.deleteCompte(adminId);
 
     logger.info('[AdminEtablissement] Admin supprimé', {
       adminId,

@@ -9,7 +9,9 @@ jest.mock('../../prisma', () => ({
   $transaction: jest.fn(),
 }));
 
-jest.mock('../../supabase', () => ({ supabaseAdmin: {} }));
+jest.mock('../../services/local-file-storage.service', () => ({
+  saveBuffer: jest.fn().mockResolvedValue('uploads/dossiers-candidats/test.pdf'),
+}));
 
 jest.mock('../../utils/numero-inscription.helper', () => ({
   genererNumeroInscriptionUnique: jest.fn().mockResolvedValue('2026-0001'),

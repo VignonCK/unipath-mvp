@@ -1,10 +1,10 @@
 // src/pages/GestionConcours.jsx
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { concoursService, etablissementService } from '../services/api';
+import { concoursService, etablissementService, centreCompositionService, decService } from '../services/api';
 import { PiecesConfiguration } from '../components/PiecesConfiguration';
 import GestionCentresConcours from '../components/concours/GestionCentresConcours';
-import DGESLayout from '../components/DGESLayout';
+import DECLayout from '../components/DECLayout';
 import { getDefaultPiecesRequises, validatePiecesConfiguration, convertLegacyId, DOSSIER_PERSONNEL_FIELDS } from '../constants/pieces';
 
 function extractPiecesRequises(concours) {
@@ -42,9 +42,47 @@ function getConcoursEtablissementKey(concours) {
   return `libre:${(concours?.etablissement || '').trim().toLowerCase()}`;
 }
 
+function normalizeEtablissementText(value = '') {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+/** Associe un libellé libre Concours.etablissement à un établissement public (sigle). */
+function resolvePublicEtablissement(concours, publicEtablissements = []) {
+  if (concours?.etablissementOrganisateur) return concours.etablissementOrganisateur;
+  if (concours?.etablissementId) {
+    const byId = publicEtablissements.find((e) => e.id === concours.etablissementId);
+    if (byId) return byId;
+  }
+
+  const label = normalizeEtablissementText(concours?.etablissement);
+  if (!label || publicEtablissements.length === 0) return null;
+
+  const ordered = [...publicEtablissements].sort((a, b) => b.nom.length - a.nom.length);
+  for (const etab of ordered) {
+    const nom = normalizeEtablissementText(etab.nom);
+    if (!nom) continue;
+    const escaped = nom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (
+      label === nom
+      || new RegExp(`\\(${escaped}\\)`, 'i').test(label)
+      || new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(label)
+    ) {
+      return etab;
+    }
+  }
+  return null;
+}
+
 export default function GestionConcours() {
   const [concours, setConcours] = useState([]);
   const [publicEtablissements, setPublicEtablissements] = useState([]);
+  const [etudeStatuses, setEtudeStatuses] = useState({});
+  const [annees, setAnnees] = useState([]);
+  const [filterAnnee, setFilterAnnee] = useState('en-cours');
   const [filterEtablissement, setFilterEtablissement] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -65,29 +103,251 @@ export default function GestionConcours() {
     dateFinDepot: '',
     dateDebutComposition: '',
     dateFinComposition: '',
+    centreIds: [],
   });
   const [submitting, setSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
   const [newMatiere, setNewMatiere] = useState('');
+  const [catalogueCentres, setCatalogueCentres] = useState([]);
+  const [numerosModal, setNumerosModal] = useState(null);
+  const [generatingNumeros, setGeneratingNumeros] = useState(false);
+  const [affectationModal, setAffectationModal] = useState(null);
+  const [membresCommission, setMembresCommission] = useState([]);
+  const [affectationForm, setAffectationForm] = useState({ examinateurs: [], controleurs: [] });
+  const [savingAffectation, setSavingAffectation] = useState(false);
+  const [postEtudeBusy, setPostEtudeBusy] = useState(false);
+  const [detailsConcours, setDetailsConcours] = useState(null);
+
+  const anneeQueryParams = () => {
+    if (filterAnnee === 'toutes') return { toutesAnnees: true };
+    if (filterAnnee === 'en-cours') {
+      const enCours = annees.find((a) => a.enCours);
+      return enCours ? { anneeAcademiqueId: enCours.id } : {};
+    }
+    return { anneeAcademiqueId: filterAnnee };
+  };
 
   useEffect(() => {
-    loadConcours();
+    decService
+      .listerAnneesAcademiques()
+      .then((data) => {
+        const list = data.annees || [];
+        setAnnees(list);
+        const enCours = data.anneeEnCours || list.find((a) => a.enCours);
+        if (enCours) setFilterAnnee((prev) => (prev === 'en-cours' ? enCours.id : prev));
+      })
+      .catch(() => setAnnees([]));
     etablissementService
       .getPublics()
       .then((data) => setPublicEtablissements(data.etablissements || []))
       .catch(() => setPublicEtablissements([]));
+    centreCompositionService
+      .lister({ actif: 'true' })
+      .then((data) => setCatalogueCentres(Array.isArray(data) ? data : []))
+      .catch(() => setCatalogueCentres([]));
   }, []);
+
+  useEffect(() => {
+    loadConcours();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterAnnee, annees.length]);
 
   const loadConcours = async () => {
     try {
       setLoading(true);
-      const data = await concoursService.getAll();
-      setConcours(data);
+      const params = anneeQueryParams();
+      const [data, etudeRes] = await Promise.all([
+        concoursService.getAll(params),
+        decService.getEtudeDossiersStatuses(params).catch(() => ({ statuses: {} })),
+      ]);
+      setConcours(Array.isArray(data) ? data : []);
+      setEtudeStatuses(etudeRes.statuses || {});
       setError('');
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLancerEtude = async (c) => {
+    try {
+      const res = await decService.lancerEtude(c.id);
+      setEtudeStatuses((prev) => ({
+        ...prev,
+        [c.id]: res.status,
+      }));
+    } catch (err) {
+      setError(err.message || "Erreur lors du lancement de l'étude");
+    }
+  };
+
+  /** TEMP — tests uniquement : force la fin des inscriptions */
+  const handleCloturerInscriptionsTest = async (c) => {
+    if (!window.confirm(
+      `[TEST] Clôturer immédiatement les inscriptions de « ${c.libelle} » ?\n`
+      + 'La date de fin de dépôt sera avancée à maintenant.\n'
+      + 'Ce bouton est temporaire et sera retiré avant le déploiement.'
+    )) {
+      return;
+    }
+    try {
+      const res = await decService.cloturerInscriptionsTest(c.id);
+      setEtudeStatuses((prev) => ({
+        ...prev,
+        [c.id]: res.status,
+      }));
+      if (res.concours?.dateFinDepot) {
+        setConcours((prev) =>
+          prev.map((item) =>
+            item.id === c.id
+              ? {
+                  ...item,
+                  dateFinDepot: res.concours.dateFinDepot,
+                  dateFin: res.concours.dateFin || res.concours.dateFinDepot,
+                }
+              : item
+          )
+        );
+      }
+    } catch (err) {
+      setError(err.message || 'Erreur lors de la clôture des inscriptions (test)');
+    }
+  };
+
+  const handleCloturerEtude = async (c) => {
+    if (!window.confirm(`Clôturer l'étude des dossiers pour « ${c.libelle} » ? Les examinateurs et contrôleurs n'y auront plus accès.`)) {
+      return;
+    }
+    try {
+      const res = await decService.cloturerEtude(c.id);
+      setEtudeStatuses((prev) => ({
+        ...prev,
+        [c.id]: res.status,
+      }));
+      if (res.alerte?.incomplete) {
+        window.alert(
+          `Attention : ${res.alerte.dossiersNonEtudies} dossier(s) sur ${res.alerte.totalDossiers} `
+          + `n'ont pas encore été examinés pour « ${c.libelle} ».\n\n`
+          + 'Une notification a été envoyée à la DEC. Vous pourrez relancer l\'étude plus tard.'
+        );
+      }
+    } catch (err) {
+      setError(err.message || 'Erreur lors de la clôture');
+    }
+  };
+
+  const handleGenererNumerosTable = async (c) => {
+    if (!window.confirm(
+      `Générer les numéros de table pour les retenus de « ${c.libelle} » ?\n`
+      + 'Format : AA + code commune + code concours + rang alpha par centre.\n'
+      + 'Les numéros déjà attribués pour ce concours seront recalculés.'
+    )) {
+      return;
+    }
+    setGeneratingNumeros(true);
+    setError('');
+    try {
+      const res = await decService.genererNumerosTable(c.id, true);
+      setNumerosModal(res);
+      if (res?.concours?.code) {
+        setConcours((prev) =>
+          prev.map((item) => (item.id === c.id ? { ...item, code: res.concours.code } : item))
+        );
+        setDetailsConcours((prev) =>
+          prev && prev.id === c.id ? { ...prev, code: res.concours.code } : prev
+        );
+      }
+    } catch (err) {
+      setError(err.message || 'Erreur lors de la génération des numéros de table');
+    } finally {
+      setGeneratingNumeros(false);
+    }
+  };
+
+  const openAffectationModal = async (c) => {
+    setError('');
+    try {
+      const [membres, aff] = await Promise.all([
+        decService.listerMembresCommission(),
+        decService.getAffectationsConcours(c.id),
+      ]);
+      setMembresCommission(Array.isArray(membres) ? membres : []);
+      setAffectationForm({
+        examinateurs: (aff.examinateurs || []).map((m) => m.id),
+        controleurs: (aff.controleurs || []).map((m) => m.id),
+      });
+      setAffectationModal(c);
+    } catch (err) {
+      setError(err.message || 'Impossible de charger les affectations');
+    }
+  };
+
+  const toggleAffectation = (role, membreId) => {
+    setAffectationForm((prev) => {
+      const key = role === 'EXAMINATEUR' ? 'examinateurs' : 'controleurs';
+      const otherKey = role === 'EXAMINATEUR' ? 'controleurs' : 'examinateurs';
+      const selected = new Set(prev[key]);
+      const other = new Set(prev[otherKey]);
+
+      if (selected.has(membreId)) {
+        selected.delete(membreId);
+      } else {
+        selected.add(membreId);
+        other.delete(membreId); // un seul rôle par concours
+      }
+
+      return {
+        ...prev,
+        [key]: [...selected],
+        [otherKey]: [...other],
+      };
+    });
+  };
+
+  const saveAffectations = async () => {
+    if (!affectationModal) return;
+    setSavingAffectation(true);
+    setError('');
+    try {
+      await decService.setAffectationsConcours(affectationModal.id, affectationForm);
+      setAffectationModal(null);
+    } catch (err) {
+      setError(err.message || 'Erreur lors de l\'enregistrement des affectations');
+    } finally {
+      setSavingAffectation(false);
+    }
+  };
+
+  const handleExportListe = async (c, format) => {
+    setPostEtudeBusy(true);
+    setError('');
+    try {
+      if (format === 'pdf') await decService.telechargerListeRetenusPdf(c.id);
+      else await decService.telechargerListeRetenusExcel(c.id);
+    } catch (err) {
+      setError(err.message || 'Erreur lors de l\'export de la liste des retenus');
+    } finally {
+      setPostEtudeBusy(false);
+    }
+  };
+
+  const handleEnvoyerConvocations = async (c) => {
+    if (!window.confirm(
+      `Envoyer les convocations par e-mail à tous les candidats admis (VALIDE) de « ${c.libelle} » ?\n`
+      + 'Les numéros de table seront régénérés avant l\'envoi.'
+    )) {
+      return;
+    }
+    setPostEtudeBusy(true);
+    setError('');
+    try {
+      const res = await decService.envoyerConvocationsRetenus(c.id, true);
+      window.alert(res.message || 'Envoi des convocations lancé.');
+    } catch (err) {
+      setError(err.message || 'Erreur lors de l\'envoi des convocations');
+    } finally {
+      setPostEtudeBusy(false);
     }
   };
 
@@ -108,13 +368,14 @@ export default function GestionConcours() {
       dateFinDepot: '',
       dateDebutComposition: '',
       dateFinComposition: '',
+      centreIds: [],
     });
     setValidationErrors({});
     setNewMatiere('');
     setShowModal(true);
   };
 
-  const openEditModal = (c) => {
+  const openEditModal = async (c) => {
     setEditingConcours(c);
 
     const piecesRequises = extractPiecesRequises(c);
@@ -122,6 +383,16 @@ export default function GestionConcours() {
 
     const linkedEtab = c.etablissementOrganisateur;
     const useEtablissementLibre = !c.etablissementId;
+
+    let centreIds = (c.centresActifs || []).map((l) => l.centreId).filter(Boolean);
+    try {
+      const liens = await centreCompositionService.getConcoursCentres(c.id, { tous: '1' });
+      centreIds = (Array.isArray(liens) ? liens : [])
+        .filter((l) => l.estActif !== false)
+        .map((l) => l.centreId);
+    } catch {
+      /* keep from concours if any */
+    }
 
     setFormData({
       libelle: c.libelle,
@@ -138,6 +409,7 @@ export default function GestionConcours() {
       dateFinDepot: formatDateInput(c.dateFinDepot || c.dateFin),
       dateDebutComposition: formatDateInput(c.dateDebutComposition || c.dateComposition),
       dateFinComposition: formatDateInput(c.dateFinComposition),
+      centreIds,
     });
     setValidationErrors({});
     setNewMatiere('');
@@ -200,6 +472,25 @@ export default function GestionConcours() {
       if (fin <= debut) {
         errors.dateFinComposition = 'La date de fin de composition doit être postérieure à la date de début';
       }
+    }
+
+    // Dates dans l'année académique du concours (en cours à la création, ou année du concours à l'édition)
+    const anneeCible =
+      (editingConcours?.annee?.libelle && annees.find((a) => a.libelle === editingConcours.annee.libelle))
+      || (editingConcours?.anneeAcademiqueId && annees.find((a) => a.id === editingConcours.anneeAcademiqueId))
+      || annees.find((a) => a.enCours);
+    if (anneeCible?.libelle) {
+      const [y1, y2] = anneeCible.libelle.split('-').map(Number);
+      const okYear = (value) => {
+        if (!value) return true;
+        const y = new Date(value).getFullYear();
+        return y === y1 || y === y2;
+      };
+      const msg = `Doit être en ${y1} ou ${y2} (année ${anneeCible.libelle})`;
+      if (!okYear(formData.dateDebutDepot)) errors.dateDebutDepot = msg;
+      if (!okYear(formData.dateFinDepot)) errors.dateFinDepot = msg;
+      if (!okYear(formData.dateDebutComposition)) errors.dateDebutComposition = msg;
+      if (!okYear(formData.dateFinComposition)) errors.dateFinComposition = msg;
     }
 
     // Validation cohérence dépôt/composition
@@ -267,6 +558,7 @@ export default function GestionConcours() {
       dateFinDepot: formData.dateFinDepot,
       dateDebutComposition: formData.dateDebutComposition,
       dateFinComposition: formData.dateFinComposition,
+      centreIds: formData.centreIds || [],
     };
 
     if (formData.useEtablissementLibre) {
@@ -392,31 +684,37 @@ export default function GestionConcours() {
 
   const etablissementFilterOptions = Array.from(
     concours.reduce((map, item) => {
-      const key = getConcoursEtablissementKey(item);
+      const resolved = resolvePublicEtablissement(item, publicEtablissements);
+      const key = resolved?.id || getConcoursEtablissementKey(item);
+      const label = resolved?.nom || getConcoursEtablissementLabel(item);
       if (!map.has(key)) {
-        map.set(key, getConcoursEtablissementLabel(item));
+        map.set(key, label);
       }
       return map;
     }, new Map())
   ).sort((a, b) => a[1].localeCompare(b[1], 'fr'));
 
   const filteredConcours = filterEtablissement
-    ? concours.filter((c) => getConcoursEtablissementKey(c) === filterEtablissement)
+    ? concours.filter((c) => {
+        const resolved = resolvePublicEtablissement(c, publicEtablissements);
+        const key = resolved?.id || getConcoursEtablissementKey(c);
+        return key === filterEtablissement;
+      })
     : concours;
 
   if (loading) return (
-    <DGESLayout>
+    <DECLayout>
       <div className='flex items-center justify-center min-h-[60vh]'>
         <div className='text-center'>
           <div className='w-10 h-10 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin mx-auto mb-3' />
           <p className='text-gray-500 text-sm'>Chargement...</p>
         </div>
       </div>
-    </DGESLayout>
+    </DECLayout>
   );
 
   return (
-    <DGESLayout>
+    <DECLayout>
       <div className='max-w-6xl mx-auto px-4 py-6 space-y-6'>
         {/* HEADER SECTION */}
         <div className='flex flex-col gap-4'>
@@ -436,21 +734,41 @@ export default function GestionConcours() {
               Nouveau concours
             </button>
           </div>
-          <div className='flex flex-col sm:flex-row sm:items-center gap-3'>
-            <label className='text-sm font-medium text-gray-600 shrink-0' htmlFor='filter-etablissement'>
-              Filtrer par établissement
-            </label>
-            <select
-              id='filter-etablissement'
-              value={filterEtablissement}
-              onChange={(e) => setFilterEtablissement(e.target.value)}
-              className='w-full sm:max-w-md rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 bg-white'
-            >
-              <option value=''>Tous les établissements</option>
-              {etablissementFilterOptions.map(([key, label]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
+          <div className='flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap'>
+            <div className='flex flex-col sm:flex-row sm:items-center gap-2 flex-1 min-w-[220px]'>
+              <label className='text-sm font-medium text-gray-600 shrink-0' htmlFor='filter-annee'>
+                Année académique
+              </label>
+              <select
+                id='filter-annee'
+                value={filterAnnee}
+                onChange={(e) => setFilterAnnee(e.target.value)}
+                className='w-full sm:max-w-xs rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 bg-white'
+              >
+                <option value='toutes'>Toutes (archives)</option>
+                {annees.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.libelle}{a.enCours ? ' — en cours' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className='flex flex-col sm:flex-row sm:items-center gap-2 flex-1 min-w-[220px]'>
+              <label className='text-sm font-medium text-gray-600 shrink-0' htmlFor='filter-etablissement'>
+                Établissement
+              </label>
+              <select
+                id='filter-etablissement'
+                value={filterEtablissement}
+                onChange={(e) => setFilterEtablissement(e.target.value)}
+                className='w-full sm:max-w-md rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 bg-white'
+              >
+                <option value=''>Tous les établissements</option>
+                {etablissementFilterOptions.map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -467,6 +785,7 @@ export default function GestionConcours() {
               <thead>
                 <tr className='bg-gray-50 border-b border-gray-100'>
                   <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Libellé</th>
+                  <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Code</th>
                   <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Établissement</th>
                   <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Dépôt début</th>
                   <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Dépôt fin</th>
@@ -479,7 +798,7 @@ export default function GestionConcours() {
               <tbody className='divide-y divide-gray-50'>
                 {filteredConcours.length === 0 ? (
                   <tr>
-                    <td colSpan='8' className='px-4 py-10 text-center text-gray-400'>
+                    <td colSpan='9' className='px-4 py-10 text-center text-gray-400'>
                       {concours.length === 0
                         ? 'Aucun concours créé. Cliquez sur "Nouveau concours" pour commencer.'
                         : 'Aucun concours pour cet établissement.'}
@@ -489,6 +808,9 @@ export default function GestionConcours() {
                   filteredConcours.map((c) => (
                     <tr key={c.id} className='hover:bg-gray-50 transition'>
                       <td className='px-4 py-3 font-medium text-gray-800'>{c.libelle}</td>
+                      <td className='px-4 py-3 text-gray-700 text-xs font-mono font-semibold'>
+                        {c.code || '—'}
+                      </td>
                       <td className='px-4 py-3 text-gray-600 text-xs'>{getConcoursEtablissementLabel(c)}</td>
                       <td className='px-4 py-3 text-gray-600 text-xs'>
                         {new Date(c.dateDebutDepot || c.dateDebut).toLocaleDateString('fr-FR')}
@@ -512,24 +834,89 @@ export default function GestionConcours() {
                         {c.fraisParticipation ? `${c.fraisParticipation} FCFA` : '-'}
                       </td>
                       <td className='px-4 py-3'>
-                        <div className='flex items-center justify-center gap-2'>
+                        <div className='flex flex-col items-stretch justify-center gap-2 min-w-[10.5rem]'>
+                          {(() => {
+                            const status = etudeStatuses[c.id] || {};
+
+                            const anneeCourante =
+                              status.anneeEnCours === true
+                              || c.annee?.enCours === true
+                              || annees.find((a) => a.id === c.anneeAcademiqueId)?.enCours === true;
+
+                            return (
+                              <>
+                                {status.periodeActive || status.peutCloturerEtude ? (
+                                  <button
+                                    type='button'
+                                    disabled={!anneeCourante || !status.peutCloturerEtude}
+                                    onClick={() => handleCloturerEtude(c)}
+                                    title={
+                                      !anneeCourante
+                                        ? "Indisponible hors de l'année académique en cours"
+                                        : "Clôturer l'étude des dossiers"
+                                    }
+                                    className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold transition ${
+                                      !anneeCourante || !status.peutCloturerEtude
+                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                        : 'bg-rose-600 text-white hover:bg-rose-700'
+                                    }`}
+                                  >
+                                    Clôturer l&apos;étude des dossiers
+                                  </button>
+                                ) : (() => {
+                                  const disabled = !anneeCourante || !status.peutLancerEtude;
+                                  const isRelance = status.peutRelancerEtude || (anneeCourante && status.periodeTerminee);
+                                  const label = isRelance
+                                    ? "Relancer l'étude des dossiers"
+                                    : "Lancer l'étude des dossiers";
+
+                                  return (
+                                    <button
+                                      type='button'
+                                      disabled={disabled}
+                                      onClick={() => handleLancerEtude(c)}
+                                      title={
+                                        disabled
+                                          ? !anneeCourante
+                                            ? "Indisponible hors de l'année académique en cours (archives)"
+                                            : status.periodeTerminee && status.tousEtudies
+                                              ? 'Étude clôturée — tous les dossiers ont été étudiés'
+                                              : 'Disponible uniquement après la clôture des inscriptions'
+                                          : isRelance
+                                            ? `${status.dossiersNonEtudies || 0} dossier(s) sans verdict / non finalisé(s) — relancer l'étude`
+                                            : "Ouvre immédiatement l'accès aux dossiers pour les examinateurs et contrôleurs"
+                                      }
+                                      className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold transition ${
+                                        disabled
+                                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                          : isRelance
+                                            ? 'bg-amber-500 text-white hover:bg-amber-600'
+                                            : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                      }`}
+                                    >
+                                      {label}
+                                    </button>
+                                  );
+                                })()}
+                              </>
+                            );
+                          })()}
                           <button
-                            onClick={() => openEditModal(c)}
-                            className='p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition'
-                            title='Modifier'
+                            type='button'
+                            disabled={postEtudeBusy}
+                            onClick={() => handleEnvoyerConvocations(c)}
+                            title='Envoyer les convocations par e-mail aux admis'
+                            className='px-2 py-1.5 rounded-lg text-[11px] font-semibold transition bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50'
                           >
-                            <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z' />
-                            </svg>
+                            Convocations
                           </button>
                           <button
-                            onClick={() => handleDelete(c.id, c.libelle)}
-                            className='p-2 text-red-600 hover:bg-red-50 rounded-lg transition'
-                            title='Supprimer'
+                            type='button'
+                            onClick={() => setDetailsConcours(c)}
+                            title='Voir les détails et actions du concours'
+                            className='px-2 py-1.5 rounded-lg text-[11px] font-semibold transition bg-blue-600 text-white hover:bg-blue-700'
                           >
-                            <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16' />
-                            </svg>
+                            Détails
                           </button>
                         </div>
                       </td>
@@ -540,6 +927,296 @@ export default function GestionConcours() {
             </table>
           </div>
         </div>
+
+        {detailsConcours && createPortal(
+          <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4'>
+            <div className='bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto'>
+              <div className='sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between'>
+                <div>
+                  <h2 className='text-lg font-bold text-gray-800'>Détails du concours</h2>
+                  <p className='text-xs text-gray-500 mt-1'>{detailsConcours.libelle}</p>
+                </div>
+                <button type='button' onClick={() => setDetailsConcours(null)} className='p-1 hover:bg-gray-100 rounded-lg' aria-label='Fermer'>✕</button>
+              </div>
+              <div className='px-6 py-4 space-y-4'>
+                <div className='grid grid-cols-2 gap-3 text-xs text-gray-600'>
+                  <div>
+                    <p className='text-gray-400 uppercase tracking-wide mb-0.5'>Code</p>
+                    <p className='font-mono font-semibold text-gray-800'>{detailsConcours.code || '—'}</p>
+                  </div>
+                  <div>
+                    <p className='text-gray-400 uppercase tracking-wide mb-0.5'>Établissement</p>
+                    <p className='font-medium text-gray-800'>{getConcoursEtablissementLabel(detailsConcours)}</p>
+                  </div>
+                  <div>
+                    <p className='text-gray-400 uppercase tracking-wide mb-0.5'>Dépôt</p>
+                    <p>
+                      {new Date(detailsConcours.dateDebutDepot || detailsConcours.dateDebut).toLocaleDateString('fr-FR')}
+                      {' → '}
+                      {new Date(detailsConcours.dateFinDepot || detailsConcours.dateFin).toLocaleDateString('fr-FR')}
+                    </p>
+                  </div>
+                  <div>
+                    <p className='text-gray-400 uppercase tracking-wide mb-0.5'>Composition</p>
+                    <p>
+                      {detailsConcours.dateDebutComposition && detailsConcours.dateFinComposition
+                        ? `${new Date(detailsConcours.dateDebutComposition).toLocaleDateString('fr-FR')} → ${new Date(detailsConcours.dateFinComposition).toLocaleDateString('fr-FR')}`
+                        : detailsConcours.dateComposition
+                          ? new Date(detailsConcours.dateComposition).toLocaleDateString('fr-FR')
+                          : '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className='text-gray-400 uppercase tracking-wide mb-0.5'>Frais</p>
+                    <p className='font-semibold text-gray-800'>
+                      {detailsConcours.fraisParticipation
+                        ? `${detailsConcours.fraisParticipation} FCFA`
+                        : '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className='text-gray-400 uppercase tracking-wide mb-0.5'>Matières</p>
+                    <p>
+                      {Array.isArray(detailsConcours.matieres) && detailsConcours.matieres.length > 0
+                        ? `${detailsConcours.matieres.length} matière(s)`
+                        : '—'}
+                    </p>
+                  </div>
+                  <div className='col-span-2 rounded-lg bg-slate-50 border border-slate-100 px-3 py-2'>
+                    <p className='text-gray-400 uppercase tracking-wide mb-0.5'>Candidats inscrits</p>
+                    <p className='text-base font-bold text-slate-800'>
+                      {typeof detailsConcours.nombreInscrits === 'number'
+                        ? detailsConcours.nombreInscrits
+                        : (etudeStatuses[detailsConcours.id]?.totalDossiers ?? '—')}
+                      <span className='ml-1 text-xs font-normal text-gray-500'>
+                        candidat{(detailsConcours.nombreInscrits ?? etudeStatuses[detailsConcours.id]?.totalDossiers ?? 0) !== 1 ? 's' : ''}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className='text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2'>Actions</p>
+                  <div className='flex flex-col gap-2'>
+                    {(etudeStatuses[detailsConcours.id]?.anneeEnCours === true
+                      || detailsConcours.annee?.enCours === true)
+                      && etudeStatuses[detailsConcours.id]?.inscriptionsCloses === false && (
+                      <button
+                        type='button'
+                        onClick={() => handleCloturerInscriptionsTest(detailsConcours)}
+                        title='[TEMP TEST] Avance la date de fin des inscriptions pour tester le lancement de l’étude'
+                        className='w-full px-3 py-2 rounded-lg text-sm font-semibold bg-orange-500 text-white hover:bg-orange-600 ring-2 ring-orange-300'
+                      >
+                        Clôturer les inscriptions (test)
+                      </button>
+                    )}
+                    <button
+                      type='button'
+                      onClick={() => openAffectationModal(detailsConcours)}
+                      className='w-full px-3 py-2 rounded-lg text-sm font-semibold bg-slate-700 text-white hover:bg-slate-800'
+                    >
+                      Affecter la commission
+                    </button>
+                    <button
+                      type='button'
+                      disabled={generatingNumeros || postEtudeBusy}
+                      onClick={() => handleGenererNumerosTable(detailsConcours)}
+                      className='w-full px-3 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50'
+                    >
+                      Générer les N° de table
+                    </button>
+                    <div className='flex gap-2'>
+                      <button
+                        type='button'
+                        disabled={postEtudeBusy}
+                        onClick={() => handleExportListe(detailsConcours, 'pdf')}
+                        className='flex-1 px-3 py-2 rounded-lg text-sm font-semibold bg-teal-700 text-white hover:bg-teal-800 disabled:opacity-50'
+                      >
+                        Liste PDF
+                      </button>
+                      <button
+                        type='button'
+                        disabled={postEtudeBusy}
+                        onClick={() => handleExportListe(detailsConcours, 'excel')}
+                        className='flex-1 px-3 py-2 rounded-lg text-sm font-semibold bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50'
+                      >
+                        Liste Excel
+                      </button>
+                    </div>
+                    <div className='flex gap-2 pt-1'>
+                      <button
+                        type='button'
+                        onClick={() => {
+                          const c = detailsConcours;
+                          setDetailsConcours(null);
+                          openEditModal(c);
+                        }}
+                        className='flex-1 px-3 py-2 rounded-lg text-sm font-semibold border border-blue-200 text-blue-700 hover:bg-blue-50'
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        type='button'
+                        onClick={() => {
+                          const c = detailsConcours;
+                          setDetailsConcours(null);
+                          handleDelete(c.id, c.libelle);
+                        }}
+                        className='flex-1 px-3 py-2 rounded-lg text-sm font-semibold border border-red-200 text-red-700 hover:bg-red-50'
+                      >
+                        Supprimer
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+        {affectationModal && createPortal(
+          <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4'>
+            <div className='bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto'>
+              <div className='sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between'>
+                <div>
+                  <h2 className='text-lg font-bold text-gray-800'>Affecter la commission</h2>
+                  <p className='text-xs text-gray-500 mt-1'>{affectationModal.libelle}</p>
+                  <p className='text-[11px] text-amber-700 mt-1'>
+                    Un membre ne peut être que examinateur ou contrôleur pour ce concours, pas les deux.
+                  </p>
+                </div>
+                <button type='button' onClick={() => setAffectationModal(null)} className='p-1 hover:bg-gray-100 rounded-lg'>✕</button>
+              </div>
+              <div className='px-6 py-4 grid sm:grid-cols-2 gap-4'>
+                <div>
+                  <h3 className='text-sm font-semibold text-gray-700 mb-2'>Examinateurs</h3>
+                  <div className='space-y-1 max-h-72 overflow-y-auto border border-gray-100 rounded-lg p-2'>
+                    {membresCommission.length === 0 && (
+                      <p className='text-xs text-gray-400 p-2'>Aucun membre commission en base.</p>
+                    )}
+                    {membresCommission.map((m) => (
+                      <label key={`ex-${m.id}`} className='flex items-start gap-2 text-xs p-1.5 hover:bg-gray-50 rounded cursor-pointer'>
+                        <input
+                          type='checkbox'
+                          checked={affectationForm.examinateurs.includes(m.id)}
+                          onChange={() => toggleAffectation('EXAMINATEUR', m.id)}
+                        />
+                        <span>
+                          <span className='font-medium'>{m.nom} {m.prenom}</span>
+                          <span className='block text-gray-400'>{m.email}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h3 className='text-sm font-semibold text-gray-700 mb-2'>Contrôleurs</h3>
+                  <div className='space-y-1 max-h-72 overflow-y-auto border border-gray-100 rounded-lg p-2'>
+                    {membresCommission.map((m) => (
+                      <label key={`ct-${m.id}`} className='flex items-start gap-2 text-xs p-1.5 hover:bg-gray-50 rounded cursor-pointer'>
+                        <input
+                          type='checkbox'
+                          checked={affectationForm.controleurs.includes(m.id)}
+                          onChange={() => toggleAffectation('CONTROLEUR', m.id)}
+                        />
+                        <span>
+                          <span className='font-medium'>{m.nom} {m.prenom}</span>
+                          <span className='block text-gray-400'>{m.email}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className='px-6 py-4 border-t border-gray-100 flex justify-end gap-2'>
+                <button type='button' onClick={() => setAffectationModal(null)} className='px-3 py-2 text-sm rounded-lg border border-gray-200'>Annuler</button>
+                <button
+                  type='button'
+                  disabled={savingAffectation}
+                  onClick={saveAffectations}
+                  className='px-3 py-2 text-sm rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50'
+                >
+                  {savingAffectation ? 'Enregistrement…' : 'Enregistrer'}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+        {numerosModal && createPortal(
+          <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4'>
+            <div className='bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto'>
+              <div className='sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between'>
+                <div>
+                  <h2 className='text-lg font-bold text-gray-800'>Numéros de table générés</h2>
+                  <p className='text-xs text-gray-500 mt-1'>
+                    {numerosModal.concours?.libelle}
+                    {numerosModal.concours?.code ? ` — code concours ${numerosModal.concours.code}` : ''}
+                    {numerosModal.concours?.anneeComposition
+                      ? ` — année ${numerosModal.concours.anneeComposition}`
+                      : ''}
+                    {' · '}
+                    {numerosModal.totalGeneres} numéro(s)
+                  </p>
+                  <p className='text-[11px] text-gray-400 mt-1 font-mono'>
+                    Format : AA + commune + concours + rang (ex. 260140601)
+                  </p>
+                </div>
+                <button
+                  type='button'
+                  onClick={() => setNumerosModal(null)}
+                  className='p-1 hover:bg-gray-100 rounded-lg'
+                  aria-label='Fermer'
+                >
+                  ✕
+                </button>
+              </div>
+              <div className='px-6 py-4 space-y-4'>
+                {(numerosModal.retenusSansCentre > 0 || (numerosModal.erreursCentres || []).length > 0) && (
+                  <div className='text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2'>
+                    {numerosModal.retenusSansCentre > 0 && (
+                      <p>{numerosModal.retenusSansCentre} retenu(s) sans centre — non numérotés.</p>
+                    )}
+                    {(numerosModal.erreursCentres || []).map((e) => (
+                      <p key={e.centreId}>{e.error}</p>
+                    ))}
+                  </div>
+                )}
+                {(numerosModal.centres || []).map((centre) => (
+                  <div key={centre.centreId} className='border border-gray-100 rounded-xl overflow-hidden'>
+                    <div className='bg-gray-50 px-4 py-2 text-sm font-semibold text-gray-700'>
+                      {centre.ville} ({centre.communeCode}) — {centre.centreNom}
+                      <span className='text-gray-400 font-normal ml-2'>{centre.total} candidat(s)</span>
+                    </div>
+                    <table className='w-full text-xs'>
+                      <thead>
+                        <tr className='border-b border-gray-100 text-gray-500'>
+                          <th className='px-3 py-2 text-left'>Rang</th>
+                          <th className='px-3 py-2 text-left'>Candidat</th>
+                          <th className='px-3 py-2 text-left'>N° de table</th>
+                        </tr>
+                      </thead>
+                      <tbody className='divide-y divide-gray-50'>
+                        {centre.candidats.map((row) => (
+                          <tr key={row.inscriptionId}>
+                            <td className='px-3 py-2'>{String(row.ordre).padStart(3, '0')}</td>
+                            <td className='px-3 py-2'>
+                              {row.candidat?.nom} {row.candidat?.prenom}
+                            </td>
+                            <td className='px-3 py-2 font-mono font-semibold'>{row.numeroTable}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
         {/* MODAL CRÉATION/ÉDITION — portail vers body pour éviter le double sidebar */}
         {showModal && createPortal(
@@ -653,7 +1330,15 @@ export default function GestionConcours() {
 
               {/* Dates de dépôt */}
               <div className='border-t pt-4'>
-                <h3 className='text-sm font-bold text-gray-800 mb-3'>Période de dépôt des dossiers</h3>
+                <h3 className='text-sm font-bold text-gray-800 mb-1'>Période de dépôt des dossiers</h3>
+                <p className='text-xs text-gray-500 mb-3'>
+                  {(() => {
+                    const enCours = annees.find((a) => a.enCours);
+                    if (!enCours) return 'Les dates doivent appartenir à l’année académique du concours.';
+                    const [y1, y2] = enCours.libelle.split('-');
+                    return `Année académique en cours : ${enCours.libelle}. Toutes les dates doivent être en ${y1} ou ${y2}.`;
+                  })()}
+                </p>
                 <div className='grid grid-cols-2 gap-4'>
                   <div>
                     <label className='block text-sm font-semibold text-gray-700 mb-1'>
@@ -869,6 +1554,60 @@ export default function GestionConcours() {
                 />
               </div>
 
+              <div className='border-t pt-4 space-y-3'>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
+                  <h3 className='text-sm font-bold text-gray-800'>
+                    Centres de composition
+                  </h3>
+                  <p className='text-xs text-gray-500'>
+                    Sélectionnez les lieux où les candidats pourront composer
+                  </p>
+                </div>
+                {catalogueCentres.length === 0 ? (
+                  <p className='text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2'>
+                    Aucun centre dans le catalogue. Créez-en un ci-dessous après enregistrement, ou via « Créer un nouveau centre ».
+                  </p>
+                ) : (
+                  <div className='max-h-48 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-2'>
+                    {catalogueCentres.map((centre) => {
+                      const checked = (formData.centreIds || []).includes(centre.id);
+                      return (
+                        <label key={centre.id} className='flex items-start gap-2 cursor-pointer text-sm'>
+                          <input
+                            type='checkbox'
+                            className='mt-1'
+                            checked={checked}
+                            onChange={(e) => {
+                              setFormData((prev) => {
+                                const current = prev.centreIds || [];
+                                return {
+                                  ...prev,
+                                  centreIds: e.target.checked
+                                    ? [...current, centre.id]
+                                    : current.filter((id) => id !== centre.id),
+                                };
+                              });
+                            }}
+                          />
+                          <span>
+                            <span className='font-medium text-gray-900'>{centre.nom}</span>
+                            <span className='text-gray-500'> — {centre.ville}</span>
+                            {centre.adresse ? (
+                              <span className='block text-xs text-gray-400'>{centre.adresse}</span>
+                            ) : null}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                {(formData.centreIds || []).length > 0 && (
+                  <p className='text-xs text-green-700'>
+                    {(formData.centreIds || []).length} centre(s) sélectionné(s)
+                  </p>
+                )}
+              </div>
+
               <GestionCentresConcours
                 concoursId={editingConcours?.id}
                 concoursLibelle={formData.libelle || editingConcours?.libelle}
@@ -1023,6 +1762,6 @@ export default function GestionConcours() {
           document.body
         )}
       </div>
-    </DGESLayout>
+    </DECLayout>
   );
 }

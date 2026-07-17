@@ -1,21 +1,4 @@
 const { etapesCompletees, verdictsDivergents } = require('./verdict-workflow.helper');
-const { formatMotifForClient } = require('./motif.helper');
-
-function mapCommentairesFromDossier(dossier) {
-  if (!dossier) {
-    return {
-      commentaireRejet: null,
-      commentaireSousReserve: null,
-      commentaireControleur: null,
-    };
-  }
-
-  return {
-    commentaireRejet: formatMotifForClient(dossier.commentaireRejet),
-    commentaireSousReserve: formatMotifForClient(dossier.commentaireSousReserve),
-    commentaireControleur: formatMotifForClient(dossier.commentaireControleur),
-  };
-}
 
 /**
  * Aplatit DossierInscription + Inscription pour compatibilité front legacy.
@@ -28,7 +11,9 @@ function mapDossierInscriptionToInscription(dossier) {
   return {
     ...ins,
     statut: dossier.statut,
-    ...mapCommentairesFromDossier(dossier),
+    commentaireRejet: dossier.commentaireRejet,
+    commentaireSousReserve: dossier.commentaireSousReserve,
+    commentaireControleur: dossier.commentaireControleur,
     decisionCommissionPar: dossier.decisionCommissionPar,
     decisionCommissionDate: dossier.decisionCommissionDate,
     decisionControleurPar: dossier.decisionControleurPar,
@@ -36,8 +21,6 @@ function mapDossierInscriptionToInscription(dossier) {
     dossierInscriptionId: dossier.id,
     quittanceUrl: dossier.quittanceUrl,
     piecesExtras: dossier.piecesExtras,
-    documentsCompl: dossier.documentsCompl,
-    centreCompositionChoisi: dossier.centreCompositionChoisi,
     doubleVerdict: {
       verdict1: dossier.verdict1,
       verdict2: dossier.decisionControleur,
@@ -51,4 +34,4 @@ function mapDossierInscriptionToInscription(dossier) {
   };
 }
 
-module.exports = { mapDossierInscriptionToInscription, mapCommentairesFromDossier };
+module.exports = { mapDossierInscriptionToInscription };

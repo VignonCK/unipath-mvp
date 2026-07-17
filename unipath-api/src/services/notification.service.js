@@ -1,18 +1,12 @@
 const emailService = require('./email.service');
 const pdfService = require('./pdf.service');
 const prisma = require('../prisma');
-const {
-  resolveInscriptionForConvocationPdf,
-  buildGenererConvocationPayload,
-  buildEmailDataDecision,
-} = require('../utils/email-decision.helper');
-const { peutEnvoyerConvocationPdf } = require('../utils/centres-composition.helper');
+const { runInBackground } = require('../utils/background-task');
 
 class NotificationService {
-  async sendNotification({ event, userId, data, priority = 'NORMAL', sendEmail = true }) {
+  async sendNotification({ event, userId, data, priority = 'NORMAL', sendEmail = true, syncEmail = false }) {
     const channels = [];
 
-    // Créer la notification in-app
     const notification = await prisma.notification.create({
       data: {
         userId,
@@ -21,42 +15,47 @@ class NotificationService {
         message: this.getMessage(event, data),
         data,
         priority,
-        expiresAt: new Date(Date.now() + 2 * 365 * 24 * 60 * 60 * 1000) // 2 ans
-      }
+        expiresAt: new Date(Date.now() + 2 * 365 * 24 * 60 * 60 * 1000),
+      },
     });
     channels.push('inApp');
 
-    // Envoyer l'email si demandé
     if (sendEmail && data.candidatEmail) {
-      try {
-        await this.sendEmailForEvent(event, data);
+      const deliverEmail = async () => {
+        try {
+          await this.sendEmailForEvent(event, data);
+          await prisma.emailDelivery.create({
+            data: {
+              notificationId: notification.id,
+              userId,
+              recipient: data.candidatEmail,
+              subject: this.getEmailSubject(event, data),
+              status: 'SENT',
+              sentAt: new Date(),
+            },
+          });
+        } catch (error) {
+          console.error('Erreur envoi email:', error);
+          await prisma.emailDelivery.create({
+            data: {
+              notificationId: notification.id,
+              userId,
+              recipient: data.candidatEmail,
+              subject: this.getEmailSubject(event, data),
+              status: 'FAILED',
+              errorMessage: error.message,
+              attempts: 1,
+            },
+          });
+        }
+      };
+
+      if (syncEmail) {
+        await deliverEmail();
         channels.push('email');
-        
-        // Enregistrer la livraison d'email
-        await prisma.emailDelivery.create({
-          data: {
-            notificationId: notification.id,
-            userId,
-            recipient: data.candidatEmail,
-            subject: this.getEmailSubject(event, data),
-            status: 'SENT',
-            sentAt: new Date()
-          }
-        });
-      } catch (error) {
-        console.error('Erreur envoi email:', error);
-        // Enregistrer l'échec
-        await prisma.emailDelivery.create({
-          data: {
-            notificationId: notification.id,
-            userId,
-            recipient: data.candidatEmail,
-            subject: this.getEmailSubject(event, data),
-            status: 'FAILED',
-            errorMessage: error.message,
-            attempts: 1
-          }
-        });
+      } else {
+        runInBackground(deliverEmail, `notification-email:${event}`);
+        channels.push('emailQueued');
       }
     }
 
@@ -98,86 +97,33 @@ class NotificationService {
             libelle: data.concours,
             dateDebut: data.concoursDateDebut,
             dateFin: data.concoursDateFin,
-            description: data.concoursDescription
+            description: data.concoursDescription,
+            etablissement: data.etablissement,
           },
-          numeroDossier: data.numeroDossier
+          numeroDossier: data.numeroDossier,
+          centreCompositionChoisi: data.centreCompositionChoisi || null,
         });
         pdfPath = pdfResult.filePath;
       } 
       else if (event === 'VALIDATION' || event === 'CONVOCATION') {
         console.log('📄 Génération convocation...');
-        const candidatFallback = {
-          matricule: data.candidatMatricule,
-          nom: data.candidatNom,
-          prenom: data.candidatPrenom,
-          email: data.candidatEmail,
-          telephone: data.candidatTelephone,
-        };
-        const concoursFallback = {
-          libelle: data.concours,
-          dateDebut: data.concoursDateDebut,
-          dateFin: data.concoursDateFin,
-          description: data.concoursDescription,
-        };
-
-        let peutEnvoyerPdf = true;
-        if (data.inscriptionId) {
-          const inscriptionForPdf = await resolveInscriptionForConvocationPdf({
-            id: data.inscriptionId,
-          });
-          const convocationCheck = await peutEnvoyerConvocationPdf(
-            {
-              concoursId: inscriptionForPdf?.concoursId,
-              concours: inscriptionForPdf?.concours || concoursFallback,
-              dossierInscription: inscriptionForPdf?.dossierInscription,
-            },
-            prisma,
-          );
-          peutEnvoyerPdf = convocationCheck.ok;
-        }
-
-        if (peutEnvoyerPdf) {
-          let convocationPayload = null;
-          if (data.inscriptionId) {
-            const inscriptionForPdf = await resolveInscriptionForConvocationPdf({
-              id: data.inscriptionId,
-            });
-            if (inscriptionForPdf) {
-              convocationPayload = buildGenererConvocationPayload(
-                inscriptionForPdf,
-                candidatFallback,
-                concoursFallback,
-              );
-            }
-          }
-
-          const pdfResult = await pdfService.genererConvocation(
-            convocationPayload || {
-              candidat: candidatFallback,
-              concours: concoursFallback,
-            },
-          );
-          pdfPath = pdfResult.filePath;
-        } else if (event === 'VALIDATION') {
-          await emailService.envoyerEmailDossierValideAttenteCentre(
-            buildEmailDataDecision({
-              candidat: {
-                email: data.candidatEmail,
-                nom: data.candidatNom,
-                prenom: data.candidatPrenom,
-                matricule: data.candidatMatricule,
-                telephone: data.candidatTelephone,
-                id: data.candidatId,
-              },
-              concours: concoursFallback,
-              inscription: { id: data.inscriptionId, numeroInscription: data.numeroDossier },
-            }),
-          );
-          return;
-        } else {
-          console.log('Convocation non envoyee : centre de composition non choisi');
-          return;
-        }
+        const pdfResult = await pdfService.genererConvocation({
+          candidat: {
+            matricule: data.candidatMatricule,
+            nom: data.candidatNom,
+            prenom: data.candidatPrenom,
+            email: data.candidatEmail,
+            telephone: data.candidatTelephone
+          },
+          concours: {
+            libelle: data.concours,
+            dateDebut: data.concoursDateDebut,
+            dateFin: data.concoursDateFin,
+            description: data.concoursDescription
+          },
+          centreCompositionChoisi: data.centreCompositionChoisi || null,
+        });
+        pdfPath = pdfResult.filePath;
       }
       
       // Appeler la méthode correspondante du service email avec le PDF

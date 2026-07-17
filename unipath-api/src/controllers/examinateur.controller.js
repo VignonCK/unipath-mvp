@@ -1,39 +1,60 @@
 // src/controllers/examinateur.controller.js
 const prisma = require('../prisma');
-const { validateAndSanitizeVerdict, validateUUID, formatMotifForClient } = require('../utils/validation');
+const { validateAndSanitizeVerdict, validateUUID } = require('../utils/validation');
 const {
-  dossierVerrouilleParControleur,
+  dossierVerrouillePourExaminateur,
+  dossierValideParExaminateur,
   assertExaminateurPeutRendreVerdict,
   assertExaminateurPeutModifierSonVerdict,
 } = require('../utils/verdict-examinateur.helper');
 const { isArbitrageDivergent, VERDICT_LABELS } = require('../utils/verdict-workflow.helper');
+const { runInBackground } = require('../utils/background-task');
 const {
-  resolveCommissionScope,
-  applyConcoursScope,
-  assertDossierDansScope,
-} = require('../utils/commission-etablissement.helper');
+  assertPeriodeEtudeActive,
+  whereConcoursPeriodeEtudeActive,
+} = require('../utils/periode-etude-dossiers.helper');
+const {
+  resolveConcoursFilterForMembre,
+} = require('../utils/affectation-commission.helper');
 
 /**
- * Liste des dossiers à évaluer par l'examinateur connecté
- * Exclut automatiquement les dossiers déjà évalués par cet examinateur
+ * Liste des dossiers à évaluer par l'examinateur connecté.
+ * Uniquement pendant la période d'étude définie par la DEC,
+ * et uniquement pour les concours auxquels il est affecté (si des affectations existent).
  */
 exports.getDossiersAEvaluer = async (req, res) => {
   try {
     const examinateurId = req.user.id;
     const { concoursId, limite = 50, offset = 0 } = req.query;
-    const scope = await resolveCommissionScope(examinateurId);
+    const now = new Date();
 
-    let whereClause = applyConcoursScope(
-      {
-        decisionControleurPar: null,
-        verdict1Par: null,
-      },
-      scope ? scope.concoursIds : null
+    const filter = await resolveConcoursFilterForMembre(
+      examinateurId,
+      'EXAMINATEUR',
+      concoursId || null
     );
-
-    if (concoursId) {
-      whereClause.inscription = { ...(whereClause.inscription || {}), concoursId };
+    if (filter.forbidden || (filter.concoursIds && filter.concoursIds.length === 0 && !filter.openMode)) {
+      return res.json({
+        dossiers: [],
+        pagination: { total: 0, limite: parseInt(limite), offset: parseInt(offset) },
+        message: filter.forbidden
+          ? 'Vous n\'êtes pas affecté à ce concours'
+          : 'Aucun concours ne vous est affecté pour l\'étude des dossiers',
+      });
     }
+
+    const concoursWhere = {
+      ...whereConcoursPeriodeEtudeActive(now),
+      ...(filter.concoursIds ? { id: { in: filter.concoursIds } } : {}),
+    };
+
+    const whereClause = {
+      decisionControleurPar: null,
+      verdict1Par: null,
+      inscription: {
+        concours: concoursWhere,
+      },
+    };
 
     const [dossiers, total] = await Promise.all([
       prisma.dossierInscription.findMany({
@@ -42,7 +63,17 @@ exports.getDossiersAEvaluer = async (req, res) => {
           inscription: {
             include: {
               candidat: { select: { nom: true, prenom: true, email: true } },
-              concours: { select: { libelle: true, etablissement: true } },
+              concours: {
+                select: {
+                  id: true,
+                  libelle: true,
+                  etablissement: true,
+                  dateFinDepot: true,
+                  dateFin: true,
+                  dateDebutEtudeDossiers: true,
+                  dateFinEtudeDossiers: true,
+                },
+              },
             },
           },
         },
@@ -71,6 +102,11 @@ exports.getDossiersAEvaluer = async (req, res) => {
         limite: parseInt(limite),
         offset: parseInt(offset),
         pages: Math.ceil(total / parseInt(limite)),
+      },
+      regleExamen: {
+        periodeEtudeRequise: true,
+        message:
+          "L'étude des dossiers n'est possible que pendant la période définie par la DEC.",
       },
     });
   } catch (error) {
@@ -110,9 +146,9 @@ exports.getDetailDossier = async (req, res) => {
       return res.status(404).json({ error: 'Dossier non trouvé' });
     }
 
-    const scope = await resolveCommissionScope(examinateurId);
-    if (scope && !(await assertDossierDansScope(dossierInscriptionId, scope.concoursIds))) {
-      return res.status(403).json({ error: 'Accès refusé à ce dossier' });
+    const etude = assertPeriodeEtudeActive(dossier.inscription?.concours);
+    if (!etude.ok) {
+      return res.status(403).json({ error: etude.error, code: etude.code });
     }
 
     // Déterminer si l'examinateur a déjà rendu son verdict
@@ -123,13 +159,13 @@ exports.getDetailDossier = async (req, res) => {
     if (monVerdictRendu) {
       monVerdict = {
         verdict: dossier.verdict1,
-        motif: formatMotifForClient(dossier.verdict1Motif),
+        motif: dossier.verdict1Motif,
         date: dossier.verdict1Date,
       };
       modificationsPossibles = 1 - dossier.verdict1ModifieCount;
     }
 
-    const verrouille = dossierVerrouilleParControleur(dossier);
+    const verrouille = dossierVerrouillePourExaminateur(dossier);
     const peutRendreVerdict = !verrouille && !monVerdictRendu && !dossier.verdict1Par;
     const peutModifierMonVerdict =
       !verrouille && monVerdictRendu && modificationsPossibles > 0;
@@ -138,8 +174,9 @@ exports.getDetailDossier = async (req, res) => {
 
     let messageLectureSeule = null;
     if (verrouille) {
-      messageLectureSeule =
-        'Décision du contrôleur rendue : les verdicts ne peuvent plus être modifiés par les examinateurs.';
+      messageLectureSeule = dossierValideParExaminateur(dossier)
+        ? 'Ce dossier a été validé définitivement. Aucune modification n\'est possible.'
+        : 'Décision du contrôleur rendue : les verdicts ne peuvent plus être modifiés par les examinateurs.';
     } else if (!monVerdictRendu && dossier.verdict1Par) {
       messageLectureSeule =
         'Ce dossier a déjà été évalué par un examinateur. Seul le contrôleur peut intervenir.';
@@ -158,7 +195,7 @@ exports.getDetailDossier = async (req, res) => {
           decisionControleur: dossier.decisionControleur,
           decisionControleurLabel:
             VERDICT_LABELS[dossier.decisionControleur] || dossier.decisionControleur,
-          motif: formatMotifForClient(dossier.decisionControleurMotif),
+          motif: dossier.decisionControleurMotif,
           date: dossier.decisionControleurDate,
         }
       : null;
@@ -257,9 +294,9 @@ exports.rendreVerdict = async (req, res) => {
       return res.status(404).json({ error: 'Dossier non trouvé' });
     }
 
-    const scope = await resolveCommissionScope(examinateurId);
-    if (scope && !(await assertDossierDansScope(dossierInscriptionId, scope.concoursIds))) {
-      return res.status(403).json({ error: 'Accès refusé à ce dossier' });
+    const etude = assertPeriodeEtudeActive(dossier.inscription?.concours);
+    if (!etude.ok) {
+      return res.status(403).json({ error: etude.error, code: etude.code });
     }
 
     const check = assertExaminateurPeutRendreVerdict(dossier, examinateurId);
@@ -275,6 +312,12 @@ exports.rendreVerdict = async (req, res) => {
       verdict1ModifieCount: 0,
     };
 
+    // Validation examinateur = décision finale (pas d'arbitrage contrôleur)
+    const validationFinale = verdict === 'VALIDE';
+    if (validationFinale) {
+      updateData.statut = 'VALIDE';
+    }
+
     // Transaction : mettre à jour le dossier + enregistrer l'action
     const result = await prisma.$transaction(async (tx) => {
       const dossierMisAJour = await tx.dossierInscription.update({
@@ -286,8 +329,15 @@ exports.rendreVerdict = async (req, res) => {
         data: {
           utilisateurId: examinateurId,
           dossierInscriptionId,
-          typeAction: 'VERDICT_EXAMINATEUR_RENDU',
-          details: { numeroVerdict: 1, verdict, motif: validation.sanitizedMotif },
+          typeAction: validationFinale
+            ? 'VERDICT_EXAMINATEUR_VALIDATION_FINALE'
+            : 'VERDICT_EXAMINATEUR_RENDU',
+          details: {
+            numeroVerdict: 1,
+            verdict,
+            motif: validation.sanitizedMotif,
+            validationFinale,
+          },
           ipAddress: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
           userAgent: req.headers['user-agent'],
         },
@@ -296,34 +346,77 @@ exports.rendreVerdict = async (req, res) => {
       return dossierMisAJour;
     });
 
-    // Créer une notification pour le contrôleur
-    const controleurWhere = { sousRole: 'CONTROLEUR' };
-    if (scope?.etablissementId) {
-      controleurWhere.etablissementId = scope.etablissementId;
-    }
     const controleur = await prisma.membreCommission.findFirst({
-      where: controleurWhere,
+      where: { sousRole: 'CONTROLEUR' },
     });
 
     if (controleur) {
+      if (validationFinale) {
+        await prisma.notification.create({
+          data: {
+            userId: controleur.id,
+            type: 'NOUVEAU_DOSSIER',
+            priority: 'NORMAL',
+            title: 'Dossier validé par un examinateur',
+            message: `L'examinateur a validé définitivement le dossier ${dossier.inscription.numeroInscription} (${dossier.inscription.candidat.nom} ${dossier.inscription.candidat.prenom}). Aucun arbitrage n'est requis.`,
+            data: {
+              dossierInscriptionId,
+              numeroInscription: dossier.inscription.numeroInscription,
+              verdictExaminateur: verdict,
+              validationFinale: true,
+            },
+          },
+        });
+      } else {
+        await prisma.notification.create({
+          data: {
+            userId: controleur.id,
+            type: 'NOUVEAU_DOSSIER',
+            priority: 'HIGH',
+            title: 'Verdict examinateur — arbitrage requis',
+            message: `Un examinateur a rendu un verdict (${verdict}) sur le dossier ${dossier.inscription.numeroInscription} (${dossier.inscription.candidat.nom} ${dossier.inscription.candidat.prenom}). Arbitrage du contrôleur attendu.`,
+            data: {
+              dossierInscriptionId,
+              numeroInscription: dossier.inscription.numeroInscription,
+              verdictExaminateur: verdict,
+            },
+          },
+        });
+      }
+    }
+
+    if (validationFinale) {
       await prisma.notification.create({
         data: {
-          userId: controleur.id,
-          type: 'NOUVEAU_DOSSIER',
-          priority: 'NORMAL',
-          title: 'Verdict examinateur — arbitrage requis',
-          message: `Un examinateur a rendu son verdict (${verdict}) sur le dossier ${dossier.inscription.numeroInscription} (${dossier.inscription.candidat.nom} ${dossier.inscription.candidat.prenom}). Arbitrage du contrôleur attendu.`,
+          userId: dossier.inscription.candidatId,
+          type: 'VALIDATION',
+          priority: 'HIGH',
+          title: 'Décision finale sur votre dossier',
+          message: `Votre dossier pour le concours ${dossier.inscription.concours.libelle} a été validé.`,
           data: {
             dossierInscriptionId,
-            numeroInscription: dossier.inscription.numeroInscription,
-            verdictExaminateur: verdict,
+            decision: 'VALIDE',
+            motif: validation.sanitizedMotif,
           },
         },
       });
+
+      runInBackground(async () => {
+        const { envoyerEmailDecisionFinale } = require('../utils/email-decision.helper');
+        await envoyerEmailDecisionFinale({
+          candidat: dossier.inscription.candidat,
+          concours: dossier.inscription.concours,
+          inscription: dossier.inscription,
+          decision: 'VALIDE',
+          motif: validation.sanitizedMotif,
+        });
+      }, 'examinateur-validation-email');
     }
 
     res.status(201).json({
-      message: 'Verdict enregistré avec succès',
+      message: validationFinale
+        ? 'Dossier validé définitivement'
+        : 'Verdict enregistré — en attente de l\'arbitrage du contrôleur',
       verdict: {
         numeroVerdict: 1,
         verdict,
@@ -332,8 +425,10 @@ exports.rendreVerdict = async (req, res) => {
       },
       dossierInscription: {
         id: result.id,
+        statut: result.statut,
         nombreVerdictsRendus: result.verdict1Par ? 1 : 0,
         decisionControleurRendue: !!result.decisionControleur,
+        validationFinale,
       },
     });
   } catch (error) {
@@ -364,15 +459,16 @@ exports.modifierVerdict = async (req, res) => {
 
     const dossier = await prisma.dossierInscription.findUnique({
       where: { id: dossierInscriptionId },
+      include: { inscription: { include: { candidat: true, concours: true } } },
     });
 
     if (!dossier) {
       return res.status(404).json({ error: 'Dossier non trouvé' });
     }
 
-    const scope = await resolveCommissionScope(examinateurId);
-    if (scope && !(await assertDossierDansScope(dossierInscriptionId, scope.concoursIds))) {
-      return res.status(403).json({ error: 'Accès refusé à ce dossier' });
+    const etude = assertPeriodeEtudeActive(dossier.inscription?.concours);
+    if (!etude.ok) {
+      return res.status(403).json({ error: etude.error, code: etude.code });
     }
 
     const check = assertExaminateurPeutModifierSonVerdict(dossier, examinateurId);
@@ -381,6 +477,7 @@ exports.modifierVerdict = async (req, res) => {
     }
 
     const modifieCount = dossier.verdict1ModifieCount;
+    const validationFinale = verdict === 'VALIDE';
 
     const updateData = {
       verdict1: verdict,
@@ -388,6 +485,13 @@ exports.modifierVerdict = async (req, res) => {
       verdict1Date: new Date(),
       verdict1ModifieCount: modifieCount + 1,
     };
+
+    if (validationFinale) {
+      updateData.statut = 'VALIDE';
+    } else {
+      // Retour vers un cas nécessitant l'arbitrage contrôleur
+      updateData.statut = 'EN_ATTENTE';
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       const dossierMisAJour = await tx.dossierInscription.update({
@@ -405,6 +509,7 @@ exports.modifierVerdict = async (req, res) => {
             ancienVerdict: dossier.verdict1,
             nouveauVerdict: verdict,
             motif: validation.sanitizedMotif,
+            validationFinale,
           },
           ipAddress: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
           userAgent: req.headers['user-agent'],
@@ -414,14 +519,65 @@ exports.modifierVerdict = async (req, res) => {
       return dossierMisAJour;
     });
 
+    if (validationFinale) {
+      await prisma.notification.create({
+        data: {
+          userId: dossier.inscription.candidatId,
+          type: 'VALIDATION',
+          priority: 'HIGH',
+          title: 'Décision finale sur votre dossier',
+          message: `Votre dossier pour le concours ${dossier.inscription.concours.libelle} a été validé.`,
+          data: { dossierInscriptionId, decision: 'VALIDE', motif: validation.sanitizedMotif },
+        },
+      });
+
+      runInBackground(async () => {
+        const { envoyerEmailDecisionFinale } = require('../utils/email-decision.helper');
+        await envoyerEmailDecisionFinale({
+          candidat: dossier.inscription.candidat,
+          concours: dossier.inscription.concours,
+          inscription: dossier.inscription,
+          decision: 'VALIDE',
+          motif: validation.sanitizedMotif,
+        });
+      }, 'examinateur-validation-email');
+    } else {
+      const controleur = await prisma.membreCommission.findFirst({
+        where: { sousRole: 'CONTROLEUR' },
+      });
+      if (controleur) {
+        await prisma.notification.create({
+          data: {
+            userId: controleur.id,
+            type: 'NOUVEAU_DOSSIER',
+            priority: 'HIGH',
+            title: 'Verdict examinateur modifié — arbitrage requis',
+            message: `Un examinateur a modifié son verdict (${dossier.verdict1} → ${verdict}) sur le dossier ${dossier.inscription.numeroInscription}. Arbitrage du contrôleur attendu.`,
+            data: {
+              dossierInscriptionId,
+              numeroInscription: dossier.inscription.numeroInscription,
+              verdictExaminateur: verdict,
+            },
+          },
+        });
+      }
+    }
+
     res.json({
-      message: 'Verdict modifié avec succès',
+      message: validationFinale
+        ? 'Dossier validé définitivement'
+        : 'Verdict modifié — en attente de l\'arbitrage du contrôleur',
       verdict: {
         numeroVerdict: 1,
         verdict,
         motif: validation.sanitizedMotif,
         date: result.verdict1Date,
         modificationsPossibles: 0,
+      },
+      dossierInscription: {
+        id: result.id,
+        statut: result.statut,
+        validationFinale,
       },
     });
   } catch (error) {

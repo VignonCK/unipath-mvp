@@ -1,10 +1,21 @@
 /**
  * Règles métier : un seul examinateur par dossier (verdict1).
- * Seul le contrôleur arbitre ensuite via decisionControleur.
+ * - VALIDE examinateur → décision finale (pas d'arbitrage contrôleur)
+ * - REJETE / SOUS_RESERVE → arbitrage contrôleur requis
  */
+
+function dossierValideParExaminateur(dossier) {
+  return dossier.statut === 'VALIDE'
+    && dossier.verdict1 === 'VALIDE'
+    && !dossier.decisionControleur;
+}
 
 function dossierVerrouilleParControleur(dossier) {
   return !!(dossier.decisionControleurPar || dossier.decisionControleur);
+}
+
+function dossierVerrouillePourExaminateur(dossier) {
+  return dossierVerrouilleParControleur(dossier) || dossierValideParExaminateur(dossier);
 }
 
 function getMonNumeroVerdict(dossier, examinateurId) {
@@ -13,8 +24,13 @@ function getMonNumeroVerdict(dossier, examinateurId) {
 }
 
 function assertExaminateurPeutRendreVerdict(dossier, examinateurId) {
-  if (dossierVerrouilleParControleur(dossier)) {
-    return { ok: false, error: 'Ce dossier est verrouillé : la décision du contrôleur a déjà été rendue.' };
+  if (dossierVerrouillePourExaminateur(dossier)) {
+    return {
+      ok: false,
+      error: dossierValideParExaminateur(dossier)
+        ? 'Ce dossier est déjà validé définitivement.'
+        : 'Ce dossier est verrouillé : la décision du contrôleur a déjà été rendue.',
+    };
   }
   if (getMonNumeroVerdict(dossier, examinateurId)) {
     return { ok: false, error: 'Vous avez déjà rendu votre verdict sur ce dossier.' };
@@ -29,8 +45,13 @@ function assertExaminateurPeutRendreVerdict(dossier, examinateurId) {
 }
 
 function assertExaminateurPeutModifierSonVerdict(dossier, examinateurId) {
-  if (dossierVerrouilleParControleur(dossier)) {
-    return { ok: false, error: 'Ce dossier est verrouillé : seul le contrôleur peut modifier les verdicts.' };
+  if (dossierVerrouillePourExaminateur(dossier)) {
+    return {
+      ok: false,
+      error: dossierValideParExaminateur(dossier)
+        ? 'Ce dossier est déjà validé définitivement et ne peut plus être modifié.'
+        : 'Ce dossier est verrouillé : seul le contrôleur peut modifier les verdicts.',
+    };
   }
   if (dossier.verdict1Par !== examinateurId) {
     return {
@@ -48,7 +69,9 @@ function assertExaminateurPeutModifierSonVerdict(dossier, examinateurId) {
 }
 
 module.exports = {
+  dossierValideParExaminateur,
   dossierVerrouilleParControleur,
+  dossierVerrouillePourExaminateur,
   getMonNumeroVerdict,
   assertExaminateurPeutRendreVerdict,
   assertExaminateurPeutModifierSonVerdict,

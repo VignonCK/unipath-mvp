@@ -1,0 +1,282 @@
+================================================================================
+UNIPATH — RAPPORT DU MODULE 2 : PARCOURS ACADÉMIQUE
+================================================================================
+Date        : 09/07/2026
+Plateforme  : UniPath MVP
+Périmètre   : Inscriptions et suivi de cursus dans les universités privées
+================================================================================
+
+1. VUE D'ENSEMBLE
+--------------------------------------------------------------------------------
+
+Le Module 2 « Parcours académique » est l'espace UniPath dédié aux étudiants
+souhaitant s'inscrire dans une université ou école supérieure privée, et au
+suivi de leur cursus une fois admis.
+
+Sur la plateforme, il est accessible depuis le hub étudiant (/dashboard) sous
+l'intitulé « Module 2 — Parcours académique ». Il couvre :
+  - La découverte des établissements privés et de leurs filières
+  - Les campagnes d'inscription annuelles
+  - Le dépôt de candidature (dossier d'admission)
+  - La préinscription et la décision de l'établissement
+  - L'inscription académique effective
+  - Le relevé de notes et le parcours universitaire
+
+
+2. OBJECTIFS DU MODULE
+--------------------------------------------------------------------------------
+
+  - Offrir un catalogue des établissements privés et leurs filières
+  - Permettre aux écoles de publier des campagnes d'inscription
+  - Gérer le workflow de candidature en ligne (dossier + frais + documents)
+  - Traiter les préinscriptions et décisions d'admission
+  - Valider les quittances bancaires (droits d'inscription)
+  - Suivre les inscriptions académiques et les notes par semestre
+  - Produire le relevé de notes (consultation + PDF)
+
+
+3. ACTEURS ET RÔLES
+--------------------------------------------------------------------------------
+
+  Acteur                    Rôle dans le module
+  ------------------------  --------------------------------------------------
+  Candidat / Étudiant       Candidature, suivi, upload documents et quittances
+  Admin établissement       Campagnes, décisions préinscription, validation
+  Établissement (compte)    Profil école, exigences documentaires, candidatures
+  DGES                      Création d'établissements et comptes admin (indirect)
+
+  Accès frontend :
+    Candidat           → /parcours/*
+    Admin établissement → /admin-etablissement/*
+    Établissement      → via compte ETABLISSEMENT (profil, candidatures)
+
+
+4. ENTITÉS DE DONNÉES
+--------------------------------------------------------------------------------
+
+  Etablissement
+    Nom, type (PRIVE/PUBLIC), ville, adresse, email, logo
+
+  Filiere
+    Nom, code, niveau (Licence/Master), durée, établissement parent
+
+  CampagneInscription
+    Titre, année académique, dates ouverture/clôture, statut (BROUILLON/PUBLIEE/CLOTUREE)
+
+  CampagneFiliere
+    Filière liée à une campagne, frais de dossier, places, critères
+
+  Application (candidature)
+    Numéro, candidat, établissement, filière, niveau, statut :
+      DRAFT → DOSSIER_FEES_PAID → PENDING_DOCUMENTS →
+      READY_FOR_PREINSCRIPTION → FICHE_GENERATED
+
+  ApplicationDocument
+    Pièces uploadées par le candidat ou auto-remplies depuis le profil
+
+  Payment / Receipt
+    Paiement frais de dossier (mock) et quittance bancaire
+
+  PreinscriptionEtablissement
+    Demande formelle après candidature validée
+    Statut : EN_ATTENTE | VALIDE | SOUS_RESERVE | REJETE
+
+  InscriptionAcademique
+    Inscription effective dans une filière pour une année académique
+    Statut : EN_COURS | VALIDE | REDOUBLANT | ABANDONNE
+
+  Note
+    Notes par matière, semestre, crédits (CC, examen, moyenne)
+
+  Diplome
+    Diplôme obtenu (Licence/Master)
+
+
+5. FONCTIONNALITÉS IMPLÉMENTÉES
+--------------------------------------------------------------------------------
+
+5.1 Côté candidat
+  [x] Catalogue des établissements privés (/parcours/etablissements)
+  [x] Détail établissement : filières, frais, conditions
+  [x] Liste des campagnes d'inscription ouvertes (/parcours/campagnes)
+  [x] Workflow candidature multi-étapes (/parcours/dossiers) :
+        choix établissement/filière → paiement frais dossier (mock) →
+        upload documents → finalisation
+  [x] Exigences documentaires dynamiques par établissement
+  [x] Auto-remplissage depuis le dossier personnel (profil)
+  [x] Suivi du statut de candidature
+  [x] Génération fiche de préinscription (PDF)
+  [x] Mes inscriptions académiques (/parcours/mes-inscriptions)
+  [x] Upload quittance bancaire (droits d'inscription)
+  [x] Relevé de notes (/parcours/releve) — consultation et PDF
+  [x] Vue parcours global (/parcours — accueil module)
+
+5.2 Côté admin établissement
+  [x] CRUD campagnes d'inscription (brouillon → publiée → clôturée)
+  [x] Association filières + frais de dossier par campagne
+  [x] Gestion du profil établissement et logo
+  [x] CRUD filières
+  [x] Consultation des candidatures reçues
+  [x] Décisions de préinscription (valider / rejeter / sous réserve)
+  [x] Validation des quittances bancaires
+  [x] Liste des étudiants inscrits
+  [x] Guide de parcours intégré (candidatures → préinscriptions → étudiants)
+  [x] Changement mot de passe obligatoire à la première connexion
+
+5.3 Côté établissement (compte école)
+  [x] Inscription établissement (/api/auth/register-etablissement)
+  [x] Gestion profil et logo
+  [x] Configuration des exigences documentaires (SchoolRequirement)
+  [x] Consultation candidatures
+  [x] Décisions préinscriptions
+
+5.4 Transverse
+  [x] Notifications (décision préinscription, quittance validée)
+  [x] Paiement mock frais de dossier
+  [x] Stockage local des documents
+  [x] PDF fiche préinscription établissement
+
+
+6. WORKFLOW MÉTIER (PARCOURS D'ADMISSION)
+--------------------------------------------------------------------------------
+
+  Étape 1 — Candidat : Candidature
+    Choisit établissement + filière + niveau
+    Paie les frais de dossier (mock)
+    Upload les documents requis
+    Finalise et envoie la candidature
+    Statut → READY_FOR_PREINSCRIPTION → FICHE_GENERATED
+
+  Étape 2 — Établissement : Examen
+    Consulte la candidature et les pièces
+    Crée une préinscription si le dossier est recevable
+
+  Étape 3 — Établissement : Décision préinscription
+    VALIDE     → candidat admis en préinscription
+    REJETE     → candidature refusée (motif)
+    SOUS_RESERVE → compléments demandés
+
+  Étape 4 — Candidat : Quittance bancaire
+    Si préinscription validée, upload la quittance des droits d'inscription
+
+  Étape 5 — Établissement : Validation quittance
+    Approuve ou rejette la quittance bancaire
+
+  Étape 6 — Inscription académique
+    Création automatique ou manuelle de l'inscription académique
+    L'étudiant apparaît dans la liste « Étudiants »
+
+  Étape 7 — Suivi de cursus
+    Saisie des notes par semestre
+    Consultation relevé de notes par l'étudiant
+
+
+7. PAGES ET ROUTES FRONTEND
+--------------------------------------------------------------------------------
+
+  Candidat :
+    /parcours                         Accueil module
+    /parcours/etablissements          Catalogue écoles privées
+    /parcours/etablissements/:id      Détail établissement
+    /parcours/campagnes               Campagnes ouvertes
+    /parcours/campagnes/:id           Détail campagne
+    /parcours/dossiers                Candidatures (workflow)
+    /parcours/mes-inscriptions        Inscriptions académiques
+    /parcours/releve                  Relevé de notes
+
+  Admin établissement :
+    /admin-etablissement/campagnes
+    /admin-etablissement/candidatures
+    /admin-etablissement/preinscriptions
+    /admin-etablissement/validation-quittances
+    /admin-etablissement/etudiants
+    /admin-etablissement/etablissement
+
+
+8. API BACKEND (ENDPOINTS PRINCIPAUX)
+--------------------------------------------------------------------------------
+
+  GET    /api/etablissements              Catalogue
+  GET    /api/etablissements/prives       Établissements privés
+  GET    /api/campagnes                   Campagnes publiées (candidat)
+  POST   /api/applications                Créer candidature
+  POST   /api/applications/:id/documents  Upload document
+  POST   /api/applications/:id/finalize   Finaliser
+  POST   /api/applications/:id/payments/dossier-fees/mock-confirm
+  GET    /api/applications/mine           Mes candidatures
+  GET    /api/preinscriptions-etablissement/mes-preinscriptions
+  PATCH  /api/preinscriptions-etablissement/:id/decision
+  POST   /api/inscriptions-academiques    Créer inscription académique
+  GET    /api/parcours/mon-parcours       Parcours complet
+  GET    /api/parcours/mon-releve/pdf     Relevé PDF
+  CRUD   /api/etablissement/campagnes/*   Admin campagnes
+
+
+9. FONCTIONNALITÉS PARTIELLES OU MANQUANTES
+--------------------------------------------------------------------------------
+
+  [ ] Paiement réel (Mobile Money, carte) — mock uniquement
+  [ ] Inscription établissement depuis le frontend (redirige vers login)
+  [ ] Gestion des emplois du temps / cours
+  [ ] Bulletin automatique par email
+  [ ] Transfert inter-établissements
+  [ ] Module réservé aux privés : le catalogue inclut aussi des établissements
+      publics (FAST, EPAC, etc.) mais le workflow candidature cible les privés
+  [ ] Validation automatique des quittances (OCR)
+
+
+10. DONNÉES ACTUELLES (APRÈS IMPORT)
+--------------------------------------------------------------------------------
+
+  Établissements          : 31 (dont ~20 privés)
+  Filières                : 90
+  Campagnes               : 18
+  Candidatures            : 19
+  Préinscriptions         : 15
+  Inscriptions académiques: 10 (données partielles en base)
+  Paiements               : 16
+
+
+11. RELATION AVEC LE MODULE 1
+--------------------------------------------------------------------------------
+
+  Les deux modules partagent :
+    - Le compte candidat et le dossier personnel (Mon compte)
+    - Le système de notifications
+    - L'authentification JWT
+
+  Ils sont indépendants fonctionnellement :
+    Module 1 = concours d'entrée (sélection compétitive)
+    Module 2 = admission directe / campagne dans une école privée
+
+
+12. POINTS FORTS
+--------------------------------------------------------------------------------
+
+  - Workflow candidature guidé étape par étape
+  - Campagnes configurables par l'admin établissement
+  - Exigences documentaires personnalisables par école
+  - Chaîne complète candidature → préinscription → inscription → notes
+  - Interface admin avec guide de parcours intégré
+
+
+13. LIMITES CONNUES
+--------------------------------------------------------------------------------
+
+  - Paiements simulés (pas de gateway réel)
+  - Pas de module emploi du temps / vie étudiante
+  - Certaines tables (Note, InscriptionAcademique) peuvent être vides selon import
+  - Filières admin via interface (pas d'API DGES dédiée filières)
+
+
+14. CONCLUSION
+--------------------------------------------------------------------------------
+
+Le Module 2 est opérationnel pour le parcours d'admission dans les universités
+privées : de la découverte d'une école à l'inscription académique et au relevé
+de notes. Il complète le Module 1 en couvrant l'admission non concurrentielle
+(campagne / candidature directe) plutôt que le concours.
+
+================================================================================
+FIN DU RAPPORT — MODULE 2 PARCOURS ACADÉMIQUE
+================================================================================

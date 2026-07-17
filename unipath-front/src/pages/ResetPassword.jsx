@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { supabase } from '../supabase';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { authService } from '../services/api';
 
 export default function ResetPassword() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [ready, setReady] = useState(false);
   const [checking, setChecking] = useState(true);
   const [newPassword, setNewPassword] = useState('');
@@ -13,52 +13,16 @@ export default function ResetPassword() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const token = searchParams.get('token');
 
   useEffect(() => {
-    const initSession = async () => {
-      try {
-        const hash = window.location.hash.substring(1);
-        if (hash) {
-          const params = new URLSearchParams(hash);
-          const accessToken = params.get('access_token');
-          const refreshToken = params.get('refresh_token');
-          const type = params.get('type');
-
-          if (type === 'recovery' && accessToken && refreshToken) {
-            const { error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-
-            if (sessionError) {
-              setError('Lien invalide ou expiré. Demandez un nouvel email de réinitialisation.');
-              setChecking(false);
-              return;
-            }
-
-            window.history.replaceState(null, '', window.location.pathname);
-            setReady(true);
-            setChecking(false);
-            return;
-          }
-        }
-
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          setReady(true);
-        } else {
-          setError('Lien de réinitialisation invalide ou expiré.');
-        }
-      } catch (err) {
-        console.error(err);
-        setError('Impossible de valider le lien de réinitialisation.');
-      } finally {
-        setChecking(false);
-      }
-    };
-
-    initSession();
-  }, []);
+    if (token) {
+      setReady(true);
+    } else {
+      setError('Lien de réinitialisation invalide ou expiré.');
+    }
+    setChecking(false);
+  }, [token]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -75,22 +39,7 @@ export default function ResetPassword() {
 
     setLoading(true);
     try {
-      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
-      if (updateError) {
-        setError(updateError.message);
-        return;
-      }
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        try {
-          await authService.finalizePasswordReset(session.access_token);
-        } catch (finalizeErr) {
-          console.warn('Finalisation reset:', finalizeErr.message);
-        }
-      }
-
-      await supabase.auth.signOut();
+      await authService.confirmResetPassword(token, newPassword);
       setSuccess(true);
       setTimeout(() => {
         navigate('/login', {

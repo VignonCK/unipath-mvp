@@ -1,6 +1,6 @@
 // src/pages/ListeDossiersExaminateur.jsx
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { concoursService } from '../services/api';
 import { apiFetch } from '../utils/apiConfig';
 import { BentoCard } from '../components/AcademicLayout';
@@ -14,10 +14,12 @@ import {
 
 const ListeDossiersExaminateur = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [dossiers, setDossiers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [filtreConcoursId, setFiltreConcoursId] = useState('');
+  const [regleExamen, setRegleExamen] = useState(null);
+  const [filtreConcoursId, setFiltreConcoursId] = useState(searchParams.get('concoursId') || '');
   const [concours, setConcours] = useState([]);
   const [pagination, setPagination] = useState({ total: 0, limite: 50, offset: 0, pages: 0 });
 
@@ -57,6 +59,7 @@ const ListeDossiersExaminateur = () => {
 
       const data = await response.json();
       setDossiers(data.dossiers || []);
+      setRegleExamen(data.regleExamen || null);
       setPagination((prev) => data.pagination || prev);
     } catch (err) {
       setError(err.message);
@@ -86,6 +89,13 @@ const ListeDossiersExaminateur = () => {
         </p>
       </div>
 
+      {regleExamen?.message && (
+        <ControleurAlert type="info">
+          <span>ℹ️</span>
+          <span>{regleExamen.message}</span>
+        </ControleurAlert>
+      )}
+
       {error && (
         <ControleurAlert type="error">
           <span>⚠️</span>
@@ -114,7 +124,14 @@ const ListeDossiersExaminateur = () => {
 
       {dossiers.length === 0 ? (
         <BentoCard className="p-6 bg-white text-center">
-          <p className="text-sm text-gray-500">Aucun dossier à évaluer pour le moment.</p>
+          <p className="text-sm text-gray-500">
+            Aucun dossier à évaluer pour le moment.
+            {regleExamen?.periodeEtudeRequise
+              ? " Les dossiers n'apparaissent que pendant la période d'étude définie par la DEC."
+              : regleExamen?.apresClotureInscriptions
+                ? " Les dossiers n'apparaissent qu'après la clôture des inscriptions du concours."
+                : ''}
+          </p>
         </BentoCard>
       ) : (
         <div className="space-y-4">

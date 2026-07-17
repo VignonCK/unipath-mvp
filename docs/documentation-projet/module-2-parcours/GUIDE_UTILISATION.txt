@@ -1,0 +1,306 @@
+================================================================================
+UNIPATH — GUIDE D'UTILISATION — MODULE 2 : PARCOURS ACADÉMIQUE
+================================================================================
+Date : 09/07/2026
+================================================================================
+
+Ce guide explique comment utiliser le Module 2 sur la plateforme UniPath pour
+les inscriptions et le suivi de cursus dans les universités privées.
+
+
+================================================================================
+1. ACCÉDER AU MODULE
+================================================================================
+
+  1. Connectez-vous sur http://localhost:5173/login
+  2. Depuis le tableau de bord (/dashboard), cliquez sur la carte
+     « Module 2 — Parcours académique »
+  3. Vous arrivez sur /parcours (accueil du module)
+
+  Navigation : l'onglet « Parcours » reste visible en haut dans /parcours/*.
+
+
+================================================================================
+2. GUIDE CANDIDAT / ÉTUDIANT
+================================================================================
+
+2.1 Préparer son profil
+----------------------
+  Complétez d'abord votre dossier personnel :
+    /mon-compte → acte de naissance, CNI, photo, relevé BAC
+
+  Ces documents peuvent être repris automatiquement dans vos candidatures.
+
+
+2.2 Explorer les établissements privés
+--------------------------------------
+  Menu : Parcours → Établissements (/parcours/etablissements)
+
+  - Parcourir la liste des écoles privées
+  - Filtrer par ville ou type
+  - Cliquer sur une école pour voir :
+      * Ses filières (Licence, Master)
+      * Les frais de scolarité
+      * Les campagnes en cours
+
+
+2.3 Consulter les campagnes d'inscription
+----------------------------------------
+  Menu : Parcours → Campagnes (/parcours/campagnes)
+
+  Une campagne = période d'inscription ouverte par une école pour une année
+  académique donnée, avec les filières et frais associés.
+
+  Cliquez sur une campagne pour voir les détails et postuler.
+
+
+2.4 Déposer une candidature (dossier d'admission)
+-------------------------------------------------
+  Menu : Parcours → Mes dossiers (/parcours/dossiers)
+
+  Workflow en 4 étapes :
+
+  ÉTAPE 1 — Choix
+    Sélectionner l'établissement
+    Choisir la filière
+    Indiquer le niveau (Licence 1, 2 ou 3)
+    Choisir l'année académique
+
+  ÉTAPE 2 — Frais de dossier
+    Montant affiché (ex. 5 000 FCFA)
+    Cliquer « Payer (mock) » — simulation de paiement en ligne
+    Statut → DOSSIER_FEES_PAID
+
+  ÉTAPE 3 — Documents
+    Uploader les pièces demandées par l'établissement :
+      - Documents du profil (auto si déjà uploadés)
+      - Pièces spécifiques (lettre de motivation, certificats, etc.)
+    Statut → PENDING_DOCUMENTS puis READY_FOR_PREINSCRIPTION
+
+  ÉTAPE 4 — Finalisation
+    Vérifier le récapitulatif
+    Cliquer « Finaliser et envoyer »
+    Statut → FICHE_GENERATED
+    Télécharger la fiche de préinscription (PDF)
+
+
+2.5 Suivre sa candidature
+-------------------------
+  Sur /parcours/dossiers, chaque candidature affiche son statut :
+
+    Brouillon              → non encore envoyée
+    Frais payés            → en cours de constitution
+    Documents en attente   → pièces manquantes
+    Prêt pour préinscription → dossier complet
+    Fiche générée          → envoyé à l'établissement
+
+  Attendre la décision de l'établissement (notification par email/cloche).
+
+
+2.6 Après acceptation — Quittance bancaire
+------------------------------------------
+  Si votre préinscription est VALIDÉE :
+    1. Effectuer le virement des droits d'inscription à l'école
+    2. Aller sur /parcours/mes-inscriptions
+    3. Uploader la quittance bancaire (PDF)
+    4. Attendre validation par l'administrateur de l'établissement
+
+
+2.7 Mes inscriptions académiques
+--------------------------------
+  Menu : /parcours/mes-inscriptions
+
+  Liste des inscriptions confirmées :
+    - Établissement et filière
+    - Année académique et niveau
+    - Statut (En cours, Validé, etc.)
+
+
+2.8 Relevé de notes
+-------------------
+  Menu : /parcours/releve
+
+  - Consulter vos notes par semestre et par matière
+  - Voir la moyenne et les crédits
+  - Télécharger le relevé en PDF
+
+
+================================================================================
+3. GUIDE ADMINISTRATEUR ÉTABLISSEMENT
+================================================================================
+
+3.1 Première connexion
+----------------------
+  À la première connexion, changement de mot de passe obligatoire.
+  Vous serez redirigé vers /admin-etablissement/changer-mot-de-passe.
+
+
+3.2 Gérer les campagnes d'inscription
+-------------------------------------
+  Menu : /admin-etablissement/campagnes
+
+  Créer une campagne :
+    - Titre (ex. « Inscription 2025-2026 »)
+    - Année académique
+    - Dates d'ouverture et de clôture
+    - Filières concernées + frais de dossier par filière
+
+  Cycle de vie :
+    BROUILLON  → en préparation (invisible candidats)
+    PUBLIEE    → visible sur /parcours/campagnes
+    CLOTUREE   → plus de nouvelles candidatures
+
+  Actions : Publier | Modifier | Clôturer | Supprimer
+
+
+3.3 Gérer l'établissement
+-------------------------
+  Menu : /admin-etablissement/etablissement
+
+  - Modifier nom, adresse, email, description
+  - Uploader le logo
+  - Créer / modifier / supprimer les filières
+
+
+3.4 Examiner les candidatures
+-----------------------------
+  Menu : /admin-etablissement/candidatures
+
+  Pour chaque candidature reçue :
+    - Voir le profil du candidat
+    - Consulter tous les documents uploadés
+    - Vérifier le paiement des frais de dossier
+
+  Le guide en haut de page rappelle le parcours :
+    Candidatures → Pré-inscriptions → Étudiants
+
+
+3.5 Décider les préinscriptions
+-------------------------------
+  Menu : /admin-etablissement/preinscriptions
+
+  Pour chaque demande en attente :
+
+    VALIDER
+      Le candidat est admis en préinscription
+      Il peut uploader sa quittance bancaire
+
+    REJETER
+      Motif obligatoire
+      Le candidat est notifié
+
+    SOUS RÉSERVE
+      Demander des compléments de dossier
+      Commentaire envoyé au candidat
+
+
+3.6 Valider les quittances bancaires
+------------------------------------
+  Menu : /admin-etablissement/validation-quittances
+
+  Pour chaque quittance uploadée par un candidat admis :
+    - Vérifier le document PDF
+    - Approuver → inscription académique peut être finalisée
+    - Rejeter → le candidat doit renvoyer une quittance correcte
+
+
+3.7 Liste des étudiants inscrits
+--------------------------------
+  Menu : /admin-etablissement/etudiants
+
+  Étudiants dont l'inscription académique est confirmée.
+  Informations : nom, filière, niveau, année académique.
+
+
+3.8 Sécurité du compte
+----------------------
+  Menu : /admin-etablissement/securite
+  Changer le mot de passe à tout moment.
+
+
+================================================================================
+4. GUIDE ÉTABLISSEMENT (compte école)
+================================================================================
+
+  Si votre école dispose d'un compte ETABLISSEMENT (distinct de l'admin) :
+
+  - Gérer le profil public de l'école
+  - Définir les exigences documentaires (pièces obligatoires par candidature)
+  - Consulter les candidatures reçues
+  - Prendre des décisions sur les préinscriptions
+
+
+================================================================================
+5. SCHÉMA DU PARCOURS COMPLET
+================================================================================
+
+  CANDIDAT                           ÉTABLISSEMENT
+  ────────                           ─────────────
+
+  [Choisir école/filière]
+  [Payer frais dossier (mock)]
+  [Uploader documents]
+  [Finaliser candidature]     ──→    [Consulter candidature]
+                                     [Créer préinscription]
+                                     [Décider : Valider/Rejeter]
+  [Notification reçue]
+  [Upload quittance banque]   ──→    [Valider quittance]
+                                     [Confirmer inscription]
+  [Inscription académique active]
+  [Consulter relevé de notes]
+
+
+================================================================================
+6. STATUTS À CONNAÎTRE
+================================================================================
+
+  Candidature (Application) :
+    DRAFT                    Brouillon
+    DOSSIER_FEES_PAID        Frais de dossier payés
+    PENDING_DOCUMENTS        Documents manquants
+    READY_FOR_PREINSCRIPTION Dossier complet
+    FICHE_GENERATED          Envoyé à l'établissement
+
+  Préinscription :
+    EN_ATTENTE               En cours d'examen
+    VALIDE                   Admis
+    SOUS_RESERVE             Compléments demandés
+    REJETE                   Refusé
+
+  Inscription académique :
+    EN_COURS                 Année en cours
+    VALIDE                   Inscription confirmée
+    REDOUBLANT               Redoublement
+    ABANDONNE                Abandon
+
+
+================================================================================
+7. COMPTES DE TEST
+================================================================================
+
+  Candidat        : harrydedji+candidat1@gmail.com / UniPath2026!
+  Admin étab.     : jerzeyshop8@gmail.com / UniPath2026!
+                    (École Supérieure Africaine des TIC)
+  Admin étab.     : forfait199@gmail.com / UniPath2026!
+                    (Pigier Bénin)
+
+  Liste complète : comptes_connexion_unipath.txt
+
+
+================================================================================
+8. DIFFÉRENCE MODULE 1 vs MODULE 2
+================================================================================
+
+  MODULE 1 — Concours          MODULE 2 — Parcours académique
+  ─────────────────────        ────────────────────────────────
+  Concours compétitif          Admission par candidature
+  Sélection par note           Sélection par dossier
+  Commission valide            Établissement décide
+  Convocation d'examen         Fiche de préinscription
+  Organisé par DGES/MESRS      Organisé par l'école privée
+  /concours/*                  /parcours/*
+
+
+================================================================================
+FIN DU GUIDE — MODULE 2
+================================================================================

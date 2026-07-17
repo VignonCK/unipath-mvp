@@ -1,0 +1,439 @@
+UNIPATH — INFORMATIONS DE CONNEXION
+Généré le : 09/07/2026 15:37:22
+Source    : import_unipath_mysql.sql
+
+IMPORTANT :
+  - Mot de passe par défaut (comptes importés) : UniPath2026!
+  - Les mots de passe Supabase originaux ne sont pas récupérables.
+  - Ne partagez pas ce fichier en production.
+
+======================================================================
+  ADMINISTRATEURS SYSTÈME (créés manuellement)
+======================================================================
+
+  [1]
+  Nom           : EPAC Commission
+  Email         : commission@epac.bj
+  Mot de passe  : Commission2026!
+  Téléphone     : +22997000001
+  Note          : Compte créé via npm run create-admins (peut ne pas être en base si import SQL effectué)
+
+  [2]
+  Nom           : MESRS DGES
+  Email         : dges@mesrs.bj
+  Mot de passe  : DGES2026!
+  Téléphone     : +22997000002
+  Note          : Module 2 (établissements privés) — créé via npm run create-admins
+
+  [3]
+  Nom           : MESRS DEC
+  Email         : dec@mesrs.bj
+  Mot de passe  : DEC2026!
+  Téléphone     : +22997000008
+  Note          : Module 1 (concours / établissements publics) — créé via npm run create-admins
+
+======================================================================
+  DGES (Direction Générale de l'Enseignement Supérieur — module 2)
+======================================================================
+
+  [1]
+  Nom           : DGES TEST
+  Email         : dges@test.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +22997000003
+
+======================================================================
+  COMMISSION — Membres
+======================================================================
+
+  [1]
+  Nom           : Commission TEST
+  Email         : commission@test.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +22997000002
+  Sous-rôle     : MEMBRE
+
+======================================================================
+  COMMISSION — Examinateurs
+======================================================================
+
+  [1]
+  Nom           : Examinateur TEST
+  Email         : examinateur@test.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +22997000004
+  Sous-rôle     : EXAMINATEUR
+
+  [2]
+  Nom           : Examinateur2 TEST
+  Email         : examinateur2@test.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +22997000006
+  Sous-rôle     : EXAMINATEUR
+
+  [3]
+  Nom           : Paul FASSINOU
+  Email         : forsuree15@gmail.com
+  Mot de passe  : UniPath2026!
+  Sous-rôle     : EXAMINATEUR
+
+======================================================================
+  COMMISSION — Contrôleurs
+======================================================================
+
+  [1]
+  Nom           : Controleur TEST
+  Email         : controleur-commission@test.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +22997000005
+  Sous-rôle     : CONTROLEUR
+
+======================================================================
+  ADMINISTRATEURS ÉTABLISSEMENT
+======================================================================
+
+  [1]
+  Nom           : Didier DIGBA
+  Email         : jerzeyshop8@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : 0146620238
+  Établissement : Ecole Superieure Africaine des TIC
+
+  [2]
+  Nom           : Girès DJIMON
+  Email         : dhvrris@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : 0168629864
+  Établissement : Ecole Superieure Africaine des TIC
+
+  [3]
+  Nom           : Marcos ALI
+  Email         : forfait199@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : 0144443333
+  Établissement : Pigier Bénin
+
+======================================================================
+  ÉTABLISSEMENTS (19 comptes avec email)
+======================================================================
+
+  [1]
+  Nom           : ESGT Benin
+  Email         : contact@esgt.bj
+  Mot de passe  : UniPath2026!
+  Établissement : ESGT Benin (Cotonou, PRIVE)
+
+  [2]
+  Nom           : École Supérieure de Gestion et de Technologie du Bénin
+  Email         : contact@esgt-benin.bj
+  Mot de passe  : UniPath2026!
+  Établissement : École Supérieure de Gestion et de Technologie du Bénin (Cotonou, PRIVE)
+
+  [3]
+  Nom           : École Supérieure de Gestion, d'Informatique et des Sciences
+  Email         : contact@esgis.bj
+  Mot de passe  : UniPath2026!
+  Établissement : École Supérieure de Gestion, d'Informatique et des Sciences (Cotonou, PRIVE)
+
+  [4]
+  Nom           : Hautes Études Commerciales et de Management
+  Email         : contact@hecm.bj
+  Mot de passe  : UniPath2026!
+  Établissement : Hautes Études Commerciales et de Management (Cotonou, PRIVE)
+
+  [5]
+  Nom           : Institut Supérieur de Management du Bénin
+  Email         : contact@ism-benin.bj
+  Mot de passe  : UniPath2026!
+  Établissement : Institut Supérieur de Management du Bénin (Porto-Novo, PRIVE)
+
+  [6]
+  Nom           : École Supérieure de Commerce et d'Administration des Entreprises
+  Email         : contact@escae-benin.bj
+  Mot de passe  : UniPath2026!
+  Établissement : École Supérieure de Commerce et d'Administration des Entreprises (Cotonou, PRIVE)
+
+  [7]
+  Nom           : École Supérieure de Management et d'Administration
+  Email         : contact@esma-benin.bj
+  Mot de passe  : UniPath2026!
+  Établissement : École Supérieure de Management et d'Administration (Cotonou, PRIVE)
+
+  [8]
+  Nom           : École Supérieure d'Administration et d'Économie
+  Email         : contact@esae.bj
+  Mot de passe  : UniPath2026!
+  Établissement : École Supérieure d'Administration et d'Économie (Cotonou, PRIVE)
+
+  [9]
+  Nom           : École Supérieure de Management du Bénin
+  Email         : contact@esm-benin.bj
+  Mot de passe  : UniPath2026!
+  Établissement : École Supérieure de Management du Bénin (Cotonou, PRIVE)
+
+  [10]
+  Nom           : Université Catholique d'Afrique de l'Ouest
+  Email         : contact@ucao-benin.bj
+  Mot de passe  : UniPath2026!
+  Établissement : Université Catholique d'Afrique de l'Ouest (Cotonou, PRIVE)
+
+  [11]
+  Nom           : Institut Universitaire Panafricain
+  Email         : contact@iup-benin.bj
+  Mot de passe  : UniPath2026!
+  Établissement : Institut Universitaire Panafricain (Porto-Novo, PRIVE)
+
+  [12]
+  Nom           : École Supérieure de l'Enseignement Professionnel Le Berger
+  Email         : contact@esep-leberger.bj
+  Mot de passe  : UniPath2026!
+  Établissement : École Supérieure de l'Enseignement Professionnel Le Berger (Cotonou, PRIVE)
+
+  [13]
+  Nom           : IRGIB Africa University
+  Email         : contact@irgib.bj
+  Mot de passe  : UniPath2026!
+  Établissement : IRGIB Africa University (Cotonou, PRIVE)
+
+  [14]
+  Nom           : Institut Supérieur de Communication et de Gestion
+  Email         : contact@iscg-benin.bj
+  Mot de passe  : UniPath2026!
+  Établissement : Institut Supérieur de Communication et de Gestion (Cotonou, PRIVE)
+
+  [15]
+  Nom           : Institut Supérieur des Métiers de l'Audiovisuel
+  Email         : contact@isma-benin.bj
+  Mot de passe  : UniPath2026!
+  Établissement : Institut Supérieur des Métiers de l'Audiovisuel (Cotonou, PRIVE)
+
+  [16]
+  Nom           : Haute École de Commerce et de Management
+  Email         : contact@hecm-benin.bj
+  Mot de passe  : UniPath2026!
+  Établissement : Haute École de Commerce et de Management (Cotonou, PRIVE)
+
+  [17]
+  Nom           : Pigier Bénin
+  Email         : contact@pigier-benin.bj
+  Mot de passe  : UniPath2026!
+  Établissement : Pigier Bénin (Cotonou, PRIVE)
+
+  [18]
+  Nom           : Institut Supérieur de Management Adonaï
+  Email         : contact@ism-adonai.bj
+  Mot de passe  : UniPath2026!
+  Établissement : Institut Supérieur de Management Adonaï (Cotonou, PRIVE)
+
+  [19]
+  Nom           : Université Africaine de Technologie et de Management
+  Email         : contact@uatm-gasa.bj
+  Mot de passe  : UniPath2026!
+  Établissement : Université Africaine de Technologie et de Management (Cotonou, PRIVE)
+
+======================================================================
+  CANDIDATS / ÉTUDIANTS (24 comptes)
+======================================================================
+
+  [1]
+  Nom           : Koffi AGOSSOU
+  Matricule     : DEMO-2026-001
+  Email         : harrydedji+candidat1@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +2296100001
+  Email confirmé: Oui
+
+  [2]
+  Nom           : Kofi MENSAH
+  Matricule     : TEMP
+  Email         : kofi.mensah@test.bj
+  Mot de passe  : UniPath2026!
+  Téléphone     : +22961000001
+  Email confirmé: Non
+
+  [3]
+  Nom           : Mireille HOUNGBO
+  Matricule     : DEMO-2026-002
+  Email         : harrydedji+candidat2@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +2296100002
+  Email confirmé: Oui
+
+  [4]
+  Nom           : Romuald KPADONOU
+  Matricule     : DEMO-2026-003
+  Email         : harrydedji+candidat3@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +2296100003
+  Email confirmé: Oui
+
+  [5]
+  Nom           : Élodie DANSOU
+  Matricule     : DEMO-2026-004
+  Email         : harrydedji+candidat4@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +2296100004
+  Email confirmé: Oui
+
+  [6]
+  Nom           : Yves TOSSOU
+  Matricule     : DEMO-2026-005
+  Email         : harrydedji+candidat5@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +2296100005
+  Email confirmé: Oui
+
+  [7]
+  Nom           : Aïcha BIAOU
+  Matricule     : DEMO-2026-006
+  Email         : harrydedji+candidat6@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +2296100006
+  Email confirmé: Oui
+
+  [8]
+  Nom           : Serge GANDONOU
+  Matricule     : DEMO-2026-007
+  Email         : harrydedji+candidat7@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +2296100007
+  Email confirmé: Oui
+
+  [9]
+  Nom           : Ayélé ADJOLO
+  Matricule     : DEMO-2026-008
+  Email         : harrydedji+candidat8@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +2296100008
+  Email confirmé: Oui
+
+  [10]
+  Nom           : Marcel ZANNOU
+  Matricule     : DEMO-2026-009
+  Email         : harrydedji+candidat9@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +2296100009
+  Email confirmé: Oui
+
+  [11]
+  Nom           : Nadia KOUASSI
+  Matricule     : DEMO-2026-010
+  Email         : harrydedji+candidat10@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +2296100010
+  Email confirmé: Oui
+
+  [12]
+  Nom           : Kévin DOSSOU
+  Matricule     : DEMO-2026-011
+  Email         : harrydedji+candidat11@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +2296100011
+  Email confirmé: Oui
+
+  [13]
+  Nom           : Prisca AHOUANDJINOU
+  Matricule     : DEMO-2026-012
+  Email         : harrydedji+candidat12@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +2296100012
+  Email confirmé: Oui
+
+  [14]
+  Nom           : Patrick SOSSOU
+  Matricule     : DEMO-2026-013
+  Email         : harrydedji+candidat13@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +2296100013
+  Email confirmé: Oui
+
+  [15]
+  Nom           : Christelle OGOUNCHILE
+  Matricule     : DEMO-2026-014
+  Email         : harrydedji+candidat14@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +2296100014
+  Email confirmé: Oui
+
+  [16]
+  Nom           : Raphaël BOCO
+  Matricule     : DEMO-2026-015
+  Email         : harrydedji+candidat15@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +2296100015
+  Email confirmé: Oui
+
+  [17]
+  Nom           : Rémi GLIBA
+  Matricule     : UnP-2026-000001
+  Email         : bkoussedoh@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +229 0155337788
+  Email confirmé: Oui
+
+  [18]
+  Nom           : Candidat1 TESTONE
+  Matricule     : UnP-2026-000002
+  Email         : candidat.test1@unipath.test
+  Mot de passe  : UniPath2026!
+  Téléphone     : +22997000101
+  Email confirmé: Oui
+
+  [19]
+  Nom           : Candidat2 TESTTWO
+  Matricule     : UnP-2026-000003
+  Email         : candidat.test2@unipath.test
+  Mot de passe  : UniPath2026!
+  Téléphone     : +22997000102
+  Email confirmé: Oui
+
+  [20]
+  Nom           : TestPrenom TestNom
+  Matricule     : UnP-2026-000005
+  Email         : test_candidat_1782243949123@example.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +22990000000
+  Email confirmé: Non
+
+  [21]
+  Nom           : Vignon KANLINHANON
+  Matricule     : UnP-2026-000006
+  Email         : vignonkanlinhanon5@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : 0141822980
+  Email confirmé: Non
+
+  [22]
+  Nom           : Sidney DEVI
+  Matricule     : UnP-2026-000004
+  Email         : unipathepac@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +229 0144269133
+  Email confirmé: Oui
+
+  [23]
+  Nom           : Keren FAVI
+  Matricule     : UnP-2026-000007
+  Email         : thechill000@gmail.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +229 0144443333
+  Email confirmé: Oui
+
+  [24]
+  Nom           : Candidat TEST
+  Matricule     : SEED-CAND-50924558
+  Email         : candidat@test.com
+  Mot de passe  : UniPath2026!
+  Téléphone     : +22997000088
+  Email confirmé: Oui
+
+======================================================================
+  RÉCAPITULATIF
+======================================================================
+  Administrateurs système (manuels) : 2
+  DGES                            : 1
+  Membres commission              : 5
+  Administrateurs établissement   : 3
+  Établissements (avec email)     : 19
+  Candidats / étudiants           : 24
+  Total comptes (table Compte)    : 52

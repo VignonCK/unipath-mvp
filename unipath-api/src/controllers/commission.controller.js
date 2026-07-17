@@ -1,6 +1,5 @@
 const prisma = require('../prisma');
 const { mapDossierInscriptionToInscription } = require('../utils/dossier-inscription-mapper');
-const { appendHistorique } = require('../utils/preinscription.helper');
 
 const STATUTS_VALIDES = [
   'EN_ATTENTE',
@@ -19,17 +18,6 @@ const STATUTS_COMMISSION = [
   'SOUS_RESERVE_PAR_COMMISSION',
 ];
 
-const ALIAS_STATUTS_COMMISSION = {
-  VALIDE: 'VALIDE_PAR_COMMISSION',
-  REJETE: 'REJETE_PAR_COMMISSION',
-  SOUS_RESERVE: 'SOUS_RESERVE_PAR_COMMISSION',
-};
-
-function resolveStatutCommissionQuery(statut) {
-  if (!statut) return null;
-  return ALIAS_STATUTS_COMMISSION[statut] || statut;
-}
-
 exports.getDossiers = async (req, res) => {
   try {
     const { statut } = req.query;
@@ -46,19 +34,18 @@ exports.getDossiers = async (req, res) => {
 
     if (userRole === 'COMMISSION') {
       if (statut) {
-        const statutEffectif = resolveStatutCommissionQuery(statut);
-        if (!STATUTS_COMMISSION.includes(statutEffectif)) {
+        if (!STATUTS_COMMISSION.includes(statut)) {
           return res.status(403).json({
             error: 'Accès refusé à ce statut',
             statutsAutorises: STATUTS_COMMISSION,
           });
         }
-        whereClause = { statut: statutEffectif };
+        whereClause = { statut };
       } else {
         whereClause = { statut: { in: STATUTS_COMMISSION } };
       }
     } else if (statut) {
-      whereClause = { statut: resolveStatutCommissionQuery(statut) || statut };
+      whereClause = { statut };
     }
 
     const dossiers = await prisma.dossierInscription.findMany({
@@ -88,7 +75,14 @@ exports.getDossiers = async (req, res) => {
 
 exports.getCandidatsParConcours = async (req, res) => {
   try {
+    const { resolveFiltreAnneePourListe } = require('../utils/annee-academique.helper');
+    const filtreAnnee = await resolveFiltreAnneePourListe(req);
+    if (filtreAnnee.error) {
+      return res.status(filtreAnnee.status || 400).json({ error: filtreAnnee.error });
+    }
+
     const concours = await prisma.concours.findMany({
+      where: filtreAnnee.where,
       include: {
         inscriptions: {
           where: {
@@ -221,15 +215,6 @@ exports.updateStatut = async (req, res) => {
         commentaireSousReserve: statut === 'SOUS_RESERVE' ? commentaireSousReserve : null,
         decisionCommissionPar: membreCommissionId,
         decisionCommissionDate: new Date(),
-        historiqueStatuts: appendHistorique(dossier.historiqueStatuts, {
-          statut: nouveauStatut,
-          date: new Date().toISOString(),
-          commentaire: statut === 'SOUS_RESERVE'
-            ? commentaireSousReserve
-            : statut === 'REJETE'
-              ? commentaireRejet
-              : `Decision commission: ${statut}`,
-        }),
       },
       include: {
         inscription: {
@@ -244,6 +229,68 @@ exports.updateStatut = async (req, res) => {
     });
   } catch (error) {
     console.error('Erreur updateStatut:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+/**
+ * Espace unifié commission : liste des concours affectés au membre connecté,
+ * avec le rôle (EXAMINATEUR / CONTROLEUR) résolu par concours et le nombre de
+ * dossiers à traiter pour ce rôle.
+ */
+exports.getMesConcours = async (req, res) => {
+  try {
+    const membreId = req.user.id;
+    const { getConcoursDuMembre } = require('../utils/affectation-commission.helper');
+
+    const affectations = await getConcoursDuMembre(membreId);
+
+    const resultats = await Promise.all(
+      affectations.map(async ({ role, concours }) => {
+        let dossiersATraiter = 0;
+
+        if (role === 'EXAMINATEUR') {
+          dossiersATraiter = await prisma.dossierInscription.count({
+            where: {
+              verdict1Par: null,
+              inscription: { concoursId: concours.id },
+            },
+          });
+        } else if (role === 'CONTROLEUR') {
+          dossiersATraiter = await prisma.dossierInscription.count({
+            where: {
+              verdict1: { in: ['REJETE', 'SOUS_RESERVE'] },
+              decisionControleur: null,
+              inscription: { concoursId: concours.id },
+            },
+          });
+        }
+
+        const clotureEtude = !!concours.etudeDossiersClotureeAt;
+
+        return {
+          role,
+          dossiersATraiter,
+          etudeCloturee: clotureEtude,
+          concours: {
+            id: concours.id,
+            nom: concours.libelle,
+            libelle: concours.libelle,
+            etablissement: concours.etablissement,
+            code: concours.code,
+            dateDebutEtudeDossiers: concours.dateDebutEtudeDossiers,
+            dateFinEtudeDossiers: concours.dateFinEtudeDossiers,
+            etudeDossiersClotureeAt: concours.etudeDossiersClotureeAt,
+          },
+        };
+      })
+    );
+
+    resultats.sort((a, b) => (a.concours.libelle || '').localeCompare(b.concours.libelle || ''));
+
+    res.json({ affectations: resultats });
+  } catch (error) {
+    console.error('Erreur getMesConcours:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };

@@ -301,7 +301,10 @@ const DetailDossierExaminateur = () => {
                   name="verdict"
                   value={v}
                   checked={verdict === v}
-                  onChange={(e) => setVerdict(e.target.value)}
+                  onChange={(e) => {
+                    setVerdict(e.target.value);
+                    if (e.target.value === 'VALIDE') setMotif('');
+                  }}
                   disabled={submitting || success || lectureSeule || !peutAgir}
                   className="text-slate-700"
                 />
@@ -311,26 +314,33 @@ const DetailDossierExaminateur = () => {
           </div>
         </div>
 
-        <div className="mt-4">
-          <label className="block text-xs font-medium text-gray-500 mb-2">
-            Motif {(verdict === 'REJETE' || verdict === 'SOUS_RESERVE') && '*'}
-          </label>
-          <textarea
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            rows="6"
-            value={motif}
-            onChange={(e) => setMotif(e.target.value)}
-            placeholder={
-              verdict === 'SOUS_RESERVE'
-                ? 'Indiquez la pièce non conforme et la correction attendue (ex. : relevé illisible — merci de le remplacer). Min. 10 caractères.'
-                : verdict === 'REJETE'
-                  ? 'Motif obligatoire (minimum 10 caractères)'
-                  : 'Motif optionnel'
-            }
-            disabled={submitting || success || lectureSeule || !peutAgir}
-          />
-          <p className="text-xs text-gray-400 mt-1">{motif.trim().length} / 1000 caractères</p>
-        </div>
+        {(verdict === 'REJETE' || verdict === 'SOUS_RESERVE') && (
+          <div className="mt-4">
+            <label className="block text-xs font-medium text-gray-500 mb-2">Motif *</label>
+            <textarea
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              rows="6"
+              value={motif}
+              onChange={(e) => setMotif(e.target.value)}
+              placeholder={
+                verdict === 'SOUS_RESERVE'
+                  ? 'Indiquez la pièce non conforme et la correction attendue (ex. : relevé illisible — merci de le remplacer). Min. 10 caractères.'
+                  : 'Motif obligatoire (minimum 10 caractères)'
+              }
+              disabled={submitting || success || lectureSeule || !peutAgir}
+            />
+            <p className="text-xs text-gray-400 mt-1">{motif.trim().length} / 1000 caractères</p>
+            <p className="text-xs text-amber-700 mt-2">
+              Ce verdict sera transmis au contrôleur pour arbitrage avant décision finale.
+            </p>
+          </div>
+        )}
+
+        {verdict === 'VALIDE' && !lectureSeule && peutAgir && (
+          <p className="mt-3 text-xs text-emerald-700">
+            La validation est définitive : le dossier sera accepté sans arbitrage du contrôleur.
+          </p>
+        )}
 
         {peutAgir && (
           <div className="mt-6 pt-4 border-t border-gray-100">

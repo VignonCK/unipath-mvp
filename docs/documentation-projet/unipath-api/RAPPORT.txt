@@ -1,0 +1,267 @@
+================================================================================
+UNIPATH — RAPPORT DU MODULE API (unipath-api)
+================================================================================
+Date        : 09/07/2026
+Version     : 1.0.0
+Auteur      : Groupe 4 SGBD — EPAC 2025-2026
+Emplacement : c:\Projet SGBD\unipath-mvp\unipath-api
+================================================================================
+
+1. PRÉSENTATION GÉNÉRALE
+--------------------------------------------------------------------------------
+
+unipath-api est le backend REST de la plateforme UniPath. Il gère l'authentification,
+les concours universitaires (MESRS), le parcours académique (établissements privés),
+les workflows de validation des dossiers, les notifications et la génération de PDF.
+
+État actuel : MVP fonctionnel en environnement local (Laragon / MySQL / phpMyAdmin).
+Migration récente depuis Supabase (PostgreSQL + Supabase Auth) vers MySQL + JWT local.
+
+
+2. STACK TECHNIQUE
+--------------------------------------------------------------------------------
+
+  Composant          Technologie
+  -----------------  ----------------------------------------------------------
+  Runtime            Node.js (CommonJS)
+  Framework HTTP     Express 5
+  Base de données    MySQL via Prisma ORM 5
+  Authentification   JWT (jsonwebtoken) + bcrypt (bcryptjs)
+  Validation         Zod
+  Upload fichiers    Multer → stockage local (uploads/dossiers-candidats/)
+  Emails             Nodemailer + file d'attente EmailDelivery (node-cron)
+  PDF                Scripts PHP (FPDF) invoqués depuis Node
+  Tests              Jest + Supertest
+  Logs               Winston
+
+  Port par défaut    : 3001
+  Préfixe API        : /api
+  Health check       : GET /health
+
+
+3. ARCHITECTURE
+--------------------------------------------------------------------------------
+
+  server.js                    Point d'entrée
+  src/app.js                   Montage des routes Express
+  src/routes/*.routes.js         Définition des endpoints par domaine
+  src/controllers/*.js           Logique métier HTTP
+  src/services/*.js              Services transverses (auth, email, PDF, fichiers)
+  src/middleware/                JWT protect, rôles, upload
+  prisma/schema.prisma           Schéma de données (30+ modèles)
+  php/                           Génération PDF (fiche préinscription, convocation, relevé)
+  scripts/                       Utilitaires (admins, migration, import SQL)
+  uploads/                       Fichiers uploadés (dossiers candidats)
+
+
+4. MODÈLE DE DONNÉES (PRINCIPAL)
+--------------------------------------------------------------------------------
+
+  AUTHENTIFICATION
+    Compte          email, passwordHash, profilType, profilId
+    ProfilType      CANDIDAT | COMMISSION | DGES | CONTROLEUR |
+                    ADMIN_ETABLISSEMENT | ETABLISSEMENT
+
+  UTILISATEURS
+    Candidat        Profil étudiant/candidat (matricule, ANIP, série, etc.)
+    MembreCommission  sousRole : MEMBRE | EXAMINATEUR | CONTROLEUR
+    AdministrateurDGES
+    Controleur      Profil contrôleur autonome (validation finale)
+    AdminEtablissement  Lié à un Etablissement
+    Etablissement   Peut aussi être un compte de connexion
+
+  MODULE CONCOURS
+    Concours        Libellé, dates, frais, séries acceptées, pièces requises (JSON)
+    Inscription     Lien candidat ↔ concours (numéro d'inscription)
+    DossierInscription  Workflow verdicts (examinateur → contrôleur → commission)
+
+  MODULE PARCOURS ACADÉMIQUE
+    Etablissement, Filiere
+    CampagneInscription, CampagneFiliere
+    Application, ApplicationDocument, Payment, Receipt
+    PreinscriptionEtablissement, InscriptionAcademique, Note, Diplome
+
+  TRANSVERSE
+    Dossier         Pièces personnelles du candidat (acte, CNI, photo, relevé)
+    Notification, EmailDelivery, ActionHistory, SystemAlert
+
+
+5. FONCTIONNALITÉS IMPLÉMENTÉES
+--------------------------------------------------------------------------------
+
+5.1 Authentification (100 % local)
+  [x] Inscription candidat (ANIP obligatoire)
+  [x] Inscription établissement
+  [x] Connexion JWT
+  [x] Confirmation email
+  [x] Réinitialisation mot de passe
+  [x] Changement de mot de passe
+  [x] Table Compte avec profilType / profilId
+
+5.2 Module Concours
+  [x] CRUD concours (DGES)
+  [x] Liste publique des concours
+  [x] Inscription candidat + soumission dossier complet
+  [x] Upload quittance et pièces complémentaires
+  [x] Workflow double verdict :
+        Examinateur (verdict1) → Contrôleur commission (arbitrage) →
+        Commission (statut + note) → Contrôleur autonome (validation finale)
+  [x] Gestion des notes d'examen (0–20)
+  [x] PDF convocation et fiche de préinscription
+  [x] Classement par concours
+  [x] Historique d'actions et audit
+
+5.3 Module Parcours académique
+  [x] Catalogue établissements et filières
+  [x] Campagnes d'inscription (admin établissement)
+  [x] Candidatures (applications) multi-étapes
+  [x] Exigences documentaires par établissement
+  [x] Paiement mock des frais de dossier
+  [x] Upload quittance bancaire (droits d'inscription)
+  [x] Préinscriptions et décisions établissement
+  [x] Inscriptions académiques et notes
+  [x] Relevé de notes + PDF
+
+5.4 Administration
+  [x] DGES : statistiques nationales, gestion établissements et admins
+  [x] Commission : revue dossiers, notifications
+  [x] Admin établissement : campagnes, candidatures, quittances, étudiants
+  [x] Établissement : profil, logo, exigences documentaires
+
+5.5 Transverse
+  [x] Notifications in-app
+  [x] File d'emails (SMTP configurable)
+  [x] Complétude de dossier (%)
+  [x] Export CSV historique
+  [x] Job cron : alerte dossiers sans verdict (> 2 jours)
+  [x] Stockage fichiers local
+
+
+6. FONCTIONNALITÉS PARTIELLES OU MANQUANTES
+--------------------------------------------------------------------------------
+
+  [ ] Paiement réel (gateway) — mock uniquement (MOCK_PROVIDER)
+  [ ] Centres de composition — stockés en JSON sur Concours, API relationnelle supprimée
+  [ ] Redis / WebSocket — configuration présente, non branchée
+  [ ] Supabase — retiré du runtime ; scripts legacy restants
+  [ ] Stockage cloud — migré vers disque local
+  [ ] API notes / inscriptions académiques — auth sans contrôle de rôle strict
+  [ ] Génération PDF — nécessite PHP + FPDF installés sur la machine
+  [ ] Refresh token JWT — expiration → reconnexion obligatoire
+  [ ] resend (package npm) — installé mais non utilisé
+
+
+7. RÔLES ET PERMISSIONS
+--------------------------------------------------------------------------------
+
+  Rôle                  Capacités principales
+  --------------------  -------------------------------------------------------
+  CANDIDAT / ETUDIANT   Profil, dossier personnel, concours, parcours, applications
+  COMMISSION (MEMBRE)   Revue dossiers, notes, statuts, notifications
+  EXAMINATEUR           Premier verdict sur les dossiers
+  CONTROLEUR (comm.)    Arbitrage, correction verdict examinateur, tableau de bord
+  CONTROLEUR (profil)   Validation finale des décisions commission
+  DGES                  CRUD concours, stats, gestion établissements
+  ADMIN_ETABLISSEMENT   Campagnes d'inscription
+  ETABLISSEMENT         Profil école, candidatures, préinscriptions, quittances
+
+
+8. ENDPOINTS PAR DOMAINE (RÉSUMÉ)
+--------------------------------------------------------------------------------
+
+  /api/auth              Inscription, login, reset password, confirmation email
+  /api/candidats         Profil candidat, PDF convocation/préinscription
+  /api/concours          Liste, détail, CRUD (DGES), classement
+  /api/inscriptions      Inscriptions concours, soumission dossier, quittance
+  /api/dossier           Dossier personnel (upload, consultation)
+  /api/commission        Dossiers, statuts, notes
+  /api/examinateur       Verdicts examinateur
+  /api/controleur-commission  Arbitrage contrôleur
+  /api/controleur        Validation finale
+  /api/dges              Statistiques, établissements, admins
+  /api/etablissements    Catalogue, profil établissement, logo
+  /api/etablissement/campagnes  CRUD campagnes (admin)
+  /api/campagnes         Campagnes publiées (candidat)
+  /api/applications      Candidatures établissements privés
+  /api/preinscriptions-etablissement  Préinscriptions
+  /api/inscriptions-academiques  Inscriptions académiques
+  /api/notes             Notes par semestre
+  /api/parcours          Parcours, relevé, PDF relevé
+  /api/completion        Complétude dossier
+  /api/history           Audit, export CSV
+  /api/notifications     Notifications in-app
+  /api/email             Monitoring emails (DGES/contrôleur)
+  /uploads/*             Fichiers statiques
+
+
+9. SCRIPTS UTILES
+--------------------------------------------------------------------------------
+
+  npm run dev                    Démarrer l'API
+  npm run test                   Tests Jest
+  npm run create-admins          Créer comptes Commission + DGES
+  npm run seed:roles             Seed des rôles
+  npm run seed:concours-officiels  Seed concours MESRS
+  npx prisma db push             Synchroniser schéma MySQL
+  npx prisma db seed             Données de démonstration
+  node scripts/convert-pg-dump-to-mysql.js   Migration Supabase → MySQL
+  node scripts/generate-comptes-connexion.js Liste des comptes
+
+
+10. VARIABLES D'ENVIRONNEMENT (.env)
+--------------------------------------------------------------------------------
+
+  Obligatoires :
+    DATABASE_URL=mysql://root:@localhost:3306/unipath
+    JWT_SECRET=<clé secrète>
+
+  Recommandées :
+    PORT=3001
+    FRONTEND_URL=http://localhost:5173
+    APP_URL=http://localhost:3001
+    JWT_EXPIRES_IN=7d
+    ACADEMIC_YEAR=2025-2026
+    SITE_CODE=UnP
+
+  Email (optionnel en dev) :
+    SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS
+    EMAIL_QUEUE_ENABLED=false   (désactive le worker en dev)
+
+
+11. MIGRATION RÉCENTE (ÉTAT ACTUEL)
+--------------------------------------------------------------------------------
+
+  Avant  : Supabase PostgreSQL + Supabase Auth + Supabase Storage
+  Après  : MySQL local + JWT/bcrypt + stockage fichiers local
+
+  Fichiers clés de migration :
+    prisma/schema.prisma          provider = "mysql", modèle Compte
+    src/services/auth.service.js  Auth JWT locale
+    src/services/local-file-storage.service.js
+    import_unipath_mysql.sql      Import données Supabase → MySQL
+    comptes_connexion_unipath.txt Liste des identifiants
+
+  Mot de passe import : UniPath2026! (tous les comptes migrés)
+
+
+12. POINTS D'ATTENTION
+--------------------------------------------------------------------------------
+
+  - PHP doit être accessible pour la génération PDF
+  - Les fichiers uploadés Supabase doivent être copiés manuellement dans uploads/
+  - Ne pas commiter le fichier .env ni comptes_connexion_unipath.txt
+  - prisma db push préféré aux migrations PostgreSQL archivées
+  - Certains scripts (create-commission-sous-roles.js) référencent encore Supabase
+
+
+13. CONCLUSION
+--------------------------------------------------------------------------------
+
+Le module API est opérationnel pour un MVP local couvrant les deux grands domaines
+métier (Concours MESRS et Parcours académique). L'authentification et la persistance
+sont entièrement locales. Les principales limites concernent les paiements réels,
+le stockage cloud et quelques reliquats de l'ancienne stack Supabase.
+
+================================================================================
+FIN DU RAPPORT — unipath-api
+================================================================================

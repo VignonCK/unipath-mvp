@@ -1,86 +1,61 @@
 // src/controllers/controleur-commission.controller.js
 const prisma = require('../prisma');
-const {
-  validateAndSanitizeVerdict,
-  validateUUID,
-  validateDecisionControleur,
-  formatMotifForClient,
-} = require('../utils/validation');
+const { validateAndSanitizeVerdict, validateUUID, validateDecisionControleur } = require('../utils/validation');
 const {
   etapesCompletees,
   verdictsDivergents,
   buildDecisionControleurUpdate,
   getVerdictControleur,
   isArbitrageDivergent,
+  necessiteArbitrageControleur,
+  dossierValideParExaminateur,
 } = require('../utils/verdict-workflow.helper');
 const { notifierExaminateurArbitrageDivergent } = require('../utils/arbitrage-examinateur.helper');
-const { appendHistorique } = require('../utils/preinscription.helper');
+const { runInBackground } = require('../utils/background-task');
 const {
   getInfoResoumissionCandidat,
   getActiviteCandidatRecente,
+  RESOUMIS_ACTION,
 } = require('../utils/sous-reserve.helper');
 const {
-  getModificationControleurInfo,
-  assertControleurPeutRendreDecision,
-  assertControleurPeutModifierDecision,
-} = require('../utils/decision-controleur.helper');
-const {
-  resolveCommissionScope,
-  applyConcoursScope,
-  assertDossierDansScope,
-} = require('../utils/commission-etablissement.helper');
-
-async function scopedWhere(req, where) {
-  const scope = await resolveCommissionScope(req.user.id);
-  return applyConcoursScope(where, scope ? scope.concoursIds : null);
-}
-
-async function assertDossierAccessible(req, dossierInscriptionId) {
-  const scope = await resolveCommissionScope(req.user.id);
-  if (!scope) return true;
-  return assertDossierDansScope(dossierInscriptionId, scope.concoursIds);
-}
+  assertPeriodeEtudeActive,
+  whereConcoursPeriodeEtudeActive,
+} = require('../utils/periode-etude-dossiers.helper');
 
 /**
  * Tableau de bord avec indicateurs clés
  */
 exports.getTableauDeBord = async (req, res) => {
   try {
-    const scope = await resolveCommissionScope(req.user.id);
-    const concoursIds = scope ? scope.concoursIds : null;
-
+    // Compter les dossiers par catégorie
     const [dossiersAvec1Verdict, dossiersAvec2Verdicts, dossiersAvecDecision] = await Promise.all([
       prisma.dossierInscription.count({
-        where: applyConcoursScope(
-          {
-            verdict1Par: { not: null },
-            decisionControleur: null,
-          },
-          concoursIds
-        ),
+        where: {
+          verdict1: { in: ['REJETE', 'SOUS_RESERVE'] },
+          decisionControleur: null,
+        },
       }),
       prisma.dossierInscription.count({
-        where: applyConcoursScope(
-          {
-            verdict1Par: { not: null },
-            decisionControleur: { not: null },
-          },
-          concoursIds
-        ),
+        where: {
+          verdict1Par: { not: null },
+          decisionControleur: { not: null },
+        },
       }),
       prisma.dossierInscription.count({
-        where: applyConcoursScope({ decisionControleur: { not: null } }, concoursIds),
+        where: {
+          OR: [
+            { decisionControleur: { not: null } },
+            { statut: 'VALIDE', verdict1: 'VALIDE', decisionControleur: null },
+          ],
+        },
       }),
     ]);
 
     const dossiersArbitres = await prisma.dossierInscription.findMany({
-      where: applyConcoursScope(
-        {
-          verdict1Par: { not: null },
-          decisionControleur: { not: null },
-        },
-        concoursIds
-      ),
+      where: {
+        verdict1Par: { not: null },
+        decisionControleur: { not: null },
+      },
       select: { verdict1: true, decisionControleur: true },
     });
 
@@ -101,12 +76,9 @@ exports.getTableauDeBord = async (req, res) => {
         : 0;
 
     const tousLesDossiers = await prisma.dossierInscription.findMany({
-      where: applyConcoursScope(
-        {
-          OR: [{ verdict1: { not: null } }, { decisionControleur: { not: null } }],
-        },
-        concoursIds
-      ),
+      where: {
+        OR: [{ verdict1: { not: null } }, { decisionControleur: { not: null } }],
+      },
       select: { verdict1: true, decisionControleur: true },
     });
 
@@ -154,38 +126,63 @@ exports.getTableauDeBord = async (req, res) => {
 exports.getDossiers = async (req, res) => {
   try {
     const { filtre, concoursId, limite = 50, offset = 0 } = req.query;
+    const now = new Date();
+    const {
+      resolveConcoursFilterForMembre,
+    } = require('../utils/affectation-commission.helper');
+
+    const filter = await resolveConcoursFilterForMembre(
+      req.user.id,
+      'CONTROLEUR',
+      concoursId || null
+    );
+    if (filter.forbidden || (filter.concoursIds && filter.concoursIds.length === 0 && !filter.openMode)) {
+      return res.json({
+        dossiers: [],
+        pagination: { total: 0, limite: parseInt(limite), offset: parseInt(offset) },
+        message: filter.forbidden
+          ? 'Vous n\'êtes pas affecté à ce concours'
+          : 'Aucun concours ne vous est affecté pour le contrôle',
+      });
+    }
+
+    const concoursWhere = {
+      ...whereConcoursPeriodeEtudeActive(now),
+      ...(filter.concoursIds ? { id: { in: filter.concoursIds } } : {}),
+    };
+    const inscriptionWhere = { concours: concoursWhere };
 
     let whereClause = {
       verdict1Par: { not: null },
+      inscription: inscriptionWhere,
     };
 
-    if (filtre === '1_verdict') {
+    if (filtre === '1_verdict' || filtre === 'sans_decision') {
       whereClause = {
-        verdict1Par: { not: null },
+        verdict1: { in: ['REJETE', 'SOUS_RESERVE'] },
         decisionControleur: null,
+        inscription: inscriptionWhere,
       };
     } else if (filtre === '2_verdicts') {
       whereClause = {
         verdict1Par: { not: null },
         decisionControleur: { not: null },
-      };
-    } else if (filtre === 'sans_decision') {
-      whereClause = {
-        verdict1Par: { not: null },
-        decisionControleur: null,
+        inscription: inscriptionWhere,
       };
     } else if (filtre === 'divergents') {
       whereClause = {
         verdict1Par: { not: null },
         decisionControleur: { not: null },
+        inscription: inscriptionWhere,
+      };
+    } else if (filtre === 'valides_examinateur') {
+      whereClause = {
+        statut: 'VALIDE',
+        verdict1: 'VALIDE',
+        decisionControleur: null,
+        inscription: inscriptionWhere,
       };
     }
-
-    if (concoursId) {
-      whereClause.inscription = { ...(whereClause.inscription || {}), concoursId };
-    }
-
-    whereClause = await scopedWhere(req, whereClause);
 
     const [dossiers, total] = await Promise.all([
       prisma.dossierInscription.findMany({
@@ -194,8 +191,20 @@ exports.getDossiers = async (req, res) => {
           inscription: {
             include: {
               candidat: { select: { nom: true, prenom: true, email: true } },
-              concours: { select: { libelle: true, etablissement: true } },
+              concours: {
+                select: {
+                  libelle: true,
+                  etablissement: true,
+                  dateDebutEtudeDossiers: true,
+                  dateFinEtudeDossiers: true,
+                },
+              },
             },
+          },
+          actionHistory: {
+            where: { typeAction: RESOUMIS_ACTION },
+            orderBy: { timestamp: 'desc' },
+            take: 1,
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -220,6 +229,8 @@ exports.getDossiers = async (req, res) => {
       const divergent = verdictsDivergents(d);
       const etapes = etapesCompletees(d);
       const verdictControleur = getVerdictControleur(d);
+      const arbitrageRequis = necessiteArbitrageControleur(d);
+      const valideParExaminateur = dossierValideParExaminateur(d);
 
       return {
         dossierInscriptionId: d.id,
@@ -235,7 +246,7 @@ exports.getDossiers = async (req, res) => {
                 par: d.verdict1Par,
                 nomExaminateur: membresMap[d.verdict1Par],
                 date: d.verdict1Date,
-                motif: formatMotifForClient(d.verdict1Motif),
+                motif: d.verdict1Motif,
               }
             : null,
           verdict2: verdictControleur
@@ -249,12 +260,14 @@ exports.getDossiers = async (req, res) => {
               }
             : null,
         },
-        statutVerdicts: `${etapes}/2`,
+        statutVerdicts: valideParExaminateur ? 'Validé examinateur' : `${etapes}/2`,
         verdictsDivergents: divergent,
-        decisionFinale: d.decisionControleur,
+        decisionFinale: d.decisionControleur || (valideParExaminateur ? 'VALIDE' : null),
+        validationExaminateurFinale: valideParExaminateur,
+        necessiteArbitrage: arbitrageRequis,
         statut: d.statut,
         resoumission: getInfoResoumissionCandidat(d),
-        priorite: divergent ? 'HIGH' : d.verdict1Par && !d.decisionControleur ? 'HIGH' : 'NORMAL',
+        priorite: arbitrageRequis || divergent ? 'HIGH' : 'NORMAL',
         dateCreation: d.createdAt,
       };
     });
@@ -282,12 +295,21 @@ exports.getDossiers = async (req, res) => {
  */
 exports.getDossiersDivergents = async (req, res) => {
   try {
-    const { limite = 50, offset = 0 } = req.query;
+    const { limite = 50, offset = 0, concoursId } = req.query;
+    const { resolveConcoursFilterForMembre } = require('../utils/affectation-commission.helper');
 
-    const whereClause = await scopedWhere(req, {
+    const filter = await resolveConcoursFilterForMembre(req.user.id, 'CONTROLEUR', concoursId || null);
+    if (filter.forbidden) {
+      return res.status(403).json({ error: "Vous n'êtes pas affecté à ce concours" });
+    }
+
+    const whereClause = {
       verdict1Par: { not: null },
       decisionControleur: { not: null },
-    });
+      ...(filter.concoursIds
+        ? { inscription: { concoursId: { in: filter.concoursIds } } }
+        : {}),
+    };
 
     const dossiers = await prisma.dossierInscription.findMany({
       where: whereClause,
@@ -334,7 +356,7 @@ exports.getDossiersDivergents = async (req, res) => {
             par: d.verdict1Par,
             nomExaminateur: membresMap[d.verdict1Par],
             date: d.verdict1Date,
-            motif: formatMotifForClient(d.verdict1Motif),
+            motif: d.verdict1Motif,
           },
           verdict2: verdictControleur
             ? {
@@ -402,8 +424,9 @@ exports.getDetailDossier = async (req, res) => {
       return res.status(404).json({ error: 'Dossier non trouvé' });
     }
 
-    if (!(await assertDossierAccessible(req, dossierInscriptionId))) {
-      return res.status(403).json({ error: 'Accès refusé à ce dossier' });
+    const etude = assertPeriodeEtudeActive(dossier.inscription?.concours);
+    if (!etude.ok) {
+      return res.status(403).json({ error: etude.error, code: etude.code });
     }
 
     const membreIds = [dossier.verdict1Par, dossier.decisionControleurPar].filter(Boolean);
@@ -415,6 +438,8 @@ exports.getDetailDossier = async (req, res) => {
       membres.map((e) => [e.id, { nom: e.nom, prenom: e.prenom, sousRole: e.sousRole }])
     );
     const verdictControleur = getVerdictControleur(dossier);
+    const valideParExaminateur = dossierValideParExaminateur(dossier);
+    const arbitrageRequis = necessiteArbitrageControleur(dossier);
 
     res.json({
       dossierInscription: {
@@ -423,9 +448,6 @@ exports.getDetailDossier = async (req, res) => {
         createdAt: dossier.createdAt,
         updatedAt: dossier.updatedAt,
       },
-      resoumission: getInfoResoumissionCandidat(dossier),
-      activiteCandidat: getActiviteCandidatRecente(dossier.actionHistory),
-      modificationControleur: getModificationControleurInfo(dossier),
       inscription: {
         numeroInscription: dossier.inscription.numeroInscription,
         candidat: {
@@ -468,7 +490,7 @@ exports.getDetailDossier = async (req, res) => {
         verdict1: dossier.verdict1Par
           ? {
               verdict: dossier.verdict1,
-              motif: formatMotifForClient(dossier.verdict1Motif),
+              motif: dossier.verdict1Motif,
               date: dossier.verdict1Date,
               examinateur: membresMap[dossier.verdict1Par],
             }
@@ -487,11 +509,20 @@ exports.getDetailDossier = async (req, res) => {
       decisionControleur: dossier.decisionControleur
         ? {
             decision: dossier.decisionControleur,
-            motif: formatMotifForClient(dossier.decisionControleurMotif),
+            motif: dossier.decisionControleurMotif,
             date: dossier.decisionControleurDate,
             par: dossier.decisionControleurPar,
           }
         : null,
+      validationExaminateurFinale: valideParExaminateur,
+      necessiteArbitrage: arbitrageRequis,
+      permissions: {
+        peutRendreDecision: arbitrageRequis,
+        peutCorrigerVerdictExaminateur: arbitrageRequis || (!!dossier.verdict1Par && !valideParExaminateur && !dossier.decisionControleur),
+        lectureSeule: valideParExaminateur || (!arbitrageRequis && !!dossier.decisionControleur),
+      },
+      resoumission: getInfoResoumissionCandidat(dossier),
+      activiteCandidat: getActiviteCandidatRecente(dossier.actionHistory),
       historique: dossier.actionHistory,
     });
   } catch (error) {
@@ -534,8 +565,15 @@ exports.modifierVerdictExaminateur = async (req, res) => {
       return res.status(404).json({ error: 'Dossier non trouvé' });
     }
 
-    if (!(await assertDossierAccessible(req, dossierInscriptionId))) {
-      return res.status(403).json({ error: 'Accès refusé à ce dossier' });
+    const etude = assertPeriodeEtudeActive(dossier.inscription?.concours);
+    if (!etude.ok) {
+      return res.status(403).json({ error: etude.error, code: etude.code });
+    }
+
+    if (dossierValideParExaminateur(dossier)) {
+      return res.status(400).json({
+        error: 'Ce dossier a été validé définitivement par l\'examinateur et ne peut plus être corrigé.',
+      });
     }
 
     const auteurId = dossier.verdict1Par;
@@ -627,18 +665,31 @@ exports.rendreDecision = async (req, res) => {
       return res.status(404).json({ error: 'Dossier non trouvé' });
     }
 
-    if (!(await assertDossierAccessible(req, dossierInscriptionId))) {
-      return res.status(403).json({ error: 'Accès refusé à ce dossier' });
+    const etude = assertPeriodeEtudeActive(dossier.inscription?.concours);
+    if (!etude.ok) {
+      return res.status(403).json({ error: etude.error, code: etude.code });
+    }
+
+    if (dossierValideParExaminateur(dossier)) {
+      return res.status(400).json({
+        error: 'Ce dossier a déjà été validé définitivement par l\'examinateur. Aucun arbitrage n\'est requis.',
+      });
+    }
+
+    if (!necessiteArbitrageControleur(dossier) && !dossier.decisionControleur) {
+      if (!dossier.verdict1Par) {
+        return res.status(400).json({ error: 'Aucun verdict examinateur n\'a encore été rendu.' });
+      }
+      if (dossier.verdict1 === 'VALIDE') {
+        return res.status(400).json({
+          error: 'Une validation examinateur ne nécessite pas d\'arbitrage du contrôleur.',
+        });
+      }
     }
 
     const validation = validateDecisionControleur(dossier, decision, motif);
     if (!validation.valid) {
       return res.status(400).json({ error: validation.error });
-    }
-
-    const checkDecision = assertControleurPeutRendreDecision(dossier);
-    if (!checkDecision.ok) {
-      return res.status(403).json({ error: checkDecision.error });
     }
 
     const nombreVerdictsPresents = etapesCompletees(dossier);
@@ -663,7 +714,6 @@ exports.rendreDecision = async (req, res) => {
     const updateData = {
       ...buildDecisionControleurUpdate(controleurId, decision, validation.sanitizedMotif),
       statut: nouveauStatut,
-      decisionControleurModifieCount: 0,
     };
 
     // Copier le motif vers les anciens champs pour compatibilité
@@ -672,12 +722,6 @@ exports.rendreDecision = async (req, res) => {
     } else if (decision === 'SOUS_RESERVE') {
       updateData.commentaireSousReserve = validation.sanitizedMotif;
     }
-
-    updateData.historiqueStatuts = appendHistorique(dossier.historiqueStatuts, {
-      statut: nouveauStatut,
-      date: new Date().toISOString(),
-      commentaire: validation.sanitizedMotif || `Decision controleur: ${decision}`,
-    });
 
     // Transaction : mettre à jour le dossier + enregistrer l'action
     const result = await prisma.$transaction(async (tx) => {
@@ -744,7 +788,7 @@ exports.rendreDecision = async (req, res) => {
       });
     }
 
-    try {
+    runInBackground(async () => {
       const { envoyerEmailDecisionFinale } = require('../utils/email-decision.helper');
       await envoyerEmailDecisionFinale({
         candidat: dossier.inscription.candidat,
@@ -753,9 +797,7 @@ exports.rendreDecision = async (req, res) => {
         decision,
         motif: validation.sanitizedMotif,
       });
-    } catch (emailError) {
-      console.error('Erreur envoi email:', emailError);
-    }
+    }, 'commission-decision-email');
 
     res.status(201).json({
       message: 'Décision enregistrée avec succès',
@@ -799,17 +841,8 @@ exports.modifierDecision = async (req, res) => {
       return res.status(404).json({ error: 'Dossier non trouvé' });
     }
 
-    if (!(await assertDossierAccessible(req, dossierInscriptionId))) {
-      return res.status(403).json({ error: 'Accès refusé à ce dossier' });
-    }
-
     if (!dossier.decisionControleur) {
       return res.status(400).json({ error: 'Aucune décision n\'a encore été rendue sur ce dossier' });
-    }
-
-    const checkModification = assertControleurPeutModifierDecision(dossier);
-    if (!checkModification.ok) {
-      return res.status(403).json({ error: checkModification.error });
     }
 
     const validation = validateDecisionControleur(dossier, decision, motif);
@@ -839,7 +872,6 @@ exports.modifierDecision = async (req, res) => {
     const updateData = {
       ...buildDecisionControleurUpdate(controleurId, decision, validation.sanitizedMotif),
       statut: nouveauStatut,
-      decisionControleurModifieCount: (dossier.decisionControleurModifieCount ?? 0) + 1,
     };
 
     // Copier le motif vers les anciens champs pour compatibilité
@@ -900,7 +932,7 @@ exports.modifierDecision = async (req, res) => {
     }
 
     if (decision !== ancienneDecision) {
-      try {
+      runInBackground(async () => {
         const { envoyerEmailDecisionFinale } = require('../utils/email-decision.helper');
         await envoyerEmailDecisionFinale({
           candidat: dossier.inscription.candidat,
@@ -909,9 +941,7 @@ exports.modifierDecision = async (req, res) => {
           decision,
           motif: validation.sanitizedMotif,
         });
-      } catch (emailErr) {
-        console.error('Erreur email modification décision:', emailErr);
-      }
+      }, 'commission-modifier-decision-email');
     }
 
     res.json({
@@ -939,18 +969,27 @@ exports.modifierDecision = async (req, res) => {
  */
 exports.getDossiersSansVerdict = async (req, res) => {
   try {
-    const { limite = 50, offset = 0 } = req.query;
+    const { limite = 50, offset = 0, concoursId } = req.query;
+    const { resolveConcoursFilterForMembre } = require('../utils/affectation-commission.helper');
+
+    const filter = await resolveConcoursFilterForMembre(req.user.id, 'CONTROLEUR', concoursId || null);
+    if (filter.forbidden) {
+      return res.status(403).json({ error: "Vous n'êtes pas affecté à ce concours" });
+    }
 
     // Date limite : il y a 2 jours
     const dateLimite = new Date();
     dateLimite.setDate(dateLimite.getDate() - 2);
 
-    const whereClause = await scopedWhere(req, {
+    const whereClause = {
       verdict1Par: null,
       createdAt: {
         lte: dateLimite,
       },
-    });
+      ...(filter.concoursIds
+        ? { inscription: { concoursId: { in: filter.concoursIds } } }
+        : {}),
+    };
 
     const [dossiers, total] = await Promise.all([
       prisma.dossierInscription.findMany({

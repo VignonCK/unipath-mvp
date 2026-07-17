@@ -5,39 +5,30 @@ const logger = require('./src/utils/logger');
 const app = require('./src/app');
 const emailWorker = require('./src/services/email.worker');
 const dossiersSansVerdictJob = require('./src/jobs/dossiers-sans-verdict.job');
+const periodeEtudeDossiersJob = require('./src/jobs/periode-etude-dossiers.job');
 const emailConfig = require('./src/config/email.config');
 
 const PORT = config.port;
-const apiBaseUrl = process.env.API_PUBLIC_URL || `http://localhost:${PORT}`;
-
 const server = app.listen(PORT, () => {
   logger.success(`Serveur UniPath démarré sur le port ${PORT}`);
-  logger.info(`Health check: ${apiBaseUrl}/health`);
-  logger.info(`API Base URL: ${apiBaseUrl}/api`);
+  logger.info(`Health check: ${config.appUrl}/health`);
+  logger.info(`API Base URL: ${config.appUrl}/api`);
   logger.info(`Environnement: ${config.env}`);
+  
+  // Start email worker only when enabled
+  if (emailConfig.isQueueEnabled()) {
+    emailWorker.start();
+    logger.info('Email worker started');
+  } else {
+    logger.warn('Email worker disabled (EMAIL_QUEUE_ENABLED=false)');
+  }
+  
+  // Start dossiers sans verdict job
+  dossiersSansVerdictJob.start();
+  logger.info('Dossiers sans verdict job started');
 
-  const prisma = require('./src/prisma');
-  const { connectPrismaWithRetry } = require('./src/utils/prisma-retry.helper');
-
-  connectPrismaWithRetry(prisma, { retries: 5, baseDelayMs: 2000 })
-    .then(() => {
-      logger.info('Connexion base de données OK');
-
-      if (emailConfig.isQueueEnabled()) {
-        emailWorker.start();
-        logger.info('Email worker started');
-      } else {
-        logger.warn('Email worker disabled (EMAIL_QUEUE_ENABLED=false)');
-      }
-
-      dossiersSansVerdictJob.start();
-      logger.info('Dossiers sans verdict job started');
-    })
-    .catch((error) => {
-      logger.warn(`Base de données injoignable au démarrage: ${error.message}`);
-      logger.warn('Vérifiez Supabase (projet actif?) et DATABASE_URL dans .env');
-      logger.warn('Les workers (email, cron) démarreront quand la base répondra — relancez npm start si besoin.');
-    });
+  periodeEtudeDossiersJob.start();
+  logger.info('Periode etude dossiers job started');
 });
 
 // Force le process à rester actif
@@ -53,6 +44,9 @@ const gracefulShutdown = (signal) => {
   // Stop dossiers sans verdict job
   dossiersSansVerdictJob.stop();
   logger.info('Dossiers sans verdict job stopped');
+
+  periodeEtudeDossiersJob.stop();
+  logger.info('Periode etude dossiers job stopped');
   
   server.close(() => {
     logger.success('Serveur arrêté proprement');

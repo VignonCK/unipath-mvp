@@ -22,6 +22,7 @@ export const ROLES = {
   CANDIDAT: 'CANDIDAT',
   COMMISSION: 'COMMISSION',
   DGES: 'DGES',
+  DEC: 'DEC',
   CONTROLEUR: 'CONTROLEUR',
   ADMIN_ETABLISSEMENT: 'ADMIN_ETABLISSEMENT',
 };
@@ -35,8 +36,9 @@ export const STUDENT_ROLES = [ROLES.ETUDIANT, ROLES.CANDIDAT];
 const DEFAULT_ROUTES = {
   [ROLES.ETUDIANT]: '/dashboard',
   [ROLES.CANDIDAT]: '/dashboard',
-  [ROLES.COMMISSION]: '/commission',
+  [ROLES.COMMISSION]: '/commission/mes-concours',
   [ROLES.DGES]: '/dashboard-dges',
+  [ROLES.DEC]: '/dashboard-dec',
   [ROLES.CONTROLEUR]: '/controleur-commission/tableau-de-bord',
   [ROLES.ADMIN_ETABLISSEMENT]: '/admin-etablissement/campagnes',
 };
@@ -170,11 +172,10 @@ export function logout() {
  * @param {string} role - Rôle de l'utilisateur
  * @returns {string} Route par défaut
  */
-export function getDefaultRoute(role, sousRole) {
+export function getDefaultRoute(role) {
   if (role === ROLES.COMMISSION) {
-    if (sousRole === SOUS_ROLES_COMMISSION.EXAMINATEUR) return '/examinateur/dossiers';
-    if (sousRole === SOUS_ROLES_COMMISSION.CONTROLEUR) return '/controleur-commission/tableau-de-bord';
-    return '/commission';
+    // Interface unifiée : tous les membres arrivent sur « Mes concours ».
+    return '/commission/mes-concours';
   }
   return DEFAULT_ROUTES[role] || '/login';
 }

@@ -22,10 +22,10 @@ const upload = multer({
 router.post('/', protect, checkRole(['CANDIDAT']), controller.createApplication);
 router.get('/mine', protect, checkRole(['CANDIDAT']), controller.getMyApplications);
 
-router.get('/etablissement/applications', protect, checkRole(['ADMIN_ETABLISSEMENT']), controller.getApplicationsForEtablissement);
-router.get('/etablissement/requirements', protect, checkRole(['ADMIN_ETABLISSEMENT']), controller.getMySchoolRequirements);
-router.post('/etablissement/requirements', protect, checkRole(['ADMIN_ETABLISSEMENT']), controller.upsertSchoolRequirement);
-router.delete('/etablissement/requirements/:id', protect, checkRole(['ADMIN_ETABLISSEMENT']), controller.deleteSchoolRequirement);
+router.get('/etablissement/applications', protect, checkRole(['ETABLISSEMENT']), controller.getApplicationsForEtablissement);
+router.get('/etablissement/requirements', protect, checkRole(['ETABLISSEMENT']), controller.getMySchoolRequirements);
+router.post('/etablissement/requirements', protect, checkRole(['ETABLISSEMENT']), controller.upsertSchoolRequirement);
+router.delete('/etablissement/requirements/:id', protect, checkRole(['ETABLISSEMENT']), controller.deleteSchoolRequirement);
 
 router.get('/requirements/etablissement/:etablissementId', protect, controller.getSchoolRequirements);
 router.get('/:id', protect, controller.getApplicationById);

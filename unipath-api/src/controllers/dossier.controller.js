@@ -1,97 +1,20 @@
-const { supabaseAdmin } = require('../supabase');
+const localFileStorage = require('../services/local-file-storage.service');
 const prisma = require('../prisma');
 const { isEtudiantRole } = require('../constants/roles.constants');
-const { isStatutSousReserveActif } = require('../utils/sous-reserve.helper');
 const {
   BUCKET_DOSSIERS_CANDIDATS,
-  sanitizeStorageRelativePath,
-  createDossiersCandidatsSignedUrl,
-  SIGNED_URL_DEFAULT_EXPIRES_IN,
+  extractStorageRelativePath,
 } = require('../utils/storage.helper');
+const { getBackendUrl } = require('../utils/url.helper');
 
-const uploadToSupabase = async (file, candidatId, typePiece) => {
+const uploadToLocal = async (file, candidatId, typePiece) => {
   const ext = file.originalname.split('.').pop();
-  const fileName = candidatId + '/' + typePiece + '-' + Date.now() + '.' + ext;
-
-  const { error } = await supabaseAdmin.storage
-    .from(BUCKET_DOSSIERS_CANDIDATS)
-    .upload(fileName, file.buffer, {
-      contentType: file.mimetype,
-      upsert: true,
-    });
-
-  if (error) throw new Error(error.message);
-
-  return fileName;
+  const storagePath = `${candidatId}/${typePiece}-${Date.now()}.${ext}`;
+  return localFileStorage.saveBuffer(file.buffer, storagePath);
 };
 
 // Pièces de base du dossier candidat
 const PIECES_DOSSIER_BASE = ['acteNaissance', 'carteIdentite', 'photo', 'releve'];
-
-function assertPeutCorrigerDossierInscription(dossierInscription) {
-  if (!dossierInscription) {
-    return { ok: false, error: 'Dossier concours introuvable' };
-  }
-  if (dossierInscription.statut === 'SOUS_RESERVE_PAR_COMMISSION') {
-    return {
-      ok: false,
-      error: 'Attendez la validation sous reserve par le controleur avant de remplacer vos pieces.',
-    };
-  }
-  if (dossierInscription.statut !== 'SOUS_RESERVE' && dossierInscription.statut !== 'EN_ATTENTE') {
-    return {
-      ok: false,
-      error: 'Le remplacement de pieces nest pas autorise pour le statut actuel du dossier.',
-    };
-  }
-  return { ok: true };
-}
-
-function assertPeutCorrigerPieceBase(candidatId, userId, userRole) {
-  if (isEtudiantRole(userRole) && userId !== candidatId) {
-    return { ok: false, error: 'Vous ne pouvez modifier que votre propre dossier personnel.' };
-  }
-  return { ok: true };
-}
-
-async function candidatPeutCorrigerPieceBase(prismaClient, candidatId, inscriptionIdHint) {
-  if (inscriptionIdHint) {
-    const inscription = await prismaClient.inscription.findFirst({
-      where: { id: inscriptionIdHint, candidatId },
-      include: { dossierInscription: true },
-    });
-    return assertPeutCorrigerDossierInscription(inscription?.dossierInscription);
-  }
-
-  const dossiersSousReserve = await prismaClient.dossierInscription.findMany({
-    where: {
-      inscription: { candidatId },
-      statut: 'SOUS_RESERVE',
-    },
-    select: { id: true },
-  });
-
-  if (dossiersSousReserve.length > 0) {
-    return { ok: true };
-  }
-
-  const enAttenteCommission = await prismaClient.dossierInscription.findFirst({
-    where: {
-      inscription: { candidatId },
-      statut: 'SOUS_RESERVE_PAR_COMMISSION',
-    },
-    select: { id: true },
-  });
-
-  if (enAttenteCommission) {
-    return {
-      ok: false,
-      error: 'Attendez la validation sous reserve par le controleur avant de remplacer vos pieces.',
-    };
-  }
-
-  return { ok: true };
-}
 
 exports.uploadPiece = async (req, res) => {
     try {
@@ -108,64 +31,39 @@ exports.uploadPiece = async (req, res) => {
         return res.status(400).json({ error: 'Aucun fichier recu' });
       }
 
-      // Upload vers Supabase (chemin objet stocké en base, pas d'URL publique)
-      const storagePath = await uploadToSupabase(req.file, candidatId, typePiece);
-      let signedUrl;
-      try {
-        signedUrl = await createDossiersCandidatsSignedUrl(storagePath);
-      } catch (signErr) {
-        console.error('Erreur URL signée après upload:', signErr);
-        return res.status(500).json({ error: 'Fichier enregistré mais accès temporaire indisponible.' });
-      }
+      // Upload vers Supabase
+      const fileUrl = await uploadToLocal(req.file, candidatId, typePiece);
 
       // ROUTAGE INTELLIGENT
       // Cas 1 : Pièce de base → Dossier Personnel
       if (PIECES_DOSSIER_BASE.includes(typePiece)) {
-        const targetCandidatId = req.params.candidatId || candidatId;
-        const baseCheck = assertPeutCorrigerPieceBase(targetCandidatId, req.user.id, req.userRole || req.user?.role);
-        if (!baseCheck.ok) {
-          return res.status(403).json({ error: baseCheck.error });
-        }
-
-        const sousReserveCheck = await candidatPeutCorrigerPieceBase(
-          prisma,
-          targetCandidatId,
-          inscriptionId,
-        );
-        if (!sousReserveCheck.ok) {
-          return res.status(400).json({ error: sousReserveCheck.error });
-        }
-
         const dossier = await prisma.dossier.upsert({
-          where: { candidatId: targetCandidatId },
-          update: { [typePiece]: storagePath },
+          where: { candidatId },
+          update: { [typePiece]: fileUrl },
           create: {
-            candidatId: targetCandidatId,
-            [typePiece]: storagePath,
+            candidatId,
+            [typePiece]: fileUrl,
           },
         });
 
         // Récupérer toutes les inscriptions du candidat pour impact multi-concours
         const inscriptions = await prisma.inscription.findMany({
-          where: { candidatId: targetCandidatId },
+          where: { candidatId },
           include: { 
             concours: { select: { libelle: true } },
-            dossierInscription: { select: { id: true, statut: true } }
+            dossierInscription: { select: { id: true } }
           }
         });
 
-        // Enregistrer l'action pour chaque dossier sous réserve actif
+        // Enregistrer l'action pour chaque dossier d'inscription
         for (const inscription of inscriptions) {
-          if (
-            inscription.dossierInscription
-            && isStatutSousReserveActif(inscription.dossierInscription.statut)
-          ) {
+          if (inscription.dossierInscription) {
             await prisma.actionHistory.create({
               data: {
                 utilisateurId: candidatId,
                 dossierInscriptionId: inscription.dossierInscription.id,
                 typeAction: 'PIECE_BASE_MISE_A_JOUR',
-                details: { typePiece, url: storagePath },
+                details: { typePiece, url: fileUrl },
                 ipAddress: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
                 userAgent: req.headers['user-agent']
               }
@@ -175,8 +73,7 @@ exports.uploadPiece = async (req, res) => {
 
         return res.json({
           message: `${typePiece} uploadee avec succes dans votre dossier personnel`,
-          url: storagePath,
-          signedUrl,
+          url: fileUrl,
           dossier,
           impactInscriptions: inscriptions.length,
           inscriptionsAffectees: inscriptions.map(i => ({
@@ -206,15 +103,10 @@ exports.uploadPiece = async (req, res) => {
           });
         }
 
-        const correctionCheck = assertPeutCorrigerDossierInscription(inscription.dossierInscription);
-        if (!correctionCheck.ok) {
-          return res.status(400).json({ error: correctionCheck.error });
-        }
-
         // Mettre à jour le dossier d'inscription
         const dossierInscription = await prisma.dossierInscription.update({
           where: { inscriptionId },
-          data: { quittanceUrl: storagePath }
+          data: { quittanceUrl: fileUrl }
         });
 
         // Enregistrer l'action
@@ -223,7 +115,7 @@ exports.uploadPiece = async (req, res) => {
             utilisateurId: candidatId,
             dossierInscriptionId: dossierInscription.id,
             typeAction: 'QUITTANCE_AJOUTEE',
-            details: { url: storagePath },
+            details: { url: fileUrl },
             ipAddress: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
             userAgent: req.headers['user-agent']
           }
@@ -231,8 +123,7 @@ exports.uploadPiece = async (req, res) => {
 
         return res.json({
           message: 'Quittance uploadee avec succes',
-          url: storagePath,
-          signedUrl,
+          url: fileUrl,
           dossierInscription
         });
       }
@@ -255,18 +146,17 @@ exports.uploadPiece = async (req, res) => {
         });
       }
 
-      const extraCheck = assertPeutCorrigerDossierInscription(inscription.dossierInscription);
-      if (!extraCheck.ok) {
-        return res.status(400).json({ error: extraCheck.error });
-      }
-
-      // Mettre à jour piecesExtras
-      const piecesExtras = inscription.dossierInscription.piecesExtras || {};
-      piecesExtras[typePiece] = storagePath;
+      // Mettre à jour piecesExtras (nouvelle référence pour Prisma/MySQL JSON)
+      const piecesExtras = {
+        ...(inscription.dossierInscription.piecesExtras && typeof inscription.dossierInscription.piecesExtras === 'object'
+          ? inscription.dossierInscription.piecesExtras
+          : {}),
+        [typePiece]: fileUrl,
+      };
 
       const dossierInscription = await prisma.dossierInscription.update({
         where: { inscriptionId },
-        data: { piecesExtras }
+        data: { piecesExtras },
       });
 
       // Enregistrer l'action
@@ -275,7 +165,7 @@ exports.uploadPiece = async (req, res) => {
           utilisateurId: candidatId,
           dossierInscriptionId: dossierInscription.id,
           typeAction: 'PIECE_EXTRA_AJOUTEE',
-          details: { typePiece, url: storagePath },
+          details: { typePiece, url: fileUrl },
           ipAddress: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
           userAgent: req.headers['user-agent']
         }
@@ -283,8 +173,7 @@ exports.uploadPiece = async (req, res) => {
 
       return res.json({
         message: `${typePiece} uploadee avec succes`,
-        url: storagePath,
-        signedUrl,
+        url: fileUrl,
         dossierInscription
       });
 
@@ -405,63 +294,27 @@ exports.getDossierPersonnel = async (req, res) => {
 
 exports.getSignedUrl = async (req, res) => {
   try {
-    const { path: requestedPath } = req.query;
+    const { path: filePath } = req.query;
 
-    if (!requestedPath) {
+    if (!filePath) {
       return res.status(400).json({ error: 'Paramètre path requis' });
     }
 
-    const sanitized = sanitizeStorageRelativePath(requestedPath);
-    if (!sanitized.ok) {
-      return res.status(400).json({ error: sanitized.error });
+    const relativePath = extractStorageRelativePath(filePath);
+    if (!relativePath) {
+      return res.status(400).json({ error: 'Chemin de fichier invalide' });
     }
 
-    const { safePath } = sanitized;
     const userRole = req.userRole || req.user?.role;
-
     if (isEtudiantRole(userRole)) {
       const ownerPrefix = `${req.user.id}/`;
-      if (!safePath.startsWith(ownerPrefix)) {
+      if (!relativePath.startsWith(ownerPrefix)) {
         return res.status(403).json({ error: 'Accès non autorisé à ce fichier' });
       }
     }
 
-    if (userRole === 'ADMIN_ETABLISSEMENT') {
-      const etablissementId = req.etablissementId || req.user?.etablissementId;
-      const candidatId = safePath.split('/')[0];
-
-      if (!etablissementId || !candidatId) {
-        return res.status(403).json({ error: 'Accès non autorisé à ce fichier' });
-      }
-
-      const [application, inscriptionAcad] = await Promise.all([
-        prisma.application.findFirst({
-          where: { candidatId, etablissementId },
-          select: { id: true },
-        }),
-        prisma.inscriptionAcademique.findFirst({
-          where: { candidatId, etablissementId },
-          select: { id: true },
-        }),
-      ]);
-
-      if (!application && !inscriptionAcad) {
-        return res.status(403).json({ error: 'Accès non autorisé à ce fichier' });
-      }
-    }
-
-    let signedUrl;
-    try {
-      signedUrl = await createDossiersCandidatsSignedUrl(
-        safePath,
-        SIGNED_URL_DEFAULT_EXPIRES_IN,
-      );
-    } catch (signErr) {
-      console.error('Erreur génération URL signée:', signErr);
-      return res.status(500).json({ error: 'Impossible de générer l\'URL d\'accès.' });
-    }
-
-    res.json({ signedUrl, expiresIn: SIGNED_URL_DEFAULT_EXPIRES_IN });
+    const signedUrl = `${getBackendUrl()}${localFileStorage.getPublicUrl(`${BUCKET_DOSSIERS_CANDIDATS}/${relativePath}`)}`;
+    res.json({ signedUrl, expiresIn: null });
   } catch (error) {
     console.error('getSignedUrl error:', error);
     res.status(500).json({ error: 'Erreur serveur.' });

@@ -20,11 +20,6 @@ function isStatutSousReserveEnCours(statut) {
   return STATUTS_SOUS_RESERVE_EN_COURS.includes(statut);
 }
 
-function parseHistorique(historiqueStatuts) {
-  if (Array.isArray(historiqueStatuts)) return historiqueStatuts;
-  return [];
-}
-
 /**
  * Date à partir de laquelle une correction de pièce est attendue (décision sous réserve).
  */
@@ -43,20 +38,11 @@ function getDateDecisionSousReserve(dossier) {
     .filter(Boolean)
     .map((d) => new Date(d).getTime());
 
-  if (dates.length > 0) {
-    return new Date(Math.max(...dates));
-  }
-
-  const historique = parseHistorique(dossier.historiqueStatuts);
-  const entreesSousReserve = historique
-    .filter((e) => ['SOUS_RESERVE', 'SOUS_RESERVE_PAR_COMMISSION'].includes(e?.statut) && e?.date)
-    .map((e) => new Date(e.date).getTime());
-
-  if (entreesSousReserve.length === 0) return null;
-  return new Date(Math.max(...entreesSousReserve));
+  if (dates.length === 0) return null;
+  return new Date(Math.max(...dates));
 }
 
-async function hasCorrectionApresSousReserve(prisma, dossierInscriptionId, dossier) {
+async function hasCorrectionApresSousReserve(prismaClient, dossierInscriptionId, dossier) {
   if (!isStatutSousReserveActif(dossier?.statut)) {
     return false;
   }
@@ -64,7 +50,7 @@ async function hasCorrectionApresSousReserve(prisma, dossierInscriptionId, dossi
   const since = getDateDecisionSousReserve(dossier);
   if (!since) return false;
 
-  const correction = await prisma.actionHistory.findFirst({
+  const correction = await prismaClient.actionHistory.findFirst({
     where: {
       dossierInscriptionId,
       typeAction: { in: CORRECTION_ACTIONS },
@@ -76,22 +62,26 @@ async function hasCorrectionApresSousReserve(prisma, dossierInscriptionId, dossi
   return Boolean(correction);
 }
 
+/**
+ * Info resoumission pour le contrôleur.
+ * Préfère actionHistory s'il est chargé ; sinon se base sur l'état du dossier.
+ */
 function getInfoResoumissionCandidat(dossier) {
-  const hist = parseHistorique(dossier?.historiqueStatuts);
-  const entrees = hist.filter((e) =>
-    String(e.commentaire || '').toLowerCase().includes('resoumission')
+  const actions = Array.isArray(dossier?.actionHistory) ? dossier.actionHistory : [];
+  const derniere = actions.find((a) => a.typeAction === RESOUMIS_ACTION) || null;
+
+  const enAttenteNouvelleDecision = Boolean(
+    dossier?.statut === 'EN_ATTENTE'
+    && !dossier?.verdict1Par
+    && !dossier?.decisionControleur
+    && derniere
   );
-  const derniere = entrees.length > 0 ? entrees[entrees.length - 1] : null;
 
   return {
     resoumis: Boolean(derniere),
-    date: derniere?.date ?? null,
-    commentaire: derniere?.commentaire ?? null,
-    enAttenteNouvelleDecision: Boolean(
-      dossier?.statut === 'EN_ATTENTE'
-      && !dossier?.decisionControleur
-      && derniere,
-    ),
+    date: derniere?.timestamp || derniere?.createdAt || null,
+    commentaire: derniere?.details?.commentaire || null,
+    enAttenteNouvelleDecision,
   };
 }
 

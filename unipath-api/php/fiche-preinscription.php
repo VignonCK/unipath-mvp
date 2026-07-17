@@ -322,8 +322,35 @@ try {
     $pdf->Ln(1);
 
     $pdf->SetX($leftMargin + 2);
-    $pdf->Cell(58, 7, ficheText('Lieu de composition :'), 0, 0, 'L');
-    $lieu = ficheText($concours['lieuComposition'] ?? $concours['etablissement'] ?? 'À communiquer');
+    $pdf->Cell(58, 7, ficheText('Centre de composition :'), 0, 0, 'L');
+
+    // Uniquement le centre choisi par le candidat (jamais l'établissement du concours)
+    $centreChoisi = null;
+    if (!empty($data['centreCompositionChoisi']) && is_array($data['centreCompositionChoisi'])) {
+        $centreChoisi = $data['centreCompositionChoisi'];
+    } elseif (!empty($inscription['dossierInscription']['centreCompositionChoisi'])
+        && is_array($inscription['dossierInscription']['centreCompositionChoisi'])) {
+        $centreChoisi = $inscription['dossierInscription']['centreCompositionChoisi'];
+    } elseif (!empty($inscription['dossierInscription']['centreChoisi']['centre']['nom'])) {
+        $cc = $inscription['dossierInscription']['centreChoisi']['centre'];
+        $centreChoisi = [
+            'nom' => $cc['nom'],
+            'ville' => $cc['ville'] ?? '',
+            'adresse' => $cc['adresse'] ?? '',
+        ];
+    }
+
+    $lieu = ficheText('Non renseigné');
+    if (!empty($centreChoisi['nom'])) {
+        $parts = [$centreChoisi['nom']];
+        if (!empty($centreChoisi['ville'])) {
+            $parts[] = $centreChoisi['ville'];
+        }
+        if (!empty($centreChoisi['adresse'])) {
+            $parts[] = $centreChoisi['adresse'];
+        }
+        $lieu = ficheText(implode(' — ', $parts));
+    }
     $pdf->MultiCell($contentWidth - 62, 7, $lieu, 0, 'L');
     $pdf->Ln(1);
 

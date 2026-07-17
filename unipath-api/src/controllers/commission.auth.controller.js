@@ -1,82 +1,79 @@
 // src/controllers/commission.auth.controller.js
-const { supabase } = require('../supabase');
+const crypto = require('crypto');
 const prisma = require('../prisma');
+const authService = require('../services/auth.service');
 const emailService = require('../services/email.service');
+
+async function registerProfile({ email, password, nom, prenom, telephone, profilType, createProfile }) {
+  const existingCompte = await authService.findCompteByEmail(email);
+  if (existingCompte) {
+    return { error: 'Un compte existe déjà avec cet email' };
+  }
+
+  const profileId = crypto.randomUUID();
+  const profile = await createProfile(profileId);
+
+  await authService.createCompte({
+    email,
+    password,
+    profilType,
+    profilId: profileId,
+    emailConfirme: true,
+  });
+
+  return { profile };
+}
 
 exports.registerCommission = async (req, res) => {
   try {
     const { email, password, nom, prenom, telephone, sousRole } = req.body;
     const sousRoleValide = sousRole === 'CONTROLEUR' ? 'CONTROLEUR' : 'EXAMINATEUR';
 
-    const { data: authData, error: authError } =
-      await supabase.auth.signUp({ 
-        email, 
-        password,
-        options: {
-          emailRedirectTo: `${process.env.APP_URL || 'http://localhost:5173'}/auth/callback`
-        }
-      });
-
-    if (authError) {
-      return res.status(400).json({ error: authError.message });
-    }
-
-    const membre = await prisma.membreCommission.create({
-      data: {
-        id: authData.user.id,
-        email,
-        nom,
-        prenom,
-        telephone,
-        sousRole: sousRoleValide,
-      },
+    const result = await registerProfile({
+      email,
+      password,
+      nom,
+      prenom,
+      telephone,
+      profilType: 'COMMISSION',
+      createProfile: (profileId) =>
+        prisma.membreCommission.create({
+          data: {
+            id: profileId,
+            email,
+            nom,
+            prenom,
+            telephone,
+            sousRole: sousRoleValide,
+          },
+        }),
     });
 
-    // Créer une notification de bienvenue
+    if (result.error) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    const membre = result.profile;
+
     await prisma.notification.create({
       data: {
         userId: membre.id,
         type: 'SYSTEME',
         title: 'Bienvenue - Membre de Commission',
         message: `Bonjour ${membre.prenom} ${membre.nom}, votre compte membre de commission a été créé avec succès.`,
-        priority: 'NORMAL'
-      }
+        priority: 'NORMAL',
+      },
     });
 
-    // Envoyer l'email de bienvenue
     try {
       await emailService.envoyerEmailBienvenue({
         email: membre.email,
         nom: membre.nom,
         prenom: membre.prenom,
-        matricule: 'COMMISSION'
-      });
-
-      await prisma.emailDelivery.create({
-        data: {
-          userId: membre.id,
-          recipient: membre.email,
-          subject: '[UniPath] Bienvenue sur la plateforme',
-          status: 'SENT',
-          attempts: 1,
-          lastAttemptAt: new Date(),
-          sentAt: new Date()
-        }
+        matricule: 'COMMISSION',
       });
     } catch (emailError) {
       console.error('❌ Erreur envoi email de bienvenue:', emailError);
-      
-      await prisma.emailDelivery.create({
-        data: {
-          userId: membre.id,
-          recipient: membre.email,
-          subject: '[UniPath] Bienvenue sur la plateforme',
-          status: 'FAILED',
-          attempts: 1,
-          lastAttemptAt: new Date(),
-          errorMessage: emailError.message
-        }
-      });
     }
 
     res.status(201).json({
@@ -100,75 +97,31 @@ exports.registerDGES = async (req, res) => {
   try {
     const { email, password, nom, prenom, telephone } = req.body;
 
-    const { data: authData, error: authError } =
-      await supabase.auth.signUp({ 
-        email, 
-        password,
-        options: {
-          emailRedirectTo: `${process.env.APP_URL || 'http://localhost:5173'}/auth/callback`
-        }
-      });
-
-    if (authError) {
-      return res.status(400).json({ error: authError.message });
-    }
-
-    const admin = await prisma.administrateurDGES.create({
-      data: {
-        id: authData.user.id,
-        email,
-        nom,
-        prenom,
-        telephone,
-      },
+    const result = await registerProfile({
+      email,
+      password,
+      nom,
+      prenom,
+      telephone,
+      profilType: 'DGES',
+      createProfile: (profileId) =>
+        prisma.administrateurDGES.create({
+          data: {
+            id: profileId,
+            email,
+            nom,
+            prenom,
+            telephone,
+            role: 'DGES',
+          },
+        }),
     });
 
-    // Créer une notification de bienvenue
-    await prisma.notification.create({
-      data: {
-        userId: admin.id,
-        type: 'SYSTEME',
-        title: 'Bienvenue - Administrateur DGES',
-        message: `Bonjour ${admin.prenom} ${admin.nom}, votre compte administrateur DGES a été créé avec succès.`,
-        priority: 'HIGH'
-      }
-    });
-
-    // Envoyer l'email de bienvenue
-    try {
-      await emailService.envoyerEmailBienvenue({
-        email: admin.email,
-        nom: admin.nom,
-        prenom: admin.prenom,
-        matricule: 'DGES'
-      });
-
-      await prisma.emailDelivery.create({
-        data: {
-          userId: admin.id,
-          recipient: admin.email,
-          subject: '[UniPath] Bienvenue sur la plateforme',
-          status: 'SENT',
-          attempts: 1,
-          lastAttemptAt: new Date(),
-          sentAt: new Date()
-        }
-      });
-    } catch (emailError) {
-      console.error('❌ Erreur envoi email de bienvenue:', emailError);
-      
-      await prisma.emailDelivery.create({
-        data: {
-          userId: admin.id,
-          recipient: admin.email,
-          subject: '[UniPath] Bienvenue sur la plateforme',
-          status: 'FAILED',
-          attempts: 1,
-          lastAttemptAt: new Date(),
-          errorMessage: emailError.message
-        }
-      });
+    if (result.error) {
+      return res.status(400).json({ error: result.error });
     }
+
+    const admin = result.profile;
 
     res.status(201).json({
       message: 'Compte DGES créé avec succès',
