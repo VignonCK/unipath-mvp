@@ -122,19 +122,19 @@ async function main() {
   // 3. Commission : 2 examinateurs + 1 contrôleur (double verdict)
   const sousRoleAccounts = [
     {
-      email: 'examinateur@test.com',
+      email: 'forsuree15+examinateur1@gmail.com',
       prenom: 'Examinateur',
       telephone: '+22997000004',
       sousRole: 'EXAMINATEUR',
     },
     {
-      email: 'examinateur2@test.com',
+      email: 'forsuree15+examinateur2@gmail.com',
       prenom: 'Examinateur2',
       telephone: '+22997000006',
       sousRole: 'EXAMINATEUR',
     },
     {
-      email: 'controleur-commission@test.com',
+      email: 'forsuree15+controleur1@gmail.com',
       prenom: 'Controleur',
       telephone: '+22997000005',
       sousRole: 'CONTROLEUR',
@@ -176,9 +176,9 @@ async function main() {
   console.log('✨ Seed terminé!\n');
   console.log('📌 Récapitulatif des comptes de test:');
   console.log('   CANDIDAT              → candidat@test.com / password123');
-  console.log('   EXAMINATEUR 1         → examinateur@test.com / password123');
-  console.log('   EXAMINATEUR 2         → examinateur2@test.com / password123');
-  console.log('   CONTROLEUR COMMISSION → controleur-commission@test.com / password123');
+  console.log('   EXAMINATEUR 1         → forsuree15+examinateur1@gmail.com / password123');
+  console.log('   EXAMINATEUR 2         → forsuree15+examinateur2@gmail.com / password123');
+  console.log('   CONTROLEUR COMMISSION → forsuree15+controleur1@gmail.com / password123');
   console.log('   DGES                  → dges@test.com / password123');
   console.log('   DEC                   → dec@test.com / password123\n');
 }

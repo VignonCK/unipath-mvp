@@ -54,7 +54,7 @@ async function fixSeed() {
       }
     }
     
-    if (email === 'commission@test.com') {
+    if (email === 'forsuree15+commission@gmail.com') {
       try {
         const existing = await prisma.membreCommission.findUnique({ where: { email } });
         
@@ -136,7 +136,7 @@ async function fixSeed() {
   console.log('\n✨ Correction terminée!\n');
   console.log('📌 Comptes de test:');
   console.log('   CANDIDAT    → candidat@test.com / password123');
-  console.log('   COMMISSION  → commission@test.com / password123');
+  console.log('   COMMISSION  → forsuree15+commission@gmail.com / password123');
   console.log('   DGES (M2)   → dges@test.com / password123');
   console.log('   DEC (M1)   → dec@test.com / password123\n');
   console.log('   Voir docs/DEC-VS-DGES.md\n');

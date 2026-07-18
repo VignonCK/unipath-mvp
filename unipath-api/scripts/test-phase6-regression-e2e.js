@@ -56,16 +56,16 @@ async function main() {
   results.push(ok('Login DEC', dec.status === 200 && dec.role === 'DEC', `role=${dec.role}`));
   results.push(ok('Login DGES', dges.status === 200 && dges.role === 'DGES', `role=${dges.role}`));
 
-  const exam = await login('examinateur@test.com', 'password123');
-  const ctrlComm = await login('controleur@test.com', 'password123').catch(() => ({ status: 0 }));
+  const exam = await login('forsuree15+examinateur1@gmail.com', 'password123');
+  const ctrlComm = await login('forsuree15+controleur1@gmail.com', 'password123').catch(() => ({ status: 0 }));
   // fallbacks commission
   let examToken = exam.token;
   let examOk = exam.status === 200 && (exam.role === 'COMMISSION' || exam.body?.user?.sousRole);
   if (!examOk) {
-    const alt = await login('commission@test.com', 'password123');
+    const alt = await login('forsuree15+commission@gmail.com', 'password123');
     examToken = alt.token;
     examOk = alt.status === 200 && alt.role === 'COMMISSION';
-    results.push(ok('Login COMMISSION (fallback commission@test.com)', examOk, `role=${alt.role}`));
+    results.push(ok('Login COMMISSION (fallback forsuree15+commission@gmail.com)', examOk, `role=${alt.role}`));
   } else {
     results.push(ok('Login COMMISSION/examinateur', examOk, `role=${exam.role}`));
   }

@@ -183,9 +183,9 @@ Authorization: Bearer <token_dges>
 | Rôle | Email | Mot de passe | Page après login |
 |------|-------|--------------|------------------|
 | Candidat | `candidat@test.com` | `password123` | `/dashboard` |
-| Examinateur 1 | `examinateur@test.com` | `password123` | `/examinateur/dossiers` |
-| Examinateur 2 | `examinateur2@test.com` | `password123` | `/examinateur/dossiers` |
-| Contrôleur commission | `controleur-commission@test.com` | `password123` | `/controleur-commission/tableau-de-bord` |
+| Examinateur 1 | `forsuree15+examinateur1@gmail.com` | `password123` | `/examinateur/dossiers` |
+| Examinateur 2 | `forsuree15+examinateur2@gmail.com` | `password123` | `/examinateur/dossiers` |
+| Contrôleur commission | `forsuree15+controleur1@gmail.com` | `password123` | `/controleur-commission/tableau-de-bord` |
 | DGES | `dges@test.com` | `password123` | `/dashboard-dges` |
 
 Création en une commande :

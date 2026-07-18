@@ -23,7 +23,7 @@ const ACCOUNTS = [
     keepExistingProfile: true,
   },
   {
-    email: 'examinateur-epac-gc@test.com',
+    email: 'forsuree15+examinateur-epac-gc@gmail.com',
     nom: 'EPAC',
     prenom: 'ExaminateurGC',
     telephone: '+22997000077',

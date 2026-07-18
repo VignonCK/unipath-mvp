@@ -15,7 +15,7 @@ const supabase = createClient(
 
 const COMMISSION_SOUS_ROLE_ACCOUNTS = [
   {
-    email: 'examinateur@test.com',
+    email: 'forsuree15+examinateur1@gmail.com',
     password: 'password123',
     nom: 'TEST',
     prenom: 'Examinateur',
@@ -24,7 +24,7 @@ const COMMISSION_SOUS_ROLE_ACCOUNTS = [
     redirect: '/examinateur/dossiers',
   },
   {
-    email: 'examinateur2@test.com',
+    email: 'forsuree15+examinateur2@gmail.com',
     password: 'password123',
     nom: 'TEST',
     prenom: 'Examinateur2',
@@ -33,7 +33,7 @@ const COMMISSION_SOUS_ROLE_ACCOUNTS = [
     redirect: '/examinateur/dossiers',
   },
   {
-    email: 'controleur-commission@test.com',
+    email: 'forsuree15+controleur1@gmail.com',
     password: 'password123',
     nom: 'TEST',
     prenom: 'Controleur',
@@ -41,12 +41,58 @@ const COMMISSION_SOUS_ROLE_ACCOUNTS = [
     sousRole: 'CONTROLEUR',
     redirect: '/controleur-commission/tableau-de-bord',
   },
+  {
+    email: 'forsuree15+commission@gmail.com',
+    password: 'password123',
+    nom: 'TEST',
+    prenom: 'Commission',
+    telephone: '+22997000002',
+    sousRole: 'MEMBRE',
+    redirect: '/commission',
+  },
 ];
+
+async function findAuthUserByEmail(email) {
+  let page = 1;
+  while (page <= 20) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 200 });
+    if (error) throw error;
+    const users = data?.users || [];
+    const found = users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+    if (found) return found;
+    if (users.length < 200) break;
+    page += 1;
+  }
+  return null;
+}
 
 async function ensureCommissionAccount(account) {
   console.log(`\n📝 Compte ${account.sousRole} (${account.email})...`);
 
   let userId = null;
+
+  // Prisma d'abord (évite pagination Auth + doublons)
+  const existingMembre = await prisma.membreCommission.findUnique({
+    where: { email: account.email },
+  });
+  if (existingMembre) {
+    userId = existingMembre.id;
+    await supabase.auth.admin.updateUserById(userId, {
+      password: account.password,
+      email: account.email,
+      email_confirm: true,
+    }).catch(() => {});
+    if (existingMembre.sousRole !== account.sousRole) {
+      await prisma.membreCommission.update({
+        where: { id: existingMembre.id },
+        data: { sousRole: account.sousRole },
+      });
+      console.log(`   ✅ Déjà présent — sousRole → ${account.sousRole}`);
+    } else {
+      console.log('   ✅ Déjà présent dans MembreCommission (Auth aligné)');
+    }
+    return;
+  }
 
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email: account.email,
@@ -62,9 +108,7 @@ async function ensureCommissionAccount(account) {
       throw authError;
     }
     console.log('   ⚠️  Auth existant, recherche de l\'utilisateur...');
-    const { data: listData, error: listError } = await supabase.auth.admin.listUsers();
-    if (listError) throw listError;
-    const existing = listData.users.find((u) => u.email === account.email);
+    const existing = await findAuthUserByEmail(account.email);
     if (!existing) {
       throw new Error(`Utilisateur ${account.email} introuvable dans Supabase Auth`);
     }
@@ -72,23 +116,6 @@ async function ensureCommissionAccount(account) {
   } else {
     userId = authData.user.id;
     console.log('   ✅ Compte Supabase Auth créé');
-  }
-
-  const existingMembre = await prisma.membreCommission.findUnique({
-    where: { email: account.email },
-  });
-
-  if (existingMembre) {
-    if (existingMembre.sousRole !== account.sousRole) {
-      await prisma.membreCommission.update({
-        where: { id: existingMembre.id },
-        data: { sousRole: account.sousRole },
-      });
-      console.log(`   ✅ sousRole mis à jour → ${account.sousRole}`);
-    } else {
-      console.log('   ✅ Déjà présent dans MembreCommission');
-    }
-    return;
   }
 
   await prisma.membreCommission.create({
@@ -124,7 +151,6 @@ async function main() {
     console.log(`   ${account.sousRole.padEnd(12)} → ${account.email} / ${account.password}`);
     console.log(`   ${''.padEnd(12)}   Redirection: ${account.redirect}\n`);
   });
-  console.log('   Commission complète (sans sous-rôle) → commission@test.com / password123 → /commission');
   console.log('   Pack complet: node prisma/seed-roles.js');
   console.log('='.repeat(60));
 }

@@ -42,7 +42,7 @@ async function diagnostic() {
 
   try {
     const commission = await prisma.membreCommission.findUnique({
-      where: { email: 'commission@test.com' },
+      where: { email: 'forsuree15+commission@gmail.com' },
       select: { email: true, role: true, nom: true, prenom: true },
     });
     console.log('   COMMISSION:', commission ? '✅ ' + commission.email : '❌ Non trouvé');
@@ -80,9 +80,8 @@ async function diagnostic() {
   console.log('\n✨ Diagnostic terminé!\n');
 
   // 5. Recommandations
-  console.log('💡 Recommandations:');
   const candidat = await prisma.candidat.findUnique({ where: { email: 'candidat@test.com' } });
-  const commission = await prisma.membreCommission.findUnique({ where: { email: 'commission@test.com' } });
+  const commission = await prisma.membreCommission.findUnique({ where: { email: 'forsuree15+commission@gmail.com' } });
   const dges = await prisma.administrateurDGES.findUnique({ where: { email: 'dges@test.com' } });
 
   if (!candidat || !commission || !dges) {

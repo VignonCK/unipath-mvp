@@ -5,10 +5,10 @@ const prisma = new PrismaClient();
 
 async function main() {
   const result = await prisma.membreCommission.updateMany({
-    where: { email: 'commission@test.com' },
+    where: { email: 'forsuree15+commission@gmail.com' },
     data: { sousRole: 'MEMBRE' },
   });
-  console.log('commission@test.com → sousRole MEMBRE:', result.count);
+  console.log('forsuree15+commission@gmail.com → sousRole MEMBRE:', result.count);
 
   const epac = await prisma.membreCommission.updateMany({
     where: { email: 'commission@epac.bj' },
@@ -17,7 +17,7 @@ async function main() {
   console.log('commission@epac.bj → sousRole MEMBRE:', epac.count);
 
   const member = await prisma.membreCommission.findUnique({
-    where: { email: 'commission@test.com' },
+    where: { email: 'forsuree15+commission@gmail.com' },
     select: { email: true, sousRole: true, prenom: true, nom: true },
   });
   console.log(member);
