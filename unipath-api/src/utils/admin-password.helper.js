@@ -14,10 +14,11 @@ function buildAdminEtablissementMetadata(etablissementId, sousRole = 'ADMIN') {
   };
 }
 
-function buildMembreCommissionMetadata(etablissementId, sousRole) {
+function buildMembreCommissionMetadata({ concoursId, etablissementId = null, sousRole }) {
   return {
     role: 'COMMISSION',
     sousRole,
+    concoursId,
     etablissementId,
     mustChangePassword: true,
     tempPasswordExpiresAt: getTempPasswordExpiresAt().toISOString(),

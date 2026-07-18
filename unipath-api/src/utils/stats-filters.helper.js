@@ -3,7 +3,8 @@ const { validateUUID } = require('./validation');
 const STATUT_ALIASES = {
   accepte: ['VALIDE', 'VALIDE_PAR_COMMISSION'],
   rejete: ['REJETE', 'REJETE_PAR_COMMISSION'],
-  attente: ['EN_ATTENTE', 'SOUS_RESERVE', 'SOUS_RESERVE_PAR_COMMISSION'],
+  attente: ['EN_ATTENTE'],
+  sous_reserve: ['SOUS_RESERVE', 'SOUS_RESERVE_PAR_COMMISSION'],
 };
 
 const RAW_STATUTS = new Set(Object.values(STATUT_ALIASES).flat());
@@ -140,7 +141,17 @@ function buildCampagneApplicationWhere(filters = {}, scope = null) {
   }
 
   if (filters._statutPrisma) {
-    where.preinscription = { statut: filters._statutPrisma };
+    const PREINSCRIPTION_STATUTS = new Set(['EN_ATTENTE', 'VALIDE', 'REJETE', 'SOUS_RESERVE']);
+    const raw = filters._statutPrisma;
+    const candidates = raw?.in ? raw.in : [raw];
+    const allowed = candidates.filter((s) => PREINSCRIPTION_STATUTS.has(s));
+    if (allowed.length === 0) {
+      where.id = '__no_match__';
+    } else {
+      where.preinscription = {
+        statut: allowed.length === 1 ? allowed[0] : { in: allowed },
+      };
+    }
   }
 
   return where;

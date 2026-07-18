@@ -501,13 +501,20 @@ exports.getApplicationRequirements = async (req, res) => {
       return res.status(403).json({ error: 'Acces refuse' });
     }
 
-    const { requirements, missing } = await getRequirementsAndAutoDocs({
+    const { requirements, autoSatisfied, missing } = await getRequirementsAndAutoDocs({
       application,
       candidate: application.candidat,
     });
 
+    // Resync profil → ApplicationDocument (PROFILE_AUTO) à chaque lecture
+    await ensureAutoDocuments(application.id, autoSatisfied);
+
+    const documents = await prisma.applicationDocument.findMany({
+      where: { applicationId: id },
+      select: { code: true, status: true },
+    });
     const providedCodes = new Set(
-      application.documents.filter((d) => d.status === 'PROVIDED').map((d) => d.code)
+      documents.filter((d) => d.status === 'PROVIDED').map((d) => d.code)
     );
 
     const normalized = requirements.map((req) => ({
@@ -542,6 +549,23 @@ exports.payDossierFeesMock = async (req, res) => {
     }
     if (application.candidatId !== userId) {
       return res.status(403).json({ error: 'Acces refuse' });
+    }
+
+    const alreadyPaid = (application.payments || []).some(
+      (p) => p.paymentType === 'DOSSIER_FEES' && p.status === 'CONFIRMED',
+    );
+    if (alreadyPaid) {
+      return res.status(400).json({
+        error: 'Les frais de dossier sont déjà payés pour cette candidature.',
+        alreadyPaid: true,
+        status: application.status,
+      });
+    }
+    if (application.status !== 'DRAFT') {
+      return res.status(400).json({
+        error: `Le paiement mock n'est possible qu'en statut DRAFT (actuel: ${application.status}).`,
+        status: application.status,
+      });
     }
 
     let amount = DEFAULT_DOSSIER_FEES;
@@ -598,11 +622,16 @@ exports.payDossierFeesMock = async (req, res) => {
     };
 
     const storagePath = `applications/${id}/receipts/${receiptNumber}.json`;
-    const receiptUrl = await uploadBufferToSupabase(
-      Buffer.from(JSON.stringify(receiptPayload, null, 2), 'utf-8'),
-      storagePath,
-      'application/json'
-    );
+    let receiptUrl = `mock://${storagePath}`;
+    try {
+      receiptUrl = await uploadBufferToSupabase(
+        Buffer.from(JSON.stringify(receiptPayload, null, 2), 'utf-8'),
+        storagePath,
+        'application/json'
+      );
+    } catch (uploadErr) {
+      console.warn('Mock receipt upload failed (continuing):', uploadErr.message);
+    }
 
     const receipt = await prisma.receipt.create({
       data: {

@@ -1,7 +1,6 @@
 const fs = require('fs');
 const prisma = require('../prisma');
 const { supabaseAdmin } = require('../supabase');
-const { genererNumeroInscriptionPourConcours } = require('../utils/numero-inscription.helper');
 const { envoyerPreInscriptionApresCreation } = require('../utils/inscription-email.helper');
 const { candidateSerieMatchesConcours } = require('../utils/series.helper');
 const { computeInscriptionCompletude, profilCandidatComplet } = require('../utils/dossier-submission.helper');
@@ -286,14 +285,6 @@ exports.soumettreDossierComplet = async (req, res) => {
           },
         });
 
-        if (!inscriptionExistante.numeroInscription) {
-          const numeroInscription = await genererNumeroInscriptionPourConcours(tx, concoursId);
-          await tx.inscription.update({
-            where: { id: inscriptionExistante.id },
-            data: { numeroInscription },
-          });
-        }
-
         const dejaSoumis = await tx.actionHistory.findFirst({
           where: {
             dossierInscriptionId,
@@ -325,10 +316,9 @@ exports.soumettreDossierComplet = async (req, res) => {
       });
     } else {
       const result = await prisma.$transaction(async (tx) => {
-        const numeroInscription = await genererNumeroInscriptionPourConcours(tx, concoursId);
-
+        // numeroInscription reste null : attribution groupée alphabétique plus tard
         const newInscription = await tx.inscription.create({
-          data: { candidatId, concoursId, numeroInscription },
+          data: { candidatId, concoursId },
         });
 
         const dossierInscription = await tx.dossierInscription.create({
@@ -806,7 +796,9 @@ exports.telechargerFichePreInscriptionPdf = async (req, res) => {
           },
         },
         concours: true,
-        dossierInscription: true,
+        dossierInscription: {
+          include: DOSSIER_CENTRE_INCLUDE,
+        },
       },
     });
 
@@ -856,7 +848,9 @@ exports.renvoyerFichePreInscription = async (req, res) => {
       where: { id },
       include: {
         concours: true,
-        dossierInscription: true,
+        dossierInscription: {
+          include: DOSSIER_CENTRE_INCLUDE,
+        },
         candidat: {
           select: {
             id: true,
@@ -896,7 +890,11 @@ exports.renvoyerFichePreInscription = async (req, res) => {
 };
 
 async function notifierCommissionDossierResoumis(inscription, concours) {
+  const concoursId = inscription.concoursId || concours?.id;
+  if (!concoursId) return;
+
   const membres = await prisma.membreCommission.findMany({
+    where: { concoursId },
     select: { id: true, email: true },
   });
   for (const membre of membres) {
@@ -1107,6 +1105,7 @@ exports.choisirCentreComposition = async (req, res) => {
     const inscription = await prisma.inscription.findFirst({
       where: { id: inscriptionId, candidatId },
       include: {
+        candidat: true,
         concours: true,
         dossierInscription: {
           include: DOSSIER_CENTRE_INCLUDE,
@@ -1124,7 +1123,7 @@ exports.choisirCentreComposition = async (req, res) => {
     if (!peutChoisirCentre(statut, centreDejaChoisi)) {
       if (statut === 'VALIDE' && centreDejaChoisi) {
         return res.status(403).json({
-          error: 'Choix verrouillé',
+          error: 'Choix verrouillé : le centre ne peut plus être modifié après validation finale.',
         });
       }
       return res.status(400).json({
@@ -1155,7 +1154,7 @@ exports.choisirCentreComposition = async (req, res) => {
       },
     });
 
-    if (!concoursCentre) {
+    if (!concoursCentre?.centre) {
       return res.status(400).json({ error: 'Centre de composition invalide pour ce concours' });
     }
 
@@ -1167,11 +1166,19 @@ exports.choisirCentreComposition = async (req, res) => {
       return res.status(429).json({ error: 'Centre complet' });
     }
 
+    // Snapshot JSON pour les PDF (fiche + convocation) même sans include relationnel
+    const centreCompositionChoisi = {
+      nom: concoursCentre.centre.nom,
+      ville: concoursCentre.centre.ville,
+      adresse: concoursCentre.centre.adresse || '',
+      choisiLe: new Date().toISOString(),
+    };
+
     const dossier = await prisma.dossierInscription.update({
       where: { id: inscription.dossierInscription.id },
       data: {
         concoursCentreId,
-        centreCompositionChoisi: null,
+        centreCompositionChoisi,
       },
       include: {
         ...DOSSIER_CENTRE_INCLUDE,
@@ -1181,7 +1188,12 @@ exports.choisirCentreComposition = async (req, res) => {
       },
     });
 
-    const centreChoisi = flattenCentreChoisi(dossier);
+    const centreChoisi = flattenCentreChoisi(dossier) || {
+      concoursCentreId,
+      nom: centreCompositionChoisi.nom,
+      ville: centreCompositionChoisi.ville,
+      adresse: centreCompositionChoisi.adresse || null,
+    };
 
     if (statut === 'VALIDE') {
       try {
@@ -1202,11 +1214,12 @@ exports.choisirCentreComposition = async (req, res) => {
     return res.json({
       message: 'Centre de composition enregistre',
       centreChoisi,
-      centreCompositionChoisi: null,
+      centreCompositionChoisi,
       inscription: {
         ...dossier.inscription,
         statut: dossier.statut,
         centreChoisi,
+        centreCompositionChoisi,
       },
     });
   } catch (error) {

@@ -16,9 +16,24 @@ export function concoursRequireCentreChoice(concours, centresRelational = []) {
 
 export function resolveCentreChoisi(inscription) {
   if (!inscription) return null;
-  return inscription.centreChoisi
-    ?? inscription.dossierInscription?.centreCompositionChoisi
-    ?? null;
+  const fromTop = inscription.centreChoisi;
+  if (fromTop?.nom || fromTop?.concoursCentreId) return fromTop;
+
+  const fromJson = inscription.centreCompositionChoisi
+    ?? inscription.dossierInscription?.centreCompositionChoisi;
+  if (fromJson?.nom) return fromJson;
+
+  const rel = inscription.dossierInscription?.centreChoisi;
+  if (rel?.centre) {
+    return {
+      concoursCentreId: rel.id,
+      nom: rel.centre.nom,
+      ville: rel.centre.ville,
+      adresse: rel.centre.adresse || null,
+    };
+  }
+
+  return null;
 }
 
 export function inscriptionHasCentreChoisi(inscription) {

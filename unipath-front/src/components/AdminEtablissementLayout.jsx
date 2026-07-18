@@ -62,6 +62,12 @@ const ALL_TABS = [
     sousRoles: [SOUS_ROLES_ETABLISSEMENT.ADMIN, SOUS_ROLES_ETABLISSEMENT.SUPERVISEUR],
   },
   {
+    label: 'Stats',
+    path: '/admin-etablissement/statistiques',
+    activePrefixes: ['/admin-etablissement/statistiques'],
+    sousRoles: [SOUS_ROLES_ETABLISSEMENT.ADMIN, SOUS_ROLES_ETABLISSEMENT.SUPERVISEUR],
+  },
+  {
     label: 'Établissement',
     path: '/admin-etablissement/etablissement',
     activePrefixes: ['/admin-etablissement/etablissement'],

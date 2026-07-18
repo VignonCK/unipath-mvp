@@ -1,7 +1,9 @@
 /**
- * Numéro d'inscription concours : {CODE}-{ANNEE}-{SEQ4}
+ * Numéro d'inscription concours (n° de table) : {CODE}-{ANNEE}-{SEQ4}
  * Exemple : ENAM-2026-0001
- * Compteur séquentiel par concours (reset à chaque nouvelle année académique).
+ *
+ * Attribution groupée alphabétique (VALIDE sans numéro), puis APPEND
+ * pour les validations tardives (dernier compteur + 1).
  */
 const { getAnneeAcademique } = require('./matricule.helper');
 
@@ -39,20 +41,32 @@ function formatNumeroInscription(code, annee, sequence) {
   return `${code}-${annee}-${String(sequence).padStart(4, '0')}`;
 }
 
+function compareCandidatsAlpha(a, b) {
+  const nomA = String(a.candidat?.nom || '').localeCompare(String(b.candidat?.nom || ''), 'fr', {
+    sensitivity: 'base',
+  });
+  if (nomA !== 0) return nomA;
+  return String(a.candidat?.prenom || '').localeCompare(String(b.candidat?.prenom || ''), 'fr', {
+    sensitivity: 'base',
+  });
+}
+
 /**
- * Génère un numéro d'inscription dans une transaction Prisma (FOR UPDATE sur Concours).
+ * Verrouille le concours et retourne le prochain numéro (incrémente le compteur).
  * @param {import('@prisma/client').Prisma.TransactionClient} tx
  * @param {string} concoursId
  */
 async function genererNumeroInscriptionPourConcours(tx, concoursId) {
   const annee = getAnneeAcademique();
 
-  const rows = await tx.$queryRaw`
-    SELECT id, libelle, sigle, "inscriptionCompteur", "inscriptionCompteurAnnee"
-    FROM "Concours"
-    WHERE id = ${concoursId}::uuid
-    FOR UPDATE
-  `;
+  // Concours.id est de type TEXT en base (pas uuid) — ne pas caster en ::uuid
+  const rows = await tx.$queryRawUnsafe(
+    `SELECT id, libelle, sigle, "inscriptionCompteur", "inscriptionCompteurAnnee"
+     FROM "Concours"
+     WHERE id = $1
+     FOR UPDATE`,
+    concoursId,
+  );
 
   const concours = rows[0];
   if (!concours) {
@@ -60,9 +74,10 @@ async function genererNumeroInscriptionPourConcours(tx, concoursId) {
   }
 
   const code = resolveCodeConcours(concours);
+  const compteurAnnee = Number(concours.inscriptionCompteurAnnee);
   const compteur =
-    concours.inscriptionCompteurAnnee === annee
-      ? (concours.inscriptionCompteur || 0) + 1
+    compteurAnnee === annee
+      ? (Number(concours.inscriptionCompteur) || 0) + 1
       : 1;
 
   const numero = formatNumeroInscription(code, annee, compteur);
@@ -77,6 +92,55 @@ async function genererNumeroInscriptionPourConcours(tx, concoursId) {
   });
 
   return numero;
+}
+
+/**
+ * Attribue les n° de table aux dossiers VALIDE sans numéro, par ordre alphabétique
+ * (nom, prénom). Les inscriptions déjà numérotées sont ignorées (APPEND).
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} concoursId
+ * @returns {Promise<Array<{ inscriptionId: string, candidatId: string, nom: string, prenom: string, numeroInscription: string }>>}
+ */
+async function attribuerNumerosTableParConcours(tx, concoursId) {
+  const concours = await tx.concours.findUnique({
+    where: { id: concoursId },
+    select: { id: true, libelle: true },
+  });
+  if (!concours) {
+    throw new Error('Concours introuvable');
+  }
+
+  const eligibles = await tx.inscription.findMany({
+    where: {
+      concoursId,
+      numeroInscription: null,
+      dossierInscription: { statut: 'VALIDE' },
+    },
+    include: {
+      candidat: { select: { id: true, nom: true, prenom: true } },
+    },
+  });
+
+  eligibles.sort(compareCandidatsAlpha);
+
+  const attribues = [];
+  for (const inscription of eligibles) {
+    const numeroInscription = await genererNumeroInscriptionPourConcours(tx, concoursId);
+    await tx.inscription.update({
+      where: { id: inscription.id },
+      data: { numeroInscription },
+    });
+    attribues.push({
+      inscriptionId: inscription.id,
+      candidatId: inscription.candidat.id,
+      nom: inscription.candidat.nom,
+      prenom: inscription.candidat.prenom,
+      numeroInscription,
+    });
+  }
+
+  return attribues;
 }
 
 function isInscriptionActive(statut) {
@@ -97,7 +161,7 @@ function pickNumeroInscriptionRecent(inscriptions = []) {
 /** @deprecated Legacy — ne pas utiliser pour les nouvelles inscriptions */
 async function genererNumeroInscriptionUnique() {
   throw new Error(
-    'genererNumeroInscriptionUnique est obsolète. Utiliser genererNumeroInscriptionPourConcours(tx, concoursId).',
+    'genererNumeroInscriptionUnique est obsolète. Utiliser attribuerNumerosTableParConcours(tx, concoursId).',
   );
 }
 
@@ -107,7 +171,9 @@ module.exports = {
   resolveCodeConcours,
   formatNumeroInscription,
   genererNumeroInscriptionPourConcours,
+  attribuerNumerosTableParConcours,
   pickNumeroInscriptionRecent,
   isInscriptionActive,
   genererNumeroInscriptionUnique,
+  compareCandidatsAlpha,
 };

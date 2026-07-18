@@ -7,8 +7,13 @@ async function resolveStatsScope(req) {
     return null;
   }
 
-  const commissionScope = await resolveCommissionScope(req.user.id);
-  if (commissionScope) {
+  if (req.userRole === 'COMMISSION') {
+    const commissionScope = await resolveCommissionScope(req.user.id);
+    if (!commissionScope) {
+      const err = new Error('Accès refusé. Aucun concours assigné à votre compte commission.');
+      err.status = 403;
+      throw err;
+    }
     return commissionScope;
   }
 

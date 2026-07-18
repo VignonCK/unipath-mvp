@@ -47,12 +47,18 @@ model MembreCommission {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
   sousRole        SousRoleCommission @default(MEMBRE)
+  /// Dénormalisé depuis concours.etablissementId (filtres/affichage).
   etablissementId String?
   etablissement   Etablissement?     @relation(fields: [etablissementId], references: [id], onDelete: SetNull)
+  /// Source de vérité du scope commission (un membre = un concours).
+  concoursId      String?
+  concours        Concours?          @relation(fields: [concoursId], references: [id], onDelete: Restrict)
 
   @@index([sousRole])
   @@index([etablissementId])
   @@index([etablissementId, sousRole])
+  @@index([concoursId])
+  @@index([concoursId, sousRole])
 }
 
 model AdministrateurDGES {
@@ -103,6 +109,7 @@ model Concours {
   criteresEligibilite  Json?
   inscriptions         Inscription[]
   centresActifs        ConcourscentreComposition[]
+  membresCommission    MembreCommission[]
 
   @@index([dateDebutDepot])
   @@index([dateFinDepot])

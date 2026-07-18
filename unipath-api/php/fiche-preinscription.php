@@ -323,7 +323,21 @@ try {
 
     $pdf->SetX($leftMargin + 2);
     $pdf->Cell(58, 7, ficheText('Lieu de composition :'), 0, 0, 'L');
-    $lieu = ficheText($concours['lieuComposition'] ?? $concours['etablissement'] ?? 'À communiquer');
+    // Priorité au centre choisi par le candidat (relationnel ou JSON)
+    $centreChoisi = $data['centreCompositionChoisi']
+        ?? ($data['inscription']['dossierInscription']['centreCompositionChoisi'] ?? null);
+    if (!empty($centreChoisi['nom'])) {
+        $parts = [$centreChoisi['nom']];
+        if (!empty($centreChoisi['ville'])) {
+            $parts[] = $centreChoisi['ville'];
+        }
+        if (!empty($centreChoisi['adresse'])) {
+            $parts[] = $centreChoisi['adresse'];
+        }
+        $lieu = ficheText(implode(' — ', array_filter($parts)));
+    } else {
+        $lieu = ficheText($concours['lieuComposition'] ?? $concours['etablissement'] ?? 'À communiquer');
+    }
     $pdf->MultiCell($contentWidth - 62, 7, $lieu, 0, 'L');
     $pdf->Ln(1);
 

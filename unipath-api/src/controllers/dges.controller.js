@@ -1,6 +1,14 @@
 const statsExportService = require('../services/statsExport.service');
 const { parseStatsFilters } = require('../utils/stats-filters.helper');
 
+function mapRepartitionSexe(repartitionSexe = {}) {
+  return {
+    M: Number(repartitionSexe.M) || 0,
+    F: Number(repartitionSexe.F) || 0,
+    non_renseigne: Number(repartitionSexe.nonRenseigne) || 0,
+  };
+}
+
 function mapParConcoursToLegacy(row) {
   return {
     concours_id: row.concoursId,
@@ -14,6 +22,8 @@ function mapParConcoursToLegacy(row) {
     dossiers_valides: row.acceptes,
     dossiers_rejetes: row.rejetes,
     en_attente: row.enAttente,
+    sous_reserve: row.sousReserve,
+    repartition_sexe: mapRepartitionSexe(row.repartitionSexe),
     taux_validation_pct: row.tauxValidationPct,
   };
 }
@@ -24,6 +34,10 @@ function mapParEtablissementLegacy(groups) {
     etablissementId: group.etablissementId,
     nbConcours: group.nbConcours,
     nbCandidats: group.totalCandidats,
+    valides: group.acceptes,
+    rejetes: group.rejetes,
+    en_attente: group.enAttente,
+    sous_reserve: group.sousReserve,
     concours: group.concours.map(mapParConcoursToLegacy),
   }));
 }
@@ -41,6 +55,8 @@ function mapParCampagneToLegacy(row) {
     valides: row.acceptes,
     rejetes: row.rejetes,
     en_attente: row.enAttente,
+    sous_reserve: row.sousReserve,
+    repartition_sexe: mapRepartitionSexe(row.repartitionSexe),
     taux_validation_pct: row.tauxValidationPct,
   };
 }
@@ -55,6 +71,7 @@ function mapParEtablissementPriveLegacy(groups) {
     valides: group.acceptes,
     rejetes: group.rejetes,
     en_attente: group.enAttente,
+    sous_reserve: group.sousReserve,
     campagnes: group.campagnes.map(mapParCampagneToLegacy),
   }));
 }
@@ -85,6 +102,8 @@ exports.getStatistiques = async (req, res) => {
         total_valides: stats.totaux.acceptes,
         total_rejetes: stats.totaux.rejetes,
         total_attente: stats.totaux.enAttente,
+        total_sous_reserve: stats.totaux.sousReserve,
+        repartition_sexe: mapRepartitionSexe(stats.totaux.repartitionSexe),
       },
       statistiques,
       parEtablissement: mapParEtablissementLegacy(stats.parEtablissement),
@@ -94,6 +113,8 @@ exports.getStatistiques = async (req, res) => {
         total_valides: stats.campagnes.totaux.acceptes,
         total_rejetes: stats.campagnes.totaux.rejetes,
         total_attente: stats.campagnes.totaux.enAttente,
+        total_sous_reserve: stats.campagnes.totaux.sousReserve,
+        repartition_sexe: mapRepartitionSexe(stats.campagnes.totaux.repartitionSexe),
       },
       statistiquesCampagnes,
       parEtablissementPrive: mapParEtablissementPriveLegacy(stats.campagnes.parEtablissement),
@@ -118,10 +139,9 @@ exports.getStatistiquesConcours = async (req, res) => {
     return res.json({
       meta: stats.meta,
       ...mapParConcoursToLegacy(row),
+      parCentre: row.parCentre,
     });
   } catch (error) {
     return handleStatsError(res, error, 'Erreur DGES concours:');
   }
 };
-
-module.exports = exports;

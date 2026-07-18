@@ -166,8 +166,14 @@ export default function DetailInscription() {
       setInscription((prev) => ({
         ...prev,
         centreChoisi: data.centreChoisi ?? null,
+        centreCompositionChoisi: data.centreCompositionChoisi ?? null,
       }));
       showMessage('Centre de composition enregistré.', 'success');
+      // Recharge pour rester aligné avec getProfil (hasCentresActifs, etc.)
+      await loadProfil();
+    } catch (err) {
+      showMessage(err.message || 'Enregistrement du centre impossible.', 'error');
+      throw err;
     } finally {
       setCentreBusy(false);
     }
@@ -270,9 +276,13 @@ export default function DetailInscription() {
                 </p>
               </div>
               <div className='glass-card-subtle px-4 py-3'>
-                <p className='text-xs text-gray-400 mb-0.5'>Institution</p>
+                <p className='text-xs text-gray-400 mb-0.5'>Centre de composition</p>
                 <p className='text-sm font-medium text-gray-800'>
-                  EPAC - UAC
+                  {centreChoisi
+                    ? formatCentreChoisi(centreChoisi)
+                    : (concoursRequireCentreChoice(inscription?.concours, centresRelational)
+                      ? 'Non choisi'
+                      : (inscription.concours?.lieuComposition || 'À communiquer'))}
                 </p>
               </div>
             </div>

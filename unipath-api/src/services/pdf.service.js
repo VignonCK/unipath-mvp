@@ -7,6 +7,8 @@ const { supabaseAdmin } = require('../supabase');
 const {
   enrichDossierInscriptionForPdf,
   peutEnvoyerConvocationPdf,
+  DOSSIER_CENTRE_INCLUDE,
+  resolveCentreCompositionChoisiForPdf,
 } = require('../utils/centres-composition.helper');
 const {
   BUCKET_DOSSIERS_CANDIDATS,
@@ -213,16 +215,25 @@ class PDFService {
             },
           },
           concours: true,
-          dossierInscription: true,
+          dossierInscription: {
+            include: DOSSIER_CENTRE_INCLUDE,
+          },
         },
       });
     }
 
     const candidatEffectif = inscriptionComplete?.candidat ?? candidat;
     const inscriptionEffectif = inscriptionComplete ?? inscription;
+    const dossierEnrichi = enrichDossierInscriptionForPdf(
+      inscriptionEffectif?.dossierInscription ?? null,
+    );
+    const centreCompositionChoisi = resolveCentreCompositionChoisiForPdf(dossierEnrichi)
+      || dossierEnrichi?.centreCompositionChoisi
+      || null;
 
     console.log('[PDF-Fiche] candidat.dossier:', JSON.stringify(candidatEffectif?.dossier, null, 2));
     console.log('[PDF-Fiche] photo URL:', candidatEffectif?.dossier?.photo);
+    console.log('[PDF-Fiche] centreCompositionChoisi:', centreCompositionChoisi);
 
     // Créer un fichier JSON temporaire avec les données
     const inputFile = path.join(this.tempDir, `input-preinscription-${Date.now()}.json`);
@@ -247,16 +258,17 @@ class PDFService {
         numeroDossier,
         pieces_fournies: pieces_fournies || [],
         pieces_manquantes: pieces_manquantes || [],
-        statut: statut || inscriptionEffectif?.dossierInscription?.statut || 'EN_ATTENTE',
+        statut: statut || dossierEnrichi?.statut || 'EN_ATTENTE',
         serie: serie ?? candidatEffectif?.serie ?? null,
         photoBase64,
         photoMime,
+        centreCompositionChoisi,
       };
       if (inscriptionEffectif) {
         payload.inscription = {
           id: inscriptionEffectif.id,
           numeroInscription: inscriptionEffectif.numeroInscription,
-          dossierInscription: inscriptionEffectif.dossierInscription || null,
+          dossierInscription: dossierEnrichi,
         };
       }
       await writeFileAsync(inputFile, JSON.stringify(payload));

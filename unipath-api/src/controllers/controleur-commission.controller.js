@@ -33,13 +33,28 @@ const {
 
 async function scopedWhere(req, where) {
   const scope = await resolveCommissionScope(req.user.id);
-  return applyConcoursScope(where, scope ? scope.concoursIds : null);
+  if (!scope) {
+    return applyConcoursScope(where, null);
+  }
+  return applyConcoursScope(where, scope.concoursId);
 }
 
 async function assertDossierAccessible(req, dossierInscriptionId) {
   const scope = await resolveCommissionScope(req.user.id);
-  if (!scope) return true;
-  return assertDossierDansScope(dossierInscriptionId, scope.concoursIds);
+  if (!scope) return false;
+  return assertDossierDansScope(dossierInscriptionId, scope.concoursId);
+}
+
+async function requireCommissionScope(req, res) {
+  const scope = await resolveCommissionScope(req.user.id);
+  if (!scope) {
+    res.status(403).json({
+      error: 'Accès refusé. Aucun concours assigné à votre compte commission.',
+      code: 'COMMISSION_SCOPE_REQUIRED',
+    });
+    return null;
+  }
+  return scope;
 }
 
 function applyDecisionCommentFields(updateData, decision, validation) {
@@ -69,7 +84,13 @@ function getMotifArbitrage(validation) {
 exports.getTableauDeBord = async (req, res) => {
   try {
     const scope = await resolveCommissionScope(req.user.id);
-    const concoursIds = scope ? scope.concoursIds : null;
+    if (!scope) {
+      return res.status(403).json({
+        error: 'Accès refusé. Aucun concours assigné à votre compte commission.',
+        code: 'COMMISSION_SCOPE_REQUIRED',
+      });
+    }
+    const concoursId = scope.concoursId;
 
     const [dossiersAvec1Verdict, dossiersAvec2Verdicts, dossiersAvecDecision] = await Promise.all([
       prisma.dossierInscription.count({
@@ -78,7 +99,7 @@ exports.getTableauDeBord = async (req, res) => {
             verdict1Par: { not: null },
             decisionControleur: null,
           },
-          concoursIds
+          concoursId
         ),
       }),
       prisma.dossierInscription.count({
@@ -87,11 +108,11 @@ exports.getTableauDeBord = async (req, res) => {
             verdict1Par: { not: null },
             decisionControleur: { not: null },
           },
-          concoursIds
+          concoursId
         ),
       }),
       prisma.dossierInscription.count({
-        where: applyConcoursScope({ decisionControleur: { not: null } }, concoursIds),
+        where: applyConcoursScope({ decisionControleur: { not: null } }, concoursId),
       }),
     ]);
 
@@ -101,7 +122,7 @@ exports.getTableauDeBord = async (req, res) => {
           verdict1Par: { not: null },
           decisionControleur: { not: null },
         },
-        concoursIds
+        concoursId
       ),
       select: { verdict1: true, decisionControleur: true },
     });
@@ -127,7 +148,7 @@ exports.getTableauDeBord = async (req, res) => {
         {
           OR: [{ verdict1: { not: null } }, { decisionControleur: { not: null } }],
         },
-        concoursIds
+        concoursId
       ),
       select: { verdict1: true, decisionControleur: true },
     });
@@ -175,6 +196,8 @@ exports.getTableauDeBord = async (req, res) => {
  */
 exports.getDossiers = async (req, res) => {
   try {
+    if (!(await requireCommissionScope(req, res))) return;
+
     const { filtre, concoursId, limite = 50, offset = 0 } = req.query;
 
     let whereClause = {
@@ -304,6 +327,8 @@ exports.getDossiers = async (req, res) => {
  */
 exports.getDossiersDivergents = async (req, res) => {
   try {
+    if (!(await requireCommissionScope(req, res))) return;
+
     const { limite = 50, offset = 0 } = req.query;
 
     const whereClause = await scopedWhere(req, {
@@ -397,6 +422,8 @@ exports.getDossiersDivergents = async (req, res) => {
  */
 exports.getDetailDossier = async (req, res) => {
   try {
+    if (!(await requireCommissionScope(req, res))) return;
+
     const { dossierInscriptionId } = req.params;
 
     // Valider l'UUID
@@ -984,6 +1011,8 @@ exports.modifierDecision = async (req, res) => {
  */
 exports.getDossiersSansVerdict = async (req, res) => {
   try {
+    if (!(await requireCommissionScope(req, res))) return;
+
     const { limite = 50, offset = 0 } = req.query;
 
     // Date limite : il y a 2 jours

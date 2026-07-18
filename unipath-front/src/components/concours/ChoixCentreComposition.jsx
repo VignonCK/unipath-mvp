@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 
 function groupByVille(centres = []) {
   const map = new Map();
@@ -31,9 +31,23 @@ export default function ChoixCentreComposition({
   const [selectedId, setSelectedId] = useState(() => centreChoisi?.concoursCentreId || centreChoisi?.id || '');
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    const nextId = centreChoisi?.concoursCentreId || centreChoisi?.id || '';
+    if (nextId) setSelectedId(nextId);
+  }, [centreChoisi?.concoursCentreId, centreChoisi?.id]);
+
   const centreVerrouille = statut === 'VALIDE' && Boolean(centreChoisi?.nom || centreChoisi?.concoursCentreId);
 
-  if (!centresRelational.length) return null;
+  if (!centresRelational.length) {
+    return (
+      <div className='rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900'>
+        <p className='font-semibold'>Centres de composition indisponibles</p>
+        <p className='mt-1 text-xs text-amber-800'>
+          Aucun centre actif n&apos;a pu être chargé pour ce concours. Réessayez plus tard ou contactez le support.
+        </p>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -33,7 +33,6 @@ import DashboardEtudiant from './pages/DashboardEtudiant';
 import DemandeInscription from './pages/DemandeInscription';
 import MesInscriptionsAcademiques from './pages/MesInscriptionsAcademiques';
 import DGESEtablissementsAdmins from './pages/dges/DGESEtablissementsAdmins';
-import DGESCommissionEtablissement from './pages/dges/DGESCommissionEtablissement';
 import MesCampagnes from './pages/admin-etablissement/MesCampagnes';
 import CampagneForm from './pages/admin-etablissement/CampagneForm';
 import DetailCampagneAdmin from './pages/admin-etablissement/DetailCampagneAdmin';
@@ -46,6 +45,7 @@ import PreinscriptionsAdmin from './pages/admin-etablissement/PreinscriptionsAdm
 import ValidationQuittances from './pages/admin-etablissement/ValidationQuittances';
 import EtudiantsAdmin from './pages/admin-etablissement/EtudiantsAdmin';
 import PersonnelAdmin from './pages/admin-etablissement/PersonnelAdmin';
+import StatistiquesEtablissement from './pages/admin-etablissement/StatistiquesEtablissement';
 import ResetPassword from './pages/ResetPassword';
 import PageCampagnesInscription from './pages/campagnes/PageCampagnesInscription';
 import DetailCampagneCandidat from './pages/campagnes/DetailCampagneCandidat';
@@ -391,11 +391,7 @@ function App() {
 
         <Route
           path='/dges/etablissements/:etablissementId/commission'
-          element={
-            <ProtectedRoute allowedRoles={['DGES']}>
-              <DGESCommissionEtablissement />
-            </ProtectedRoute>
-          }
+          element={<Navigate to='/dges-etablissements-admins' replace />}
         />
 
         {/* Routes protégées - ADMIN_ETABLISSEMENT */}
@@ -506,6 +502,18 @@ function App() {
               allowedSousRoles={['ADMIN', 'SUPERVISEUR']}
             >
               <PersonnelAdmin />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/admin-etablissement/statistiques'
+          element={
+            <ProtectedRoute
+              allowedRoles={['ADMIN_ETABLISSEMENT']}
+              allowedSousRoles={['ADMIN', 'SUPERVISEUR']}
+            >
+              <StatistiquesEtablissement />
             </ProtectedRoute>
           }
         />

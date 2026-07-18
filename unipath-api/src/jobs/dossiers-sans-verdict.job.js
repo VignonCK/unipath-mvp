@@ -65,11 +65,6 @@ const dossiersSansVerdictJob = cron.schedule(
 
       logger.warn(`⚠️ ${dossiersSansVerdict.length} dossier(s) sans verdict détecté(s)`);
 
-      const [controleur, examinateurs] = await Promise.all([
-        prisma.membreCommission.findFirst({ where: { sousRole: 'CONTROLEUR' } }),
-        prisma.membreCommission.findMany({ where: { sousRole: 'EXAMINATEUR' } }),
-      ]);
-
       let notificationsCreees = 0;
 
       for (const dossier of dossiersSansVerdict) {
@@ -77,6 +72,7 @@ const dossiersSansVerdictJob = cron.schedule(
           (new Date() - new Date(dossier.createdAt)) / (1000 * 60 * 60 * 24)
         );
         const numero = dossier.inscription.numeroInscription || dossier.id.substring(0, 8);
+        const concoursId = dossier.inscription.concoursId;
         const dataBase = {
           dossierInscriptionId: dossier.id,
           numeroInscription: numero,
@@ -86,6 +82,15 @@ const dossiersSansVerdictJob = cron.schedule(
           joursEcoules,
           dateCreation: dossier.createdAt,
         };
+
+        const [controleur, examinateurs] = await Promise.all([
+          prisma.membreCommission.findFirst({
+            where: { sousRole: 'CONTROLEUR', concoursId },
+          }),
+          prisma.membreCommission.findMany({
+            where: { sousRole: 'EXAMINATEUR', concoursId },
+          }),
+        ]);
 
         if (controleur) {
           const skip = await notificationDejaEnvoyee(controleur.id, dossier.id, 'ALERTE');

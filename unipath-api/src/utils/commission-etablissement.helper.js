@@ -1,60 +1,72 @@
 const prisma = require('../prisma');
 
-const LIMITES_SOUS_ROLE = {
-  EXAMINATEUR: 2,
-  CONTROLEUR: 1,
-};
-
-async function getEtablissementPublic(etablissementId) {
-  const etablissement = await prisma.etablissement.findUnique({
-    where: { id: etablissementId },
-    select: { id: true, nom: true, ville: true, type: true },
+async function getConcoursPublic(concoursId) {
+  const concours = await prisma.concours.findUnique({
+    where: { id: concoursId },
+    select: {
+      id: true,
+      libelle: true,
+      sigle: true,
+      etablissementId: true,
+      etablissement: true,
+      etablissementOrganisateur: {
+        select: { id: true, nom: true, ville: true, type: true },
+      },
+    },
   });
 
-  if (!etablissement) {
-    return { error: 'Établissement non trouvé', status: 404 };
+  if (!concours) {
+    return { error: 'Concours non trouvé', status: 404 };
   }
 
-  if (etablissement.type !== 'PUBLIC') {
+  const etab = concours.etablissementOrganisateur;
+  if (etab && etab.type !== 'PUBLIC') {
     return {
-      error: 'La commission ne peut être rattachée qu\'à un établissement public.',
+      error: 'La commission ne peut être rattachée qu\'à un concours d\'établissement public.',
       status: 400,
     };
   }
 
-  return { etablissement };
-}
-
-async function resolveCommissionScope(userId) {
-  const membre = await prisma.membreCommission.findUnique({
-    where: { id: userId },
-    select: { etablissementId: true, sousRole: true },
-  });
-
-  if (!membre?.etablissementId) {
-    return null;
-  }
-
-  const concours = await prisma.concours.findMany({
-    where: { etablissementId: membre.etablissementId },
-    select: { id: true },
-  });
-
   return {
-    etablissementId: membre.etablissementId,
-    concoursIds: concours.map((c) => c.id),
+    concours: {
+      id: concours.id,
+      libelle: concours.libelle,
+      sigle: concours.sigle,
+      etablissementId: concours.etablissementId,
+      etablissementNom: etab?.nom || concours.etablissement || null,
+      etablissement: etab || null,
+    },
   };
 }
 
-function applyConcoursScope(where = {}, concoursIds) {
-  if (concoursIds === null || concoursIds === undefined) {
-    return where;
+/**
+ * Deny-by-default : sans concoursId → null (à traiter en 403).
+ * @returns {{ concoursId: string, etablissementId: string|null } | null}
+ */
+async function resolveCommissionScope(userId) {
+  const membre = await prisma.membreCommission.findUnique({
+    where: { id: userId },
+    select: { concoursId: true, etablissementId: true, sousRole: true },
+  });
+
+  if (!membre?.concoursId) {
+    return null;
   }
 
+  return {
+    concoursId: membre.concoursId,
+    etablissementId: membre.etablissementId || null,
+  };
+}
+
+/**
+ * Applique le filtre concours. null/undefined → aucun dossier (deny-by-default).
+ */
+function applyConcoursScope(where = {}, concoursId) {
   const inscriptionScope =
-    concoursIds.length === 0
+    !concoursId
       ? { concoursId: { in: [] } }
-      : { concoursId: { in: concoursIds } };
+      : { concoursId };
 
   if (where.inscription) {
     return {
@@ -66,12 +78,8 @@ function applyConcoursScope(where = {}, concoursIds) {
   return { ...where, inscription: inscriptionScope };
 }
 
-async function assertDossierDansScope(dossierInscriptionId, concoursIds) {
-  if (concoursIds === null || concoursIds === undefined) {
-    return true;
-  }
-
-  if (concoursIds.length === 0) {
+async function assertDossierDansScope(dossierInscriptionId, concoursId) {
+  if (!concoursId) {
     return false;
   }
 
@@ -80,16 +88,15 @@ async function assertDossierDansScope(dossierInscriptionId, concoursIds) {
     select: { inscription: { select: { concoursId: true } } },
   });
 
-  if (!dossier) {
+  if (!dossier?.inscription?.concoursId) {
     return false;
   }
 
-  return concoursIds.includes(dossier.inscription.concoursId);
+  return dossier.inscription.concoursId === concoursId;
 }
 
 module.exports = {
-  LIMITES_SOUS_ROLE,
-  getEtablissementPublic,
+  getConcoursPublic,
   resolveCommissionScope,
   applyConcoursScope,
   assertDossierDansScope,

@@ -894,14 +894,22 @@ export default function DemandeInscription() {
                             {dossierFeesPaid ? 'Paiement confirmé' : 'Paiement simulé'} —{' '}
                             {fraisDossierAffiche.toLocaleString('fr-FR')} FCFA
                           </p>
-                          <button
-                            type='button'
-                            onClick={payDossierFees}
-                            disabled={actionBusy || applicationDetail.status !== 'DRAFT'}
-                            className='mt-4 w-full rounded-xl bg-blue-900 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50'
-                          >
-                            Payer (mock)
-                          </button>
+                          {dossierFeesPaid || applicationDetail.status !== 'DRAFT' ? (
+                            <p className='mt-4 rounded-xl bg-white/70 px-3 py-2.5 text-xs font-medium text-blue-900'>
+                              {dossierFeesPaid
+                                ? '✓ Frais déjà payés — le bouton mock n\'est plus nécessaire.'
+                                : `Paiement mock disponible uniquement en brouillon (statut actuel : ${applicationDetail.status}).`}
+                            </p>
+                          ) : (
+                            <button
+                              type='button'
+                              onClick={payDossierFees}
+                              disabled={actionBusy}
+                              className='mt-4 w-full rounded-xl bg-blue-900 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50'
+                            >
+                              Payer (mock)
+                            </button>
+                          )}
                         </div>
 
                         <div className='rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4'>
@@ -951,8 +959,35 @@ export default function DemandeInscription() {
                           </div>
                           <button
                             type='button'
-                            onClick={() => applicationService.telechargerFiche(selectedApplicationId)}
-                            className='rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 transition hover:bg-gray-50'
+                            onClick={async () => {
+                              if (!selectedApplicationId) return;
+                              try {
+                                setActionBusy(true);
+                                setError('');
+                                await applicationService.telechargerFiche(selectedApplicationId);
+                                setMessage('Fiche téléchargée');
+                              } catch (err) {
+                                setError(err.message || 'Impossible de télécharger la fiche');
+                              } finally {
+                                setActionBusy(false);
+                              }
+                            }}
+                            disabled={
+                              actionBusy
+                              || !(
+                                applicationDetail.status === 'FICHE_GENERATED'
+                                || applicationDetail.preinscriptionId
+                                || applicationDetail.preinscription?.id
+                              )
+                            }
+                            title={
+                              applicationDetail.status === 'FICHE_GENERATED'
+                                || applicationDetail.preinscriptionId
+                                || applicationDetail.preinscription?.id
+                                ? undefined
+                                : 'Finalisez d\'abord votre dossier pour générer la fiche'
+                            }
+                            className='rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50'
                           >
                             Télécharger la fiche
                           </button>

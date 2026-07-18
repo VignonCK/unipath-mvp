@@ -6,8 +6,11 @@ const { checkRole } = require('../middleware/role.middleware');
 const dgesController = require('../controllers/dges.controller');
 const adminEtablissementRoutes = require('./adminEtablissement.routes');
 const commissionEtablissementRoutes = require('./commissionEtablissement.routes');
+const commissionConcoursRoutes = require('./commissionConcours.routes');
 
+// Ancienne route désactivée (403) — ne pas réactiver
 router.use('/etablissements/:etablissementId/commission', commissionEtablissementRoutes);
+router.use('/concours/:concoursId/commission', commissionConcoursRoutes);
 router.use('/etablissements', adminEtablissementRoutes);
 
 // Routes protégées - DGES et COMMISSION peuvent voir les statistiques

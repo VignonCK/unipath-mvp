@@ -9,8 +9,13 @@ const {
 
 const ACCEPTES = ['VALIDE', 'VALIDE_PAR_COMMISSION'];
 const REJETES = ['REJETE', 'REJETE_PAR_COMMISSION'];
+const SOUS_RESERVE = ['SOUS_RESERVE', 'SOUS_RESERVE_PAR_COMMISSION'];
 const PREINSCRIPTION_ACCEPTES = ['VALIDE'];
 const PREINSCRIPTION_REJETES = ['REJETE'];
+const PREINSCRIPTION_SOUS_RESERVE = ['SOUS_RESERVE'];
+
+const EMPTY_COUNTS = { acceptes: 0, rejetes: 0, enAttente: 0, sousReserve: 0 };
+const EMPTY_SEXE = { M: 0, F: 0, nonRenseigne: 0 };
 
 const HEADER_FILL = {
   type: 'pattern',
@@ -21,13 +26,62 @@ const HEADER_FILL = {
 function categorizeStatut(statut) {
   if (ACCEPTES.includes(statut)) return 'acceptes';
   if (REJETES.includes(statut)) return 'rejetes';
+  if (SOUS_RESERVE.includes(statut)) return 'sousReserve';
   return 'enAttente';
 }
 
 function categorizePreinscriptionStatut(statut) {
   if (PREINSCRIPTION_ACCEPTES.includes(statut)) return 'acceptes';
   if (PREINSCRIPTION_REJETES.includes(statut)) return 'rejetes';
+  if (PREINSCRIPTION_SOUS_RESERVE.includes(statut)) return 'sousReserve';
   return 'enAttente';
+}
+
+function categorizeSexe(sexe) {
+  const normalized = String(sexe || '').trim().toUpperCase();
+  if (normalized === 'M') return 'M';
+  if (normalized === 'F') return 'F';
+  return 'nonRenseigne';
+}
+
+function emptyCounts() {
+  return { ...EMPTY_COUNTS };
+}
+
+function emptySexeCounts() {
+  return { ...EMPTY_SEXE };
+}
+
+function countSexeFromItems(items, getSexe) {
+  const counts = emptySexeCounts();
+  for (const item of items) {
+    counts[categorizeSexe(getSexe(item))] += 1;
+  }
+  return counts;
+}
+
+function sumCounts(acc, row) {
+  return {
+    totalCandidats: acc.totalCandidats + row.totalCandidats,
+    acceptes: acc.acceptes + row.acceptes,
+    rejetes: acc.rejetes + row.rejetes,
+    enAttente: acc.enAttente + row.enAttente,
+    sousReserve: acc.sousReserve + row.sousReserve,
+  };
+}
+
+function sumSexe(acc, row) {
+  const sexe = row.repartitionSexe || EMPTY_SEXE;
+  return {
+    M: acc.M + sexe.M,
+    F: acc.F + sexe.F,
+    nonRenseigne: acc.nonRenseigne + sexe.nonRenseigne,
+  };
+}
+
+function formatSexeLine(repartitionSexe = EMPTY_SEXE) {
+  return `Masculin : ${repartitionSexe.M} | Féminin : ${repartitionSexe.F}`
+    + ` | Non renseigné : ${repartitionSexe.nonRenseigne}`;
 }
 
 function resolvePreinscriptionStatut(application) {
@@ -108,10 +162,11 @@ function buildCentreBreakdown(concours) {
 }
 
 function buildConcoursStats(concours) {
-  const counts = { acceptes: 0, rejetes: 0, enAttente: 0 };
-  const totalCandidats = concours.inscriptions?.length || 0;
+  const counts = emptyCounts();
+  const inscriptions = concours.inscriptions || [];
+  const totalCandidats = inscriptions.length;
 
-  for (const ins of concours.inscriptions || []) {
+  for (const ins of inscriptions) {
     const statut = ins.dossierInscription?.statut || 'EN_ATTENTE';
     counts[categorizeStatut(statut)] += 1;
   }
@@ -132,6 +187,8 @@ function buildConcoursStats(concours) {
     acceptes: counts.acceptes,
     rejetes: counts.rejetes,
     enAttente: counts.enAttente,
+    sousReserve: counts.sousReserve,
+    repartitionSexe: countSexeFromItems(inscriptions, (ins) => ins.candidat?.sexe),
     tauxValidationPct,
     parCentre: buildCentreBreakdown(concours),
   };
@@ -154,6 +211,7 @@ function buildParEtablissement(parConcours) {
         acceptes: 0,
         rejetes: 0,
         enAttente: 0,
+        sousReserve: 0,
         concours: [],
       });
     }
@@ -164,6 +222,7 @@ function buildParEtablissement(parConcours) {
     group.acceptes += stats.acceptes;
     group.rejetes += stats.rejetes;
     group.enAttente += stats.enAttente;
+    group.sousReserve += stats.sousReserve;
     group.concours.push(stats);
   }
 
@@ -171,7 +230,7 @@ function buildParEtablissement(parConcours) {
 }
 
 function buildCampagneStatsRow(campagne, applications) {
-  const counts = { acceptes: 0, rejetes: 0, enAttente: 0 };
+  const counts = emptyCounts();
   for (const app of applications) {
     const statut = resolvePreinscriptionStatut(app);
     counts[categorizePreinscriptionStatut(statut)] += 1;
@@ -194,6 +253,8 @@ function buildCampagneStatsRow(campagne, applications) {
     acceptes: counts.acceptes,
     rejetes: counts.rejetes,
     enAttente: counts.enAttente,
+    sousReserve: counts.sousReserve,
+    repartitionSexe: countSexeFromItems(applications, (app) => app.candidat?.sexe),
     tauxValidationPct,
   };
 }
@@ -216,6 +277,7 @@ function buildParEtablissementPrive(parCampagne) {
         acceptes: 0,
         rejetes: 0,
         enAttente: 0,
+        sousReserve: 0,
         campagnes: [],
       });
     }
@@ -226,6 +288,7 @@ function buildParEtablissementPrive(parCampagne) {
     group.acceptes += stats.acceptes;
     group.rejetes += stats.rejetes;
     group.enAttente += stats.enAttente;
+    group.sousReserve += stats.sousReserve;
     group.campagnes.push(stats);
   }
 
@@ -235,7 +298,7 @@ function buildParEtablissementPrive(parCampagne) {
 async function collectCampagneStats(filters = {}, scope = null) {
   if (filters.concoursId || filters.centreId) {
     return {
-      totaux: { totalCandidats: 0, acceptes: 0, rejetes: 0, enAttente: 0 },
+      totaux: { totalCandidats: 0, ...emptyCounts(), repartitionSexe: emptySexeCounts() },
       parCampagne: [],
       parEtablissement: [],
     };
@@ -251,6 +314,7 @@ async function collectCampagneStats(filters = {}, scope = null) {
   const applications = await prisma.application.findMany({
     where: applicationWhere,
     include: {
+      candidat: { select: { sexe: true } },
       preinscription: { select: { statut: true } },
       campagneFiliere: {
         include: {
@@ -284,17 +348,17 @@ async function collectCampagneStats(filters = {}, scope = null) {
 
   const parEtablissement = buildParEtablissementPrive(parCampagne);
 
-  const totaux = parCampagne.reduce(
-    (acc, row) => ({
-      totalCandidats: acc.totalCandidats + row.totalCandidats,
-      acceptes: acc.acceptes + row.acceptes,
-      rejetes: acc.rejetes + row.rejetes,
-      enAttente: acc.enAttente + row.enAttente,
-    }),
-    { totalCandidats: 0, acceptes: 0, rejetes: 0, enAttente: 0 },
-  );
+  const totaux = parCampagne.reduce(sumCounts, { totalCandidats: 0, ...emptyCounts() });
+  totaux.repartitionSexe = parCampagne.reduce(sumSexe, emptySexeCounts());
 
   return { totaux, parCampagne, parEtablissement };
+}
+
+function getAllowedConcoursIds(scope) {
+  if (!scope) return null;
+  if (scope.concoursId) return [scope.concoursId];
+  if (Array.isArray(scope.concoursIds)) return scope.concoursIds;
+  return null;
 }
 
 function buildConcoursWhere(filters = {}, scope = null) {
@@ -308,8 +372,8 @@ function buildConcoursWhere(filters = {}, scope = null) {
     where.etablissementId = filters.etablissementId;
   }
 
-  if (scope?.concoursIds) {
-    const allowed = scope.concoursIds;
+  const allowed = getAllowedConcoursIds(scope);
+  if (allowed) {
     if (allowed.length === 0) {
       where.id = { in: [] };
     } else if (filters.concoursId) {
@@ -323,10 +387,11 @@ function buildConcoursWhere(filters = {}, scope = null) {
 }
 
 function assertFiltersInScope(filters, scope) {
-  if (!scope?.concoursIds || !filters.concoursId) {
+  const allowed = getAllowedConcoursIds(scope);
+  if (!allowed || !filters.concoursId) {
     return true;
   }
-  return scope.concoursIds.includes(filters.concoursId);
+  return allowed.includes(filters.concoursId);
 }
 
 function assertEtablissementInScope(filters, scope) {
@@ -382,15 +447,8 @@ async function collectStats(filters = {}, scope = null) {
   const parEtablissement = buildParEtablissement(parConcours);
   const campagnes = await collectCampagneStats(filters, scope);
 
-  const totaux = parConcours.reduce(
-    (acc, row) => ({
-      totalCandidats: acc.totalCandidats + row.totalCandidats,
-      acceptes: acc.acceptes + row.acceptes,
-      rejetes: acc.rejetes + row.rejetes,
-      enAttente: acc.enAttente + row.enAttente,
-    }),
-    { totalCandidats: 0, acceptes: 0, rejetes: 0, enAttente: 0 },
-  );
+  const totaux = parConcours.reduce(sumCounts, { totalCandidats: 0, ...emptyCounts() });
+  totaux.repartitionSexe = parConcours.reduce(sumSexe, emptySexeCounts());
 
   return {
     meta: {
@@ -435,6 +493,44 @@ async function generateExcel(stats) {
   workbook.creator = 'UniPath';
   workbook.created = new Date(stats.meta.generatedAt);
 
+  const sheetGlobal = workbook.addWorksheet('Synthèse globale');
+  sheetGlobal.addRow([
+    'Module',
+    'Total',
+    'Acceptés / Validés',
+    'Rejetés',
+    'En attente',
+    'Sous réserve',
+    'Masculin (M)',
+    'Féminin (F)',
+    'Non renseigné',
+  ]);
+  styleHeaderRow(sheetGlobal.getRow(1));
+  sheetGlobal.addRow([
+    'Concours',
+    stats.totaux.totalCandidats,
+    stats.totaux.acceptes,
+    stats.totaux.rejetes,
+    stats.totaux.enAttente,
+    stats.totaux.sousReserve,
+    stats.totaux.repartitionSexe?.M ?? 0,
+    stats.totaux.repartitionSexe?.F ?? 0,
+    stats.totaux.repartitionSexe?.nonRenseigne ?? 0,
+  ]);
+  sheetGlobal.addRow([
+    'Établissements privés',
+    stats.campagnes?.totaux?.totalCandidats ?? 0,
+    stats.campagnes?.totaux?.acceptes ?? 0,
+    stats.campagnes?.totaux?.rejetes ?? 0,
+    stats.campagnes?.totaux?.enAttente ?? 0,
+    stats.campagnes?.totaux?.sousReserve ?? 0,
+    stats.campagnes?.totaux?.repartitionSexe?.M ?? 0,
+    stats.campagnes?.totaux?.repartitionSexe?.F ?? 0,
+    stats.campagnes?.totaux?.repartitionSexe?.nonRenseigne ?? 0,
+  ]);
+  autoFitWorksheet(sheetGlobal);
+  sheetGlobal.views = [{ state: 'frozen', ySplit: 1 }];
+
   const sheetSynth = workbook.addWorksheet('Synthèse concours');
   sheetSynth.addRow([
     'Établissement',
@@ -443,6 +539,10 @@ async function generateExcel(stats) {
     'Acceptés',
     'Rejetés',
     'En attente',
+    'Sous réserve',
+    'Masculin (M)',
+    'Féminin (F)',
+    'Non renseigné',
     'Taux validation %',
   ]);
   styleHeaderRow(sheetSynth.getRow(1));
@@ -455,6 +555,10 @@ async function generateExcel(stats) {
       row.acceptes,
       row.rejetes,
       row.enAttente,
+      row.sousReserve,
+      row.repartitionSexe?.M ?? 0,
+      row.repartitionSexe?.F ?? 0,
+      row.repartitionSexe?.nonRenseigne ?? 0,
       row.tauxValidationPct,
     ]);
   }
@@ -469,6 +573,7 @@ async function generateExcel(stats) {
     'Acceptés',
     'Rejetés',
     'En attente',
+    'Sous réserve',
   ]);
   styleHeaderRow(sheetEtab.getRow(1));
 
@@ -480,6 +585,7 @@ async function generateExcel(stats) {
       row.acceptes,
       row.rejetes,
       row.enAttente,
+      row.sousReserve,
     ]);
   }
   autoFitWorksheet(sheetEtab);
@@ -525,6 +631,10 @@ async function generateExcel(stats) {
     'Validées',
     'Rejetées',
     'En attente',
+    'Sous réserve',
+    'Masculin (M)',
+    'Féminin (F)',
+    'Non renseigné',
     'Taux validation %',
   ]);
   styleHeaderRow(sheetCampagnes.getRow(1));
@@ -538,6 +648,10 @@ async function generateExcel(stats) {
       row.acceptes,
       row.rejetes,
       row.enAttente,
+      row.sousReserve,
+      row.repartitionSexe?.M ?? 0,
+      row.repartitionSexe?.F ?? 0,
+      row.repartitionSexe?.nonRenseigne ?? 0,
       row.tauxValidationPct,
     ]);
   }
@@ -553,6 +667,7 @@ async function generateExcel(stats) {
     'Validées',
     'Rejetées',
     'En attente',
+    'Sous réserve',
   ]);
   styleHeaderRow(sheetEtabPrive.getRow(1));
 
@@ -565,6 +680,7 @@ async function generateExcel(stats) {
       row.acceptes,
       row.rejetes,
       row.enAttente,
+      row.sousReserve,
     ]);
   }
   autoFitWorksheet(sheetEtabPrive);
@@ -635,18 +751,21 @@ async function generatePdf(stats) {
     doc.text(`Acceptés : ${stats.totaux.acceptes}`);
     doc.text(`Rejetés : ${stats.totaux.rejetes}`);
     doc.text(`En attente : ${stats.totaux.enAttente}`);
+    doc.text(`Sous réserve : ${stats.totaux.sousReserve}`);
+    doc.text(`Répartition par sexe — ${formatSexeLine(stats.totaux.repartitionSexe)}`);
 
     doc.moveDown(1.2);
     doc.font('Helvetica-Bold').fontSize(13).text('Détail par concours');
     doc.moveDown(0.5);
 
     const columns = [
-      { label: 'Concours', width: pageWidth * 0.28 },
-      { label: 'Établissement', width: pageWidth * 0.22 },
-      { label: 'Total', width: pageWidth * 0.1 },
-      { label: 'Acceptés', width: pageWidth * 0.12 },
-      { label: 'Rejetés', width: pageWidth * 0.12 },
-      { label: 'Attente', width: pageWidth * 0.12 },
+      { label: 'Concours', width: pageWidth * 0.24 },
+      { label: 'Établissement', width: pageWidth * 0.18 },
+      { label: 'Total', width: pageWidth * 0.09 },
+      { label: 'Acceptés', width: pageWidth * 0.11 },
+      { label: 'Rejetés', width: pageWidth * 0.11 },
+      { label: 'Attente', width: pageWidth * 0.11 },
+      { label: 'Sous rés.', width: pageWidth * 0.12 },
     ];
 
     const drawTableHeader = () => {
@@ -686,6 +805,7 @@ async function generatePdf(stats) {
         String(row.acceptes),
         String(row.rejetes),
         String(row.enAttente),
+        String(row.sousReserve),
       ];
 
       for (let i = 0; i < columns.length; i += 1) {
@@ -713,15 +833,18 @@ async function generatePdf(stats) {
       doc.text(`Validées : ${stats.campagnes.totaux.acceptes}`);
       doc.text(`Rejetées : ${stats.campagnes.totaux.rejetes}`);
       doc.text(`En attente : ${stats.campagnes.totaux.enAttente}`);
+      doc.text(`Sous réserve : ${stats.campagnes.totaux.sousReserve}`);
+      doc.text(`Répartition par sexe — ${formatSexeLine(stats.campagnes.totaux.repartitionSexe)}`);
       doc.moveDown(0.8);
 
       const campagneColumns = [
-        { label: 'Établissement', width: pageWidth * 0.24 },
-        { label: 'Campagne', width: pageWidth * 0.28 },
-        { label: 'Total', width: pageWidth * 0.1 },
-        { label: 'Validées', width: pageWidth * 0.12 },
-        { label: 'Rejetées', width: pageWidth * 0.12 },
-        { label: 'Attente', width: pageWidth * 0.12 },
+        { label: 'Établissement', width: pageWidth * 0.2 },
+        { label: 'Campagne', width: pageWidth * 0.22 },
+        { label: 'Total', width: pageWidth * 0.09 },
+        { label: 'Validées', width: pageWidth * 0.11 },
+        { label: 'Rejetées', width: pageWidth * 0.11 },
+        { label: 'Attente', width: pageWidth * 0.11 },
+        { label: 'Sous rés.', width: pageWidth * 0.12 },
       ];
 
       const drawCampagneHeader = () => {
@@ -760,6 +883,7 @@ async function generatePdf(stats) {
           String(row.acceptes),
           String(row.rejetes),
           String(row.enAttente),
+          String(row.sousReserve),
         ];
         for (let i = 0; i < campagneColumns.length; i += 1) {
           doc.rect(x, y, campagneColumns[i].width, 16).stroke('#E5E7EB');

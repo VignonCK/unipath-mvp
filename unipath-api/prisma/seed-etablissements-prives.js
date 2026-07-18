@@ -2,6 +2,7 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') }
 const { PrismaClient } = require('@prisma/client');
 const { supabaseAdmin } = require('../src/supabase');
 const { upsertDefaultSchoolRequirements } = require('../src/utils/default-school-requirements.helper');
+const { genererMatriculeUnique } = require('../src/utils/matricule.helper');
 
 const prisma = new PrismaClient();
 
@@ -90,7 +91,6 @@ async function seedDemoCandidats() {
 
   for (const demo of DEMO_CANDIDATS) {
     const email = `harrydedji+candidat${demo.index}@gmail.com`;
-    const matricule = `DEMO-2026-${String(demo.index).padStart(3, '0')}`;
     const numeroApplication = `DEMO-APP-2026-${String(demo.index).padStart(3, '0')}`;
     const numeroPreinscription = `DEMO-PE-2026-${String(demo.index).padStart(3, '0')}`;
     const telephone = `+22961${String(100000 + demo.index).slice(1)}`;
@@ -100,6 +100,17 @@ async function seedDemoCandidats() {
       demo.etablissementEmail,
       demo.filiereCode
     );
+
+    const existing = await prisma.candidat.findUnique({
+      where: { email },
+      select: { id: true, matricule: true },
+    });
+
+    const needsRealMatricule =
+      !existing?.matricule || /^DEMO-/i.test(existing.matricule);
+    const matricule = needsRealMatricule
+      ? await genererMatriculeUnique()
+      : existing.matricule;
 
     const candidat = await prisma.candidat.upsert({
       where: { email },
@@ -114,6 +125,7 @@ async function seedDemoCandidats() {
         lieuNaiss: demo.lieuNaiss,
         emailConfirme: true,
         role: 'ETUDIANT',
+        ...(needsRealMatricule ? { matricule } : {}),
       },
       create: {
         id: userId,
@@ -177,22 +189,57 @@ async function seedDemoCandidats() {
     });
     stats.applications += 1;
 
+    // Aligné sur default-school-requirements.helper.js
     const demoDocs = [
-      { code: 'ACTE_NAISSANCE', label: 'Acte de naissance', url: `${DEMO_DOC_BASE}/acte-${demo.index}.pdf` },
-      { code: 'CARTE_IDENTITE', label: 'Carte d\'identité', url: `${DEMO_DOC_BASE}/cni-${demo.index}.pdf` },
-      { code: 'PHOTO', label: 'Photo d\'identité', url: `${DEMO_DOC_BASE}/photo-${demo.index}.jpg` },
-      { code: 'RELEVE_NOTES', label: 'Relevé de notes', url: `${DEMO_DOC_BASE}/releve-${demo.index}.pdf` },
+      {
+        code: 'acte_naissance',
+        label: 'Acte de naissance',
+        url: `${DEMO_DOC_BASE}/acte-${demo.index}.pdf`,
+        source: 'PROFILE_AUTO',
+      },
+      {
+        code: 'carte_identite',
+        label: "Carte d'identité",
+        url: `${DEMO_DOC_BASE}/cni-${demo.index}.pdf`,
+        source: 'PROFILE_AUTO',
+      },
+      {
+        code: 'photo_identite',
+        label: "Photo d'identité",
+        url: `${DEMO_DOC_BASE}/photo-${demo.index}.jpg`,
+        source: 'PROFILE_AUTO',
+      },
+      {
+        code: 'releve_bac',
+        label: 'Relevé de notes du Bac',
+        url: `${DEMO_DOC_BASE}/releve-${demo.index}.pdf`,
+        source: 'PROFILE_AUTO',
+      },
+      {
+        code: 'lettre_demande_inscription',
+        label: "Lettre de demande d'inscription",
+        url: `${DEMO_DOC_BASE}/lettre-${demo.index}.pdf`,
+        source: 'STUDENT_UPLOAD',
+      },
     ];
+
+    // Nettoyer d'anciens codes seed (ACTE_NAISSANCE, PHOTO, …) qui ne matchent plus les requirements
+    await prisma.applicationDocument.deleteMany({
+      where: {
+        applicationId: application.id,
+        code: { in: ['ACTE_NAISSANCE', 'CARTE_IDENTITE', 'PHOTO', 'RELEVE_NOTES'] },
+      },
+    });
 
     for (const doc of demoDocs) {
       await prisma.applicationDocument.upsert({
         where: { applicationId_code: { applicationId: application.id, code: doc.code } },
-        update: { status: 'PROVIDED', documentUrl: doc.url, source: 'STUDENT_UPLOAD' },
+        update: { status: 'PROVIDED', documentUrl: doc.url, source: doc.source, label: doc.label },
         create: {
           applicationId: application.id,
           code: doc.code,
           label: doc.label,
-          source: 'STUDENT_UPLOAD',
+          source: doc.source,
           documentUrl: doc.url,
           status: 'PROVIDED',
         },
@@ -256,12 +303,54 @@ async function seedDemoCandidats() {
       data: { preinscriptionId: preinscription.id },
     });
 
+    // Après acceptation réelle, la quittance bancaire se dépose sur InscriptionAcademique
+    if (demo.statut === 'VALIDE') {
+      const existingInsAcad = await prisma.inscriptionAcademique.findFirst({
+        where: {
+          candidatId: candidat.id,
+          filiereId: filiere.id,
+          anneeAcademique: DEMO_ANNEE,
+        },
+        select: { id: true },
+      });
+
+      let inscriptionAcadId = existingInsAcad?.id;
+      if (!inscriptionAcadId) {
+        const created = await prisma.inscriptionAcademique.create({
+          data: {
+            candidatId: candidat.id,
+            filiereId: filiere.id,
+            etablissementId: etablissement.id,
+            anneeAcademique: DEMO_ANNEE,
+            niveau: 1,
+            statut: 'EN_ATTENTE_QUITTANCE',
+          },
+          select: { id: true },
+        });
+        inscriptionAcadId = created.id;
+      } else {
+        await prisma.inscriptionAcademique.update({
+          where: { id: inscriptionAcadId },
+          data: { statut: 'EN_ATTENTE_QUITTANCE' },
+        });
+      }
+
+      if (preinscription.inscriptionAcadId !== inscriptionAcadId) {
+        await prisma.preinscriptionEtablissement.update({
+          where: { id: preinscription.id },
+          data: { inscriptionAcadId },
+        });
+      }
+    }
+
     console.log(
-      `   ✅ ${demo.prenom} ${demo.nom} → ${etablissement.nom.split(' ')[0]}… (${demo.statut})`
+      `   ✅ ${demo.prenom} ${demo.nom} (${candidat.matricule}) → ${etablissement.nom.split(' ')[0]}… (${demo.statut})`
     );
   }
 
-  const totalCandidats = await prisma.candidat.count({ where: { matricule: { startsWith: 'DEMO-2026-' } } });
+  const totalCandidats = await prisma.candidat.count({
+    where: { email: { startsWith: 'harrydedji+candidat', endsWith: '@gmail.com' } },
+  });
   const totalApps = await prisma.application.count({ where: { numeroApplication: { startsWith: 'DEMO-APP-2026-' } } });
   const totalPe = await prisma.preinscriptionEtablissement.count({
     where: { numeroPreinscription: { startsWith: 'DEMO-PE-2026-' } },
@@ -270,6 +359,7 @@ async function seedDemoCandidats() {
   console.log(`\nRésumé démo : ${totalCandidats} candidat(s), ${totalApps} application(s), ${totalPe} préinscription(s).`);
   console.log('Mot de passe commun : Test2026!');
   console.log('Emails : harrydedji+candidat1@gmail.com … harrydedji+candidat15@gmail.com');
+  console.log('Matricules : format UniPath (ex. UnP-2026-000001) via genererMatriculeUnique()');
 
   return stats;
 }

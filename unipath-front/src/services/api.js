@@ -602,6 +602,7 @@ export const etablissementService = {
     const query = searchParams.toString();
     return request(`/etablissements/${id}/etudiants${query ? `?${query}` : ''}`);
   },
+  getStatistiques: (id) => request(`/etablissements/${id}/statistiques`),
   getMonProfil: () => request('/etablissements/mon/profil'),
   updateMonProfil: (data) =>
     request('/etablissements/mon/profil', {

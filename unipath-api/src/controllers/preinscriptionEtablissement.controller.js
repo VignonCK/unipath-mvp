@@ -543,7 +543,7 @@ exports.deciderPreinscriptionEtablissement = async (req, res) => {
             etablissementId: existing.etablissementId,
             anneeAcademique: existing.anneeAcademique,
             niveau: existing.niveau,
-            statut: 'EN_COURS',
+            statut: 'EN_ATTENTE_QUITTANCE',
           },
           select: { id: true },
         });

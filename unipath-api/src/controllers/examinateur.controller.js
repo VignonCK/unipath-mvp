@@ -20,20 +20,27 @@ const {
 exports.getDossiersAEvaluer = async (req, res) => {
   try {
     const examinateurId = req.user.id;
-    const { concoursId, limite = 50, offset = 0 } = req.query;
+    const { concoursId: concoursIdQuery, limite = 50, offset = 0 } = req.query;
     const scope = await resolveCommissionScope(examinateurId);
+
+    if (!scope) {
+      return res.status(403).json({
+        error: 'Accès refusé. Aucun concours assigné à votre compte commission.',
+        code: 'COMMISSION_SCOPE_REQUIRED',
+      });
+    }
+
+    if (concoursIdQuery && concoursIdQuery !== scope.concoursId) {
+      return res.status(403).json({ error: 'Accès refusé à ce concours' });
+    }
 
     let whereClause = applyConcoursScope(
       {
         decisionControleurPar: null,
         verdict1Par: null,
       },
-      scope ? scope.concoursIds : null
+      scope.concoursId
     );
-
-    if (concoursId) {
-      whereClause.inscription = { ...(whereClause.inscription || {}), concoursId };
-    }
 
     const [dossiers, total] = await Promise.all([
       prisma.dossierInscription.findMany({
@@ -111,7 +118,7 @@ exports.getDetailDossier = async (req, res) => {
     }
 
     const scope = await resolveCommissionScope(examinateurId);
-    if (scope && !(await assertDossierDansScope(dossierInscriptionId, scope.concoursIds))) {
+    if (!scope || !(await assertDossierDansScope(dossierInscriptionId, scope.concoursId))) {
       return res.status(403).json({ error: 'Accès refusé à ce dossier' });
     }
 
@@ -273,7 +280,7 @@ exports.rendreVerdict = async (req, res) => {
     }
 
     const scope = await resolveCommissionScope(examinateurId);
-    if (scope && !(await assertDossierDansScope(dossierInscriptionId, scope.concoursIds))) {
+    if (!scope || !(await assertDossierDansScope(dossierInscriptionId, scope.concoursId))) {
       return res.status(403).json({ error: 'Accès refusé à ce dossier' });
     }
 
@@ -312,11 +319,8 @@ exports.rendreVerdict = async (req, res) => {
       return dossierMisAJour;
     });
 
-    // Créer une notification pour le contrôleur
-    const controleurWhere = { sousRole: 'CONTROLEUR' };
-    if (scope?.etablissementId) {
-      controleurWhere.etablissementId = scope.etablissementId;
-    }
+    // Créer une notification pour le contrôleur du même concours
+    const controleurWhere = { sousRole: 'CONTROLEUR', concoursId: scope.concoursId };
     const controleur = await prisma.membreCommission.findFirst({
       where: controleurWhere,
     });
@@ -387,7 +391,7 @@ exports.modifierVerdict = async (req, res) => {
     }
 
     const scope = await resolveCommissionScope(examinateurId);
-    if (scope && !(await assertDossierDansScope(dossierInscriptionId, scope.concoursIds))) {
+    if (!scope || !(await assertDossierDansScope(dossierInscriptionId, scope.concoursId))) {
       return res.status(403).json({ error: 'Accès refusé à ce dossier' });
     }
 
