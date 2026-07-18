@@ -451,6 +451,28 @@ export const dgesService = {
   genererNumerosTable: (concoursId) =>
     request(`/dges/concours/${concoursId}/generer-numeros-table`, { method: 'POST' }),
 
+  /**
+   * Import CSV n° de table. dryRun=true par défaut.
+   * @param {string} concoursId
+   * @param {File|Blob} file
+   * @param {{ dryRun?: boolean }} [options]
+   */
+  importerNumerosTable: async (concoursId, file, { dryRun = true } = {}) => {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('file', file);
+    const qs = dryRun === false ? '?dryRun=false' : '?dryRun=true';
+    const response = await fetch(
+      `${BASE_URL}/dges/concours/${concoursId}/importer-numeros-table${qs}`,
+      {
+        method: 'POST',
+        headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+        body: formData,
+      },
+    );
+    return handleMultipartResponse(response, 'Erreur import CSV numéros de table');
+  },
+
   exportStats: async (format, params = {}) => {
     const token = localStorage.getItem('token');
     const qs = new URLSearchParams({ format });

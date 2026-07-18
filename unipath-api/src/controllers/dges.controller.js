@@ -316,6 +316,83 @@ exports.genererNumerosTableConcours = async (req, res) => {
 };
 
 /**
+ * Import CSV des n° de table (alternative à la génération auto).
+ * POST /api/dges/concours/:concoursId/importer-numeros-table
+ * Query: dryRun=true (défaut) | dryRun=false
+ * Body multipart: file (CSV)
+ */
+exports.importerNumerosTableConcours = async (req, res) => {
+  try {
+    const { concoursId } = req.params;
+    const dryRunParam = req.query.dryRun;
+    const apply = dryRunParam === 'false' || dryRunParam === '0';
+
+    const {
+      parseCsvNumerosTable,
+      validerEtImporterNumerosTable,
+    } = require('../utils/importer-numeros-table.helper');
+
+    if (!req.file?.buffer?.length) {
+      return res.status(400).json({ error: 'Fichier CSV requis (champ « file »)' });
+    }
+
+    const concours = await prisma.concours.findUnique({
+      where: { id: concoursId },
+      select: { id: true, libelle: true },
+    });
+    if (!concours) {
+      return res.status(404).json({ error: 'Concours non trouvé' });
+    }
+
+    const { rows, parseErrors } = parseCsvNumerosTable(req.file.buffer);
+    if (parseErrors.length && rows.length === 0) {
+      return res.status(400).json({
+        error: 'CSV invalide',
+        dryRun: !apply,
+        erreurs: parseErrors,
+        valides: [],
+        countValides: 0,
+        countErreurs: parseErrors.length,
+        appliques: 0,
+      });
+    }
+
+    const run = async (db) => {
+      const report = await validerEtImporterNumerosTable(db, concoursId, rows, { apply });
+      if (parseErrors.length) {
+        report.erreurs = [...parseErrors, ...report.erreurs];
+        report.countErreurs = report.erreurs.length;
+      }
+      return report;
+    };
+
+    const report = apply
+      ? await prisma.$transaction(run, { maxWait: 15_000, timeout: 120_000 })
+      : await run(prisma);
+
+    const parts = [];
+    if (report.dryRun) {
+      parts.push(`Dry-run : ${report.countValides} ligne(s) valide(s), ${report.countErreurs} erreur(s)`);
+    } else {
+      parts.push(`${report.appliques} numéro(s) importé(s)`);
+      if (report.countErreurs > 0) {
+        parts.push(`${report.countErreurs} ligne(s) en erreur (ignorées)`);
+      }
+    }
+
+    return res.json({
+      message: parts.join(' — '),
+      ...report,
+    });
+  } catch (error) {
+    console.error('importerNumerosTableConcours:', error);
+    return res.status(500).json({
+      error: error.message || 'Erreur lors de l\'import des numéros de table',
+    });
+  }
+};
+
+/**
  * Lookup candidat plateforme par matricule (Module 2 — DGES uniquement).
  * GET /api/dges/candidats/lookup?matricule=UnP-2026-000001
  */
