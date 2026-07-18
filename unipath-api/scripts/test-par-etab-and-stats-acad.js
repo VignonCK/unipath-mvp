@@ -34,10 +34,10 @@ async function api(method, url, token, body) {
   return { status: r.status, data };
 }
 
-function sumEtabRows(rows) {
+function sumEtabPriveRows(rows) {
   return (rows || []).reduce(
     (a, e) => ({
-      n: a.n + Number(e.nbCandidats || 0),
+      n: a.n + Number(e.nbCandidatures || 0),
       v: a.v + Number(e.valides || 0),
       r: a.r + Number(e.rejetes || 0),
       a: a.a + Number(e.en_attente || 0),
@@ -47,12 +47,12 @@ function sumEtabRows(rows) {
   );
 }
 
-function sumConcoursRows(rows) {
+function sumCampagneRows(rows) {
   return (rows || []).reduce(
     (a, e) => ({
-      n: a.n + Number(e.total_inscrits || 0),
-      v: a.v + Number(e.dossiers_valides || 0),
-      r: a.r + Number(e.dossiers_rejetes || 0),
+      n: a.n + Number(e.total_candidatures || 0),
+      v: a.v + Number(e.valides || 0),
+      r: a.r + Number(e.rejetes || 0),
       a: a.a + Number(e.en_attente || 0),
       s: a.s + Number(e.sous_reserve || 0),
     }),
@@ -78,36 +78,49 @@ async function main() {
   };
   await getStatistiques(req, res);
   const d = res.body;
-  const sumEtab = sumEtabRows(d.parEtablissement);
-  const sumConc = sumConcoursRows(d.statistiques);
 
-  console.log('\n=== 1. parEtablissement vs détail concours ===');
-  console.log('parEtablissement', sumEtab);
-  console.log('statistiques', sumConc);
-  console.log('totaux', {
-    inscrits: d.totaux.total_inscrits,
-    valides: d.totaux.total_valides,
-    rejetes: d.totaux.total_rejetes,
-    attente: d.totaux.total_attente,
-    sous_reserve: d.totaux.total_sous_reserve,
+  // Phase 4+ : /dges/statistiques = Module 2 campagnes uniquement
+  // (plus de totaux/statistiques/parEtablissement concours)
+  all = check(
+    'réponse M2: totauxCampagnes + statistiquesCampagnes + parEtablissementPrive',
+    Boolean(d?.totauxCampagnes)
+      && Array.isArray(d?.statistiquesCampagnes)
+      && Array.isArray(d?.parEtablissementPrive)
+      && d.totaux === undefined
+      && d.statistiques === undefined,
+    `keys=${Object.keys(d || {}).join(',')}`,
+  ) && all;
+
+  const sumEtab = sumEtabPriveRows(d.parEtablissementPrive);
+  const sumCamp = sumCampagneRows(d.statistiquesCampagnes);
+
+  console.log('\n=== 1. parEtablissementPrive vs statistiquesCampagnes (M2) ===');
+  console.log('parEtablissementPrive', sumEtab);
+  console.log('statistiquesCampagnes', sumCamp);
+  console.log('totauxCampagnes', {
+    candidatures: d.totauxCampagnes?.total_candidatures,
+    valides: d.totauxCampagnes?.total_valides,
+    rejetes: d.totauxCampagnes?.total_rejetes,
+    attente: d.totauxCampagnes?.total_attente,
+    sous_reserve: d.totauxCampagnes?.total_sous_reserve,
   });
 
   all = check(
-    'totaux = sum etab',
-    d.totaux.total_inscrits === sumEtab.n
-      && d.totaux.total_valides === sumEtab.v
-      && d.totaux.total_rejetes === sumEtab.r
-      && d.totaux.total_attente === sumEtab.a
-      && d.totaux.total_sous_reserve === sumEtab.s,
+    'totauxCampagnes = sum etab privés',
+    Number(d.totauxCampagnes.total_candidatures) === sumEtab.n
+      && Number(d.totauxCampagnes.total_valides) === sumEtab.v
+      && Number(d.totauxCampagnes.total_rejetes) === sumEtab.r
+      && Number(d.totauxCampagnes.total_attente) === sumEtab.a
+      && Number(d.totauxCampagnes.total_sous_reserve) === sumEtab.s,
   ) && all;
 
-  all = check('sum etab = sum concours', JSON.stringify(sumEtab) === JSON.stringify(sumConc)) && all;
+  all = check('sum etab = sum campagnes', JSON.stringify(sumEtab) === JSON.stringify(sumCamp)) && all;
 
   let nestedOk = true;
-  for (const etab of d.parEtablissement || []) {
-    const nested = sumConcoursRows(etab.concours);
+  for (const etab of d.parEtablissementPrive || []) {
+    const nested = sumCampagneRows(etab.campagnes);
     if (
-      nested.n !== Number(etab.nbCandidats)
+      nested.n !== Number(etab.nbCandidatures)
       || nested.v !== Number(etab.valides)
       || nested.r !== Number(etab.rejetes)
       || nested.a !== Number(etab.en_attente)
@@ -115,7 +128,7 @@ async function main() {
     ) {
       nestedOk = false;
       console.log(' mismatch', etab.etablissement, nested, {
-        nbCandidats: etab.nbCandidats,
+        nbCandidatures: etab.nbCandidatures,
         valides: etab.valides,
         rejetes: etab.rejetes,
         en_attente: etab.en_attente,
@@ -123,12 +136,12 @@ async function main() {
       });
     }
   }
-  all = check('chaque etab = somme de ses concours', nestedOk) && all;
+  all = check('chaque etab = somme de ses campagnes', nestedOk) && all;
 
-  const withData = (d.parEtablissement || []).filter((e) => e.nbCandidats > 0);
+  const withData = (d.parEtablissementPrive || []).filter((e) => e.nbCandidatures > 0);
   console.log(
-    'Établissements avec inscrits:',
-    withData.map((e) => `${e.etablissement} (${e.nbCandidats})`).join(', ') || '(aucun)',
+    'Établissements privés avec candidatures:',
+    withData.map((e) => `${e.etablissement} (${e.nbCandidatures})`).join(', ') || '(aucun)',
   );
 
   const layoutSrc = fs.readFileSync(
@@ -222,7 +235,15 @@ async function main() {
     const list = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
     const u = (list.data?.users || []).find((x) => x.email === ctrlEmail);
     if (u) {
-      await supabaseAdmin.auth.admin.updateUserById(u.id, { password: ctrlPass });
+      await supabaseAdmin.auth.admin.updateUserById(u.id, {
+        password: ctrlPass,
+        email_confirm: true,
+        user_metadata: {
+          ...(u.user_metadata || {}),
+          mustChangePassword: false,
+          temporaryPasswordExpiresAt: null,
+        },
+      });
       all = check('reset pwd CONTROLEUR existant', true) && all;
     } else {
       all = check('CONTROLEUR disponible pour test', false, JSON.stringify(createCtrl.data).slice(0, 200)) && all;
@@ -231,7 +252,25 @@ async function main() {
   }
 
   if (ctrlPass) {
-    const loginCtrl = await login(ctrlEmail, ctrlPass);
+    let loginCtrl = await login(ctrlEmail, ctrlPass);
+    // Compte staff parfois encore en mot de passe temporaire → forcer un 2e reset
+    if (loginCtrl.status === 403 || loginCtrl.status === 401) {
+      const { supabaseAdmin } = require('../src/supabase');
+      const list = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+      const u = (list.data?.users || []).find((x) => x.email === ctrlEmail);
+      if (u) {
+        await supabaseAdmin.auth.admin.updateUserById(u.id, {
+          password: ctrlPass,
+          email_confirm: true,
+          user_metadata: {
+            ...(u.user_metadata || {}),
+            mustChangePassword: false,
+            temporaryPasswordExpiresAt: null,
+          },
+        });
+        loginCtrl = await login(ctrlEmail, ctrlPass);
+      }
+    }
     console.log(
       'login CONTROLEUR',
       loginCtrl.status,
@@ -240,14 +279,18 @@ async function main() {
       'mustChange=',
       loginCtrl.body.user?.mustChangePassword || loginCtrl.body.mustChangePassword,
     );
-    all = check('login CONTROLEUR', loginCtrl.status === 200, `status=${loginCtrl.status}`) && all;
+    all = check('login CONTROLEUR', loginCtrl.status === 200, `status=${loginCtrl.status} err=${loginCtrl.body.error || ''}`) && all;
     const ctrlToken = loginCtrl.body.token;
-    const statsCtrl = await api('GET', `/etablissements/${etabId}/statistiques`, ctrlToken);
-    all = check(
-      'CONTROLEUR GET stats 403',
-      statsCtrl.status === 403,
-      `status=${statsCtrl.status} body=${JSON.stringify(statsCtrl.data).slice(0, 160)}`,
-    ) && all;
+    if (ctrlToken) {
+      const statsCtrl = await api('GET', `/etablissements/${etabId}/statistiques`, ctrlToken);
+      all = check(
+        'CONTROLEUR GET stats 403',
+        statsCtrl.status === 403,
+        `status=${statsCtrl.status} body=${JSON.stringify(statsCtrl.data).slice(0, 160)}`,
+      ) && all;
+    } else {
+      all = check('CONTROLEUR GET stats 403', false, 'pas de token') && all;
+    }
 
     // Simulate menu filter
     const ALL_TABS = [
