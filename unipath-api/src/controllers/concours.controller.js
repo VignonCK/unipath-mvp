@@ -423,6 +423,8 @@ exports.createConcours = async (req, res) => {
         dateFinDepot: new Date(dateFinDepot),
         dateDebutComposition: new Date(dateDebutComposition),
         dateFinComposition: new Date(dateFinComposition),
+        etudeCloturee: true,
+        etudeClotureeAt: new Date(),
         ...(codeFiliereParsed.skip ? {} : { codeFiliere: codeFiliereParsed.value }),
     };
 

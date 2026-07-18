@@ -210,11 +210,14 @@ exports.cloturerEtudeConcours = async (req, res) => {
 
 /**
  * Rouvre l'étude des dossiers pour un concours (DEC).
+ * Précondition : au moins 1 EXAMINATEUR + 1 CONTROLEUR assignés.
  * POST /api/dges/concours/:concoursId/rouvrir-etude
  */
 exports.rouvrirEtudeConcours = async (req, res) => {
   try {
     const { concoursId } = req.params;
+    const { getCommissionStaffStatus } = require('../utils/commission-etude.helper');
+
     const concours = await prisma.concours.findUnique({
       where: { id: concoursId },
       select: { id: true, libelle: true, etudeCloturee: true, etudeClotureeAt: true },
@@ -233,6 +236,19 @@ exports.rouvrirEtudeConcours = async (req, res) => {
           etudeCloturee: false,
           etudeClotureeAt: null,
         },
+      });
+    }
+
+    const staff = await getCommissionStaffStatus(prisma, concoursId);
+    if (!staff.peutOuvrirEtude) {
+      const labels = staff.manquants.map((m) => (
+        m === 'EXAMINATEUR' ? 'examinateur' : 'contrôleur'
+      ));
+      return res.status(400).json({
+        error: `Impossible d'ouvrir l'étude : commission incomplète (manque ${labels.join(' et ')}). Assignez au moins 1 examinateur et 1 contrôleur.`,
+        code: 'COMMISSION_INCOMPLETE',
+        manquants: staff.manquants,
+        peutOuvrirEtude: false,
       });
     }
 

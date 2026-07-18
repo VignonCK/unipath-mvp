@@ -47,6 +47,11 @@ const membreSelect = {
 exports.getCommission = async (req, res) => {
   try {
     const { concoursId } = req.params;
+    const {
+      getCommissionStaffStatus,
+      hasEtudeDejaOuverte,
+    } = require('../utils/commission-etude.helper');
+
     const result = await withPrismaRetry(() => getConcoursPublic(concoursId));
     if (result.error) {
       return res.status(result.status).json({ error: result.error });
@@ -62,13 +67,27 @@ exports.getCommission = async (req, res) => {
 
     const examinateurs = membres.filter((m) => m.sousRole === 'EXAMINATEUR');
     const controleurs = membres.filter((m) => m.sousRole === 'CONTROLEUR');
+    const staff = await getCommissionStaffStatus(prisma, concoursId);
+
+    const concoursRow = await prisma.concours.findUnique({
+      where: { id: concoursId },
+      select: { id: true, createdAt: true, etudeCloturee: true, etudeClotureeAt: true },
+    });
+    const etudeDejaOuverte = await hasEtudeDejaOuverte(prisma, concoursRow);
 
     return res.json({
       message: 'Commission récupérée avec succès',
-      concours: result.concours,
+      concours: {
+        ...result.concours,
+        etudeDejaOuverte,
+      },
       membres,
       examinateurs,
       controleurs,
+      peutOuvrirEtude: staff.peutOuvrirEtude,
+      manquants: staff.manquants,
+      nbExaminateurs: staff.nbExaminateurs,
+      nbControleurs: staff.nbControleurs,
     });
   } catch (error) {
     logger.error('[CommissionConcours] Erreur getCommission', { error: error.message });

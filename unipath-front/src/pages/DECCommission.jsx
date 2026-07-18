@@ -224,8 +224,21 @@ export default function DECCommission() {
     const c = data?.concours;
     if (!c) return;
     const cloture = Boolean(c.etudeCloturee);
+    const ouvrirLabel = c.etudeDejaOuverte ? 'Rouvrir' : 'Ouvrir';
+
     if (cloture) {
-      if (!confirm(`Rouvrir l'étude des dossiers pour « ${c.libelle} » ?\nLes examinateurs et contrôleurs pourront à nouveau modifier les dossiers.`)) {
+      if (!data?.peutOuvrirEtude) {
+        const labels = (data?.manquants || []).map((m) => (
+          m === 'EXAMINATEUR' ? 'examinateur' : 'contrôleur'
+        ));
+        setError(
+          `Commission incomplète (manque ${labels.join(' et ') || 'staff'}). Assignez au moins 1 examinateur et 1 contrôleur avant d'ouvrir l'étude.`,
+        );
+        return;
+      }
+      if (!confirm(
+        `${ouvrirLabel} l'étude des dossiers pour « ${c.libelle} » ?\nLes examinateurs et contrôleurs pourront modifier les dossiers.`,
+      )) {
         return;
       }
     } else if (!confirm(
@@ -237,17 +250,10 @@ export default function DECCommission() {
     setEtudeBusy(true);
     setError('');
     try {
-      const res = cloture
-        ? await dgesService.rouvrirEtudeConcours(c.id)
-        : await dgesService.cloturerEtudeConcours(c.id);
-      setData((prev) => (prev ? {
-        ...prev,
-        concours: {
-          ...prev.concours,
-          etudeCloturee: res?.concours?.etudeCloturee ?? !cloture,
-          etudeClotureeAt: res?.concours?.etudeClotureeAt ?? null,
-        },
-      } : prev));
+      await (cloture
+        ? dgesService.rouvrirEtudeConcours(c.id)
+        : dgesService.cloturerEtudeConcours(c.id));
+      await charger();
     } catch (err) {
       setError(err.message || 'Action étude impossible');
     } finally {
@@ -256,6 +262,8 @@ export default function DECCommission() {
   };
 
   const concours = data?.concours;
+  const peutOuvrir = Boolean(data?.peutOuvrirEtude);
+  const ouvrirBtnLabel = concours?.etudeDejaOuverte ? 'Rouvrir l\'étude' : 'Ouvrir l\'étude';
 
   return (
     <DECLayout>
@@ -312,16 +320,34 @@ export default function DECCommission() {
                   <p className="text-sm text-gray-500 mt-1">
                     Étude :{' '}
                     {concours.etudeCloturee ? (
-                      <span className="font-semibold text-red-700">Clôturée</span>
+                      <span className="font-semibold text-red-700">
+                        {concours.etudeDejaOuverte ? 'Clôturée' : 'Verrouillée (pas encore ouverte)'}
+                      </span>
                     ) : (
                       <span className="font-semibold text-emerald-700">Ouverte</span>
                     )}
                   </p>
+                  {concours.etudeCloturee && !peutOuvrir && (
+                    <p className="text-xs text-amber-700 mt-2">
+                      Assignez au moins 1 examinateur et 1 contrôleur pour pouvoir ouvrir l&apos;étude
+                      {(data?.manquants || []).length > 0
+                        ? ` (manque : ${(data.manquants || []).map((m) => (
+                          m === 'EXAMINATEUR' ? 'examinateur' : 'contrôleur'
+                        )).join(', ')})`
+                        : ''}
+                      .
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"
                   onClick={handleToggleEtude}
-                  disabled={etudeBusy}
+                  disabled={etudeBusy || (concours.etudeCloturee && !peutOuvrir)}
+                  title={
+                    concours.etudeCloturee && !peutOuvrir
+                      ? 'Commission incomplète'
+                      : undefined
+                  }
                   className={`px-4 py-2 rounded-xl text-sm font-semibold transition disabled:opacity-50 ${
                     concours.etudeCloturee
                       ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
@@ -330,7 +356,7 @@ export default function DECCommission() {
                 >
                   {etudeBusy
                     ? '…'
-                    : (concours.etudeCloturee ? 'Rouvrir l\'étude' : 'Clôturer l\'étude')}
+                    : (concours.etudeCloturee ? ouvrirBtnLabel : 'Clôturer l\'étude')}
                 </button>
               </div>
             </BentoCard>

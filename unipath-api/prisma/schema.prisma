@@ -117,7 +117,7 @@ model Concours {
   codeFiliere              String?
   inscriptionCompteur      Int           @default(0)
   inscriptionCompteurAnnee Int?
-  etudeCloturee            Boolean       @default(false)
+  etudeCloturee            Boolean       @default(true)
   etudeClotureeAt          DateTime?
   createdAt            DateTime      @default(now())
   criteresEligibilite  Json?
