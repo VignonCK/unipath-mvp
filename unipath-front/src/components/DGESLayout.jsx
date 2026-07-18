@@ -22,6 +22,11 @@ const TABS = [
     path: '/dges-etablissements-admins',
     activePrefixes: ['/dges-etablissements-admins', '/dges/etablissements'],
   },
+  {
+    label: 'Candidats',
+    path: '/dges/recherche-candidat',
+    activePrefixes: ['/dges/recherche-candidat'],
+  },
 ];
 
 export default function DGESLayout({ children }) {

@@ -7,7 +7,7 @@ Référence rapide pour l’équipe (Phases 1–5 de la séparation).
 | Rôle | Module | Responsabilités |
 |------|--------|-----------------|
 | **DEC** | Module 1 — Concours | CRUD concours, centres de composition, commission concours, clôture/réouverture d’étude, n° de table, dashboard stats concours (`/dashboard-dec`, `/api/dec/statistiques`) |
-| **DGES** | Module 2 — Établissements privés | Création d’établissements / admins, campagnes d’inscription privées, dashboard stats campagnes (`/dashboard-dges`, `/api/dges/statistiques`) |
+| **DGES** | Module 2 — Établissements privés | Création d’établissements / admins, campagnes d’inscription privées, dashboard stats campagnes (`/dashboard-dges`, `/api/dges/statistiques`), **recherche candidat par matricule plateforme** (`/dges/recherche-candidat`, `GET /api/dges/candidats/lookup`) |
 | **COMMISSION** | Module 1 (opérationnel) | Examens / contrôle des dossiers concours |
 
 ## Comptes de test
@@ -23,6 +23,7 @@ Seeds : `prisma/seed-roles.js`, `scripts/seed-dec-test-account.js`, `scripts/cre
 
 - `GET /api/dec/statistiques` → concours uniquement (`checkRole(['DEC','COMMISSION'])`)
 - `GET /api/dges/statistiques` → campagnes / EP privés uniquement (`checkRole(['DGES'])`)
+- `GET /api/dges/candidats/lookup?matricule=…` → identité + parcours `InscriptionAcademique` (M2), sans données concours (`checkRole(['DGES'])`)
 - `GET /api/stats/export` → Excel/PDF scopé automatiquement (DEC → M1, DGES → M2)
 
 ## Ne pas confondre

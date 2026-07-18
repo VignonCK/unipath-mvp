@@ -303,3 +303,72 @@ exports.genererNumerosTableConcours = async (req, res) => {
     });
   }
 };
+
+/**
+ * Lookup candidat plateforme par matricule (Module 2 — DGES uniquement).
+ * GET /api/dges/candidats/lookup?matricule=UnP-2026-000001
+ */
+exports.lookupCandidatParMatricule = async (req, res) => {
+  try {
+    const { validerFormatMatricule } = require('../utils/matricule.helper');
+    const raw = req.query.matricule;
+    if (raw == null || String(raw).trim() === '') {
+      return res.status(400).json({ error: 'Paramètre matricule requis' });
+    }
+
+    const matricule = String(raw).trim();
+    if (!validerFormatMatricule(matricule)) {
+      return res.status(400).json({
+        error: 'Format de matricule invalide (attendu ex. UnP-2026-000001)',
+      });
+    }
+
+    const row = await prisma.candidat.findUnique({
+      where: { matricule },
+      select: {
+        id: true,
+        matricule: true,
+        nom: true,
+        prenom: true,
+        email: true,
+        telephone: true,
+        sexe: true,
+        nationalite: true,
+        dateNaiss: true,
+        lieuNaiss: true,
+        serie: true,
+        anip: true,
+        InscriptionAcademique: {
+          orderBy: [{ anneeAcademique: 'desc' }, { niveau: 'desc' }],
+          select: {
+            id: true,
+            anneeAcademique: true,
+            niveau: true,
+            statut: true,
+            matricule: true,
+            createdAt: true,
+            etablissement: {
+              select: { id: true, nom: true, type: true, ville: true },
+            },
+            filiere: {
+              select: { id: true, nom: true, code: true, niveau: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!row) {
+      return res.status(404).json({ error: 'Candidat non trouvé pour ce matricule' });
+    }
+
+    const { InscriptionAcademique, ...candidat } = row;
+    return res.json({
+      candidat,
+      inscriptionsAcademiques: InscriptionAcademique || [],
+    });
+  } catch (error) {
+    console.error('lookupCandidatParMatricule:', error);
+    return res.status(500).json({ error: 'Erreur lors de la recherche du candidat' });
+  }
+};

@@ -34,6 +34,7 @@ import DashboardEtudiant from './pages/DashboardEtudiant';
 import DemandeInscription from './pages/DemandeInscription';
 import MesInscriptionsAcademiques from './pages/MesInscriptionsAcademiques';
 import DGESEtablissementsAdmins from './pages/dges/DGESEtablissementsAdmins';
+import DGESRechercheCandidat from './pages/dges/DGESRechercheCandidat';
 import MesCampagnes from './pages/admin-etablissement/MesCampagnes';
 import CampagneForm from './pages/admin-etablissement/CampagneForm';
 import DetailCampagneAdmin from './pages/admin-etablissement/DetailCampagneAdmin';
@@ -398,6 +399,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['DGES']}>
               <DGESEtablissementsAdmins />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/dges/recherche-candidat'
+          element={
+            <ProtectedRoute allowedRoles={['DGES']}>
+              <DGESRechercheCandidat />
             </ProtectedRoute>
           }
         />

@@ -15,6 +15,12 @@ router.use('/etablissements', adminEtablissementRoutes);
 
 // Routes protégées - Module 2 (établissements privés) — DGES uniquement
 router.get('/statistiques', protect, checkRole(['DGES']), dgesController.getStatistiques);
+router.get(
+  '/candidats/lookup',
+  protect,
+  checkRole(['DGES']),
+  dgesController.lookupCandidatParMatricule,
+);
 
 // Module 1 (concours) — réservé DEC (Phase 2/6 séparation DEC/DGES)
 router.post(

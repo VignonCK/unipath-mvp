@@ -439,6 +439,9 @@ export const dgesService = {
   getStatistiques: (params = {}) =>
     request(`/dges/statistiques${buildStatsQueryString(params)}`),
 
+  lookupCandidat: (matricule) =>
+    request(`/dges/candidats/lookup?matricule=${encodeURIComponent(matricule)}`),
+
   cloturerEtudeConcours: (concoursId) =>
     request(`/dges/concours/${concoursId}/cloturer-etude`, { method: 'POST' }),
 
