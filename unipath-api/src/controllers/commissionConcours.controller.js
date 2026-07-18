@@ -15,8 +15,8 @@ function genererMotDePasseTemporaire() {
   return crypto.randomBytes(9).toString('base64url').slice(0, 12);
 }
 
-function validerDonneesMembre(body) {
-  const { nom, prenom, email, sousRole } = body;
+function validerIdentiteCompte(body) {
+  const { nom, prenom, email } = body;
   if (!nom?.trim() || !prenom?.trim() || !email?.trim()) {
     return 'nom, prenom et email sont obligatoires';
   }
@@ -24,10 +24,15 @@ function validerDonneesMembre(body) {
   if (!emailRegex.test(email.trim())) {
     return 'Adresse email invalide';
   }
-  if (!['EXAMINATEUR', 'CONTROLEUR'].includes(String(sousRole || '').toUpperCase())) {
-    return 'Le sous-rôle doit être EXAMINATEUR ou CONTROLEUR';
-  }
   return null;
+}
+
+function validerSousRoleAssignation(sousRole) {
+  const upper = String(sousRole || '').toUpperCase();
+  if (!['EXAMINATEUR', 'CONTROLEUR'].includes(upper)) {
+    return { error: 'Le sous-rôle doit être EXAMINATEUR ou CONTROLEUR' };
+  }
+  return { sousRole: upper };
 }
 
 const membreSelect = {
@@ -43,6 +48,23 @@ const membreSelect = {
   createdAt: true,
   updatedAt: true,
 };
+
+async function syncAuthMetadata(membreId, { concoursId, etablissementId, sousRole }) {
+  try {
+    await supabaseAdmin.auth.admin.updateUserById(membreId, {
+      user_metadata: buildMembreCommissionMetadata({
+        concoursId: concoursId || null,
+        etablissementId: etablissementId || null,
+        sousRole,
+      }),
+    });
+  } catch (err) {
+    logger.error('[CommissionConcours] Sync metadata Auth échouée', {
+      membreId,
+      error: err.message,
+    });
+  }
+}
 
 exports.getCommission = async (req, res) => {
   try {
@@ -101,31 +123,27 @@ exports.getCommission = async (req, res) => {
   }
 };
 
-exports.creerMembre = async (req, res) => {
+/**
+ * POST /api/dges/commission/comptes
+ * Crée un compte commission non assigné (concoursId=null, sousRole=MEMBRE).
+ */
+exports.creerCompte = async (req, res) => {
   try {
-    const { concoursId } = req.params;
-    const erreur = validerDonneesMembre(req.body);
+    const erreur = validerIdentiteCompte(req.body);
     if (erreur) {
       return res.status(400).json({ error: erreur });
     }
 
-    const result = await getConcoursPublic(concoursId);
-    if (result.error) {
-      return res.status(result.status).json({ error: result.error });
-    }
-
-    const { nom, prenom, email, telephone, sousRole } = req.body;
-    const sousRoleUpper = String(sousRole).toUpperCase();
+    const { nom, prenom, email, telephone } = req.body;
     const emailNormalise = email.trim().toLowerCase();
-    const { concours } = result;
-    const etablissementId = concours.etablissementId || null;
 
     const emailExistant = await prisma.membreCommission.findUnique({
       where: { email: emailNormalise },
     });
     if (emailExistant) {
       return res.status(409).json({
-        error: 'Un membre de commission avec cet email existe déjà (une personne = un seul concours)',
+        error: 'Un compte commission avec cet email existe déjà',
+        code: 'EMAIL_EXISTS',
       });
     }
 
@@ -136,16 +154,15 @@ exports.creerMembre = async (req, res) => {
       password: motDePasseTemporaire,
       email_confirm: true,
       user_metadata: buildMembreCommissionMetadata({
-        concoursId,
-        etablissementId,
-        sousRole: sousRoleUpper,
+        concoursId: null,
+        etablissementId: null,
+        sousRole: 'MEMBRE',
       }),
     });
 
     if (authError) {
-      logger.error('[CommissionConcours] Erreur Supabase', {
+      logger.error('[CommissionConcours] Erreur Supabase creerCompte', {
         error: authError.message,
-        concoursId,
       });
       return res.status(400).json({ error: authError.message });
     }
@@ -158,79 +175,210 @@ exports.creerMembre = async (req, res) => {
         email: emailNormalise,
         telephone: telephone?.trim() || null,
         role: 'COMMISSION',
-        sousRole: sousRoleUpper,
-        concoursId,
-        etablissementId,
+        sousRole: 'MEMBRE',
+        concoursId: null,
+        etablissementId: null,
       },
       select: membreSelect,
     });
 
     const loginUrl = buildFrontendUrl('/login');
-    const roleLabel = sousRoleUpper === 'EXAMINATEUR' ? 'examinateur' : 'contrôleur';
-    const concoursLabel = concours.libelle || concours.sigle || concoursId;
-
     try {
       await emailService.createEmail({
         userId: membre.id,
         recipient: emailNormalise,
-        subject: `UniPath — Accès ${roleLabel} ${concoursLabel}`,
+        subject: 'UniPath — Compte commission créé',
         emailType: 'COMMISSION_CONCOURS_CREDENTIALS',
         htmlBody: `
           <h2>Bienvenue sur UniPath</h2>
           <p>Bonjour ${membre.prenom} ${membre.nom},</p>
-          <p>Un compte <strong>${roleLabel}</strong> a été créé pour la commission du concours <strong>${concoursLabel}</strong>.</p>
+          <p>Un compte <strong>commission</strong> a été créé. Vous serez affecté(e) à un concours par la DEC.</p>
           <p><strong>Email :</strong> ${emailNormalise}</p>
           <p><strong>Mot de passe temporaire :</strong> ${motDePasseTemporaire}</p>
           <p><strong>Validité :</strong> ${TEMP_PASSWORD_VALIDITY_HOURS} heures.</p>
           <p>Connectez-vous sur <a href="${loginUrl}">${loginUrl}</a> puis définissez votre mot de passe personnel.</p>
         `,
-        textBody: `Bonjour ${membre.prenom} ${membre.nom}, compte ${roleLabel} UniPath pour ${concoursLabel} : ${emailNormalise} / ${motDePasseTemporaire} (valable ${TEMP_PASSWORD_VALIDITY_HOURS}h). Connexion : ${loginUrl}`,
+        textBody: `Bonjour ${membre.prenom} ${membre.nom}, compte commission UniPath : ${emailNormalise} / ${motDePasseTemporaire} (valable ${TEMP_PASSWORD_VALIDITY_HOURS}h). Connexion : ${loginUrl}`,
       });
     } catch (emailErr) {
-      logger.error('[CommissionConcours] Email non envoyé', {
+      logger.error('[CommissionConcours] Email compte non envoyé', {
         membreId: membre.id,
         error: emailErr.message,
       });
     }
 
     return res.status(201).json({
-      message: 'Membre de commission créé. Un email avec les identifiants a été envoyé.',
+      message: 'Compte commission créé (non assigné). Un email avec les identifiants a été envoyé.',
       membre,
     });
   } catch (error) {
-    logger.error('[CommissionConcours] Erreur creerMembre', { error: error.message });
-    return res.status(500).json({ error: 'Erreur serveur lors de la création du membre' });
+    logger.error('[CommissionConcours] Erreur creerCompte', { error: error.message });
+    return res.status(500).json({ error: 'Erreur serveur lors de la création du compte' });
   }
 };
 
-exports.supprimerMembre = async (req, res) => {
+/**
+ * GET /api/dges/commission/comptes?nonAssignes=1
+ * Liste le pool de comptes sans concours.
+ */
+exports.listerComptes = async (req, res) => {
+  try {
+    const nonAssignes = String(req.query.nonAssignes || '') === '1'
+      || String(req.query.nonAssignes || '').toLowerCase() === 'true';
+
+    if (!nonAssignes) {
+      return res.status(400).json({
+        error: 'Paramètre nonAssignes=1 requis (liste du pool de comptes non assignés)',
+        code: 'QUERY_REQUIRED',
+      });
+    }
+
+    const comptes = await withPrismaRetry(() =>
+      prisma.membreCommission.findMany({
+        where: { concoursId: null },
+        select: membreSelect,
+        orderBy: [{ createdAt: 'desc' }],
+      })
+    );
+
+    return res.json({
+      message: 'Comptes non assignés récupérés',
+      comptes,
+      total: comptes.length,
+    });
+  } catch (error) {
+    logger.error('[CommissionConcours] Erreur listerComptes', { error: error.message });
+    if (isPrismaConnectionError(error)) {
+      return res.status(503).json({
+        error: 'Base de données temporairement indisponible.',
+        code: 'DB_UNAVAILABLE',
+      });
+    }
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+/**
+ * POST /api/dges/concours/:concoursId/commission/assigner
+ * Body: { membreId, sousRole }
+ */
+exports.assignerMembre = async (req, res) => {
+  try {
+    const { concoursId } = req.params;
+    const { membreId } = req.body || {};
+    if (!membreId) {
+      return res.status(400).json({ error: 'membreId est obligatoire' });
+    }
+
+    const roleCheck = validerSousRoleAssignation(req.body?.sousRole);
+    if (roleCheck.error) {
+      return res.status(400).json({ error: roleCheck.error });
+    }
+    const { sousRole } = roleCheck;
+
+    const result = await getConcoursPublic(concoursId);
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { concours } = result;
+    const etablissementId = concours.etablissementId || null;
+
+    const membre = await prisma.membreCommission.findUnique({
+      where: { id: membreId },
+      select: membreSelect,
+    });
+    if (!membre) {
+      return res.status(404).json({ error: 'Compte commission introuvable', code: 'MEMBRE_NOT_FOUND' });
+    }
+
+    if (membre.concoursId) {
+      if (membre.concoursId === concoursId) {
+        return res.status(409).json({
+          error: 'Ce compte est déjà assigné à ce concours',
+          code: 'DEJA_ASSIGNE_ICI',
+          concoursId: membre.concoursId,
+        });
+      }
+      return res.status(409).json({
+        error: 'Ce compte est déjà assigné à un autre concours (une personne = un seul concours)',
+        code: 'DEJA_ASSIGNE',
+        concoursId: membre.concoursId,
+      });
+    }
+
+    const updated = await prisma.membreCommission.update({
+      where: { id: membreId },
+      data: {
+        concoursId,
+        etablissementId,
+        sousRole,
+      },
+      select: membreSelect,
+    });
+
+    await syncAuthMetadata(membreId, { concoursId, etablissementId, sousRole });
+
+    return res.status(200).json({
+      message: 'Compte assigné à la commission du concours',
+      membre: updated,
+    });
+  } catch (error) {
+    logger.error('[CommissionConcours] Erreur assignerMembre', { error: error.message });
+    return res.status(500).json({ error: 'Erreur serveur lors de l\'assignation' });
+  }
+};
+
+/**
+ * DELETE /api/dges/concours/:concoursId/commission/:membreId
+ * Désassigne (concoursId=null, sousRole=MEMBRE) — ne supprime pas le compte Auth.
+ */
+exports.desassignerMembre = async (req, res) => {
   try {
     const { concoursId, membreId } = req.params;
 
     const membre = await prisma.membreCommission.findFirst({
       where: { id: membreId, concoursId },
+      select: membreSelect,
     });
 
     if (!membre) {
-      return res.status(404).json({ error: 'Membre de commission non trouvé pour ce concours' });
+      return res.status(404).json({ error: 'Membre non trouvé pour ce concours' });
     }
 
-    await prisma.membreCommission.delete({ where: { id: membreId } });
+    const updated = await prisma.membreCommission.update({
+      where: { id: membreId },
+      data: {
+        concoursId: null,
+        etablissementId: null,
+        sousRole: 'MEMBRE',
+      },
+      select: membreSelect,
+    });
 
-    try {
-      await supabaseAdmin.auth.admin.deleteUser(membreId);
-    } catch (supabaseErr) {
-      logger.error('[CommissionConcours] Suppression Supabase échouée', {
-        membreId,
-        error: supabaseErr.message,
-      });
-    }
+    await syncAuthMetadata(membreId, {
+      concoursId: null,
+      etablissementId: null,
+      sousRole: 'MEMBRE',
+    });
 
-    return res.json({ message: 'Membre de commission supprimé avec succès' });
+    return res.json({
+      message: 'Membre désassigné — le compte reste disponible dans le pool',
+      membre: updated,
+    });
   } catch (error) {
-    logger.error('[CommissionConcours] Erreur supprimerMembre', { error: error.message });
+    logger.error('[CommissionConcours] Erreur desassignerMembre', { error: error.message });
     return res.status(500).json({ error: 'Erreur serveur' });
   }
+};
+
+/**
+ * Ancien POST /api/dges/concours/:concoursId/commission — retiré (Phase 2).
+ */
+exports.creerMembreObsolete = async (_req, res) => {
+  return res.status(410).json({
+    error: 'Endpoint retiré. Utilisez POST /api/dges/commission/comptes puis POST /api/dges/concours/:concoursId/commission/assigner.',
+    code: 'ENDPOINT_REMOVED',
+  });
 };
 
 module.exports = exports;

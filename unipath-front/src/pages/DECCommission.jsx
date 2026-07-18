@@ -6,126 +6,10 @@ import { BentoCard } from '../components/AcademicLayout';
 const FORM_INIT = { nom: '', prenom: '', email: '', telephone: '' };
 const LIMITES = { EXAMINATEUR: 10, CONTROLEUR: 5 };
 
-function MembreRow({ membre, onDelete, deleting }) {
-  return (
-    <tr className="border-b border-gray-100 hover:bg-gray-50/80">
-      <td className="py-3 px-4 font-medium text-gray-900">
-        {membre.prenom} {membre.nom}
-      </td>
-      <td className="py-3 px-4 text-gray-600">{membre.email}</td>
-      <td className="py-3 px-4 text-gray-500">{membre.telephone || '—'}</td>
-      <td className="py-3 px-4 text-right">
-        <button
-          type="button"
-          onClick={() => onDelete(membre.id)}
-          disabled={deleting}
-          className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50"
-        >
-          Supprimer
-        </button>
-      </td>
-    </tr>
-  );
-}
-
-function MembreSection({
-  title, sousRole, membres, limite, form, setForm, onSubmit, submitting, onDelete, deletingId, message, error,
-}) {
-  return (
-    <BentoCard className="p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-          <p className="text-sm text-gray-500">
-            {membres.length} compte{membres.length > 1 ? 's' : ''} actif{membres.length > 1 ? 's' : ''}
-          </p>
-        </div>
-      </div>
-
-      {message && (
-        <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-          {message}
-        </div>
-      )}
-      {error && (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {membres.length > 0 ? (
-        <div className="overflow-x-auto mb-6">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-500 border-b">
-                <th className="py-2 px-4 font-semibold">Nom</th>
-                <th className="py-2 px-4 font-semibold">Email</th>
-                <th className="py-2 px-4 font-semibold">Téléphone</th>
-                <th className="py-2 px-4 font-semibold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {membres.map((m) => (
-                <MembreRow
-                  key={m.id}
-                  membre={m}
-                  onDelete={onDelete}
-                  deleting={deletingId === m.id}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="text-sm text-gray-500 mb-6">Aucun membre pour le moment.</p>
-      )}
-
-      {membres.length < limite && (
-        <form onSubmit={(e) => onSubmit(e, sousRole)} className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
-          <input
-            type="text"
-            required
-            placeholder="Nom"
-            value={form.nom}
-            onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))}
-            className="px-3 py-2 border border-gray-200 rounded-lg"
-          />
-          <input
-            type="text"
-            required
-            placeholder="Prénom"
-            value={form.prenom}
-            onChange={(e) => setForm((f) => ({ ...f, prenom: e.target.value }))}
-            className="px-3 py-2 border border-gray-200 rounded-lg"
-          />
-          <input
-            type="email"
-            required
-            placeholder="Email"
-            value={form.email}
-            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-            className="px-3 py-2 border border-gray-200 rounded-lg"
-          />
-          <input
-            type="tel"
-            placeholder="Téléphone (optionnel)"
-            value={form.telephone}
-            onChange={(e) => setForm((f) => ({ ...f, telephone: e.target.value }))}
-            className="px-3 py-2 border border-gray-200 rounded-lg"
-          />
-          <div className="md:col-span-2">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-4 py-2 rounded-lg bg-emerald-800 text-white font-semibold hover:bg-emerald-900 disabled:opacity-50"
-            >
-              {submitting ? 'Création...' : `Ajouter ${title.toLowerCase()}`}
-            </button>
-          </div>
-        </form>
-      )}
-    </BentoCard>
-  );
+function roleLabel(sousRole) {
+  if (sousRole === 'EXAMINATEUR') return 'Examinateur';
+  if (sousRole === 'CONTROLEUR') return 'Contrôleur';
+  return sousRole || '—';
 }
 
 export default function DECCommission() {
@@ -135,15 +19,23 @@ export default function DECCommission() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [data, setData] = useState(null);
-  const [examForm, setExamForm] = useState(FORM_INIT);
-  const [ctrlForm, setCtrlForm] = useState(FORM_INIT);
-  const [submittingRole, setSubmittingRole] = useState('');
-  const [deletingId, setDeletingId] = useState('');
-  const [examMessage, setExamMessage] = useState('');
-  const [examError, setExamError] = useState('');
-  const [ctrlMessage, setCtrlMessage] = useState('');
-  const [ctrlError, setCtrlError] = useState('');
   const [etudeBusy, setEtudeBusy] = useState(false);
+
+  // Bloc 2 — assignés + modal
+  const [desassigningId, setDesassigningId] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [pool, setPool] = useState([]);
+  const [poolLoading, setPoolLoading] = useState(false);
+  const [assignMembreId, setAssignMembreId] = useState('');
+  const [assignSousRole, setAssignSousRole] = useState('EXAMINATEUR');
+  const [assignBusy, setAssignBusy] = useState(false);
+  const [assignError, setAssignError] = useState('');
+
+  // Bloc 3 — créer un compte (pool)
+  const [createForm, setCreateForm] = useState(FORM_INIT);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createMessage, setCreateMessage] = useState('');
+  const [createError, setCreateError] = useState('');
 
   useEffect(() => {
     setLoadingList(true);
@@ -179,44 +71,71 @@ export default function DECCommission() {
     charger();
   }, [charger]);
 
-  const handleCreate = async (e, sousRole) => {
-    e.preventDefault();
-    if (!concoursId) return;
-    const form = sousRole === 'EXAMINATEUR' ? examForm : ctrlForm;
-    const setMessage = sousRole === 'EXAMINATEUR' ? setExamMessage : setCtrlMessage;
-    const setFormError = sousRole === 'EXAMINATEUR' ? setExamError : setCtrlError;
-    const resetForm = sousRole === 'EXAMINATEUR' ? setExamForm : setCtrlForm;
-
-    setSubmittingRole(sousRole);
-    setFormError('');
-    setMessage('');
+  const openAssignModal = async () => {
+    setModalOpen(true);
+    setAssignError('');
+    setAssignMembreId('');
+    setAssignSousRole('EXAMINATEUR');
+    setPoolLoading(true);
     try {
-      const res = await dgesService.creerMembreCommissionConcours(concoursId, {
-        ...form,
-        sousRole,
-      });
-      setMessage(res.message || 'Membre créé');
-      resetForm(FORM_INIT);
-      await charger();
+      const res = await dgesService.listerComptesCommission(true);
+      setPool(Array.isArray(res?.comptes) ? res.comptes : []);
     } catch (err) {
-      setFormError(err.message || 'Erreur lors de la création');
+      setAssignError(err.message || 'Impossible de charger le pool');
+      setPool([]);
     } finally {
-      setSubmittingRole('');
+      setPoolLoading(false);
     }
   };
 
-  const handleDelete = async (membreId) => {
-    if (!window.confirm('Supprimer ce membre de la commission ? Cette action est irréversible.')) return;
-    setDeletingId(membreId);
-    setExamError('');
-    setCtrlError('');
+  const handleAssign = async (e) => {
+    e.preventDefault();
+    if (!concoursId || !assignMembreId) return;
+    setAssignBusy(true);
+    setAssignError('');
     try {
-      await dgesService.supprimerMembreCommissionConcours(concoursId, membreId);
+      await dgesService.assignerMembreCommission(concoursId, {
+        membreId: assignMembreId,
+        sousRole: assignSousRole,
+      });
+      setModalOpen(false);
       await charger();
     } catch (err) {
-      setError(err.message || 'Erreur lors de la suppression');
+      setAssignError(err.message || 'Assignation impossible');
     } finally {
-      setDeletingId('');
+      setAssignBusy(false);
+    }
+  };
+
+  const handleDesassigner = async (membreId) => {
+    if (!window.confirm(
+      'Désassigner ce membre de ce concours ? Le compte restera disponible dans le pool.',
+    )) return;
+    setDesassigningId(membreId);
+    setError('');
+    try {
+      await dgesService.desassignerMembreCommission(concoursId, membreId);
+      await charger();
+    } catch (err) {
+      setError(err.message || 'Erreur lors de la désassignation');
+    } finally {
+      setDesassigningId('');
+    }
+  };
+
+  const handleCreateCompte = async (e) => {
+    e.preventDefault();
+    setCreateBusy(true);
+    setCreateError('');
+    setCreateMessage('');
+    try {
+      const res = await dgesService.creerCompteCommission(createForm);
+      setCreateMessage(res.message || 'Compte créé (non assigné)');
+      setCreateForm(FORM_INIT);
+    } catch (err) {
+      setCreateError(err.message || 'Erreur lors de la création');
+    } finally {
+      setCreateBusy(false);
     }
   };
 
@@ -264,6 +183,10 @@ export default function DECCommission() {
   const concours = data?.concours;
   const peutOuvrir = Boolean(data?.peutOuvrirEtude);
   const ouvrirBtnLabel = concours?.etudeDejaOuverte ? 'Rouvrir l\'étude' : 'Ouvrir l\'étude';
+  const assignes = Array.isArray(data?.membres) ? data.membres : [];
+  const nbExam = data?.nbExaminateurs ?? (data?.examinateurs || []).length;
+  const nbCtrl = data?.nbControleurs ?? (data?.controleurs || []).length;
+  const canAssignMore = nbExam < LIMITES.EXAMINATEUR || nbCtrl < LIMITES.CONTROLEUR;
 
   return (
     <DECLayout>
@@ -271,7 +194,7 @@ export default function DECCommission() {
         <div>
           <h1 className="text-2xl font-black text-gray-900">Commission</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Examinateurs et contrôleurs par concours — ouverture / clôture de l&apos;étude
+            Comptes commission, assignation par concours, ouverture / clôture de l&apos;étude
           </p>
         </div>
 
@@ -284,10 +207,8 @@ export default function DECCommission() {
             value={concoursId}
             onChange={(e) => {
               setConcoursId(e.target.value);
-              setExamMessage('');
-              setCtrlMessage('');
-              setExamError('');
-              setCtrlError('');
+              setCreateMessage('');
+              setCreateError('');
             }}
             disabled={loadingList}
             className="w-full sm:max-w-lg rounded-xl border border-gray-200 px-3 py-2 text-sm"
@@ -313,6 +234,7 @@ export default function DECCommission() {
 
         {!loading && concours && (
           <>
+            {/* Bloc 1 — état étude */}
             <BentoCard className="p-6">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
@@ -361,38 +283,213 @@ export default function DECCommission() {
               </div>
             </BentoCard>
 
-            <MembreSection
-              title="Examinateurs"
-              sousRole="EXAMINATEUR"
-              membres={data.examinateurs || []}
-              limite={LIMITES.EXAMINATEUR}
-              form={examForm}
-              setForm={setExamForm}
-              onSubmit={handleCreate}
-              submitting={submittingRole === 'EXAMINATEUR'}
-              onDelete={handleDelete}
-              deletingId={deletingId}
-              message={examMessage}
-              error={examError}
-            />
+            {/* Bloc 2 — assignés à ce concours */}
+            <BentoCard className="p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">Membres assignés</h2>
+                  <p className="text-sm text-gray-500">
+                    {nbExam} examinateur{nbExam > 1 ? 's' : ''} · {nbCtrl} contrôleur{nbCtrl > 1 ? 's' : ''}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={openAssignModal}
+                  disabled={!canAssignMore}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-800 text-white hover:bg-emerald-900 disabled:opacity-50"
+                >
+                  Assigner un compte existant
+                </button>
+              </div>
 
-            <MembreSection
-              title="Contrôleur"
-              sousRole="CONTROLEUR"
-              membres={data.controleurs || []}
-              limite={LIMITES.CONTROLEUR}
-              form={ctrlForm}
-              setForm={setCtrlForm}
-              onSubmit={handleCreate}
-              submitting={submittingRole === 'CONTROLEUR'}
-              onDelete={handleDelete}
-              deletingId={deletingId}
-              message={ctrlMessage}
-              error={ctrlError}
-            />
+              {assignes.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-gray-500 border-b">
+                        <th className="py-2 px-4 font-semibold">Nom</th>
+                        <th className="py-2 px-4 font-semibold">Email</th>
+                        <th className="py-2 px-4 font-semibold">Rôle</th>
+                        <th className="py-2 px-4 font-semibold text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {assignes.map((m) => (
+                        <tr key={m.id} className="border-b border-gray-100 hover:bg-gray-50/80">
+                          <td className="py-3 px-4 font-medium text-gray-900">
+                            {m.prenom} {m.nom}
+                          </td>
+                          <td className="py-3 px-4 text-gray-600">{m.email}</td>
+                          <td className="py-3 px-4 text-gray-700">{roleLabel(m.sousRole)}</td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleDesassigner(m.id)}
+                              disabled={desassigningId === m.id}
+                              className="text-sm text-amber-700 hover:text-amber-900 disabled:opacity-50"
+                            >
+                              {desassigningId === m.id ? '…' : 'Désassigner'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">
+                  Aucun membre assigné. Créez un compte ci-dessous, puis assignez-le ici.
+                </p>
+              )}
+            </BentoCard>
           </>
         )}
+
+        {/* Bloc 3 — créer un compte (indépendant du concours sélectionné) */}
+        <BentoCard className="p-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-1">Créer un compte</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            Le compte est ajouté au pool (sans concours). Assignez-le ensuite à un concours.
+          </p>
+
+          {createMessage && (
+            <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+              {createMessage}
+            </div>
+          )}
+          {createError && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {createError}
+            </div>
+          )}
+
+          <form onSubmit={handleCreateCompte} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input
+              type="text"
+              required
+              placeholder="Nom"
+              value={createForm.nom}
+              onChange={(e) => setCreateForm((f) => ({ ...f, nom: e.target.value }))}
+              className="px-3 py-2 border border-gray-200 rounded-lg"
+            />
+            <input
+              type="text"
+              required
+              placeholder="Prénom"
+              value={createForm.prenom}
+              onChange={(e) => setCreateForm((f) => ({ ...f, prenom: e.target.value }))}
+              className="px-3 py-2 border border-gray-200 rounded-lg"
+            />
+            <input
+              type="email"
+              required
+              placeholder="Email"
+              value={createForm.email}
+              onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
+              className="px-3 py-2 border border-gray-200 rounded-lg"
+            />
+            <input
+              type="tel"
+              placeholder="Téléphone (optionnel)"
+              value={createForm.telephone}
+              onChange={(e) => setCreateForm((f) => ({ ...f, telephone: e.target.value }))}
+              className="px-3 py-2 border border-gray-200 rounded-lg"
+            />
+            <div className="md:col-span-2">
+              <button
+                type="submit"
+                disabled={createBusy}
+                className="px-4 py-2 rounded-lg bg-gray-900 text-white font-semibold hover:bg-gray-800 disabled:opacity-50"
+              >
+                {createBusy ? 'Création…' : 'Créer le compte'}
+              </button>
+            </div>
+          </form>
+        </BentoCard>
       </div>
+
+      {/* Modal assignation */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-gray-900 mb-1">Assigner un compte</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Choisir un compte du pool et un rôle pour ce concours.
+            </p>
+
+            {assignError && (
+              <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {assignError}
+              </div>
+            )}
+
+            {poolLoading ? (
+              <p className="text-sm text-gray-500">Chargement du pool…</p>
+            ) : (
+              <form onSubmit={handleAssign} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1" htmlFor="assign-membre">
+                    Compte
+                  </label>
+                  <select
+                    id="assign-membre"
+                    required
+                    value={assignMembreId}
+                    onChange={(e) => setAssignMembreId(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  >
+                    <option value="">— Sélectionner —</option>
+                    {pool.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.prenom} {c.nom} ({c.email})
+                      </option>
+                    ))}
+                  </select>
+                  {pool.length === 0 && (
+                    <p className="text-xs text-amber-700 mt-1">
+                      Aucun compte disponible. Créez-en un d&apos;abord.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1" htmlFor="assign-role">
+                    Rôle
+                  </label>
+                  <select
+                    id="assign-role"
+                    value={assignSousRole}
+                    onChange={(e) => setAssignSousRole(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  >
+                    <option value="EXAMINATEUR" disabled={nbExam >= LIMITES.EXAMINATEUR}>
+                      Examinateur ({nbExam}/{LIMITES.EXAMINATEUR})
+                    </option>
+                    <option value="CONTROLEUR" disabled={nbCtrl >= LIMITES.CONTROLEUR}>
+                      Contrôleur ({nbCtrl}/{LIMITES.CONTROLEUR})
+                    </option>
+                  </select>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-100"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={assignBusy || pool.length === 0}
+                    className="px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-800 text-white hover:bg-emerald-900 disabled:opacity-50"
+                  >
+                    {assignBusy ? '…' : 'Assigner'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </DECLayout>
   );
 }

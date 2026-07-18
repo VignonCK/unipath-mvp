@@ -8,6 +8,7 @@ const dgesController = require('../controllers/dges.controller');
 const adminEtablissementRoutes = require('./adminEtablissement.routes');
 const commissionEtablissementRoutes = require('./commissionEtablissement.routes');
 const commissionConcoursRoutes = require('./commissionConcours.routes');
+const commissionConcoursController = require('../controllers/commissionConcours.controller');
 
 const csvUpload = multer({
   storage: multer.memoryStorage(),
@@ -28,6 +29,21 @@ const csvUpload = multer({
 
 // Ancienne route désactivée (403) — ne pas réactiver
 router.use('/etablissements/:etablissementId/commission', commissionEtablissementRoutes);
+
+// Pool comptes commission (DEC) — avant /concours/:id/commission
+router.post(
+  '/commission/comptes',
+  protect,
+  checkRole(['DEC']),
+  commissionConcoursController.creerCompte,
+);
+router.get(
+  '/commission/comptes',
+  protect,
+  checkRole(['DEC']),
+  commissionConcoursController.listerComptes,
+);
+
 router.use('/concours/:concoursId/commission', commissionConcoursRoutes);
 router.use('/etablissements', adminEtablissementRoutes);
 

@@ -101,14 +101,19 @@ async function main() {
       `status=${openSans.status} code=${openSans.data.code}`,
     ));
 
-    const exam = await api('POST', `/dges/concours/${concoursId}/commission`, dec.token, {
+    const examCompte = await api('POST', '/dges/commission/comptes', dec.token, {
       nom: 'Exam',
       prenom: 'Test',
       email: `exam.precond.${stamp}@test.local`,
+    });
+    if (examCompte.data?.membre?.id) cleanup.membreIds.push(examCompte.data.membre.id);
+    results.push(ok('3a. Créer compte examinateur (pool)', examCompte.status === 201, `status=${examCompte.status}`));
+
+    const exam = await api('POST', `/dges/concours/${concoursId}/commission/assigner`, dec.token, {
+      membreId: examCompte.data?.membre?.id,
       sousRole: 'EXAMINATEUR',
     });
-    if (exam.data?.membre?.id) cleanup.membreIds.push(exam.data.membre.id);
-    results.push(ok('3a. Créer examinateur', exam.status === 201, `status=${exam.status}`));
+    results.push(ok('3a2. Assigner examinateur', exam.status === 200, `status=${exam.status}`));
 
     const openPartial = await api('POST', `/dges/concours/${concoursId}/rouvrir-etude`, dec.token);
     results.push(ok(
@@ -117,14 +122,19 @@ async function main() {
       `status=${openPartial.status} manquants=${JSON.stringify(openPartial.data.manquants)}`,
     ));
 
-    const ctrl = await api('POST', `/dges/concours/${concoursId}/commission`, dec.token, {
+    const ctrlCompte = await api('POST', '/dges/commission/comptes', dec.token, {
       nom: 'Ctrl',
       prenom: 'Test',
       email: `ctrl.precond.${stamp}@test.local`,
+    });
+    if (ctrlCompte.data?.membre?.id) cleanup.membreIds.push(ctrlCompte.data.membre.id);
+    results.push(ok('3c. Créer compte contrôleur (pool)', ctrlCompte.status === 201, `status=${ctrlCompte.status}`));
+
+    const ctrl = await api('POST', `/dges/concours/${concoursId}/commission/assigner`, dec.token, {
+      membreId: ctrlCompte.data?.membre?.id,
       sousRole: 'CONTROLEUR',
     });
-    if (ctrl.data?.membre?.id) cleanup.membreIds.push(ctrl.data.membre.id);
-    results.push(ok('3c. Créer contrôleur', ctrl.status === 201, `status=${ctrl.status}`));
+    results.push(ok('3c2. Assigner contrôleur', ctrl.status === 200, `status=${ctrl.status}`));
 
     const get2 = await api('GET', `/dges/concours/${concoursId}/commission`, dec.token);
     results.push(ok(

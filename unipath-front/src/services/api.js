@@ -451,13 +451,26 @@ export const dgesService = {
   getCommissionConcours: (concoursId) =>
     request(`/dges/concours/${concoursId}/commission`),
 
-  creerMembreCommissionConcours: (concoursId, data) =>
-    request(`/dges/concours/${concoursId}/commission`, {
+  /** Crée un compte commission non assigné (pool). */
+  creerCompteCommission: (data) =>
+    request('/dges/commission/comptes', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
-  supprimerMembreCommissionConcours: (concoursId, membreId) =>
+  /** Liste le pool de comptes sans concours (nonAssignes=1). */
+  listerComptesCommission: (nonAssignes = true) =>
+    request(`/dges/commission/comptes${nonAssignes ? '?nonAssignes=1' : ''}`),
+
+  /** Assigne un compte du pool à un concours avec un sous-rôle. */
+  assignerMembreCommission: (concoursId, data) =>
+    request(`/dges/concours/${concoursId}/commission/assigner`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  /** Désassigne un membre (remet dans le pool) — ne supprime pas le compte. */
+  desassignerMembreCommission: (concoursId, membreId) =>
     request(`/dges/concours/${concoursId}/commission/${membreId}`, {
       method: 'DELETE',
     }),
