@@ -1,5 +1,6 @@
 const statsExportService = require('../services/statsExport.service');
 const { parseStatsFilters } = require('../utils/stats-filters.helper');
+const prisma = require('../prisma');
 
 function mapRepartitionSexe(repartitionSexe = {}) {
   return {
@@ -143,5 +144,99 @@ exports.getStatistiquesConcours = async (req, res) => {
     });
   } catch (error) {
     return handleStatsError(res, error, 'Erreur DGES concours:');
+  }
+};
+
+/**
+ * Clôture l'étude des dossiers pour un concours (DGES).
+ * POST /api/dges/concours/:concoursId/cloturer-etude
+ */
+exports.cloturerEtudeConcours = async (req, res) => {
+  try {
+    const { concoursId } = req.params;
+    const concours = await prisma.concours.findUnique({
+      where: { id: concoursId },
+      select: { id: true, libelle: true, etudeCloturee: true, etudeClotureeAt: true },
+    });
+
+    if (!concours) {
+      return res.status(404).json({ error: 'Concours non trouvé' });
+    }
+
+    if (concours.etudeCloturee) {
+      return res.json({
+        message: 'L\'étude était déjà clôturée pour ce concours',
+        concours: {
+          id: concours.id,
+          libelle: concours.libelle,
+          etudeCloturee: true,
+          etudeClotureeAt: concours.etudeClotureeAt,
+        },
+      });
+    }
+
+    const updated = await prisma.concours.update({
+      where: { id: concoursId },
+      data: {
+        etudeCloturee: true,
+        etudeClotureeAt: new Date(),
+      },
+      select: { id: true, libelle: true, etudeCloturee: true, etudeClotureeAt: true },
+    });
+
+    return res.json({
+      message: 'Étude des dossiers clôturée pour ce concours',
+      concours: updated,
+    });
+  } catch (error) {
+    console.error('cloturerEtudeConcours:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+/**
+ * Rouvre l'étude des dossiers pour un concours (DGES).
+ * POST /api/dges/concours/:concoursId/rouvrir-etude
+ */
+exports.rouvrirEtudeConcours = async (req, res) => {
+  try {
+    const { concoursId } = req.params;
+    const concours = await prisma.concours.findUnique({
+      where: { id: concoursId },
+      select: { id: true, libelle: true, etudeCloturee: true, etudeClotureeAt: true },
+    });
+
+    if (!concours) {
+      return res.status(404).json({ error: 'Concours non trouvé' });
+    }
+
+    if (!concours.etudeCloturee) {
+      return res.json({
+        message: 'L\'étude était déjà ouverte pour ce concours',
+        concours: {
+          id: concours.id,
+          libelle: concours.libelle,
+          etudeCloturee: false,
+          etudeClotureeAt: null,
+        },
+      });
+    }
+
+    const updated = await prisma.concours.update({
+      where: { id: concoursId },
+      data: {
+        etudeCloturee: false,
+        etudeClotureeAt: null,
+      },
+      select: { id: true, libelle: true, etudeCloturee: true, etudeClotureeAt: true },
+    });
+
+    return res.json({
+      message: 'Étude des dossiers rouverte pour ce concours',
+      concours: updated,
+    });
+  } catch (error) {
+    console.error('rouvrirEtudeConcours:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 };

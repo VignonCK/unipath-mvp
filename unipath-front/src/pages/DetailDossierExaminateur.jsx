@@ -182,6 +182,18 @@ const DetailDossierExaminateur = () => {
         </ControleurAlert>
       )}
 
+      {(dossier.etudeCloturee || dossier.inscription?.concours?.etudeCloturee) && (
+        <ControleurAlert type="warning">
+          <span>🔒</span>
+          <span>
+            <strong>Étude clôturée</strong>
+            {' — '}
+            {dossier.permissions?.messageLectureSeule
+              || "L'étude des dossiers est clôturée pour ce concours. Consultation seule — aucune modification possible."}
+          </span>
+        </ControleurAlert>
+      )}
+
       <BentoCard className="p-5 bg-white">
         <h2 className="text-base font-semibold text-slate-800 mb-4">Informations du candidat</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">

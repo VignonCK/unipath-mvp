@@ -12,6 +12,10 @@ const {
   applyConcoursScope,
   assertDossierDansScope,
 } = require('../utils/commission-etablissement.helper');
+const {
+  assertEtudeOuvertePourDossier,
+  sendEtudeClotureeSiBesoin,
+} = require('../utils/etude-cloture.helper');
 
 /**
  * Liste des dossiers à évaluer par l'examinateur connecté
@@ -143,15 +147,20 @@ exports.getDetailDossier = async (req, res) => {
       modificationsPossibles = 1 - dossier.verdict1ModifieCount;
     }
 
+    const etudeCloturee = Boolean(dossier.inscription?.concours?.etudeCloturee);
     const verrouille = dossierVerrouilleParControleur(dossier);
-    const peutRendreVerdict = !verrouille && !monVerdictRendu && !dossier.verdict1Par;
+    const peutRendreVerdict =
+      !etudeCloturee && !verrouille && !monVerdictRendu && !dossier.verdict1Par;
     const peutModifierMonVerdict =
-      !verrouille && monVerdictRendu && modificationsPossibles > 0;
+      !etudeCloturee && !verrouille && monVerdictRendu && modificationsPossibles > 0;
     const lectureSeule =
-      verrouille || (!peutRendreVerdict && !peutModifierMonVerdict);
+      etudeCloturee || verrouille || (!peutRendreVerdict && !peutModifierMonVerdict);
 
     let messageLectureSeule = null;
-    if (verrouille) {
+    if (etudeCloturee) {
+      messageLectureSeule =
+        "L'étude des dossiers est clôturée pour ce concours. Consultation seule — aucune modification possible.";
+    } else if (verrouille) {
       messageLectureSeule =
         'Décision du contrôleur rendue : les verdicts ne peuvent plus être modifiés par les examinateurs.';
     } else if (!monVerdictRendu && dossier.verdict1Par) {
@@ -203,8 +212,11 @@ exports.getDetailDossier = async (req, res) => {
         concours: {
           libelle: dossier.inscription.concours.libelle,
           etablissement: dossier.inscription.concours.etablissement,
+          etudeCloturee,
+          etudeClotureeAt: dossier.inscription.concours.etudeClotureeAt || null,
         },
       },
+      etudeCloturee,
       piecesBase: {
         acteNaissance: {
           url: dossier.inscription.candidat.dossier?.acteNaissance,
@@ -241,6 +253,7 @@ exports.getDetailDossier = async (req, res) => {
         peutRendreVerdict,
         peutModifierMonVerdict,
         lectureSeule,
+        messageLectureSeule,
       },
       messageLectureSeule,
     });
@@ -283,6 +296,9 @@ exports.rendreVerdict = async (req, res) => {
     if (!scope || !(await assertDossierDansScope(dossierInscriptionId, scope.concoursId))) {
       return res.status(403).json({ error: 'Accès refusé à ce dossier' });
     }
+
+    const etudeCheck = await assertEtudeOuvertePourDossier(dossierInscriptionId, dossier);
+    if (sendEtudeClotureeSiBesoin(res, etudeCheck)) return;
 
     const check = assertExaminateurPeutRendreVerdict(dossier, examinateurId);
     if (!check.ok) {
@@ -384,6 +400,7 @@ exports.modifierVerdict = async (req, res) => {
 
     const dossier = await prisma.dossierInscription.findUnique({
       where: { id: dossierInscriptionId },
+      include: { inscription: { include: { concours: true } } },
     });
 
     if (!dossier) {
@@ -394,6 +411,9 @@ exports.modifierVerdict = async (req, res) => {
     if (!scope || !(await assertDossierDansScope(dossierInscriptionId, scope.concoursId))) {
       return res.status(403).json({ error: 'Accès refusé à ce dossier' });
     }
+
+    const etudeCheck = await assertEtudeOuvertePourDossier(dossierInscriptionId, dossier);
+    if (sendEtudeClotureeSiBesoin(res, etudeCheck)) return;
 
     const check = assertExaminateurPeutModifierSonVerdict(dossier, examinateurId);
     if (!check.ok) {

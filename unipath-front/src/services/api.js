@@ -442,6 +442,12 @@ export const dgesService = {
   getStatistiquesConcours: (id, params = {}) =>
     request(`/dges/statistiques/${id}${buildStatsQueryString(params)}`),
 
+  cloturerEtudeConcours: (concoursId) =>
+    request(`/dges/concours/${concoursId}/cloturer-etude`, { method: 'POST' }),
+
+  rouvrirEtudeConcours: (concoursId) =>
+    request(`/dges/concours/${concoursId}/rouvrir-etude`, { method: 'POST' }),
+
   exportStats: async (format, params = {}) => {
     const token = localStorage.getItem('token');
     const qs = new URLSearchParams({ format });

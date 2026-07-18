@@ -17,4 +17,17 @@ router.use('/etablissements', adminEtablissementRoutes);
 router.get('/statistiques', protect, checkRole(['DGES', 'COMMISSION']), dgesController.getStatistiques);
 router.get('/statistiques/:concoursId', protect, checkRole(['DGES', 'COMMISSION']), dgesController.getStatistiquesConcours);
 
+router.post(
+  '/concours/:concoursId/cloturer-etude',
+  protect,
+  checkRole(['DGES']),
+  dgesController.cloturerEtudeConcours,
+);
+router.post(
+  '/concours/:concoursId/rouvrir-etude',
+  protect,
+  checkRole(['DGES']),
+  dgesController.rouvrirEtudeConcours,
+);
+
 module.exports = router;

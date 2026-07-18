@@ -30,6 +30,10 @@ const {
   applyConcoursScope,
   assertDossierDansScope,
 } = require('../utils/commission-etablissement.helper');
+const {
+  assertEtudeOuvertePourDossier,
+  sendEtudeClotureeSiBesoin,
+} = require('../utils/etude-cloture.helper');
 
 async function scopedWhere(req, where) {
   const scope = await resolveCommissionScope(req.user.id);
@@ -491,8 +495,12 @@ exports.getDetailDossier = async (req, res) => {
           libelle: dossier.inscription.concours.libelle,
           etablissement: dossier.inscription.concours.etablissement,
           dateComposition: dossier.inscription.concours.dateComposition,
+          etudeCloturee: Boolean(dossier.inscription.concours.etudeCloturee),
+          etudeClotureeAt: dossier.inscription.concours.etudeClotureeAt || null,
         },
       },
+      etudeCloturee: Boolean(dossier.inscription.concours.etudeCloturee),
+      etudeClotureeAt: dossier.inscription.concours.etudeClotureeAt || null,
       piecesBase: {
         acteNaissance: {
           url: dossier.inscription.candidat.dossier?.acteNaissance,
@@ -597,6 +605,9 @@ exports.modifierVerdictExaminateur = async (req, res) => {
       return res.status(403).json({ error: 'Accès refusé à ce dossier' });
     }
 
+    const etudeCheck = await assertEtudeOuvertePourDossier(dossierInscriptionId, dossier);
+    if (sendEtudeClotureeSiBesoin(res, etudeCheck)) return;
+
     const auteurId = dossier.verdict1Par;
     if (!auteurId) {
       return res.status(400).json({ error: 'Aucun verdict examinateur à modifier sur ce dossier' });
@@ -690,6 +701,9 @@ exports.rendreDecision = async (req, res) => {
     if (!(await assertDossierAccessible(req, dossierInscriptionId))) {
       return res.status(403).json({ error: 'Accès refusé à ce dossier' });
     }
+
+    const etudeCheck = await assertEtudeOuvertePourDossier(dossierInscriptionId, dossier);
+    if (sendEtudeClotureeSiBesoin(res, etudeCheck)) return;
 
     const validation = validateDecisionControleur(
       dossier,
@@ -870,6 +884,9 @@ exports.modifierDecision = async (req, res) => {
     if (!(await assertDossierAccessible(req, dossierInscriptionId))) {
       return res.status(403).json({ error: 'Accès refusé à ce dossier' });
     }
+
+    const etudeCheck = await assertEtudeOuvertePourDossier(dossierInscriptionId, dossier);
+    if (sendEtudeClotureeSiBesoin(res, etudeCheck)) return;
 
     if (!dossier.decisionControleur) {
       return res.status(400).json({ error: 'Aucune décision n\'a encore été rendue sur ce dossier' });

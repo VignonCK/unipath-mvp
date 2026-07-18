@@ -105,6 +105,8 @@ model Concours {
   sigle                    String?
   inscriptionCompteur      Int           @default(0)
   inscriptionCompteurAnnee Int?
+  etudeCloturee            Boolean       @default(false)
+  etudeClotureeAt          DateTime?
   createdAt            DateTime      @default(now())
   criteresEligibilite  Json?
   inscriptions         Inscription[]
@@ -114,6 +116,7 @@ model Concours {
   @@index([dateDebutDepot])
   @@index([dateFinDepot])
   @@index([etablissementId])
+  @@index([etudeCloturee])
 }
 
 model Inscription {

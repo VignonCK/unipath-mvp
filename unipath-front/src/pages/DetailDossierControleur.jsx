@@ -318,7 +318,9 @@ const DetailDossierControleur = () => {
   const arbitrageObligatoire = arbitrageRequis(decision, verdictExaminateur);
   const modInfo = dossier?.modificationControleur;
   const formulaireDecisionVerrouille = Boolean(
-    dossier?.decisionControleur && !modInfo?.peutModifier
+    dossier?.etudeCloturee
+    || dossier?.inscription?.concours?.etudeCloturee
+    || (dossier?.decisionControleur && !modInfo?.peutModifier)
   );
   const peutSoumettreDecision = !formulaireDecisionVerrouille;
 
@@ -349,6 +351,17 @@ const DetailDossierControleur = () => {
         <ControleurAlert type="error">
           <span>⚠️</span>
           <span>{error}</span>
+        </ControleurAlert>
+      )}
+
+      {(dossier.etudeCloturee || dossier.inscription?.concours?.etudeCloturee) && (
+        <ControleurAlert type="warning">
+          <span>🔒</span>
+          <span>
+            <strong>Étude clôturée</strong>
+            {' — '}
+            L&apos;étude des dossiers est clôturée pour ce concours. Consultation seule — aucune décision ni correction possible.
+          </span>
         </ControleurAlert>
       )}
 
@@ -407,7 +420,7 @@ const DetailDossierControleur = () => {
             titre="Examinateur"
             verdictData={dossier.verdicts.verdict1}
             divergent={dossier.verdictsDivergents}
-            allowCorrection
+            allowCorrection={!(dossier.etudeCloturee || dossier.inscription?.concours?.etudeCloturee)}
             onCorriger={(v) => ouvrirCorrectionVerdict(1, v)}
           />
           <VerdictPanel

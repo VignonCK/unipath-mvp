@@ -1,7 +1,7 @@
 // src/pages/GestionConcours.jsx
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { concoursService, etablissementService } from '../services/api';
+import { concoursService, etablissementService, dgesService } from '../services/api';
 import { PiecesConfiguration } from '../components/PiecesConfiguration';
 import GestionCentresConcours from '../components/concours/GestionCentresConcours';
 import DGESLayout from '../components/DGESLayout';
@@ -69,6 +69,7 @@ export default function GestionConcours() {
   const [submitting, setSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
   const [newMatiere, setNewMatiere] = useState('');
+  const [etudeBusyId, setEtudeBusyId] = useState(null);
 
   useEffect(() => {
     loadConcours();
@@ -390,6 +391,41 @@ export default function GestionConcours() {
     }
   };
 
+  const handleToggleEtude = async (c) => {
+    const cloture = Boolean(c.etudeCloturee);
+    if (cloture) {
+      if (!confirm(`Rouvrir l'étude des dossiers pour « ${c.libelle} » ?\nLes examinateurs et contrôleurs pourront à nouveau modifier les dossiers.`)) {
+        return;
+      }
+    } else if (!confirm(
+      `Clôturer l'étude des dossiers pour « ${c.libelle} » ?\nPlus aucune modification (verdicts / décisions) ne sera possible tant que l'étude reste clôturée.`,
+    )) {
+      return;
+    }
+
+    try {
+      setEtudeBusyId(c.id);
+      setError('');
+      const data = cloture
+        ? await dgesService.rouvrirEtudeConcours(c.id)
+        : await dgesService.cloturerEtudeConcours(c.id);
+      const updated = data?.concours;
+      setConcours((prev) => prev.map((row) => (
+        row.id === c.id
+          ? {
+            ...row,
+            etudeCloturee: updated?.etudeCloturee ?? !cloture,
+            etudeClotureeAt: updated?.etudeClotureeAt ?? null,
+          }
+          : row
+      )));
+    } catch (err) {
+      setError(err.message || 'Action impossible');
+    } finally {
+      setEtudeBusyId(null);
+    }
+  };
+
   const etablissementFilterOptions = Array.from(
     concours.reduce((map, item) => {
       const key = getConcoursEtablissementKey(item);
@@ -471,7 +507,7 @@ export default function GestionConcours() {
                   <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Dépôt début</th>
                   <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Dépôt fin</th>
                   <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Composition</th>
-                  <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Matières</th>
+                  <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Étude</th>
                   <th className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase'>Frais</th>
                   <th className='px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase'>Actions</th>
                 </tr>
@@ -503,16 +539,37 @@ export default function GestionConcours() {
                             ? new Date(c.dateComposition).toLocaleDateString('fr-FR')
                             : '-'}
                       </td>
-                      <td className='px-4 py-3 text-gray-600 text-xs'>
-                        {Array.isArray(c.matieres) && c.matieres.length > 0
-                          ? `${c.matieres.length} matière${c.matieres.length > 1 ? 's' : ''}`
-                          : '-'}
+                      <td className='px-4 py-3'>
+                        {c.etudeCloturee ? (
+                          <span className='inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700'>
+                            Clôturée
+                          </span>
+                        ) : (
+                          <span className='inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700'>
+                            Ouverte
+                          </span>
+                        )}
                       </td>
                       <td className='px-4 py-3 text-gray-700 font-semibold'>
                         {c.fraisParticipation ? `${c.fraisParticipation} FCFA` : '-'}
                       </td>
                       <td className='px-4 py-3'>
-                        <div className='flex items-center justify-center gap-2'>
+                        <div className='flex items-center justify-center gap-2 flex-wrap'>
+                          <button
+                            type='button'
+                            onClick={() => handleToggleEtude(c)}
+                            disabled={etudeBusyId === c.id}
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-50 ${
+                              c.etudeCloturee
+                                ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                                : 'bg-amber-50 text-amber-900 hover:bg-amber-100'
+                            }`}
+                            title={c.etudeCloturee ? 'Rouvrir l\'étude' : 'Clôturer l\'étude'}
+                          >
+                            {etudeBusyId === c.id
+                              ? '…'
+                              : (c.etudeCloturee ? 'Rouvrir l\'étude' : 'Clôturer l\'étude')}
+                          </button>
                           <button
                             onClick={() => openEditModal(c)}
                             className='p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition'
