@@ -70,6 +70,7 @@ export default function GestionConcours() {
   const [validationErrors, setValidationErrors] = useState({});
   const [newMatiere, setNewMatiere] = useState('');
   const [etudeBusyId, setEtudeBusyId] = useState(null);
+  const [numerosBusyId, setNumerosBusyId] = useState(null);
 
   useEffect(() => {
     loadConcours();
@@ -426,6 +427,26 @@ export default function GestionConcours() {
     }
   };
 
+  const handleGenererNumeros = async (c) => {
+    if (!confirm(
+      `Générer les numéros de table pour « ${c.libelle} » ?\nLes candidats VALIDE sans numéro recevront un numéro dans l'ordre alphabétique (les numéros déjà attribués ne changent pas).`,
+    )) {
+      return;
+    }
+
+    try {
+      setNumerosBusyId(c.id);
+      setError('');
+      const data = await dgesService.genererNumerosTable(c.id);
+      const n = data?.count ?? 0;
+      alert(data?.message || `${n} numéro(s) attribué(s)`);
+    } catch (err) {
+      setError(err.message || 'Génération des numéros impossible');
+    } finally {
+      setNumerosBusyId(null);
+    }
+  };
+
   const etablissementFilterOptions = Array.from(
     concours.reduce((map, item) => {
       const key = getConcoursEtablissementKey(item);
@@ -569,6 +590,15 @@ export default function GestionConcours() {
                             {etudeBusyId === c.id
                               ? '…'
                               : (c.etudeCloturee ? 'Rouvrir l\'étude' : 'Clôturer l\'étude')}
+                          </button>
+                          <button
+                            type='button'
+                            onClick={() => handleGenererNumeros(c)}
+                            disabled={numerosBusyId === c.id}
+                            className='px-2.5 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-50 bg-blue-50 text-blue-900 hover:bg-blue-100'
+                            title='Générer les numéros de table'
+                          >
+                            {numerosBusyId === c.id ? '…' : 'Générer les n° de table'}
                           </button>
                           <button
                             onClick={() => openEditModal(c)}

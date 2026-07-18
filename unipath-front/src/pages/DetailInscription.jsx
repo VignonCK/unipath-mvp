@@ -136,6 +136,10 @@ export default function DetailInscription() {
       showMessage('Choisissez d\'abord votre centre de composition.', 'error');
       return;
     }
+    if (!inscription?.numeroInscription) {
+      showMessage('N° de table en attente d\'attribution par la commission.', 'error');
+      return;
+    }
     setTelechargement(prev => ({ ...prev, convocation: true }));
     try {
       await convocationService.telecharger(inscriptionId);
@@ -501,12 +505,18 @@ export default function DetailInscription() {
                       && !centreChoisi && (
                       <p className='text-xs text-red-600 mt-1'>Choisissez votre centre de composition d&apos;abord.</p>
                     )}
+                    {!inscription.numeroInscription && (
+                      <p className='text-xs text-amber-700 mt-1'>
+                        N° de table en attente d&apos;attribution par la commission
+                      </p>
+                    )}
                   </div>
                 </div>
                 <button
                   onClick={handleConvocation}
                   disabled={
                     telechargement.convocation
+                    || !inscription.numeroInscription
                     || (concoursRequireCentreChoice(inscription?.concours, centresRelational)
                       && !centreChoisi)
                   }

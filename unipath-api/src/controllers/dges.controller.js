@@ -240,3 +240,52 @@ exports.rouvrirEtudeConcours = async (req, res) => {
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 };
+
+/**
+ * Attribue les n° de table aux dossiers VALIDE sans numéro (ordre alphabétique + APPEND).
+ * POST /api/dges/concours/:concoursId/generer-numeros-table
+ */
+exports.genererNumerosTableConcours = async (req, res) => {
+  try {
+    const { concoursId } = req.params;
+    const { attribuerNumerosTableParConcours } = require('../utils/numero-inscription.helper');
+
+    const concours = await prisma.concours.findUnique({
+      where: { id: concoursId },
+      select: {
+        id: true,
+        libelle: true,
+        etudeCloturee: true,
+        etudeClotureeAt: true,
+      },
+    });
+
+    if (!concours) {
+      return res.status(404).json({ error: 'Concours non trouvé' });
+    }
+
+    const attribues = await prisma.$transaction(
+      (tx) => attribuerNumerosTableParConcours(tx, concoursId),
+      { maxWait: 15_000, timeout: 120_000 },
+    );
+
+    return res.json({
+      message: attribues.length > 0
+        ? `${attribues.length} numéro(s) de table attribué(s)`
+        : 'Aucun candidat VALIDE en attente de numéro pour ce concours',
+      concours: {
+        id: concours.id,
+        libelle: concours.libelle,
+        etudeCloturee: concours.etudeCloturee,
+        etudeClotureeAt: concours.etudeClotureeAt,
+      },
+      count: attribues.length,
+      attribues,
+    });
+  } catch (error) {
+    console.error('genererNumerosTableConcours:', error);
+    return res.status(500).json({
+      error: error.message || 'Erreur lors de la génération des numéros de table',
+    });
+  }
+};

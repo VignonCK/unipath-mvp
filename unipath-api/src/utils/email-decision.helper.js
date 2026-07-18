@@ -95,6 +95,15 @@ function buildEmailDataDecision({ candidat, concours, inscription, motif }) {
 
 async function genererPdfConvocation(inscriptionRecord, candidat, concours) {
   const inscriptionForPdf = await resolveInscriptionForConvocationPdf(inscriptionRecord);
+
+  if (!inscriptionForPdf?.numeroInscription) {
+    const err = new Error(
+      "Le numéro de table n'a pas encore été attribué. La convocation sera disponible après génération des numéros par la DGES.",
+    );
+    err.code = 'NUMERO_TABLE_MANQUANT';
+    throw err;
+  }
+
   const convocationCheck = await peutEnvoyerConvocationPdf(
     {
       concoursId: inscriptionForPdf?.concoursId || concours?.id,
@@ -129,8 +138,8 @@ async function envoyerConvocationAuCandidat({ candidat, concours, inscription })
     pdfPath = generatedPath;
     await emailService.envoyerEmailValidation(emailData, pdfPath);
   } catch (err) {
-    if (err.code === 'CENTRE_NON_CHOISI') {
-      console.warn('Convocation non envoyee : centre de composition non choisi');
+    if (err.code === 'CENTRE_NON_CHOISI' || err.code === 'NUMERO_TABLE_MANQUANT') {
+      console.warn(`Convocation PDF non envoyee : ${err.code}`);
       return;
     }
     console.error('Erreur PDF convocation, envoi sans pièce jointe:', err);
@@ -161,6 +170,11 @@ async function envoyerEmailDecisionFinale({ candidat, concours, inscription, dec
 
     if (!convocationCheck.ok) {
       await emailService.envoyerEmailDossierValideAttenteCentre(emailData);
+      return;
+    }
+
+    if (!inscriptionForPdf.numeroInscription) {
+      console.warn('Convocation PDF non envoyee a la validation : NUMERO_TABLE_MANQUANT');
       return;
     }
 

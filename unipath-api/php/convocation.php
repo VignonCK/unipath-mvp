@@ -42,15 +42,9 @@ function buildNumeroConvocation($data, $concours) {
         return strtoupper(convocationCleanText($numeroInscription));
     }
 
-    $libelle = $data['libelleConcours'] ?? $concours['libelle'] ?? '';
-    $libelleTrimmed = preg_replace('/^concours\s*/i', '', trim($libelle));
-    $firstWord = explode(' ', $libelleTrimmed)[0] ?? 'CONV';
-    $sigle = strtoupper(substr(preg_replace('/[^A-Z0-9]/', '', strtoupper($firstWord)), 0, 6));
-    if ($sigle === '') {
-        $sigle = 'CONV';
-    }
-
-    return "CONV-{$sigle}-2026-0001";
+    // Plus de faux numéro inventé (CONV-…-0001) : le backend doit refuser avant d'appeler PHP.
+    fwrite(STDERR, "Erreur: numeroInscription manquant pour la convocation\n");
+    exit(1);
 }
 
 function renderConvocationPhotoFromBase64($pdf, $photoBase64, $photoMime, $photoX, $photoY, $photoW, $photoH) {

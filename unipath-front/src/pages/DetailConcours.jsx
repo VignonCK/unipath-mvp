@@ -253,6 +253,10 @@ export default function DetailConcours() {
       setErreur('Choisissez d\'abord votre centre de composition dans votre espace inscription.');
       return;
     }
+    if (!ins?.numeroInscription) {
+      setErreur('N° de table en attente d\'attribution par la commission');
+      return;
+    }
     try {
       setTelechargement((prev) => ({ ...prev, convocation: true }));
       setErreur(null);
@@ -523,16 +527,27 @@ export default function DetailConcours() {
                   onClick={handleTelechargerConvocation}
                   disabled={
                     telechargement.convocation
+                    || !inscriptionExistante.numeroInscription
                     || (concoursHasCentres(centresRelational)
                       && !inscriptionExistante.centreChoisi?.nom
                       && !inscriptionExistante.centreChoisi?.concoursCentreId)
                   }
                   className='rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-60'
+                  title={
+                    !inscriptionExistante.numeroInscription
+                      ? 'N° de table en attente d\'attribution par la commission'
+                      : undefined
+                  }
                 >
                   {telechargement.convocation ? 'Téléchargement...' : 'Télécharger la convocation'}
                 </button>
               )}
             </div>
+            {inscriptionExistante.statut === 'VALIDE' && !inscriptionExistante.numeroInscription && (
+              <p className='text-xs text-amber-700 pt-1'>
+                N° de table en attente d&apos;attribution par la commission
+              </p>
+            )}
           </div>
         )}
 

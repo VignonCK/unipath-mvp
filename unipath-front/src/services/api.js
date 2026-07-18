@@ -448,6 +448,9 @@ export const dgesService = {
   rouvrirEtudeConcours: (concoursId) =>
     request(`/dges/concours/${concoursId}/rouvrir-etude`, { method: 'POST' }),
 
+  genererNumerosTable: (concoursId) =>
+    request(`/dges/concours/${concoursId}/generer-numeros-table`, { method: 'POST' }),
+
   exportStats: async (format, params = {}) => {
     const token = localStorage.getItem('token');
     const qs = new URLSearchParams({ format });

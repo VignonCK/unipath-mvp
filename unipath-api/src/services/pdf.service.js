@@ -359,6 +359,16 @@ class PDFService {
 
     try {
       const concoursId = concours?.id ?? inscription?.concoursId;
+
+      const numeroInscription = inscription?.numeroInscription ?? data.numeroInscription ?? null;
+      if (!numeroInscription) {
+        const err = new Error(
+          "Le numéro de table n'a pas encore été attribué. La convocation sera disponible après génération des numéros par la DGES.",
+        );
+        err.code = 'NUMERO_TABLE_MANQUANT';
+        throw err;
+      }
+
       const dossierInscription = enrichDossierInscriptionForPdf(
         inscription?.dossierInscription ?? null,
       );
@@ -374,11 +384,10 @@ class PDFService {
         throw err;
       }
 
-      console.log('[Convocation] inscription.numeroInscription:', inscription?.numeroInscription);
+      console.log('[Convocation] inscription.numeroInscription:', numeroInscription);
       console.log('[Convocation] inscription.concours.libelle:', inscription?.concours?.libelle);
       console.log('[Convocation] inscription.id:', inscription?.id);
 
-      const numeroInscription = inscription?.numeroInscription ?? data.numeroInscription ?? null;
       const numeroConvocation = numeroInscription;
       console.log('[Convocation] numeroConvocation:', numeroConvocation);
 

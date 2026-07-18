@@ -142,6 +142,26 @@ class NotificationService {
             const inscriptionForPdf = await resolveInscriptionForConvocationPdf({
               id: data.inscriptionId,
             });
+            if (inscriptionForPdf && !inscriptionForPdf.numeroInscription) {
+              console.log('Convocation non envoyee : numero de table non attribue');
+              if (event === 'VALIDATION') {
+                await emailService.envoyerEmailDossierValideAttenteCentre(
+                  buildEmailDataDecision({
+                    candidat: {
+                      email: data.candidatEmail,
+                      nom: data.candidatNom,
+                      prenom: data.candidatPrenom,
+                      matricule: data.candidatMatricule,
+                      telephone: data.candidatTelephone,
+                      id: data.candidatId,
+                    },
+                    concours: concoursFallback,
+                    inscription: { id: data.inscriptionId, numeroInscription: data.numeroDossier },
+                  }),
+                );
+              }
+              return;
+            }
             if (inscriptionForPdf) {
               convocationPayload = buildGenererConvocationPayload(
                 inscriptionForPdf,

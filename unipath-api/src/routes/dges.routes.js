@@ -29,5 +29,11 @@ router.post(
   checkRole(['DGES']),
   dgesController.rouvrirEtudeConcours,
 );
+router.post(
+  '/concours/:concoursId/generer-numeros-table',
+  protect,
+  checkRole(['DGES']),
+  dgesController.genererNumerosTableConcours,
+);
 
 module.exports = router;

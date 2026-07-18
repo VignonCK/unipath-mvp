@@ -63,6 +63,13 @@ exports.telechargerConvocation = async (req, res) => {
       return res.status(400).json({ error: 'La convocation n\'est disponible que pour les dossiers valides' });
     }
 
+    if (!inscription.numeroInscription) {
+      return res.status(400).json({
+        error: "Le numéro de table n'a pas encore été attribué. La convocation sera disponible après génération des numéros par la DGES.",
+        code: 'NUMERO_TABLE_MANQUANT',
+      });
+    }
+
     const convocationCheck = await peutEnvoyerConvocationPdf(
       {
         concoursId: inscription.concoursId,
@@ -106,6 +113,9 @@ exports.telechargerConvocation = async (req, res) => {
     await envoyerPdfGenere(res, pdfResult, nomFichier);
   } catch (error) {
     console.error('telechargerConvocation error:', error);
+    if (error.code === 'NUMERO_TABLE_MANQUANT' || error.code === 'CENTRE_NON_CHOISI') {
+      return res.status(400).json({ error: error.message, code: error.code });
+    }
     res.status(500).json({ error: 'Erreur serveur' });
   }
 };
