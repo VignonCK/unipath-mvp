@@ -1,5 +1,6 @@
 // prisma/seed-roles.js
-// Script pour créer des comptes de test pour chaque rôle
+// Comptes de test : Candidat, Commission, DGES (Module 2), DEC (Module 1), …
+// Voir docs/DEC-VS-DGES.md — ne pas créer de compte concours en rôle DGES.
 
 const { PrismaClient } = require('@prisma/client');
 const { createClient } = require('@supabase/supabase-js');
@@ -86,13 +87,26 @@ async function main() {
 
     if (decError) {
       console.log('⚠️  DEC existe déjà ou erreur:', decError.message);
+      // Aligner le profil Prisma (nom/prénom) même si Auth existait déjà
+      try {
+        const existingDec = await prisma.administrateurDEC.findUnique({ where: { email: 'dec@test.com' } });
+        if (existingDec) {
+          await prisma.administrateurDEC.update({
+            where: { email: 'dec@test.com' },
+            data: { nom: 'Mensah', prenom: 'Adjo', role: 'DEC' },
+          });
+          console.log('   → Profil DEC mis à jour (Adjo Mensah)\n');
+        }
+      } catch (e) {
+        console.log('   → Impossible de mettre à jour le profil DEC:', e.message);
+      }
     } else {
       await prisma.administrateurDEC.create({
         data: {
           id: decAuth.user.id,
           email: 'dec@test.com',
-          nom: 'TEST',
-          prenom: 'DEC',
+          nom: 'Mensah',
+          prenom: 'Adjo',
           telephone: '+22997000004',
           role: 'DEC',
         },

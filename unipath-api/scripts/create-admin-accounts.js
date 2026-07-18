@@ -1,6 +1,8 @@
 /**
- * Script pour créer les comptes administrateurs (Commission et DGES)
+ * Script pour créer les comptes administrateurs (Commission, DGES Module 2, DEC Module 1)
  * Usage: node scripts/create-admin-accounts.js
+ *
+ * Voir docs/DEC-VS-DGES.md pour la séparation des rôles.
  */
 
 require('dotenv').config();
@@ -8,7 +10,6 @@ const { supabase } = require('../src/supabase');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-// Credentials pré-définis pour les comptes administrateurs
 const ADMIN_ACCOUNTS = [
   {
     type: 'COMMISSION',
@@ -26,6 +27,14 @@ const ADMIN_ACCOUNTS = [
     prenom: 'MESRS',
     telephone: '+22997000002',
   },
+  {
+    type: 'DEC',
+    email: 'dec@mesrs.bj',
+    password: 'DEC2026!',
+    nom: 'Mensah',
+    prenom: 'Adjo',
+    telephone: '+22997000005',
+  },
 ];
 
 async function createAdminAccounts() {
@@ -37,11 +46,10 @@ async function createAdminAccounts() {
       console.log(`   Email: ${account.email}`);
       console.log(`   Mot de passe: ${account.password}`);
 
-      // 1. Créer le compte Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: account.email,
         password: account.password,
-        email_confirm: true, // Confirmer l'email automatiquement
+        email_confirm: true,
       });
 
       if (authError) {
@@ -52,7 +60,6 @@ async function createAdminAccounts() {
         throw authError;
       }
 
-      // 2. Créer l'entrée dans la table appropriée
       if (account.type === 'COMMISSION') {
         await prisma.membreCommission.create({
           data: {
@@ -74,6 +81,17 @@ async function createAdminAccounts() {
             prenom: account.prenom,
             telephone: account.telephone,
             role: 'DGES',
+          },
+        });
+      } else if (account.type === 'DEC') {
+        await prisma.administrateurDEC.create({
+          data: {
+            id: authData.user.id,
+            email: account.email,
+            nom: account.nom,
+            prenom: account.prenom,
+            telephone: account.telephone,
+            role: 'DEC',
           },
         });
       }
@@ -103,7 +121,6 @@ async function createAdminAccounts() {
   process.exit(0);
 }
 
-// Exécuter le script
 createAdminAccounts().catch((error) => {
   console.error('❌ Erreur fatale:', error);
   process.exit(1);

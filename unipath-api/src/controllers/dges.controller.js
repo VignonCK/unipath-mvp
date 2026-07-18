@@ -162,7 +162,7 @@ exports.getStatistiquesConcours = async (req, res) => {
 };
 
 /**
- * Clôture l'étude des dossiers pour un concours (DGES).
+ * Clôture l'étude des dossiers pour un concours (DEC).
  * POST /api/dges/concours/:concoursId/cloturer-etude
  */
 exports.cloturerEtudeConcours = async (req, res) => {
@@ -209,7 +209,7 @@ exports.cloturerEtudeConcours = async (req, res) => {
 };
 
 /**
- * Rouvre l'étude des dossiers pour un concours (DGES).
+ * Rouvre l'étude des dossiers pour un concours (DEC).
  * POST /api/dges/concours/:concoursId/rouvrir-etude
  */
 exports.rouvrirEtudeConcours = async (req, res) => {

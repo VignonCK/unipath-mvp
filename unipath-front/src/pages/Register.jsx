@@ -48,7 +48,7 @@ const MODULES = [
 ];
 
 // Seul le rôle CANDIDAT est disponible à l'inscription publique
-// Les comptes COMMISSION et DGES sont créés par les administrateurs
+// Les comptes COMMISSION, DEC (concours) et DGES (établissements privés) sont créés par les administrateurs
 
 // ── STYLES (inline) ───────────────────────────────────────────────────────────
 const S = {
@@ -569,7 +569,7 @@ function FormLeft({ isMobile }) {
             fontSize: 12,
             color: "#1e40af",
           }}>
-            ℹ️ Vous vous inscrivez en tant que <strong>candidat</strong>. Les comptes commission et DGES sont crees par les administrateurs.
+            ℹ️ Vous vous inscrivez en tant que <strong>candidat</strong>. Les comptes commission, DEC et DGES sont crees par les administrateurs.
           </div>
           
           <div style={{ display: "flex", gap: 10 }}>

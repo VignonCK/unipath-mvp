@@ -65,7 +65,7 @@ exports.telechargerConvocation = async (req, res) => {
 
     if (!inscription.numeroInscription) {
       return res.status(400).json({
-        error: "Le numéro de table n'a pas encore été attribué. La convocation sera disponible après génération des numéros par la DGES.",
+        error: "Le numéro de table n'a pas encore été attribué. La convocation sera disponible après génération des numéros par la DEC.",
         code: 'NUMERO_TABLE_MANQUANT',
       });
     }

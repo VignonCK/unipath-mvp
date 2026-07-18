@@ -137,7 +137,7 @@ export default function DetailInscription() {
       return;
     }
     if (!inscription?.numeroInscription) {
-      showMessage('N° de table en attente d\'attribution par la commission.', 'error');
+      showMessage('N° de table en attente d\'attribution par la DEC.', 'error');
       return;
     }
     setTelechargement(prev => ({ ...prev, convocation: true }));
@@ -507,7 +507,7 @@ export default function DetailInscription() {
                     )}
                     {!inscription.numeroInscription && (
                       <p className='text-xs text-amber-700 mt-1'>
-                        N° de table en attente d&apos;attribution par la commission
+                        N° de table en attente d&apos;attribution par la DEC
                       </p>
                     )}
                   </div>

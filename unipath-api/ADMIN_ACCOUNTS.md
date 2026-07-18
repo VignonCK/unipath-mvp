@@ -135,18 +135,21 @@ await supabase.auth.admin.updateUserById(
 
 ## 📊 Accès aux Statistiques
 
-La Commission a accès aux mêmes statistiques que la DGES :
+> Séparation DEC / DGES : voir `docs/DEC-VS-DGES.md`.
+> - **DEC** → Module 1 (concours) : `GET /api/dec/statistiques`
+> - **DGES** → Module 2 (établissements privés) : `GET /api/dges/statistiques`
+> - La Commission a accès en lecture aux stats concours (DEC).
 
 ### Endpoints Disponibles
 
 ```bash
-# Statistiques globales
-GET /api/dges/statistiques
-Authorization: Bearer <token_commission>
+# Statistiques concours (Module 1)
+GET /api/dec/statistiques
+Authorization: Bearer <token_dec_ou_commission>
 
-# Statistiques par concours
-GET /api/dges/statistiques/:concoursId
-Authorization: Bearer <token_commission>
+# Statistiques campagnes / EP privés (Module 2)
+GET /api/dges/statistiques
+Authorization: Bearer <token_dges>
 ```
 
 ### Exemple de Réponse
@@ -253,7 +256,7 @@ Exécutez la requête SQL d'insertion manuelle.
 Vérifiez que :
 1. Le token est valide
 2. Le rôle est correct dans la base de données
-3. Les routes utilisent `checkRole(['DGES', 'COMMISSION'])`
+3. Les routes M1 utilisent `checkRole(['DEC', ...])` ; M2 utilise `checkRole(['DGES'])`
 
 ---
 

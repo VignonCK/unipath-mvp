@@ -363,7 +363,7 @@ class PDFService {
       const numeroInscription = inscription?.numeroInscription ?? data.numeroInscription ?? null;
       if (!numeroInscription) {
         const err = new Error(
-          "Le numéro de table n'a pas encore été attribué. La convocation sera disponible après génération des numéros par la DGES.",
+          "Le numéro de table n'a pas encore été attribué. La convocation sera disponible après génération des numéros par la DEC.",
         );
         err.code = 'NUMERO_TABLE_MANQUANT';
         throw err;

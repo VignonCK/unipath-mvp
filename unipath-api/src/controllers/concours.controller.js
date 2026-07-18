@@ -250,7 +250,7 @@ exports.getClassement = async (req, res) => {
       // La commission voit les candidats qu'elle a validés (avant contrôleur)
       statutsValides = ['VALIDE_PAR_COMMISSION', 'VALIDE'];
     } else {
-      // Par défaut (DGES, public), on ne montre que les validés définitivement
+      // Par défaut (DEC / public), on ne montre que les validés définitivement
       statutsValides = ['VALIDE'];
     }
 

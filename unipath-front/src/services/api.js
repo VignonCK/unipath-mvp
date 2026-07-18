@@ -197,7 +197,7 @@ export const concoursService = {
   getById: (id) => request(`/concours/${id}`),
   getClassement: (id) => request(`/concours/${id}/classement`),
   
-  // CRUD pour DGES
+  // CRUD concours (réservé DEC — Module 1)
   create: (data) =>
     request('/concours', {
       method: 'POST',
@@ -421,7 +421,7 @@ export const commissionService = {
     }),
 };
 
-// ── DGES ──────────────────────────────────────────────────────────
+// ── Stats DGES (M2) + actions concours DEC (URL /api/dges/concours/* pour compat) ──
 function buildStatsQueryString(params = {}) {
   const qs = new URLSearchParams();
   const allowed = ['sexe', 'concoursId', 'etablissementId', 'statut', 'centreId', 'anneeAcademique'];

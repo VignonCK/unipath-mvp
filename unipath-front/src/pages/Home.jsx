@@ -94,7 +94,7 @@ export default function Home() {
     {
       icon: '',
       titre: 'Statistiques en temps réel',
-      desc: 'La DGES dispose d\'un tableau de bord national avec graphiques et taux de validation calculés automatiquement.',
+      desc: 'La DEC dispose d\'un tableau de bord national des concours (inscrits, validations, centres) ; la DGES suit les établissements privés.',
     },
   ];
 

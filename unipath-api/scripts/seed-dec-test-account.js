@@ -18,6 +18,9 @@ const supabase = createClient(
 
 const EMAIL = 'dec@test.com';
 const PASSWORD = 'password123';
+const NOM = 'Mensah';
+const PRENOM = 'Adjo';
+const TELEPHONE = '+22997000004';
 
 async function findAuthUserByEmail(email) {
   let page = 1;
@@ -67,7 +70,11 @@ async function main() {
   });
 
   if (existing) {
-    console.log('✅ Profil AdministrateurDEC déjà présent');
+    await prisma.administrateurDEC.update({
+      where: { id: authUser.id },
+      data: { nom: NOM, prenom: PRENOM, telephone: TELEPHONE, role: 'DEC' },
+    });
+    console.log('✅ Profil AdministrateurDEC mis à jour (nom/prénom)');
   } else {
     const byEmail = await prisma.administrateurDEC.findUnique({
       where: { email: EMAIL },
@@ -81,9 +88,9 @@ async function main() {
       data: {
         id: authUser.id,
         email: EMAIL,
-        nom: 'TEST',
-        prenom: 'DEC',
-        telephone: '+22997000004',
+        nom: NOM,
+        prenom: PRENOM,
+        telephone: TELEPHONE,
         role: 'DEC',
       },
     });
@@ -93,6 +100,7 @@ async function main() {
   console.log('\n📌 Compte DEC prêt:');
   console.log(`   Email    : ${EMAIL}`);
   console.log(`   Password : ${PASSWORD}`);
+  console.log(`   Nom      : ${PRENOM} ${NOM}`);
   console.log(`   Role     : DEC`);
   console.log(`   Auth id  : ${authUser.id}\n`);
 }

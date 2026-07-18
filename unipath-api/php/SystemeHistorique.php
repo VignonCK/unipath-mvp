@@ -31,7 +31,7 @@ class SystemeHistorique {
     ];
     
     // Rôles autorisés à consulter l'historique
-    const ROLES_AUTORISES_LECTURE = ['COMMISSION', 'DGES'];
+    const ROLES_AUTORISES_LECTURE = ['COMMISSION', 'DEC', 'DGES'];
     
     /**
      * Constructeur
@@ -244,7 +244,7 @@ class SystemeHistorique {
      */
     public function verifierAcces($utilisateurId, $role) {
         try {
-            // Seuls COMMISSION et DGES peuvent accéder à l'historique
+            // COMMISSION, DEC (M1) et DGES (M2) peuvent accéder à l'historique
             $acces = in_array($role, self::ROLES_AUTORISES_LECTURE);
             
             if (!$acces) {
@@ -558,7 +558,7 @@ class SystemeHistorique {
             ];
         }
         
-        // Chercher dans les administrateurs DGES
+        // Chercher dans les administrateurs DGES (Module 2)
         $stmt = $this->pdo->prepare("
             SELECT id, nom, prenom, email, role 
             FROM \"AdministrateurDGES\" 
@@ -566,6 +566,22 @@ class SystemeHistorique {
         ");
         $stmt->execute($utilisateurIds);
         
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $utilisateurs[$row['id']] = [
+                'nom' => $row['prenom'] . ' ' . $row['nom'],
+                'email' => $row['email'],
+                'role' => $row['role']
+            ];
+        }
+
+        // Chercher dans les administrateurs DEC (Module 1)
+        $stmt = $this->pdo->prepare("
+            SELECT id, nom, prenom, email, role 
+            FROM \"AdministrateurDEC\" 
+            WHERE id IN ($placeholders)
+        ");
+        $stmt->execute($utilisateurIds);
+
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $utilisateurs[$row['id']] = [
                 'nom' => $row['prenom'] . ' ' . $row['nom'],

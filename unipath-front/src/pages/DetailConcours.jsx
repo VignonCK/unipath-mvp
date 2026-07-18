@@ -254,7 +254,7 @@ export default function DetailConcours() {
       return;
     }
     if (!ins?.numeroInscription) {
-      setErreur('N° de table en attente d\'attribution par la commission');
+      setErreur('N° de table en attente d\'attribution par la DEC');
       return;
     }
     try {
@@ -535,7 +535,7 @@ export default function DetailConcours() {
                   className='rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-60'
                   title={
                     !inscriptionExistante.numeroInscription
-                      ? 'N° de table en attente d\'attribution par la commission'
+                      ? 'N° de table en attente d\'attribution par la DEC'
                       : undefined
                   }
                 >
@@ -545,7 +545,7 @@ export default function DetailConcours() {
             </div>
             {inscriptionExistante.statut === 'VALIDE' && !inscriptionExistante.numeroInscription && (
               <p className='text-xs text-amber-700 pt-1'>
-                N° de table en attente d&apos;attribution par la commission
+                N° de table en attente d&apos;attribution par la DEC
               </p>
             )}
           </div>

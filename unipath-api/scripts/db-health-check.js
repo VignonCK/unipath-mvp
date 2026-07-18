@@ -51,7 +51,7 @@ async function checkEnums() {
   const roles = await prisma.$queryRaw`
     SELECT unnest(enum_range(NULL::"Role"))::text AS role
   `;
-  const expected = ['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DGES', 'ADMIN_ETABLISSEMENT', 'ETUDIANT'];
+  const expected = ['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DGES', 'DEC', 'ADMIN_ETABLISSEMENT', 'ETUDIANT'];
   const found = roles.map((r) => r.role);
   const missing = expected.filter((r) => !found.includes(r));
   if (missing.length) {
