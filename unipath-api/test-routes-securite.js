@@ -193,11 +193,12 @@ test(
     flat(dgesRoutes).includes("router.get('/statistiques', protect, checkRole(['DGES'])"),
 );
 test(
-  'Clôture / réouverture / n° table (URL /dges/concours/…) → DEC seul',
+  'Clôture / réouverture / n° table / import CSV (URL /dges/concours/…) → DEC seul',
   flat(dgesRoutes).includes("'/concours/:concoursId/cloturer-etude'") &&
     flat(dgesRoutes).includes("'/concours/:concoursId/rouvrir-etude'") &&
     flat(dgesRoutes).includes("'/concours/:concoursId/generer-numeros-table'") &&
-    (dgesRoutes.match(/checkRole\(\['DEC'\]\)/g) || []).length >= 3,
+    flat(dgesRoutes).includes("'/concours/:concoursId/importer-numeros-table'") &&
+    (dgesRoutes.match(/checkRole\(\['DEC'\]\)/g) || []).length >= 4,
 );
 test(
   'Actions concours sous /api/dges/concours : pas de checkRole DGES',
