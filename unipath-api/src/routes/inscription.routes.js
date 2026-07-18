@@ -60,7 +60,7 @@ router.get('/:id/fiche', protect, checkRole(['CANDIDAT']), inscriptionController
 router.get('/:id', protect, inscriptionController.getInscriptionById);
 
 // 🔒 Routes pour Dossier Concours - Accessible par CANDIDAT (owner only), COMMISSION, CONTROLEUR, DGES
-router.post('/:inscriptionId/dossier-concours/quittance', protect, checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DGES']), handleDossierUpload('quittance'), dossierController.uploadPiece);
-router.post('/:inscriptionId/dossier-concours/pieces-extras', protect, checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DGES']), handleDossierUpload('fichier'), dossierController.uploadPiece);
+router.post('/:inscriptionId/dossier-concours/quittance', protect, checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DEC']), handleDossierUpload('quittance'), dossierController.uploadPiece);
+router.post('/:inscriptionId/dossier-concours/pieces-extras', protect, checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DEC']), handleDossierUpload('fichier'), dossierController.uploadPiece);
 
 module.exports = router;

@@ -7,8 +7,6 @@ import {
 } from 'recharts';
 import {
   dgesService,
-  concoursService,
-  centreCompositionService,
   etablissementService,
 } from '../services/api';
 import DGESLayout from '../components/DGESLayout';
@@ -16,10 +14,8 @@ import { BentoCard } from '../components/AcademicLayout';
 
 const EMPTY_FILTERS = {
   etablissementId: '',
-  concoursId: '',
   statut: '',
   sexe: '',
-  centreId: '',
   anneeAcademique: '',
 };
 
@@ -125,11 +121,8 @@ export default function DashboardDGES() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [exportBusy, setExportBusy] = useState(null);
-  const [activeModule, setActiveModule] = useState('concours');
 
-  const [concoursList, setConcoursList] = useState([]);
   const [etablissementsPrives, setEtablissementsPrives] = useState([]);
-  const [centresOptions, setCentresOptions] = useState([]);
   const [draftFilters, setDraftFilters] = useState({ ...EMPTY_FILTERS });
   const [appliedFilters, setAppliedFilters] = useState({ ...EMPTY_FILTERS });
 
@@ -143,74 +136,24 @@ export default function DashboardDGES() {
   }, []);
 
   useEffect(() => {
-    concoursService.getAll()
-      .then((rows) => setConcoursList(Array.isArray(rows) ? rows : []))
-      .catch(() => setConcoursList([]));
     etablissementService.getPrives()
-      .then((data) => {
-        const rows = Array.isArray(data) ? data : (data?.etablissements || []);
+      .then((payload) => {
+        const rows = Array.isArray(payload) ? payload : (payload?.etablissements || []);
         setEtablissementsPrives(rows);
       })
       .catch(() => setEtablissementsPrives([]));
     loadStats(EMPTY_FILTERS);
   }, [loadStats]);
 
-  useEffect(() => {
-    if (!draftFilters.concoursId) {
-      setCentresOptions([]);
-      return;
-    }
-    centreCompositionService.getConcoursCentres(draftFilters.concoursId)
-      .then((rows) => {
-        const unique = new Map();
-        (Array.isArray(rows) ? rows : []).forEach((row) => {
-          if (row.centreId && row.centre) {
-            unique.set(row.centreId, row.centre);
-          }
-        });
-        setCentresOptions([...unique.values()]);
-      })
-      .catch(() => setCentresOptions([]));
-  }, [draftFilters.concoursId]);
-
-  const etablissementOptions = useMemo(() => {
-    const map = new Map();
-    (Array.isArray(concoursList) ? concoursList : []).forEach((c) => {
-      const id = c.etablissementId || c.etablissementOrganisateur?.id;
-      const nom = c.etablissementOrganisateur?.nom || c.etablissement || 'Non renseigné';
-      if (id) map.set(id, nom);
-    });
-    (Array.isArray(etablissementsPrives) ? etablissementsPrives : []).forEach((e) => {
-      if (e.id) map.set(e.id, e.nom);
-    });
-    return [...map.entries()]
-      .map(([id, nom]) => ({ id, nom }))
-      .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
-  }, [concoursList, etablissementsPrives]);
-
-  const concoursOptions = useMemo(() => {
-    let list = concoursList;
-    if (draftFilters.etablissementId) {
-      list = list.filter((c) =>
-        c.etablissementId === draftFilters.etablissementId
-        || c.etablissementOrganisateur?.id === draftFilters.etablissementId,
-      );
-    }
-    return [...list].sort((a, b) => a.libelle.localeCompare(b.libelle, 'fr'));
-  }, [concoursList, draftFilters.etablissementId]);
+  const etablissementOptions = useMemo(() => (
+    [...(Array.isArray(etablissementsPrives) ? etablissementsPrives : [])]
+      .filter((e) => e.id)
+      .map((e) => ({ id: e.id, nom: e.nom }))
+      .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
+  ), [etablissementsPrives]);
 
   const handleFilterChange = (field, value) => {
-    setDraftFilters((prev) => {
-      const next = { ...prev, [field]: value };
-      if (field === 'etablissementId') {
-        next.concoursId = '';
-        next.centreId = '';
-      }
-      if (field === 'concoursId') {
-        next.centreId = '';
-      }
-      return next;
-    });
+    setDraftFilters((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleApplyFilters = () => {
@@ -221,18 +164,7 @@ export default function DashboardDGES() {
   const handleResetFilters = () => {
     setDraftFilters({ ...EMPTY_FILTERS });
     setAppliedFilters({ ...EMPTY_FILTERS });
-    setCentresOptions([]);
     loadStats(EMPTY_FILTERS);
-  };
-
-  const handleModuleChange = (moduleId) => {
-    setActiveModule(moduleId);
-    if (moduleId === 'campagnes' && (appliedFilters.concoursId || appliedFilters.centreId)) {
-      const next = { ...appliedFilters, concoursId: '', centreId: '' };
-      setDraftFilters((prev) => ({ ...prev, concoursId: '', centreId: '' }));
-      setAppliedFilters(next);
-      loadStats(next);
-    }
   };
 
   const handleExport = async (format) => {
@@ -260,42 +192,17 @@ export default function DashboardDGES() {
     );
   }
 
-  const chartData = data?.statistiques
-    ?.filter((s) => Number(s.total_inscrits) > 0)
-    .map((s) => ({
-      name: s.concours.length > 18 ? `${s.concours.substring(0, 18)}…` : s.concours,
-      'En attente': Number(s.en_attente),
-      'Sous réserve': Number(s.sous_reserve),
-      Validés: Number(s.dossiers_valides),
-      Rejetés: Number(s.dossiers_rejetes),
-    })) || [];
-
-  const etablissementChartData = (data?.parEtablissement || [])
-    .filter((s) => Number(s.nbCandidats) > 0)
-    .map((s) => ({
-      name: s.etablissement.length > 16 ? `${s.etablissement.substring(0, 16)}…` : s.etablissement,
-      'En attente': Number(s.en_attente),
-      'Sous réserve': Number(s.sous_reserve),
-      Validés: Number(s.valides),
-      Rejetés: Number(s.rejetes),
-    }));
-
   const campagneChartData = (data?.parEtablissementPrive || [])
-    ?.filter((s) => Number(s.nbCandidatures) > 0)
+    .filter((s) => Number(s.nbCandidatures) > 0)
     .map((s) => ({
       name: s.etablissement.length > 16 ? `${s.etablissement.substring(0, 16)}…` : s.etablissement,
       'En attente': Number(s.en_attente),
       'Sous réserve': Number(s.sous_reserve),
       Validées: Number(s.valides),
       Rejetées: Number(s.rejetes),
-    })) || [];
+    }));
 
-  const hasInscriptions = (data?.totaux?.total_inscrits ?? 0) > 0;
   const hasCampagneInscriptions = (data?.totauxCampagnes?.total_candidatures ?? 0) > 0;
-
-  const tauxGlobal = data?.totaux?.total_inscrits > 0
-    ? Math.round((data.totaux.total_valides / data.totaux.total_inscrits) * 100)
-    : 0;
 
   const tauxCampagnes = data?.totauxCampagnes?.total_candidatures > 0
     ? Math.round((data.totauxCampagnes.total_valides / data.totauxCampagnes.total_candidatures) * 100)
@@ -307,26 +214,6 @@ export default function DashboardDGES() {
     <DGESLayout>
       <div className='max-w-6xl mx-auto px-4 py-4 sm:p-6 space-y-4 sm:space-y-6 animate-slide-in'>
 
-        <div className='flex flex-wrap gap-2'>
-          {[
-            { id: 'concours', label: 'Concours' },
-            { id: 'campagnes', label: 'Établissements privés' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              type='button'
-              onClick={() => handleModuleChange(tab.id)}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                activeModule === tab.id
-                  ? 'bg-blue-900 text-white shadow'
-                  : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
         <BentoCard className='p-4 sm:p-5 space-y-4'>
           <div className='flex flex-wrap items-center justify-between gap-2'>
             <h2 className='text-base font-bold text-gray-800'>Filtres</h2>
@@ -337,30 +224,15 @@ export default function DashboardDGES() {
 
           <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3'>
             <label className='block text-xs text-gray-500'>
-              Établissement
+              Établissement privé
               <select
                 value={draftFilters.etablissementId}
                 onChange={(e) => handleFilterChange('etablissementId', e.target.value)}
                 className='mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800'
               >
-                <option value=''>Tous les établissements</option>
+                <option value=''>Tous les établissements privés</option>
                 {etablissementOptions.map((e) => (
                   <option key={e.id} value={e.id}>{e.nom}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className='block text-xs text-gray-500'>
-              Concours
-              <select
-                value={draftFilters.concoursId}
-                onChange={(e) => handleFilterChange('concoursId', e.target.value)}
-                disabled={activeModule === 'campagnes'}
-                className='mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 disabled:bg-gray-50 disabled:text-gray-400'
-              >
-                <option value=''>Tous les concours</option>
-                {concoursOptions.map((c) => (
-                  <option key={c.id} value={c.id}>{c.libelle}</option>
                 ))}
               </select>
             </label>
@@ -387,23 +259,6 @@ export default function DashboardDGES() {
               >
                 {SEXE_OPTIONS.map((o) => (
                   <option key={o.value || 'all'} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className='block text-xs text-gray-500'>
-              Centre de composition
-              <select
-                value={draftFilters.centreId}
-                onChange={(e) => handleFilterChange('centreId', e.target.value)}
-                disabled={activeModule === 'campagnes' || !draftFilters.concoursId}
-                className='mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 disabled:bg-gray-50 disabled:text-gray-400'
-              >
-                <option value=''>
-                  {draftFilters.concoursId ? 'Tous les centres' : 'Choisir un concours d\'abord'}
-                </option>
-                {centresOptions.map((c) => (
-                  <option key={c.id} value={c.id}>{c.nom} — {c.ville}</option>
                 ))}
               </select>
             </label>
@@ -473,331 +328,127 @@ export default function DashboardDGES() {
           </div>
         )}
 
-        {activeModule === 'concours' && (
-          <>
-            <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
-              <div className='lg:col-span-2 grid grid-cols-2 md:grid-cols-5 gap-4'>
-                {[
-                  { label: 'Total inscrits', value: data?.totaux?.total_inscrits ?? 0, color: 'bg-orange-500', sub: 'text-orange-100' },
-                  { label: 'Validés', value: data?.totaux?.total_valides ?? 0, color: 'bg-green-600', sub: 'text-green-100' },
-                  { label: 'Rejetés', value: data?.totaux?.total_rejetes ?? 0, color: 'bg-red-600', sub: 'text-red-100' },
-                  { label: 'En attente', value: data?.totaux?.total_attente ?? 0, color: 'bg-yellow-500', sub: 'text-yellow-900' },
-                  { label: 'Sous réserve', value: data?.totaux?.total_sous_reserve ?? 0, color: 'bg-amber-700', sub: 'text-amber-100' },
-                ].map((card) => (
-                  <div key={card.label} className={`${card.color} p-5 rounded-2xl shadow-lg`}>
-                    <p className='text-3xl font-black text-white'>{card.value}</p>
-                    <p className={`text-xs font-medium mt-1 ${card.sub}`}>{card.label}</p>
-                  </div>
-                ))}
+        <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
+          <div className='lg:col-span-2 grid grid-cols-2 md:grid-cols-5 gap-4'>
+            {[
+              { label: 'Total candidatures', value: data?.totauxCampagnes?.total_candidatures ?? 0, color: 'bg-orange-500', sub: 'text-orange-100' },
+              { label: 'Validées', value: data?.totauxCampagnes?.total_valides ?? 0, color: 'bg-green-600', sub: 'text-green-100' },
+              { label: 'Rejetées', value: data?.totauxCampagnes?.total_rejetes ?? 0, color: 'bg-red-600', sub: 'text-red-100' },
+              { label: 'En attente', value: data?.totauxCampagnes?.total_attente ?? 0, color: 'bg-yellow-500', sub: 'text-yellow-900' },
+              { label: 'Sous réserve', value: data?.totauxCampagnes?.total_sous_reserve ?? 0, color: 'bg-amber-700', sub: 'text-amber-100' },
+            ].map((card) => (
+              <div key={card.label} className={`${card.color} p-5 rounded-2xl shadow-lg`}>
+                <p className='text-3xl font-black text-white'>{card.value}</p>
+                <p className={`text-xs font-medium mt-1 ${card.sub}`}>{card.label}</p>
               </div>
-              <SexeRepartitionCard
-                repartition={data?.totaux?.repartition_sexe}
-                total={data?.totaux?.total_inscrits ?? 0}
-              />
-            </div>
+            ))}
+          </div>
+          <SexeRepartitionCard
+            repartition={data?.totauxCampagnes?.repartition_sexe}
+            total={data?.totauxCampagnes?.total_candidatures ?? 0}
+          />
+        </div>
 
-            {!hasInscriptions && (
-              <div className='rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-900'>
-                <p className='font-semibold'>Aucune inscription pour les filtres sélectionnés</p>
-                <p className='mt-1 text-blue-700'>
-                  Ajustez les filtres ou réinitialisez pour voir l&apos;ensemble des données.
-                </p>
-              </div>
-            )}
-
-            {data?.totaux?.total_inscrits > 0 && (
-              <BentoCard className='p-6'>
-                <div className='flex items-center justify-between mb-3'>
-                  <h2 className='text-base font-bold text-gray-800'>Taux de validation global</h2>
-                  <span className='text-2xl font-black text-green-600'>{tauxGlobal}%</span>
-                </div>
-                <div className='w-full bg-gray-100 rounded-full h-2.5 overflow-hidden'>
-                  <div
-                    className='h-2.5 bg-green-500 rounded-full transition-all duration-700'
-                    style={{ width: `${tauxGlobal}%` }}
-                  />
-                </div>
-                <div className='flex justify-between text-xs text-gray-400 mt-1.5'>
-                  <span>{data.totaux.total_valides} validés</span>
-                  <span>{data.totaux.total_inscrits} inscrits au total</span>
-                </div>
-              </BentoCard>
-            )}
-
-            <BentoCard className='p-6'>
-              <h2 className='text-base font-bold text-gray-800 mb-6'>Inscriptions par concours</h2>
-              {chartData.length === 0 ? (
-                <p className='text-center text-gray-400 text-sm py-10'>
-                  Aucun concours avec inscriptions pour ces filtres.
-                </p>
-              ) : (
-                <ResponsiveContainer width='100%' height={280}>
-                  <BarChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 60 }}>
-                    <CartesianGrid strokeDasharray='3 3' stroke='#f0f0f0' />
-                    <XAxis dataKey='name' angle={-30} textAnchor='end' interval={0} tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
-                    <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
-                    <Bar dataKey='En attente' fill='#F59E0B' radius={[4, 4, 0, 0]} />
-                    <Bar dataKey='Sous réserve' fill='#B45309' radius={[4, 4, 0, 0]} />
-                    <Bar dataKey='Validés' fill='#10B981' radius={[4, 4, 0, 0]} />
-                    <Bar dataKey='Rejetés' fill='#EF4444' radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </BentoCard>
-
-            <BentoCard className='p-0 overflow-hidden'>
-              <div className='px-6 py-4 border-b border-gray-100 flex items-center justify-between'>
-                <h2 className='text-base font-bold text-gray-800'>Détail par concours</h2>
-                <span className='text-xs text-gray-400'>{data?.statistiques?.length || 0} concours</span>
-              </div>
-              <div className='overflow-x-auto'>
-                <table className='w-full text-sm min-w-[720px]'>
-                  <thead>
-                    <tr className='bg-gray-50 border-b border-gray-100'>
-                      {['Concours', 'Date début', 'Total', 'Validés', 'Rejetés', 'En attente', 'Sous réserve', 'Taux'].map((h) => (
-                        <th key={h} className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide'>
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className='divide-y divide-gray-50'>
-                    {data?.statistiques?.map((s) => {
-                      const taux = Number(s.taux_validation_pct) || 0;
-                      return (
-                        <tr key={s.concours_id} className='hover:bg-gray-50 transition'>
-                          <td className='px-4 py-3 font-medium text-gray-800'>{s.concours}</td>
-                          <td className='px-4 py-3 text-gray-500 text-xs'>
-                            {s.dateDebut ? new Date(s.dateDebut).toLocaleDateString('fr-FR') : '—'}
-                          </td>
-                          <td className='px-4 py-3 font-bold text-gray-900'>{Number(s.total_inscrits)}</td>
-                          <td className='px-4 py-3 text-green-700 font-semibold'>{Number(s.dossiers_valides)}</td>
-                          <td className='px-4 py-3 text-red-600 font-semibold'>{Number(s.dossiers_rejetes)}</td>
-                          <td className='px-4 py-3 text-yellow-600 font-semibold'>{Number(s.en_attente)}</td>
-                          <td className='px-4 py-3 text-amber-800 font-semibold'>{Number(s.sous_reserve)}</td>
-                          <td className='px-4 py-3'>
-                            <div className='flex items-center gap-2'>
-                              <div className='flex-1 bg-gray-100 rounded-full h-1.5 min-w-[40px]'>
-                                <div
-                                  className={`h-1.5 rounded-full ${taux >= 50 ? 'bg-green-500' : 'bg-red-400'}`}
-                                  style={{ width: `${taux}%` }}
-                                />
-                              </div>
-                              <span className={`text-xs font-bold ${taux >= 50 ? 'text-green-600' : 'text-red-500'}`}>
-                                {taux}%
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </BentoCard>
-
-            <BentoCard className='p-6'>
-              <h2 className='text-base font-bold text-gray-800 mb-6'>Inscriptions par établissement</h2>
-              {etablissementChartData.length === 0 ? (
-                <p className='text-center text-gray-400 text-sm py-10'>
-                  Aucun établissement avec inscriptions pour ces filtres.
-                </p>
-              ) : (
-                <ResponsiveContainer width='100%' height={280}>
-                  <BarChart data={etablissementChartData} margin={{ top: 5, right: 20, left: 0, bottom: 60 }}>
-                    <CartesianGrid strokeDasharray='3 3' stroke='#f0f0f0' />
-                    <XAxis dataKey='name' angle={-30} textAnchor='end' interval={0} tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
-                    <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
-                    <Bar dataKey='En attente' fill='#F59E0B' radius={[4, 4, 0, 0]} />
-                    <Bar dataKey='Sous réserve' fill='#B45309' radius={[4, 4, 0, 0]} />
-                    <Bar dataKey='Validés' fill='#10B981' radius={[4, 4, 0, 0]} />
-                    <Bar dataKey='Rejetés' fill='#EF4444' radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </BentoCard>
-
-            <BentoCard className='p-0 overflow-hidden'>
-              <div className='px-6 py-4 border-b border-gray-100 flex items-center justify-between'>
-                <h2 className='text-base font-bold text-gray-800'>Par établissement</h2>
-                <span className='text-xs text-gray-400'>{data?.parEtablissement?.length || 0} établissement(s)</span>
-              </div>
-              <div className='overflow-x-auto'>
-                <table className='w-full text-sm min-w-[760px]'>
-                  <thead>
-                    <tr className='bg-gray-50 border-b border-gray-100'>
-                      {['Établissement', 'Total inscrits', 'Validés', 'Rejetés', 'En attente', 'Sous réserve', 'Taux'].map((h) => (
-                        <th key={h} className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide'>
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className='divide-y divide-gray-50'>
-                    {(data?.parEtablissement || []).map((s) => {
-                      const total = Number(s.nbCandidats) || 0;
-                      const valides = Number(s.valides) || 0;
-                      const taux = total > 0 ? Math.round((valides / total) * 100) : 0;
-                      return (
-                        <tr key={s.etablissementId || s.etablissement} className='hover:bg-gray-50 transition'>
-                          <td className='px-4 py-3 font-medium text-gray-800'>{s.etablissement}</td>
-                          <td className='px-4 py-3 font-bold text-gray-900'>{total}</td>
-                          <td className='px-4 py-3 text-green-700 font-semibold'>{valides}</td>
-                          <td className='px-4 py-3 text-red-600 font-semibold'>{Number(s.rejetes)}</td>
-                          <td className='px-4 py-3 text-yellow-600 font-semibold'>{Number(s.en_attente)}</td>
-                          <td className='px-4 py-3 text-amber-800 font-semibold'>{Number(s.sous_reserve)}</td>
-                          <td className='px-4 py-3'>
-                            <div className='flex items-center gap-2'>
-                              <div className='flex-1 bg-gray-100 rounded-full h-1.5 min-w-[40px]'>
-                                <div
-                                  className={`h-1.5 rounded-full ${taux >= 50 ? 'bg-green-500' : 'bg-red-400'}`}
-                                  style={{ width: `${taux}%` }}
-                                />
-                              </div>
-                              <span className={`text-xs font-bold ${taux >= 50 ? 'text-green-600' : 'text-red-500'}`}>
-                                {taux}%
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </BentoCard>
-          </>
+        {!hasCampagneInscriptions && (
+          <div className='rounded-2xl border border-teal-200 bg-teal-50 px-5 py-4 text-sm text-teal-900'>
+            <p className='font-semibold'>Aucune candidature pour les filtres sélectionnés</p>
+            <p className='mt-1 text-teal-700'>
+              Les campagnes d&apos;inscription des établissements privés apparaîtront ici.
+            </p>
+          </div>
         )}
 
-        {activeModule === 'campagnes' && (
-          <>
-            <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
-              <div className='lg:col-span-2 grid grid-cols-2 md:grid-cols-5 gap-4'>
-                {[
-                  { label: 'Total candidatures', value: data?.totauxCampagnes?.total_candidatures ?? 0, color: 'bg-orange-500', sub: 'text-orange-100' },
-                  { label: 'Validées', value: data?.totauxCampagnes?.total_valides ?? 0, color: 'bg-green-600', sub: 'text-green-100' },
-                  { label: 'Rejetées', value: data?.totauxCampagnes?.total_rejetes ?? 0, color: 'bg-red-600', sub: 'text-red-100' },
-                  { label: 'En attente', value: data?.totauxCampagnes?.total_attente ?? 0, color: 'bg-yellow-500', sub: 'text-yellow-900' },
-                  { label: 'Sous réserve', value: data?.totauxCampagnes?.total_sous_reserve ?? 0, color: 'bg-amber-700', sub: 'text-amber-100' },
-                ].map((card) => (
-                  <div key={card.label} className={`${card.color} p-5 rounded-2xl shadow-lg`}>
-                    <p className='text-3xl font-black text-white'>{card.value}</p>
-                    <p className={`text-xs font-medium mt-1 ${card.sub}`}>{card.label}</p>
-                  </div>
-                ))}
-              </div>
-              <SexeRepartitionCard
-                repartition={data?.totauxCampagnes?.repartition_sexe}
-                total={data?.totauxCampagnes?.total_candidatures ?? 0}
+        {hasCampagneInscriptions && (
+          <BentoCard className='p-6'>
+            <div className='flex items-center justify-between mb-3'>
+              <h2 className='text-base font-bold text-gray-800'>Taux de validation (établissements privés)</h2>
+              <span className='text-2xl font-black text-green-600'>{tauxCampagnes}%</span>
+            </div>
+            <div className='w-full bg-gray-100 rounded-full h-2.5 overflow-hidden'>
+              <div
+                className='h-2.5 bg-green-500 rounded-full transition-all duration-700'
+                style={{ width: `${tauxCampagnes}%` }}
               />
             </div>
-
-            {!hasCampagneInscriptions && (
-              <div className='rounded-2xl border border-teal-200 bg-teal-50 px-5 py-4 text-sm text-teal-900'>
-                <p className='font-semibold'>Aucune candidature pour les filtres sélectionnés</p>
-                <p className='mt-1 text-teal-700'>
-                  Les campagnes d&apos;inscription des établissements privés apparaîtront ici.
-                </p>
-              </div>
-            )}
-
-            {hasCampagneInscriptions && (
-              <BentoCard className='p-6'>
-                <div className='flex items-center justify-between mb-3'>
-                  <h2 className='text-base font-bold text-gray-800'>Taux de validation (établissements privés)</h2>
-                  <span className='text-2xl font-black text-green-600'>{tauxCampagnes}%</span>
-                </div>
-                <div className='w-full bg-gray-100 rounded-full h-2.5 overflow-hidden'>
-                  <div
-                    className='h-2.5 bg-green-500 rounded-full transition-all duration-700'
-                    style={{ width: `${tauxCampagnes}%` }}
-                  />
-                </div>
-                <div className='flex justify-between text-xs text-gray-400 mt-1.5'>
-                  <span>{data.totauxCampagnes.total_valides} validées</span>
-                  <span>{data.totauxCampagnes.total_candidatures} candidatures au total</span>
-                </div>
-              </BentoCard>
-            )}
-
-            <BentoCard className='p-6'>
-              <h2 className='text-base font-bold text-gray-800 mb-6'>Candidatures par établissement</h2>
-              {campagneChartData.length === 0 ? (
-                <p className='text-center text-gray-400 text-sm py-10'>
-                  Aucune campagne avec candidatures pour ces filtres.
-                </p>
-              ) : (
-                <ResponsiveContainer width='100%' height={280}>
-                  <BarChart data={campagneChartData} margin={{ top: 5, right: 20, left: 0, bottom: 60 }}>
-                    <CartesianGrid strokeDasharray='3 3' stroke='#f0f0f0' />
-                    <XAxis dataKey='name' angle={-30} textAnchor='end' interval={0} tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
-                    <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
-                    <Bar dataKey='En attente' fill='#F59E0B' radius={[4, 4, 0, 0]} />
-                    <Bar dataKey='Sous réserve' fill='#B45309' radius={[4, 4, 0, 0]} />
-                    <Bar dataKey='Validées' fill='#10B981' radius={[4, 4, 0, 0]} />
-                    <Bar dataKey='Rejetées' fill='#EF4444' radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </BentoCard>
-
-            <BentoCard className='p-0 overflow-hidden'>
-              <div className='px-6 py-4 border-b border-gray-100 flex items-center justify-between'>
-                <h2 className='text-base font-bold text-gray-800'>Détail par campagne</h2>
-                <span className='text-xs text-gray-400'>{data?.statistiquesCampagnes?.length || 0} campagne(s)</span>
-              </div>
-              <div className='overflow-x-auto'>
-                <table className='w-full text-sm min-w-[800px]'>
-                  <thead>
-                    <tr className='bg-gray-50 border-b border-gray-100'>
-                      {['Établissement', 'Campagne', 'Année', 'Total', 'Validées', 'Rejetées', 'En attente', 'Sous réserve', 'Taux'].map((h) => (
-                        <th key={h} className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide'>
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className='divide-y divide-gray-50'>
-                    {data?.statistiquesCampagnes?.map((s) => {
-                      const taux = Number(s.taux_validation_pct) || 0;
-                      return (
-                        <tr key={s.campagne_id} className='hover:bg-gray-50 transition'>
-                          <td className='px-4 py-3 font-medium text-gray-800'>{s.etablissement}</td>
-                          <td className='px-4 py-3 text-gray-700'>{s.campagne}</td>
-                          <td className='px-4 py-3 text-gray-500 text-xs'>{s.anneeAcademique || '—'}</td>
-                          <td className='px-4 py-3 font-bold text-gray-900'>{Number(s.total_candidatures)}</td>
-                          <td className='px-4 py-3 text-green-700 font-semibold'>{Number(s.valides)}</td>
-                          <td className='px-4 py-3 text-red-600 font-semibold'>{Number(s.rejetes)}</td>
-                          <td className='px-4 py-3 text-yellow-600 font-semibold'>{Number(s.en_attente)}</td>
-                          <td className='px-4 py-3 text-amber-800 font-semibold'>{Number(s.sous_reserve)}</td>
-                          <td className='px-4 py-3'>
-                            <div className='flex items-center gap-2'>
-                              <div className='flex-1 bg-gray-100 rounded-full h-1.5 min-w-[40px]'>
-                                <div
-                                  className={`h-1.5 rounded-full ${taux >= 50 ? 'bg-green-500' : 'bg-red-400'}`}
-                                  style={{ width: `${taux}%` }}
-                                />
-                              </div>
-                              <span className={`text-xs font-bold ${taux >= 50 ? 'text-green-600' : 'text-red-500'}`}>
-                                {taux}%
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </BentoCard>
-          </>
+            <div className='flex justify-between text-xs text-gray-400 mt-1.5'>
+              <span>{data.totauxCampagnes.total_valides} validées</span>
+              <span>{data.totauxCampagnes.total_candidatures} candidatures au total</span>
+            </div>
+          </BentoCard>
         )}
+
+        <BentoCard className='p-6'>
+          <h2 className='text-base font-bold text-gray-800 mb-6'>Candidatures par établissement</h2>
+          {campagneChartData.length === 0 ? (
+            <p className='text-center text-gray-400 text-sm py-10'>
+              Aucune campagne avec candidatures pour ces filtres.
+            </p>
+          ) : (
+            <ResponsiveContainer width='100%' height={280}>
+              <BarChart data={campagneChartData} margin={{ top: 5, right: 20, left: 0, bottom: 60 }}>
+                <CartesianGrid strokeDasharray='3 3' stroke='#f0f0f0' />
+                <XAxis dataKey='name' angle={-30} textAnchor='end' interval={0} tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
+                <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
+                <Bar dataKey='En attente' fill='#F59E0B' radius={[4, 4, 0, 0]} />
+                <Bar dataKey='Sous réserve' fill='#B45309' radius={[4, 4, 0, 0]} />
+                <Bar dataKey='Validées' fill='#10B981' radius={[4, 4, 0, 0]} />
+                <Bar dataKey='Rejetées' fill='#EF4444' radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </BentoCard>
+
+        <BentoCard className='p-0 overflow-hidden'>
+          <div className='px-6 py-4 border-b border-gray-100 flex items-center justify-between'>
+            <h2 className='text-base font-bold text-gray-800'>Détail par campagne</h2>
+            <span className='text-xs text-gray-400'>{data?.statistiquesCampagnes?.length || 0} campagne(s)</span>
+          </div>
+          <div className='overflow-x-auto'>
+            <table className='w-full text-sm min-w-[800px]'>
+              <thead>
+                <tr className='bg-gray-50 border-b border-gray-100'>
+                  {['Établissement', 'Campagne', 'Année', 'Total', 'Validées', 'Rejetées', 'En attente', 'Sous réserve', 'Taux'].map((h) => (
+                    <th key={h} className='px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide'>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className='divide-y divide-gray-50'>
+                {data?.statistiquesCampagnes?.map((s) => {
+                  const taux = Number(s.taux_validation_pct) || 0;
+                  return (
+                    <tr key={s.campagne_id} className='hover:bg-gray-50 transition'>
+                      <td className='px-4 py-3 font-medium text-gray-800'>{s.etablissement}</td>
+                      <td className='px-4 py-3 text-gray-700'>{s.campagne}</td>
+                      <td className='px-4 py-3 text-gray-500 text-xs'>{s.anneeAcademique || '—'}</td>
+                      <td className='px-4 py-3 font-bold text-gray-900'>{Number(s.total_candidatures)}</td>
+                      <td className='px-4 py-3 text-green-700 font-semibold'>{Number(s.valides)}</td>
+                      <td className='px-4 py-3 text-red-600 font-semibold'>{Number(s.rejetes)}</td>
+                      <td className='px-4 py-3 text-yellow-600 font-semibold'>{Number(s.en_attente)}</td>
+                      <td className='px-4 py-3 text-amber-800 font-semibold'>{Number(s.sous_reserve)}</td>
+                      <td className='px-4 py-3'>
+                        <div className='flex items-center gap-2'>
+                          <div className='flex-1 bg-gray-100 rounded-full h-1.5 min-w-[40px]'>
+                            <div
+                              className={`h-1.5 rounded-full ${taux >= 50 ? 'bg-green-500' : 'bg-red-400'}`}
+                              style={{ width: `${taux}%` }}
+                            />
+                          </div>
+                          <span className={`text-xs font-bold ${taux >= 50 ? 'text-green-600' : 'text-red-500'}`}>
+                            {taux}%
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </BentoCard>
 
       </div>
     </DGESLayout>

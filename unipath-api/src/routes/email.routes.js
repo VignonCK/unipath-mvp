@@ -10,8 +10,8 @@ const emailController = require('../controllers/email.controller');
 const { protect } = require('../middleware/auth.middleware');
 const { checkRole } = require('../middleware/role.middleware');
 
-// 🔒 Protected routes - Reserved for DGES and CONTROLEUR roles
-router.get('/health', protect, checkRole(['DGES', 'CONTROLEUR']), emailController.getEmailHealth);
-router.get('/stats', protect, checkRole(['DGES', 'CONTROLEUR']), emailController.getEmailStats);
+// 🔒 Ops technique — DEC + DGES + CONTROLEUR (pas de scope métier M1/M2)
+router.get('/health', protect, checkRole(['DEC', 'DGES', 'CONTROLEUR']), emailController.getEmailHealth);
+router.get('/stats', protect, checkRole(['DEC', 'DGES', 'CONTROLEUR']), emailController.getEmailStats);
 
 module.exports = router;

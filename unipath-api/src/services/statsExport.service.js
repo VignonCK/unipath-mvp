@@ -401,59 +401,82 @@ function assertEtablissementInScope(filters, scope) {
   return scope.etablissementId === filters.etablissementId;
 }
 
-async function collectStats(filters = {}, scope = null) {
+async function collectStats(filters = {}, scope = null, options = {}) {
+  const module = options.module || 'all'; // 'all' | 'concours' | 'campagnes'
+  if (!['all', 'concours', 'campagnes'].includes(module)) {
+    const err = new Error('module stats invalide');
+    err.status = 400;
+    throw err;
+  }
+
   if (!assertFiltersInScope(filters, scope) || !assertEtablissementInScope(filters, scope)) {
     const err = new Error('Accès refusé pour les filtres demandés');
     err.status = 403;
     throw err;
   }
 
-  const centresWhere = { estActif: true };
-  if (filters.anneeAcademique) {
-    centresWhere.anneeAcademique = filters.anneeAcademique;
-  }
+  const emptyCampagnes = () => ({
+    totaux: { totalCandidats: 0, ...emptyCounts(), repartitionSexe: emptySexeCounts() },
+    parCampagne: [],
+    parEtablissement: [],
+  });
 
-  const inscriptionWhere = buildInscriptionWhere(filters);
+  let parConcours = [];
+  let parEtablissement = [];
+  let totaux = { totalCandidats: 0, ...emptyCounts(), repartitionSexe: emptySexeCounts() };
 
-  const concoursList = await prisma.concours.findMany({
-    where: buildConcoursWhere(filters, scope),
-    include: {
-      etablissementOrganisateur: {
-        select: { id: true, nom: true, ville: true },
-      },
-      inscriptions: {
-        where: inscriptionWhere,
-        include: {
-          candidat: { select: { sexe: true } },
-          dossierInscription: {
-            include: {
-              centreChoisi: { include: { centre: true } },
+  if (module === 'all' || module === 'concours') {
+    const centresWhere = { estActif: true };
+    if (filters.anneeAcademique) {
+      centresWhere.anneeAcademique = filters.anneeAcademique;
+    }
+
+    const inscriptionWhere = buildInscriptionWhere(filters);
+
+    const concoursList = await prisma.concours.findMany({
+      where: buildConcoursWhere(filters, scope),
+      include: {
+        etablissementOrganisateur: {
+          select: { id: true, nom: true, ville: true },
+        },
+        inscriptions: {
+          where: inscriptionWhere,
+          include: {
+            candidat: { select: { sexe: true } },
+            dossierInscription: {
+              include: {
+                centreChoisi: { include: { centre: true } },
+              },
             },
           },
         },
-      },
-      centresActifs: {
-        where: centresWhere,
-        include: {
-          centre: true,
-          _count: { select: { dossiers: true } },
+        centresActifs: {
+          where: centresWhere,
+          include: {
+            centre: true,
+            _count: { select: { dossiers: true } },
+          },
         },
       },
-    },
-    orderBy: { dateDebut: 'desc' },
-  });
+      orderBy: { dateDebut: 'desc' },
+    });
 
-  const parConcours = concoursList.map(buildConcoursStats);
-  const parEtablissement = buildParEtablissement(parConcours);
-  const campagnes = await collectCampagneStats(filters, scope);
+    parConcours = concoursList.map(buildConcoursStats);
+    parEtablissement = buildParEtablissement(parConcours);
+    totaux = parConcours.reduce(sumCounts, { totalCandidats: 0, ...emptyCounts() });
+    totaux.repartitionSexe = parConcours.reduce(sumSexe, emptySexeCounts());
+  }
 
-  const totaux = parConcours.reduce(sumCounts, { totalCandidats: 0, ...emptyCounts() });
-  totaux.repartitionSexe = parConcours.reduce(sumSexe, emptySexeCounts());
+  let campagnes = emptyCampagnes();
+  if (module === 'all' || module === 'campagnes') {
+    campagnes = await collectCampagneStats(filters, scope);
+  }
 
   return {
     meta: {
       generatedAt: new Date().toISOString(),
       filters: metaFiltersFromParsed(filters),
+      module,
     },
     totaux,
     parConcours,
@@ -493,6 +516,10 @@ async function generateExcel(stats) {
   workbook.creator = 'UniPath';
   workbook.created = new Date(stats.meta.generatedAt);
 
+  const module = stats.meta?.module || 'all';
+  const includeConcours = module === 'all' || module === 'concours';
+  const includeCampagnes = module === 'all' || module === 'campagnes';
+
   const sheetGlobal = workbook.addWorksheet('Synthèse globale');
   sheetGlobal.addRow([
     'Module',
@@ -506,31 +533,36 @@ async function generateExcel(stats) {
     'Non renseigné',
   ]);
   styleHeaderRow(sheetGlobal.getRow(1));
-  sheetGlobal.addRow([
-    'Concours',
-    stats.totaux.totalCandidats,
-    stats.totaux.acceptes,
-    stats.totaux.rejetes,
-    stats.totaux.enAttente,
-    stats.totaux.sousReserve,
-    stats.totaux.repartitionSexe?.M ?? 0,
-    stats.totaux.repartitionSexe?.F ?? 0,
-    stats.totaux.repartitionSexe?.nonRenseigne ?? 0,
-  ]);
-  sheetGlobal.addRow([
-    'Établissements privés',
-    stats.campagnes?.totaux?.totalCandidats ?? 0,
-    stats.campagnes?.totaux?.acceptes ?? 0,
-    stats.campagnes?.totaux?.rejetes ?? 0,
-    stats.campagnes?.totaux?.enAttente ?? 0,
-    stats.campagnes?.totaux?.sousReserve ?? 0,
-    stats.campagnes?.totaux?.repartitionSexe?.M ?? 0,
-    stats.campagnes?.totaux?.repartitionSexe?.F ?? 0,
-    stats.campagnes?.totaux?.repartitionSexe?.nonRenseigne ?? 0,
-  ]);
+  if (includeConcours) {
+    sheetGlobal.addRow([
+      'Concours',
+      stats.totaux.totalCandidats,
+      stats.totaux.acceptes,
+      stats.totaux.rejetes,
+      stats.totaux.enAttente,
+      stats.totaux.sousReserve,
+      stats.totaux.repartitionSexe?.M ?? 0,
+      stats.totaux.repartitionSexe?.F ?? 0,
+      stats.totaux.repartitionSexe?.nonRenseigne ?? 0,
+    ]);
+  }
+  if (includeCampagnes) {
+    sheetGlobal.addRow([
+      'Établissements privés',
+      stats.campagnes?.totaux?.totalCandidats ?? 0,
+      stats.campagnes?.totaux?.acceptes ?? 0,
+      stats.campagnes?.totaux?.rejetes ?? 0,
+      stats.campagnes?.totaux?.enAttente ?? 0,
+      stats.campagnes?.totaux?.sousReserve ?? 0,
+      stats.campagnes?.totaux?.repartitionSexe?.M ?? 0,
+      stats.campagnes?.totaux?.repartitionSexe?.F ?? 0,
+      stats.campagnes?.totaux?.repartitionSexe?.nonRenseigne ?? 0,
+    ]);
+  }
   autoFitWorksheet(sheetGlobal);
   sheetGlobal.views = [{ state: 'frozen', ySplit: 1 }];
 
+  if (includeConcours) {
   const sheetSynth = workbook.addWorksheet('Synthèse concours');
   sheetSynth.addRow([
     'Établissement',
@@ -564,7 +596,9 @@ async function generateExcel(stats) {
   }
   autoFitWorksheet(sheetSynth);
   sheetSynth.views = [{ state: 'frozen', ySplit: 1 }];
+  }
 
+  if (includeConcours) {
   const sheetEtab = workbook.addWorksheet('Par établissement');
   sheetEtab.addRow([
     'Établissement',
@@ -621,7 +655,9 @@ async function generateExcel(stats) {
   }
   autoFitWorksheet(sheetCentres);
   sheetCentres.views = [{ state: 'frozen', ySplit: 1 }];
+  }
 
+  if (includeCampagnes) {
   const sheetCampagnes = workbook.addWorksheet('Synthèse campagnes');
   sheetCampagnes.addRow([
     'Établissement',
@@ -685,6 +721,7 @@ async function generateExcel(stats) {
   }
   autoFitWorksheet(sheetEtabPrive);
   sheetEtabPrive.views = [{ state: 'frozen', ySplit: 1 }];
+  }
 
   return workbook.xlsx.writeBuffer();
 }
@@ -744,7 +781,13 @@ async function generatePdf(stats) {
     }
 
     doc.moveDown(1.2).fillColor('#000000');
-    doc.font('Helvetica-Bold').fontSize(13).text('Totaux globaux');
+
+    const module = stats.meta?.module || 'all';
+    const includeConcours = module === 'all' || module === 'concours';
+    const includeCampagnes = module === 'all' || module === 'campagnes';
+
+    if (includeConcours) {
+    doc.font('Helvetica-Bold').fontSize(13).text('Totaux globaux (concours)');
     doc.moveDown(0.4);
     doc.font('Helvetica').fontSize(11);
     doc.text(`Total candidats : ${stats.totaux.totalCandidats}`);
@@ -822,10 +865,11 @@ async function generatePdf(stats) {
     if (stats.parConcours.length === 0) {
       doc.font('Helvetica-Oblique').fontSize(10).text('Aucune donnée pour les filtres sélectionnés.');
     }
+    } // end includeConcours
 
     const campagneRows = stats.campagnes?.parCampagne || [];
-    if (campagneRows.length > 0) {
-      doc.addPage();
+    if (includeCampagnes) {
+      if (includeConcours) doc.addPage();
       doc.font('Helvetica-Bold').fontSize(13).text('Campagnes d\'inscription (établissements privés)');
       doc.moveDown(0.5);
       doc.font('Helvetica').fontSize(11);
@@ -836,6 +880,10 @@ async function generatePdf(stats) {
       doc.text(`Sous réserve : ${stats.campagnes.totaux.sousReserve}`);
       doc.text(`Répartition par sexe — ${formatSexeLine(stats.campagnes.totaux.repartitionSexe)}`);
       doc.moveDown(0.8);
+
+      if (campagneRows.length === 0) {
+        doc.font('Helvetica-Oblique').fontSize(10).text('Aucune candidature pour les filtres sélectionnés.');
+      } else {
 
       const campagneColumns = [
         { label: 'Établissement', width: pageWidth * 0.2 },
@@ -895,7 +943,8 @@ async function generatePdf(stats) {
         }
         doc.y = y + 18;
       }
-    }
+      } // end campagneRows.length > 0
+    } // end includeCampagnes
 
     doc.end();
   });

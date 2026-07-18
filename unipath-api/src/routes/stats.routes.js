@@ -7,7 +7,7 @@ const statsExportController = require('../controllers/statsExport.controller');
 router.get(
   '/export',
   protect,
-  checkRole(['DGES', 'COMMISSION', 'CONTROLEUR']),
+  checkRole(['DEC', 'DGES', 'COMMISSION', 'CONTROLEUR']),
   statsExportController.exportStats,
 );
 

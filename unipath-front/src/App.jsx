@@ -382,15 +382,17 @@ function App() {
           }
         />
 
+        {/* Routes protégées - DEC (Module 1 concours) */}
         <Route
           path='/gestion-concours'
           element={
-            <ProtectedRoute allowedRoles={['DGES']}>
+            <ProtectedRoute allowedRoles={['DEC']}>
               <GestionConcours />
             </ProtectedRoute>
           }
         />
 
+        {/* Routes protégées - DGES (Module 2 établissements) */}
         <Route
           path='/dges-etablissements-admins'
           element={

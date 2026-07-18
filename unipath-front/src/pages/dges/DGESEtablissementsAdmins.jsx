@@ -1,32 +1,14 @@
-import { Fragment, useEffect, useState } from 'react';
-import { concoursService, dgesService, etablissementService } from '../../services/api';
+import { useEffect, useState } from 'react';
+import { dgesService, etablissementService } from '../../services/api';
 import DGESLayout from '../../components/DGESLayout';
 import { BentoCard } from '../../components/AcademicLayout';
 
 const FORM_INIT = { nom: '', prenom: '', email: '', telephone: '' };
-const ETAB_FORM_INIT = { nom: '', ville: '', type: 'PUBLIC', adresse: '', email: '' };
-
-function formatConcoursDates(concours) {
-  const depotDebut = concours.dateDebutDepot || concours.dateDebut;
-  const depotFin = concours.dateFinDepot || concours.dateFin;
-  const compoDebut = concours.dateDebutComposition || concours.dateComposition;
-  const compoFin = concours.dateFinComposition;
-
-  const fmt = (d) => (d ? new Date(d).toLocaleDateString('fr-FR') : '—');
-
-  if (compoDebut && compoFin) {
-    return `Dépôt ${fmt(depotDebut)} → ${fmt(depotFin)} · Composition ${fmt(compoDebut)} → ${fmt(compoFin)}`;
-  }
-  return `Dépôt ${fmt(depotDebut)} → ${fmt(depotFin)} · Composition ${fmt(compoDebut)}`;
-}
+const ETAB_FORM_INIT = { nom: '', ville: '', type: 'PRIVE', adresse: '', email: '' };
 
 export default function DGESEtablissementsAdmins() {
-  const [activeTab, setActiveTab] = useState('PRIVE');
   const [etablissements, setEtablissements] = useState([]);
-  const [publicEtablissements, setPublicEtablissements] = useState([]);
-  const [concoursByEtab, setConcoursByEtab] = useState({});
   const [loading, setLoading] = useState(true);
-  const [loadingPublic, setLoadingPublic] = useState(false);
   const [error, setError] = useState('');
   const [pageMessage, setPageMessage] = useState('');
 
@@ -43,7 +25,6 @@ export default function DGESEtablissementsAdmins() {
   const [etabForm, setEtabForm] = useState(ETAB_FORM_INIT);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
-  const [expandedPublicEtabId, setExpandedPublicEtabId] = useState(null);
 
   const chargerEtablissements = () => {
     setLoading(true);
@@ -57,35 +38,9 @@ export default function DGESEtablissementsAdmins() {
       .finally(() => setLoading(false));
   };
 
-  const chargerEtablissementsPublics = async () => {
-    setLoadingPublic(true);
-    setError('');
-    try {
-      const data = await etablissementService.getPublics();
-      const publics = data.etablissements || [];
-      setPublicEtablissements(publics);
-
-      const entries = await Promise.all(
-        publics.map(async (etab) => {
-          const concours = await concoursService.getByEtablissement(etab.id);
-          return [etab.id, Array.isArray(concours) ? concours : []];
-        })
-      );
-      setConcoursByEtab(Object.fromEntries(entries));
-    } catch (err) {
-      setError(err.message || 'Erreur de chargement des établissements publics');
-    } finally {
-      setLoadingPublic(false);
-    }
-  };
-
   useEffect(() => {
-    if (activeTab === 'PRIVE') {
-      chargerEtablissements();
-    } else {
-      chargerEtablissementsPublics();
-    }
-  }, [activeTab]);
+    chargerEtablissements();
+  }, []);
 
   const ouvrirModal = async (etab) => {
     setSelectedEtab(etab);
@@ -158,13 +113,10 @@ export default function DGESEtablissementsAdmins() {
     setCreating(true);
     setCreateError('');
     try {
-      const data = await dgesService.creerEtablissement(etabForm);
+      const data = await dgesService.creerEtablissement({ ...etabForm, type: 'PRIVE' });
       setPageMessage(data.message || 'Établissement créé');
       fermerCreateModal();
       await chargerEtablissements();
-      if (etabForm.type === 'PUBLIC') {
-        await chargerEtablissementsPublics();
-      }
     } catch (err) {
       setCreateError(err.message || 'Erreur lors de la création');
     } finally {
@@ -180,15 +132,6 @@ export default function DGESEtablissementsAdmins() {
       const data = await dgesService.supprimerEtablissement(etab.id);
       setPageMessage(data.message || 'Établissement supprimé');
       setEtablissements((prev) => prev.filter((e) => e.id !== etab.id));
-      setPublicEtablissements((prev) => prev.filter((e) => e.id !== etab.id));
-      setConcoursByEtab((prev) => {
-        const next = { ...prev };
-        delete next[etab.id];
-        return next;
-      });
-      if (expandedPublicEtabId === etab.id) {
-        setExpandedPublicEtabId(null);
-      }
     } catch (err) {
       setError(err.message || 'Erreur lors de la suppression');
     }
@@ -201,9 +144,7 @@ export default function DGESEtablissementsAdmins() {
           <div>
             <h1 className="text-2xl font-black text-gray-900">Établissements &amp; Admins</h1>
             <p className="text-gray-500 text-sm mt-1">
-              {activeTab === 'PRIVE'
-                ? 'Gérez les établissements privés et leurs administrateurs.'
-                : 'Gérez les établissements publics, leurs concours et la commission (examinateurs / contrôleurs) par établissement.'}
+              Gérez les établissements privés et leurs administrateurs.
             </p>
           </div>
           <button
@@ -215,31 +156,6 @@ export default function DGESEtablissementsAdmins() {
           </button>
         </div>
 
-        <div className="flex gap-2 border-b border-gray-200">
-          <button
-            type="button"
-            onClick={() => setActiveTab('PRIVE')}
-            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition -mb-px ${
-              activeTab === 'PRIVE'
-                ? 'border-orange-500 text-orange-600'
-                : 'border-transparent text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            Établissements privés
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('PUBLIC')}
-            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition -mb-px ${
-              activeTab === 'PUBLIC'
-                ? 'border-blue-900 text-blue-900'
-                : 'border-transparent text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            Établissements publics
-          </button>
-        </div>
-
         {pageMessage && (
           <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">{pageMessage}</div>
         )}
@@ -248,7 +164,7 @@ export default function DGESEtablissementsAdmins() {
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
 
-        {activeTab === 'PRIVE' && (loading ? (
+        {loading ? (
           <div className="flex justify-center py-16">
             <div className="w-10 h-10 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin" />
           </div>
@@ -304,101 +220,7 @@ export default function DGESEtablissementsAdmins() {
               </table>
             </div>
           </BentoCard>
-        ))}
-
-        {activeTab === 'PUBLIC' && (loadingPublic ? (
-          <div className="flex justify-center py-16">
-            <div className="w-10 h-10 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin" />
-          </div>
-        ) : (
-          <BentoCard className="p-0 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-100">
-                  <tr>
-                    <th className="text-left px-6 py-3 font-semibold text-gray-600">Nom</th>
-                    <th className="text-left px-6 py-3 font-semibold text-gray-600">Ville</th>
-                    <th className="text-left px-6 py-3 font-semibold text-gray-600">Nb concours</th>
-                    <th className="text-right px-6 py-3 font-semibold text-gray-600">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {publicEtablissements.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-6 py-10 text-center text-gray-400">
-                        Aucun établissement public enregistré.
-                      </td>
-                    </tr>
-                  ) : (
-                    publicEtablissements.map((etab) => {
-                      const concours = concoursByEtab[etab.id] || [];
-                      const isExpanded = expandedPublicEtabId === etab.id;
-
-                      return (
-                        <Fragment key={etab.id}>
-                          <tr className="hover:bg-gray-50/50">
-                            <td className="px-6 py-4 font-medium text-gray-900">{etab.nom}</td>
-                            <td className="px-6 py-4 text-gray-600">{etab.ville}</td>
-                            <td className="px-6 py-4 text-gray-700 font-semibold">{concours.length}</td>
-                            <td className="px-6 py-4 text-right space-x-3 whitespace-nowrap">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setExpandedPublicEtabId(isExpanded ? null : etab.id)
-                                }
-                                className="text-sm font-semibold text-blue-900 hover:text-orange-500 transition"
-                              >
-                                {isExpanded ? 'Masquer les concours' : 'Voir les concours'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteEtablissement(etab)}
-                                className="text-sm font-semibold text-red-600 hover:text-red-800 transition"
-                              >
-                                Supprimer
-                              </button>
-                            </td>
-                          </tr>
-                          {isExpanded && (
-                            <tr key={`${etab.id}-concours`} className="bg-gray-50/80">
-                              <td colSpan={4} className="px-6 py-4">
-                                {concours.length === 0 ? (
-                                  <p className="text-sm text-gray-400">
-                                    Aucun concours lié à cet établissement.
-                                  </p>
-                                ) : (
-                                  <ul className="space-y-3">
-                                    {concours.map((c) => {
-                                      const nbCandidats = c._count?.inscriptions ?? 0;
-                                      return (
-                                        <li
-                                          key={c.id}
-                                          className="rounded-lg border border-gray-200 bg-white px-4 py-3"
-                                        >
-                                          <p className="font-semibold text-gray-900">{c.libelle}</p>
-                                          <p className="text-xs text-gray-500 mt-1">
-                                            {formatConcoursDates(c)}
-                                          </p>
-                                          <p className="text-xs text-gray-400 mt-1">
-                                            {nbCandidats} candidat{nbCandidats > 1 ? 's' : ''} inscrit{nbCandidats > 1 ? 's' : ''}
-                                          </p>
-                                        </li>
-                                      );
-                                    })}
-                                  </ul>
-                                )}
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </BentoCard>
-        ))}
+        )}
       </div>
 
       {modalOpen && selectedEtab && (
@@ -484,7 +306,7 @@ export default function DGESEtablissementsAdmins() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900">Nouvel établissement</h2>
+              <h2 className="text-lg font-bold text-gray-900">Nouvel établissement privé</h2>
               <button type="button" onClick={fermerCreateModal} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
             </div>
             <form onSubmit={handleCreateEtablissement} className="p-6 space-y-4">
@@ -495,18 +317,9 @@ export default function DGESEtablissementsAdmins() {
                 <label className="block text-xs font-medium text-gray-600 mb-1">Nom *</label>
                 <input required value={etabForm.nom} onChange={(e) => setEtabForm((p) => ({ ...p, nom: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
               </div>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Ville *</label>
-                  <input required value={etabForm.ville} onChange={(e) => setEtabForm((p) => ({ ...p, ville: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Type *</label>
-                  <select required value={etabForm.type} onChange={(e) => setEtabForm((p) => ({ ...p, type: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                    <option value="PUBLIC">PUBLIC</option>
-                    <option value="PRIVE">PRIVE</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Ville *</label>
+                <input required value={etabForm.ville} onChange={(e) => setEtabForm((p) => ({ ...p, ville: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Adresse</label>

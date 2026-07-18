@@ -7,6 +7,7 @@ const COMMISSION_SOUS_ROLES_ECRITURE = ['EXAMINATEUR', 'CONTROLEUR'];
 
 const ACTIONS_AUTORISEES = {
   COMMISSION: ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_COMMISSION'],
+  DEC: ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_COMMISSION', 'DECISION_CONTROLEUR'],
   DGES: ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_COMMISSION', 'DECISION_CONTROLEUR'],
   CONTROLEUR: ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_CONTROLEUR'],
   ADMIN_ETABLISSEMENT: ['DOSSIER_VALIDE', 'DOSSIER_REJETE', 'DOSSIER_MODIFIE', 'DECISION_COMMISSION'],
@@ -42,7 +43,7 @@ function canWriteHistory(req) {
   const role = getRequestRole(req);
   const sousRole = req.user?.sousRole;
 
-  if (role === 'DGES' || role === 'CONTROLEUR' || role === 'ADMIN_ETABLISSEMENT') {
+  if (role === 'DEC' || role === 'DGES' || role === 'CONTROLEUR' || role === 'ADMIN_ETABLISSEMENT') {
     return true;
   }
 
@@ -265,9 +266,9 @@ exports.genererRapportAudit = async (req, res) => {
   try {
     const userRole = getRequestRole(req);
 
-    if (!['DGES', 'CONTROLEUR'].includes(userRole)) {
+    if (!['DEC', 'DGES', 'CONTROLEUR'].includes(userRole)) {
       return res.status(403).json({
-        error: 'Accès refusé. Seuls les administrateurs DGES et contrôleurs peuvent générer des rapports d\'audit.',
+        error: 'Accès refusé. Seuls les administrateurs DEC/DGES et contrôleurs peuvent générer des rapports d\'audit.',
       });
     }
 
@@ -313,9 +314,9 @@ exports.exporterCSV = async (req, res) => {
   try {
     const userRole = getRequestRole(req);
 
-    if (!['DGES', 'CONTROLEUR'].includes(userRole)) {
+    if (!['DEC', 'DGES', 'CONTROLEUR'].includes(userRole)) {
       return res.status(403).json({
-        error: 'Accès refusé. Seuls les administrateurs DGES et contrôleurs peuvent exporter des données d\'audit.',
+        error: 'Accès refusé. Seuls les administrateurs DEC/DGES et contrôleurs peuvent exporter des données d\'audit.',
       });
     }
 
@@ -371,9 +372,9 @@ exports.getHistoriqueVerdicts = async (req, res) => {
     const { dossierInscriptionId } = req.params;
     const userRole = getRequestRole(req);
 
-    if (!['COMMISSION', 'CONTROLEUR', 'DGES'].includes(userRole)) {
+    if (!['COMMISSION', 'CONTROLEUR', 'DEC', 'DGES'].includes(userRole)) {
       return res.status(403).json({
-        error: 'Accès refusé. Seuls les membres de la commission, contrôleurs et DGES peuvent consulter l\'historique.',
+        error: 'Accès refusé. Seuls les membres de la commission, contrôleurs, DEC et DGES peuvent consulter l\'historique.',
       });
     }
 

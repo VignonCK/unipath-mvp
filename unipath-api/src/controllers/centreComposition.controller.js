@@ -211,7 +211,7 @@ exports.getCentresDuConcours = async (req, res) => {
   try {
     const { concoursId } = req.params;
     const { tous } = req.query;
-    const isDges = req.user?.role === 'DGES';
+    const isDec = req.user?.role === 'DEC';
 
     const concours = await prisma.concours.findUnique({ where: { id: concoursId } });
     if (!concours) {
@@ -219,7 +219,7 @@ exports.getCentresDuConcours = async (req, res) => {
     }
 
     const where = { concoursId };
-    if (!(isDges && tous === '1')) {
+    if (!(isDec && tous === '1')) {
       where.estActif = true;
     }
 

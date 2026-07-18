@@ -7,12 +7,12 @@ const completionController = require('../controllers/completion.controller');
 
 // Route statique AVANT la route dynamique
 // ✅ CONTROLEUR ajouté - Besoin des stats pour prendre des décisions
-router.get('/stats/global', protect, checkRole(['COMMISSION', 'DGES', 'CONTROLEUR']), completionController.getStatistiquesGlobales);
+router.get('/stats/global', protect, checkRole(['COMMISSION', 'DEC', 'CONTROLEUR']), completionController.getStatistiquesGlobales);
 
-router.get('/:candidatId', protect, checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DGES']), completionController.getCompletion);
-router.get('/:candidatId/pieces', protect, checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DGES']), completionController.getPiecesManquantes);
+router.get('/:candidatId', protect, checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DEC']), completionController.getCompletion);
+router.get('/:candidatId/pieces', protect, checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DEC']), completionController.getPiecesManquantes);
 
-// 🔒 Route pour Dossier Complet - Accessible par CANDIDAT (owner only), COMMISSION, CONTROLEUR, DGES
-router.get('/inscriptions/:inscriptionId/dossier-complet', protect, checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DGES']), completionController.getDossierComplet);
+// 🔒 Route pour Dossier Complet - Accessible par CANDIDAT (owner only), COMMISSION, CONTROLEUR, DEC
+router.get('/inscriptions/:inscriptionId/dossier-complet', protect, checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DEC']), completionController.getDossierComplet);
 
 module.exports = router;

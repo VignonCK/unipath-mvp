@@ -91,23 +91,11 @@ function handleStatsError(res, error, contextLabel) {
 exports.getStatistiques = async (req, res) => {
   try {
     const filters = parseStatsFilters(req.query);
-    const stats = await statsExportService.collectStats(filters, null);
-    const statistiques = stats.parConcours.map(mapParConcoursToLegacy);
+    const stats = await statsExportService.collectStats(filters, null, { module: 'campagnes' });
     const statistiquesCampagnes = stats.campagnes.parCampagne.map(mapParCampagneToLegacy);
 
     return res.json({
       meta: stats.meta,
-      totaux: {
-        total_concours: statistiques.length,
-        total_inscrits: stats.totaux.totalCandidats,
-        total_valides: stats.totaux.acceptes,
-        total_rejetes: stats.totaux.rejetes,
-        total_attente: stats.totaux.enAttente,
-        total_sous_reserve: stats.totaux.sousReserve,
-        repartition_sexe: mapRepartitionSexe(stats.totaux.repartitionSexe),
-      },
-      statistiques,
-      parEtablissement: mapParEtablissementLegacy(stats.parEtablissement),
       totauxCampagnes: {
         total_campagnes: statistiquesCampagnes.length,
         total_candidatures: stats.campagnes.totaux.totalCandidats,
@@ -125,12 +113,38 @@ exports.getStatistiques = async (req, res) => {
   }
 };
 
+/** Stats Module 1 (concours) — réservé DEC (+ COMMISSION pour lecture). */
+exports.getStatistiquesDec = async (req, res) => {
+  try {
+    const filters = parseStatsFilters(req.query);
+    const stats = await statsExportService.collectStats(filters, null, { module: 'concours' });
+    const statistiques = stats.parConcours.map(mapParConcoursToLegacy);
+
+    return res.json({
+      meta: stats.meta,
+      totaux: {
+        total_concours: statistiques.length,
+        total_inscrits: stats.totaux.totalCandidats,
+        total_valides: stats.totaux.acceptes,
+        total_rejetes: stats.totaux.rejetes,
+        total_attente: stats.totaux.enAttente,
+        total_sous_reserve: stats.totaux.sousReserve,
+        repartition_sexe: mapRepartitionSexe(stats.totaux.repartitionSexe),
+      },
+      statistiques,
+      parEtablissement: mapParEtablissementLegacy(stats.parEtablissement),
+    });
+  } catch (error) {
+    return handleStatsError(res, error, 'Erreur DEC:');
+  }
+};
+
 exports.getStatistiquesConcours = async (req, res) => {
   try {
     const filters = parseStatsFilters(req.query, {
       concoursIdFromPath: req.params.concoursId,
     });
-    const stats = await statsExportService.collectStats(filters, null);
+    const stats = await statsExportService.collectStats(filters, null, { module: 'concours' });
     const row = stats.parConcours[0];
 
     if (!row) {
@@ -143,7 +157,7 @@ exports.getStatistiquesConcours = async (req, res) => {
       parCentre: row.parCentre,
     });
   } catch (error) {
-    return handleStatsError(res, error, 'Erreur DGES concours:');
+    return handleStatsError(res, error, 'Erreur DEC concours:');
   }
 };
 

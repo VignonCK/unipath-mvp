@@ -439,9 +439,6 @@ export const dgesService = {
   getStatistiques: (params = {}) =>
     request(`/dges/statistiques${buildStatsQueryString(params)}`),
 
-  getStatistiquesConcours: (id, params = {}) =>
-    request(`/dges/statistiques/${id}${buildStatsQueryString(params)}`),
-
   cloturerEtudeConcours: (concoursId) =>
     request(`/dges/concours/${concoursId}/cloturer-etude`, { method: 'POST' }),
 
@@ -535,6 +532,60 @@ export const dgesService = {
     request(`/dges/etablissements/${etablissementId}/commission/${membreId}`, {
       method: 'DELETE',
     }),
+};
+
+export const decService = {
+  getStatistiques: (params = {}) =>
+    request(`/dec/statistiques${buildStatsQueryString(params)}`),
+
+  getStatistiquesConcours: (id, params = {}) =>
+    request(`/dec/statistiques/${id}${buildStatsQueryString(params)}`),
+
+  exportStats: async (format, params = {}) => {
+    const token = localStorage.getItem('token');
+    const qs = new URLSearchParams({ format });
+    const allowed = ['sexe', 'concoursId', 'etablissementId', 'statut', 'centreId', 'anneeAcademique'];
+    for (const key of allowed) {
+      const value = params[key];
+      if (value != null && value !== '') {
+        qs.set(key, value);
+      }
+    }
+
+    const response = await fetch(`${BASE_URL}/stats/export?${qs.toString()}`, {
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+    });
+
+    if (redirectToLoginOn401(response.status)) {
+      return;
+    }
+
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type') || '';
+      let message = 'Erreur lors de l\'export';
+      if (contentType.includes('application/json')) {
+        const err = await response.json();
+        message = err.error || message;
+      }
+      throw new Error(message);
+    }
+
+    const contentDisposition = response.headers.get('content-disposition');
+    const fallback = `stats-inscriptions.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+    const match = contentDisposition?.match(/filename="?([^";\n]+)"?/);
+    const filename = match ? match[1] : fallback;
+    const blob = await response.blob();
+    const objectUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(objectUrl);
+  },
 };
 
 export const staffEtablissementService = {

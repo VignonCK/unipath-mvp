@@ -1,4 +1,4 @@
-// src/components/DGESLayout.jsx
+// src/components/DECLayout.jsx
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/api';
 import BottomTabNav from './BottomTabNav';
@@ -14,20 +14,20 @@ function initiales(str) {
 const TABS = [
   {
     label: 'Tableau de bord',
-    path: '/dashboard-dges',
-    activePrefixes: ['/dashboard-dges'],
+    path: '/dashboard-dec',
+    activePrefixes: ['/dashboard-dec'],
   },
   {
-    label: 'Établissements',
-    path: '/dges-etablissements-admins',
-    activePrefixes: ['/dges-etablissements-admins', '/dges/etablissements'],
+    label: 'Concours',
+    path: '/gestion-concours',
+    activePrefixes: ['/gestion-concours'],
   },
 ];
 
-export default function DGESLayout({ children }) {
+export default function DECLayout({ children }) {
   const navigate = useNavigate();
   const user = authService.getCurrentUser();
-  const nomUser = user?.prenom ? `${user.prenom} ${user.nom || ''}`.trim() : user?.email || 'DGES';
+  const nomUser = user?.prenom ? `${user.prenom} ${user.nom || ''}`.trim() : user?.email || 'DEC';
 
   const handleLogout = () => {
     authService.logout();
@@ -36,35 +36,35 @@ export default function DGESLayout({ children }) {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      <header className="bg-blue-900 text-white px-4 sm:px-6 py-3 shrink-0 z-40 shadow-lg sticky top-0">
+      <header className="bg-emerald-900 text-white px-4 sm:px-6 py-3 shrink-0 z-40 shadow-lg sticky top-0">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <button
               type="button"
-              onClick={() => navigate('/dashboard-dges')}
-              className="text-xl font-black tracking-tight hover:text-orange-300 transition shrink-0"
+              onClick={() => navigate('/dashboard-dec')}
+              className="text-xl font-black tracking-tight hover:text-emerald-200 transition shrink-0"
             >
               UniPath
             </button>
-            <span className="px-2 py-0.5 text-xs font-semibold bg-orange-500 text-white rounded shrink-0">
-              DGES
+            <span className="px-2 py-0.5 text-xs font-semibold bg-emerald-500 text-white rounded shrink-0">
+              DEC
             </span>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center text-sm font-bold text-white border-2 border-orange-400">
+              <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center text-sm font-bold text-white border-2 border-emerald-400">
                 {initiales(nomUser)}
               </div>
               <div className="hidden sm:block text-left">
                 <p className="text-sm font-semibold leading-tight max-w-[10rem] truncate">{nomUser}</p>
-                <p className="text-orange-300 text-[10px]">Administrateur DGES</p>
+                <p className="text-emerald-200 text-[10px]">Administrateur DEC</p>
               </div>
             </div>
             <button
               type="button"
               onClick={handleLogout}
-              className="hidden sm:inline text-xs border border-orange-400 text-orange-300 px-3 py-1.5 rounded-lg hover:bg-orange-500 hover:text-white transition"
+              className="hidden sm:inline text-xs border border-emerald-400 text-emerald-200 px-3 py-1.5 rounded-lg hover:bg-emerald-500 hover:text-white transition"
             >
               Déconnexion
             </button>

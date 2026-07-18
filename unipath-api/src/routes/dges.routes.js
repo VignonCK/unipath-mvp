@@ -13,26 +13,26 @@ router.use('/etablissements/:etablissementId/commission', commissionEtablissemen
 router.use('/concours/:concoursId/commission', commissionConcoursRoutes);
 router.use('/etablissements', adminEtablissementRoutes);
 
-// Routes protégées - DGES et COMMISSION peuvent voir les statistiques
-router.get('/statistiques', protect, checkRole(['DGES', 'COMMISSION']), dgesController.getStatistiques);
-router.get('/statistiques/:concoursId', protect, checkRole(['DGES', 'COMMISSION']), dgesController.getStatistiquesConcours);
+// Routes protégées - Module 2 (établissements privés) — DGES uniquement
+router.get('/statistiques', protect, checkRole(['DGES']), dgesController.getStatistiques);
 
+// Module 1 (concours) — réservé DEC (Phase 2/6 séparation DEC/DGES)
 router.post(
   '/concours/:concoursId/cloturer-etude',
   protect,
-  checkRole(['DGES']),
+  checkRole(['DEC']),
   dgesController.cloturerEtudeConcours,
 );
 router.post(
   '/concours/:concoursId/rouvrir-etude',
   protect,
-  checkRole(['DGES']),
+  checkRole(['DEC']),
   dgesController.rouvrirEtudeConcours,
 );
 router.post(
   '/concours/:concoursId/generer-numeros-table',
   protect,
-  checkRole(['DGES']),
+  checkRole(['DEC']),
   dgesController.genererNumerosTableConcours,
 );
 

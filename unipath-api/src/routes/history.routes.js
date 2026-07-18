@@ -5,12 +5,12 @@ const { protect } = require('../middleware/auth.middleware');
 const { checkRole } = require('../middleware/role.middleware');
 const historyController = require('../controllers/history.controller');
 
-const HISTORY_WRITE_ROLES = ['DGES', 'CONTROLEUR', 'ADMIN_ETABLISSEMENT', 'COMMISSION'];
+const HISTORY_WRITE_ROLES = ['DEC', 'DGES', 'CONTROLEUR', 'ADMIN_ETABLISSEMENT', 'COMMISSION'];
 
 // Routes statiques AVANT les routes dynamiques
-router.get('/audit/rapport', protect, checkRole(['COMMISSION', 'DGES', 'CONTROLEUR']), historyController.genererRapportAudit);
-router.get('/export/csv/:dossierInscriptionId', protect, checkRole(['COMMISSION', 'DGES', 'CONTROLEUR']), historyController.exporterCSV);
-router.get('/export/csv', protect, checkRole(['COMMISSION', 'DGES', 'CONTROLEUR']), historyController.exporterCSV);
+router.get('/audit/rapport', protect, checkRole(['COMMISSION', 'DEC', 'DGES', 'CONTROLEUR']), historyController.genererRapportAudit);
+router.get('/export/csv/:dossierInscriptionId', protect, checkRole(['COMMISSION', 'DEC', 'DGES', 'CONTROLEUR']), historyController.exporterCSV);
+router.get('/export/csv', protect, checkRole(['COMMISSION', 'DEC', 'DGES', 'CONTROLEUR']), historyController.exporterCSV);
 router.post(
   '/action',
   protect,

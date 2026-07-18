@@ -3,7 +3,7 @@ const { parseStatsFilters } = require('../utils/stats-filters.helper');
 const { resolveCommissionScope } = require('../utils/commission-etablissement.helper');
 
 async function resolveStatsScope(req) {
-  if (req.userRole === 'DGES') {
+  if (req.userRole === 'DGES' || req.userRole === 'DEC') {
     return null;
   }
 
@@ -32,6 +32,14 @@ async function resolveStatsScope(req) {
   return null;
 }
 
+function resolveExportModule(userRole) {
+  if (userRole === 'DGES') return 'campagnes';
+  if (userRole === 'DEC' || userRole === 'COMMISSION' || userRole === 'CONTROLEUR') {
+    return 'concours';
+  }
+  return 'all';
+}
+
 exports.exportStats = async (req, res) => {
   try {
     const format = String(req.query.format || '').toLowerCase();
@@ -41,8 +49,10 @@ exports.exportStats = async (req, res) => {
 
     const filters = parseStatsFilters(req.query);
     const scope = await resolveStatsScope(req);
-    const stats = await statsExportService.collectStats(filters, scope);
+    const module = resolveExportModule(req.userRole || req.user?.role);
+    const stats = await statsExportService.collectStats(filters, scope, { module });
     const dateSlug = new Date().toISOString().slice(0, 10);
+    const moduleSlug = module === 'campagnes' ? 'etablissements' : 'concours';
 
     if (format === 'excel') {
       const buffer = await statsExportService.generateExcel(stats);
@@ -52,7 +62,7 @@ exports.exportStats = async (req, res) => {
       );
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename="stats-inscriptions-${dateSlug}.xlsx"`,
+        `attachment; filename="stats-${moduleSlug}-${dateSlug}.xlsx"`,
       );
       return res.send(Buffer.from(buffer));
     }
@@ -61,7 +71,7 @@ exports.exportStats = async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="stats-inscriptions-${dateSlug}.pdf"`,
+      `attachment; filename="stats-${moduleSlug}-${dateSlug}.pdf"`,
     );
     return res.send(pdfBuffer);
   } catch (error) {

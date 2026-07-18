@@ -11,6 +11,6 @@ router.patch('/dossiers/:inscriptionId', protect, checkRole(['COMMISSION']), com
 
 // Nouvelles routes pour la gestion des notes
 router.get('/concours', protect, checkRole(['COMMISSION']), commissionController.getCandidatsParConcours);
-router.patch('/notes/:inscriptionId', protect, checkRole(['COMMISSION']), commissionController.updateNote);
+router.patch('/notes/:inscriptionId', protect, checkRole(['COMMISSION', 'DEC']), commissionController.updateNote);
 
 module.exports = router;

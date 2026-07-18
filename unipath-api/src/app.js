@@ -26,6 +26,7 @@ const commissionRoutes = require('./routes/commission.routes');
 const controleurRoutes = require('./routes/controleur.routes');
 const dossierRoutes = require('./routes/dossier.routes');
 const dgesRoutes = require('./routes/dges.routes');
+const decRoutes = require('./routes/dec.routes');
 const completionRoutes = require('./routes/completion.routes');
 const historyRoutes = require('./routes/history.routes');
 const notificationRoutes = require('./routes/notifications.routes');
@@ -62,6 +63,7 @@ app.use('/api/dossier', (req, res, next) => {
 });
 app.use('/api/dossier', dossierRoutes);
 app.use('/api/dges', dgesRoutes);
+app.use('/api/dec', decRoutes);
 app.use('/api/completion', completionRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/notifications', notificationRoutes);

@@ -10,10 +10,10 @@ router.get('/', protectOptional, concoursController.getAllConcours); // ✅ prot
 router.get('/:id', protectOptional, concoursController.getConcoursById); // ✅ protectOptional pour dossierCandidat
 
 // 🔒 Route classement protégée - Données sensibles (notes, emails)
-router.get('/:id/classement', protect, checkRole(['COMMISSION', 'DGES', 'CONTROLEUR']), concoursController.getClassement);
+router.get('/:id/classement', protect, checkRole(['COMMISSION', 'DEC', 'CONTROLEUR']), concoursController.getClassement);
 
-router.post('/', protect, checkRole(['DGES']), concoursController.createConcours);
-router.put('/:id', protect, checkRole(['DGES']), concoursController.updateConcours);
-router.delete('/:id', protect, checkRole(['DGES']), concoursController.deleteConcours);
+router.post('/', protect, checkRole(['DEC']), concoursController.createConcours);
+router.put('/:id', protect, checkRole(['DEC']), concoursController.updateConcours);
+router.delete('/:id', protect, checkRole(['DEC']), concoursController.deleteConcours);
 
 module.exports = router;

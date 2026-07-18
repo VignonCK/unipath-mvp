@@ -9,7 +9,7 @@ const { handleDossierUpload } = require('../middleware/upload.middleware');
 router.get(
   '/signed-url',
   protect,
-  checkRole(['COMMISSION', 'CONTROLEUR', 'DGES', 'CANDIDAT', 'ETUDIANT', 'ADMIN_ETABLISSEMENT']),
+  checkRole(['COMMISSION', 'CONTROLEUR', 'DEC', 'DGES', 'CANDIDAT', 'ETUDIANT', 'ADMIN_ETABLISSEMENT']),
   dossierController.getSignedUrl
 );
 
@@ -23,17 +23,17 @@ router.post(
 );
 router.get('/', protect, dossierController.getDossier);
 
-// 🔒 Dossier personnel — CANDIDAT (self), COMMISSION, CONTROLEUR, DGES
+// 🔒 Dossier personnel — CANDIDAT (self), COMMISSION, CONTROLEUR, DEC
 router.get(
   '/candidats/:candidatId/dossier-personnel',
   protect,
-  checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DGES']),
+  checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DEC']),
   dossierController.getDossierPersonnel
 );
 router.put(
   '/candidats/:candidatId/dossier-personnel/pieces',
   protect,
-  checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DGES']),
+  checkRole(['CANDIDAT', 'COMMISSION', 'CONTROLEUR', 'DEC']),
   handleDossierUpload('fichier'),
   dossierController.uploadPiece
 );

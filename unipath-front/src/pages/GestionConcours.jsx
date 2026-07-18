@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { concoursService, etablissementService, dgesService } from '../services/api';
 import { PiecesConfiguration } from '../components/PiecesConfiguration';
 import GestionCentresConcours from '../components/concours/GestionCentresConcours';
-import DGESLayout from '../components/DGESLayout';
+import DECLayout from '../components/DECLayout';
 import { getDefaultPiecesRequises, validatePiecesConfiguration, convertLegacyId, DOSSIER_PERSONNEL_FIELDS } from '../constants/pieces';
 
 function extractPiecesRequises(concours) {
@@ -462,18 +462,18 @@ export default function GestionConcours() {
     : concours;
 
   if (loading) return (
-    <DGESLayout>
+    <DECLayout>
       <div className='flex items-center justify-center min-h-[60vh]'>
         <div className='text-center'>
           <div className='w-10 h-10 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin mx-auto mb-3' />
           <p className='text-gray-500 text-sm'>Chargement...</p>
         </div>
       </div>
-    </DGESLayout>
+    </DECLayout>
   );
 
   return (
-    <DGESLayout>
+    <DECLayout>
       <div className='max-w-6xl mx-auto px-4 py-6 space-y-6'>
         {/* HEADER SECTION */}
         <div className='flex flex-col gap-4'>
@@ -1110,6 +1110,6 @@ export default function GestionConcours() {
           document.body
         )}
       </div>
-    </DGESLayout>
+    </DECLayout>
   );
 }

@@ -6,14 +6,14 @@ const centreCompositionController = require('../controllers/centreComposition.co
 const centreRouter = express.Router();
 const concoursCentresRouter = express.Router({ mergeParams: true });
 
-centreRouter.post('/', protect, checkRole(['DGES']), centreCompositionController.creerCentre);
-centreRouter.get('/', protect, checkRole(['DGES']), centreCompositionController.listerCentres);
-centreRouter.put('/:id', protect, checkRole(['DGES']), centreCompositionController.modifierCentre);
-centreRouter.patch('/:id/actif', protect, checkRole(['DGES']), centreCompositionController.toggleActifCentre);
+centreRouter.post('/', protect, checkRole(['DEC']), centreCompositionController.creerCentre);
+centreRouter.get('/', protect, checkRole(['DEC']), centreCompositionController.listerCentres);
+centreRouter.put('/:id', protect, checkRole(['DEC']), centreCompositionController.modifierCentre);
+centreRouter.patch('/:id/actif', protect, checkRole(['DEC']), centreCompositionController.toggleActifCentre);
 
 concoursCentresRouter.get('/', protect, centreCompositionController.getCentresDuConcours);
-concoursCentresRouter.post('/', protect, checkRole(['DGES']), centreCompositionController.ajouterCentreAuConcours);
-concoursCentresRouter.patch('/:concourscentreId', protect, checkRole(['DGES']), centreCompositionController.modifierConcoursCentre);
-concoursCentresRouter.delete('/:concourscentreId', protect, checkRole(['DGES']), centreCompositionController.retirerCentreDuConcours);
+concoursCentresRouter.post('/', protect, checkRole(['DEC']), centreCompositionController.ajouterCentreAuConcours);
+concoursCentresRouter.patch('/:concourscentreId', protect, checkRole(['DEC']), centreCompositionController.modifierConcoursCentre);
+concoursCentresRouter.delete('/:concourscentreId', protect, checkRole(['DEC']), centreCompositionController.retirerCentreDuConcours);
 
 module.exports = { centreRouter, concoursCentresRouter };

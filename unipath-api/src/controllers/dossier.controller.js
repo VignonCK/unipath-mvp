@@ -14,6 +14,15 @@ const {
   SIGNED_URL_DEFAULT_EXPIRES_IN,
 } = require('../utils/storage.helper');
 
+/** Chemins Module 2 (établissements privés / inscription acad). Le reste = Module 1 concours. */
+function isModule2StoragePath(safePath) {
+  if (!safePath) return false;
+  if (safePath.startsWith('applications/')) return true;
+  if (safePath.startsWith('preinscriptions/')) return true;
+  if (safePath.includes('/inscriptions-acad/')) return true;
+  return false;
+}
+
 async function applyPieceCorrigeeSurDossier(dossierInscription, typePiece) {
   if (!dossierInscription || !isStatutSousReserveActif(dossierInscription.statut)) {
     return dossierInscription;
@@ -481,6 +490,15 @@ exports.getSignedUrl = async (req, res) => {
 
     const { safePath } = sanitized;
     const userRole = req.userRole || req.user?.role;
+    const isM2 = isModule2StoragePath(safePath);
+
+    // DEC = Module 1 (concours) uniquement ; DGES = Module 2 (établissements) uniquement
+    if (userRole === 'DEC' && isM2) {
+      return res.status(403).json({ error: 'Accès non autorisé à ce fichier (réservé Module 2 / DGES)' });
+    }
+    if (userRole === 'DGES' && !isM2) {
+      return res.status(403).json({ error: 'Accès non autorisé à ce fichier (réservé Module 1 / DEC)' });
+    }
 
     if (isEtudiantRole(userRole)) {
       const ownerPrefix = `${req.user.id}/`;

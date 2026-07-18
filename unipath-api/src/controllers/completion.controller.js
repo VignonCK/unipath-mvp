@@ -42,7 +42,7 @@ exports.getCompletion = async (req, res) => {
       candidat: { id: candidat.id, nom: candidat.nom, prenom: candidat.prenom, email: candidat.email },
       permissions: {
         peutModifier: isEtudiantRole(userRole) && userId === candidatId,
-        peutVoirDetails: ['COMMISSION', 'CONTROLEUR', 'DGES'].includes(userRole)
+        peutVoirDetails: ['COMMISSION', 'CONTROLEUR', 'DEC'].includes(userRole)
       }
     });
 
@@ -245,7 +245,7 @@ exports.getCompletionInscription = async (req, res) => {
       },
       permissions: {
         peutModifier: isEtudiantRole(userRole) && userId === inscription.candidatId,
-        peutVoirDetails: ['COMMISSION', 'CONTROLEUR', 'DGES'].includes(userRole)
+        peutVoirDetails: ['COMMISSION', 'CONTROLEUR', 'DEC'].includes(userRole)
       }
     };
 
@@ -265,8 +265,8 @@ exports.getDossierComplet = async (req, res) => {
     const userId = req.user.id;
     const userRole = req.userRole || req.user?.role;
 
-    // Vérifier les permissions (COMMISSION, CONTROLEUR, DGES uniquement)
-    if (!['COMMISSION', 'CONTROLEUR', 'DGES'].includes(userRole)) {
+    // Vérifier les permissions (COMMISSION, CONTROLEUR, DEC uniquement)
+    if (!['COMMISSION', 'CONTROLEUR', 'DEC'].includes(userRole)) {
       return res.status(403).json({ error: 'Accès refusé. Réservé à la commission.' });
     }
 
