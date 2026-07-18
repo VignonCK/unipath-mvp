@@ -114,6 +114,7 @@ model Concours {
   dateDebutComposition DateTime?
   dateFinComposition   DateTime?
   sigle                    String?
+  codeFiliere              String?
   inscriptionCompteur      Int           @default(0)
   inscriptionCompteurAnnee Int?
   etudeCloturee            Boolean       @default(false)
@@ -196,6 +197,7 @@ model CentreComposition {
   id        String   @id @default(uuid())
   nom       String
   ville     String
+  codeVille String?
   adresse   String?
   telephone String?
   actif     Boolean  @default(true)

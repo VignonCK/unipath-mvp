@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { centreCompositionService } from '../../services/api';
 
-const EMPTY_CENTRE = { nom: '', ville: '', adresse: '', telephone: '' };
+const EMPTY_CENTRE = { nom: '', ville: '', codeVille: '', adresse: '', telephone: '' };
 
 function defaultAnneeAcademique(libelle) {
   const match = String(libelle || '').match(/20\d{2}/);
@@ -22,9 +22,10 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
   const [selectedCentreId, setSelectedCentreId] = useState('');
   const [anneeAcademique, setAnneeAcademique] = useState(() => defaultAnneeAcademique(concoursLibelle));
   const [capaciteAjout, setCapaciteAjout] = useState('');
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCentreModal, setShowCentreModal] = useState(false);
+  const [editingCentreId, setEditingCentreId] = useState(null);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
-  const [newCentre, setNewCentre] = useState(EMPTY_CENTRE);
+  const [centreForm, setCentreForm] = useState(EMPTY_CENTRE);
 
   const loadData = useCallback(async ({ silent = false } = {}) => {
     if (!concoursId) return;
@@ -48,6 +49,25 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const openCreateCentre = () => {
+    setEditingCentreId(null);
+    setCentreForm(EMPTY_CENTRE);
+    setShowCentreModal(true);
+  };
+
+  const openEditCentre = (centre) => {
+    if (!centre?.id) return;
+    setEditingCentreId(centre.id);
+    setCentreForm({
+      nom: centre.nom || '',
+      ville: centre.ville || '',
+      codeVille: centre.codeVille || '',
+      adresse: centre.adresse || '',
+      telephone: centre.telephone || '',
+    });
+    setShowCentreModal(true);
+  };
 
   const handleAjouter = async () => {
     if (!selectedCentreId) return;
@@ -93,15 +113,27 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
     }
   };
 
-  const handleCreerCentre = async (e) => {
+  const handleSubmitCentre = async (e) => {
     e.preventDefault();
     setBusy(true);
     try {
-      const created = await centreCompositionService.creer(newCentre);
-      setShowCreateModal(false);
-      setNewCentre(EMPTY_CENTRE);
+      const payload = {
+        nom: centreForm.nom,
+        ville: centreForm.ville,
+        adresse: centreForm.adresse || null,
+        telephone: centreForm.telephone || null,
+        codeVille: centreForm.codeVille.trim() === '' ? null : centreForm.codeVille.trim(),
+      };
+      if (editingCentreId) {
+        await centreCompositionService.modifier(editingCentreId, payload);
+      } else {
+        const created = await centreCompositionService.creer(payload);
+        setSelectedCentreId(created.id);
+      }
+      setShowCentreModal(false);
+      setEditingCentreId(null);
+      setCentreForm(EMPTY_CENTRE);
       await loadData({ silent: true });
-      setSelectedCentreId(created.id);
     } catch (err) {
       alert(err.message);
     } finally {
@@ -121,6 +153,8 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
     return <p className='text-sm text-gray-500'>Chargement des centres…</p>;
   }
 
+  const selectedCatalogue = catalogue.find((c) => c.id === selectedCentreId);
+
   return (
     <div className='border-t pt-4 space-y-4 relative'>
       {loading && (
@@ -130,7 +164,7 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
         <h3 className='text-sm font-bold text-gray-800'>Centres de composition</h3>
         <button
           type='button'
-          onClick={() => setShowCreateModal(true)}
+          onClick={openCreateCentre}
           className='text-xs font-semibold text-orange-700 hover:text-orange-900'
         >
           + Créer un nouveau centre
@@ -151,6 +185,7 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
             {catalogue.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.nom} — {c.ville}
+                {c.codeVille ? ` (${c.codeVille})` : ''}
               </option>
             ))}
           </select>
@@ -172,14 +207,26 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
             className='px-3 py-2 border border-gray-200 rounded-lg text-sm'
           />
         </div>
-        <button
-          type='button'
-          disabled={busy || !selectedCentreId}
-          onClick={handleAjouter}
-          className='px-4 py-2 rounded-lg bg-orange-600 text-white text-xs font-semibold hover:bg-orange-700 disabled:opacity-60'
-        >
-          Ajouter au concours
-        </button>
+        <div className='flex flex-wrap gap-2'>
+          <button
+            type='button'
+            disabled={busy || !selectedCentreId}
+            onClick={handleAjouter}
+            className='px-4 py-2 rounded-lg bg-orange-600 text-white text-xs font-semibold hover:bg-orange-700 disabled:opacity-60'
+          >
+            Ajouter au concours
+          </button>
+          {selectedCatalogue && (
+            <button
+              type='button'
+              disabled={busy}
+              onClick={() => openEditCentre(selectedCatalogue)}
+              className='px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-xs font-semibold hover:bg-white disabled:opacity-60'
+            >
+              Modifier le centre sélectionné
+            </button>
+          )}
+        </div>
       </div>
 
       <div className='space-y-2'>
@@ -197,6 +244,11 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
             <div className='flex-1 min-w-[200px]'>
               <p className='font-medium text-gray-900'>
                 {lien.centre?.nom} — {lien.centre?.ville}
+                {lien.centre?.codeVille ? (
+                  <span className='ml-2 text-xs font-mono text-orange-700'>code {lien.centre.codeVille}</span>
+                ) : (
+                  <span className='ml-2 text-xs text-amber-600'>sans code ville</span>
+                )}
               </p>
               <p className='text-xs text-gray-500'>
                 {lien.anneeAcademique}
@@ -229,6 +281,14 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
             <button
               type='button'
               disabled={busy}
+              onClick={() => openEditCentre(lien.centre)}
+              className='text-xs text-blue-700 hover:text-blue-900 font-semibold'
+            >
+              Éditer
+            </button>
+            <button
+              type='button'
+              disabled={busy}
               onClick={() => handleRetirer(lien.id)}
               className='text-xs text-red-600 hover:text-red-800 font-semibold'
             >
@@ -238,43 +298,63 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
         ))}
       </div>
 
-      {showCreateModal && createPortal(
+      {showCentreModal && createPortal(
         <div className='fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4'>
           <form
-            onSubmit={handleCreerCentre}
+            onSubmit={handleSubmitCentre}
             className='w-full max-w-md rounded-2xl bg-white p-6 shadow-xl space-y-4'
           >
-            <h4 className='font-bold text-gray-900'>Nouveau centre</h4>
+            <h4 className='font-bold text-gray-900'>
+              {editingCentreId ? 'Modifier le centre' : 'Nouveau centre'}
+            </h4>
             <input
               required
-              value={newCentre.nom}
-              onChange={(e) => setNewCentre({ ...newCentre, nom: e.target.value })}
+              value={centreForm.nom}
+              onChange={(e) => setCentreForm({ ...centreForm, nom: e.target.value })}
               placeholder='Nom du lieu'
               className='w-full px-3 py-2 border border-gray-200 rounded-lg text-sm'
             />
             <input
               required
-              value={newCentre.ville}
-              onChange={(e) => setNewCentre({ ...newCentre, ville: e.target.value })}
+              value={centreForm.ville}
+              onChange={(e) => setCentreForm({ ...centreForm, ville: e.target.value })}
               placeholder='Ville'
               className='w-full px-3 py-2 border border-gray-200 rounded-lg text-sm'
             />
+            <div>
+              <label className='block text-xs font-semibold text-gray-600 mb-1'>
+                Code ville (2 chiffres, pour n° de table)
+              </label>
+              <input
+                value={centreForm.codeVille}
+                onChange={(e) => setCentreForm({ ...centreForm, codeVille: e.target.value })}
+                placeholder='01'
+                maxLength={2}
+                inputMode='numeric'
+                pattern='\d{2}'
+                className='w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono'
+              />
+              <p className='mt-1 text-[11px] text-gray-500'>Optionnel pour l’instant — ex. 01 = Cotonou</p>
+            </div>
             <input
-              value={newCentre.adresse}
-              onChange={(e) => setNewCentre({ ...newCentre, adresse: e.target.value })}
+              value={centreForm.adresse}
+              onChange={(e) => setCentreForm({ ...centreForm, adresse: e.target.value })}
               placeholder='Adresse (optionnel)'
               className='w-full px-3 py-2 border border-gray-200 rounded-lg text-sm'
             />
             <input
-              value={newCentre.telephone}
-              onChange={(e) => setNewCentre({ ...newCentre, telephone: e.target.value })}
+              value={centreForm.telephone}
+              onChange={(e) => setCentreForm({ ...centreForm, telephone: e.target.value })}
               placeholder='Téléphone (optionnel)'
               className='w-full px-3 py-2 border border-gray-200 rounded-lg text-sm'
             />
             <div className='flex justify-end gap-2'>
               <button
                 type='button'
-                onClick={() => setShowCreateModal(false)}
+                onClick={() => {
+                  setShowCentreModal(false);
+                  setEditingCentreId(null);
+                }}
                 className='px-4 py-2 text-sm text-gray-600'
               >
                 Annuler
@@ -284,7 +364,7 @@ export default function GestionCentresConcours({ concoursId, concoursLibelle }) 
                 disabled={busy}
                 className='px-4 py-2 rounded-lg bg-orange-600 text-white text-sm font-semibold disabled:opacity-60'
               >
-                {busy ? 'Création...' : 'Créer'}
+                {busy ? 'Enregistrement…' : (editingCentreId ? 'Enregistrer' : 'Créer')}
               </button>
             </div>
           </form>

@@ -52,6 +52,7 @@ export default function GestionConcours() {
   const [editingConcours, setEditingConcours] = useState(null);
   const [formData, setFormData] = useState({
     libelle: '',
+    codeFiliere: '',
     etablissementId: '',
     etablissement: '',
     useEtablissementLibre: false,
@@ -97,6 +98,7 @@ export default function GestionConcours() {
     setEditingConcours(null);
     setFormData({
       libelle: '',
+      codeFiliere: '',
       etablissementId: '',
       etablissement: '',
       useEtablissementLibre: false,
@@ -127,6 +129,7 @@ export default function GestionConcours() {
 
     setFormData({
       libelle: c.libelle,
+      codeFiliere: c.codeFiliere || '',
       etablissementId: c.etablissementId || '',
       etablissement: linkedEtab?.nom || c.etablissement || '',
       useEtablissementLibre,
@@ -152,6 +155,9 @@ export default function GestionConcours() {
     // Champs obligatoires
     if (!formData.libelle || formData.libelle.trim() === '') {
       errors.libelle = 'Le libellé est obligatoire';
+    }
+    if (formData.codeFiliere && !/^\d{2}$/.test(String(formData.codeFiliere).trim())) {
+      errors.codeFiliere = 'Le code filière doit être exactement 2 chiffres (ex: 40)';
     }
     if (formData.useEtablissementLibre) {
       if (!formData.etablissement || formData.etablissement.trim() === '') {
@@ -249,6 +255,7 @@ export default function GestionConcours() {
     const selectedEtab = publicEtablissements.find((e) => e.id === formData.etablissementId);
     const payload = {
       libelle: formData.libelle,
+      codeFiliere: formData.codeFiliere?.trim() ? formData.codeFiliere.trim() : null,
       etablissement: formData.useEtablissementLibre
         ? formData.etablissement.trim()
         : (selectedEtab?.nom || formData.etablissement.trim()),
@@ -677,6 +684,27 @@ export default function GestionConcours() {
                 />
                 {validationErrors.libelle && (
                   <p className='mt-1 text-xs text-red-600'>{validationErrors.libelle}</p>
+                )}
+              </div>
+
+              <div>
+                <label className='block text-sm font-semibold text-gray-700 mb-1'>
+                  Code filière (n° de table)
+                </label>
+                <input
+                  type='text'
+                  value={formData.codeFiliere}
+                  onChange={(e) => setFormData({ ...formData, codeFiliere: e.target.value })}
+                  placeholder='40'
+                  maxLength={2}
+                  inputMode='numeric'
+                  className={`w-full px-4 py-2 border rounded-xl font-mono ${
+                    validationErrors.codeFiliere ? 'border-red-500' : 'border-gray-200'
+                  }`}
+                />
+                <p className='mt-1 text-xs text-gray-500'>Optionnel — 2 chiffres (ex. 40)</p>
+                {validationErrors.codeFiliere && (
+                  <p className='mt-1 text-xs text-red-600'>{validationErrors.codeFiliere}</p>
                 )}
               </div>
 

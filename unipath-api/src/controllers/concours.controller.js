@@ -12,6 +12,7 @@ const { candidateSerieMatchesConcours } = require('../utils/series.helper');
 const { validateCentresComposition } = require('../utils/centres-composition.helper');
 const { normalizePieceNom } = require('../constants/pieces.constants');
 const { deriveSigleFromLibelleConcours } = require('../utils/numero-inscription.helper');
+const { parseOptionalCode2 } = require('../utils/code-table.helper');
 
 /** piece.id → champ Dossier Prisma (fallback si sourceDossier absent). */
 const DOSSIER_FIELD_MAP = {
@@ -320,7 +321,8 @@ exports.createConcours = async (req, res) => {
       dateFinDepot,
       dateDebutComposition,
       dateFinComposition,
-      centresComposition
+      centresComposition,
+      codeFiliere,
     } = req.body;
 
     const missingFields = [];
@@ -340,6 +342,11 @@ exports.createConcours = async (req, res) => {
         error: 'Tous les champs obligatoires doivent être renseignés',
         missingFields
       });
+    }
+
+    const codeFiliereParsed = parseOptionalCode2(codeFiliere, 'codeFiliere');
+    if (codeFiliereParsed.error) {
+      return res.status(400).json({ error: codeFiliereParsed.error });
     }
 
     const validationDepot = validateDatesDepot(dateDebutDepot, dateFinDepot);
@@ -415,7 +422,8 @@ exports.createConcours = async (req, res) => {
         dateDebutDepot: new Date(dateDebutDepot),
         dateFinDepot: new Date(dateFinDepot),
         dateDebutComposition: new Date(dateDebutComposition),
-        dateFinComposition: new Date(dateFinComposition)
+        dateFinComposition: new Date(dateFinComposition),
+        ...(codeFiliereParsed.skip ? {} : { codeFiliere: codeFiliereParsed.value }),
     };
 
     if (resolvedEtablissement.value !== undefined) {
@@ -459,7 +467,8 @@ exports.updateConcours = async (req, res) => {
       dateFinDepot,
       dateDebutComposition,
       dateFinComposition,
-      centresComposition
+      centresComposition,
+      codeFiliere,
     } = req.body;
 
     const existing = await prisma.concours.findUnique({
@@ -471,7 +480,15 @@ exports.updateConcours = async (req, res) => {
       return res.status(404).json({ error: 'Concours non trouvé' });
     }
 
+    const codeFiliereParsed = parseOptionalCode2(codeFiliere, 'codeFiliere');
+    if (codeFiliereParsed.error) {
+      return res.status(400).json({ error: codeFiliereParsed.error });
+    }
+
     const updateData = {};
+    if (!codeFiliereParsed.skip) {
+      updateData.codeFiliere = codeFiliereParsed.value;
+    }
     let hasInscriptions = existing._count.inscriptions > 0;
     let piecesModified = false;
 

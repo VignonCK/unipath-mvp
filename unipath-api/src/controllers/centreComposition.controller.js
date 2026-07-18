@@ -1,4 +1,5 @@
 const prisma = require('../prisma');
+const { parseOptionalCode2 } = require('../utils/code-table.helper');
 
 function mapConcoursCentreRow(row) {
   const inscritsCount = row._count?.dossiers ?? 0;
@@ -20,9 +21,14 @@ function mapConcoursCentreRow(row) {
 
 exports.creerCentre = async (req, res) => {
   try {
-    const { nom, ville, adresse, telephone } = req.body;
+    const { nom, ville, adresse, telephone, codeVille } = req.body;
     if (!nom?.trim() || !ville?.trim()) {
       return res.status(400).json({ error: 'Nom et ville requis' });
+    }
+
+    const codeParsed = parseOptionalCode2(codeVille, 'codeVille');
+    if (codeParsed.error) {
+      return res.status(400).json({ error: codeParsed.error });
     }
 
     const centre = await prisma.centreComposition.create({
@@ -31,6 +37,7 @@ exports.creerCentre = async (req, res) => {
         ville: ville.trim(),
         adresse: adresse?.trim() || null,
         telephone: telephone?.trim() || null,
+        ...(codeParsed.skip ? {} : { codeVille: codeParsed.value }),
       },
     });
 
@@ -67,11 +74,16 @@ exports.listerCentres = async (req, res) => {
 exports.modifierCentre = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nom, ville, adresse, telephone } = req.body;
+    const { nom, ville, adresse, telephone, codeVille } = req.body;
 
     const existing = await prisma.centreComposition.findUnique({ where: { id } });
     if (!existing) {
       return res.status(404).json({ error: 'Centre non trouvé' });
+    }
+
+    const codeParsed = parseOptionalCode2(codeVille, 'codeVille');
+    if (codeParsed.error) {
+      return res.status(400).json({ error: codeParsed.error });
     }
 
     const centre = await prisma.centreComposition.update({
@@ -81,6 +93,7 @@ exports.modifierCentre = async (req, res) => {
         ...(ville != null && { ville: String(ville).trim() }),
         ...(adresse !== undefined && { adresse: adresse?.trim() || null }),
         ...(telephone !== undefined && { telephone: telephone?.trim() || null }),
+        ...(!codeParsed.skip && { codeVille: codeParsed.value }),
       },
     });
 
