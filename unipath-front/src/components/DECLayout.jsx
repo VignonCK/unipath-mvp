@@ -22,6 +22,21 @@ const TABS = [
     path: '/gestion-concours',
     activePrefixes: ['/gestion-concours'],
   },
+  {
+    label: 'Centres',
+    path: '/dec/centres',
+    activePrefixes: ['/dec/centres'],
+  },
+  {
+    label: 'Commission',
+    path: '/dec/commission',
+    activePrefixes: ['/dec/commission'],
+  },
+  {
+    label: 'Convocations',
+    path: '/dec/convocations',
+    activePrefixes: ['/dec/convocations'],
+  },
 ];
 
 export default function DECLayout({ children }) {

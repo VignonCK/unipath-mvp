@@ -9,6 +9,8 @@ async function getConcoursPublic(concoursId) {
       sigle: true,
       etablissementId: true,
       etablissement: true,
+      etudeCloturee: true,
+      etudeClotureeAt: true,
       etablissementOrganisateur: {
         select: { id: true, nom: true, ville: true, type: true },
       },
@@ -35,6 +37,8 @@ async function getConcoursPublic(concoursId) {
       etablissementId: concours.etablissementId,
       etablissementNom: etab?.nom || concours.etablissement || null,
       etablissement: etab || null,
+      etudeCloturee: Boolean(concours.etudeCloturee),
+      etudeClotureeAt: concours.etudeClotureeAt || null,
     },
   };
 }

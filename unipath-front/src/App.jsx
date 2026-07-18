@@ -11,6 +11,9 @@ import DetailCandidatCommission from './pages/DetailCandidatCommission';
 import DashboardDGES from './pages/DashboardDGES';
 import DashboardDEC from './pages/DashboardDEC';
 import GestionConcours from './pages/GestionConcours';
+import DECCentres from './pages/DECCentres';
+import DECCommission from './pages/DECCommission';
+import DECConvocations from './pages/DECConvocations';
 import GestionNotes from './pages/GestionNotes';
 import ClassementConcours from './pages/ClassementConcours';
 import PageConcours from './pages/PageConcours';
@@ -389,6 +392,30 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['DEC']}>
               <GestionConcours />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/dec/centres'
+          element={
+            <ProtectedRoute allowedRoles={['DEC']}>
+              <DECCentres />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/dec/commission'
+          element={
+            <ProtectedRoute allowedRoles={['DEC']}>
+              <DECCommission />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/dec/convocations'
+          element={
+            <ProtectedRoute allowedRoles={['DEC']}>
+              <DECConvocations />
             </ProtectedRoute>
           }
         />

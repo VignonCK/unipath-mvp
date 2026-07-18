@@ -448,6 +448,20 @@ export const dgesService = {
   rouvrirEtudeConcours: (concoursId) =>
     request(`/dges/concours/${concoursId}/rouvrir-etude`, { method: 'POST' }),
 
+  getCommissionConcours: (concoursId) =>
+    request(`/dges/concours/${concoursId}/commission`),
+
+  creerMembreCommissionConcours: (concoursId, data) =>
+    request(`/dges/concours/${concoursId}/commission`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  supprimerMembreCommissionConcours: (concoursId, membreId) =>
+    request(`/dges/concours/${concoursId}/commission/${membreId}`, {
+      method: 'DELETE',
+    }),
+
   genererNumerosTable: (concoursId) =>
     request(`/dges/concours/${concoursId}/generer-numeros-table`, { method: 'POST' }),
 
