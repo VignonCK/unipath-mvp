@@ -51,7 +51,7 @@ async function ensureNumeroTable(inscriptionId, concoursId) {
     console.log('N° de table déjà présent:', current.numeroInscription);
     return current.numeroInscription;
   }
-  const attribues = await prisma.$transaction(
+  const { attribues } = await prisma.$transaction(
     (tx) => attribuerNumerosTableParConcours(tx, concoursId),
     { timeout: 30000 },
   );

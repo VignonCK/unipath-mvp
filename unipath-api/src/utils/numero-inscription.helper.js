@@ -1,13 +1,14 @@
 /**
- * Numéro d'inscription concours (n° de table) : {CODE}-{ANNEE}-{SEQ4}
- * Exemple : ENAM-2026-0001
+ * N° de table concours : YY + codeVille(2) + codeFiliere(2) + seq(3)
+ * Exemple : 260140601
  *
- * Attribution groupée alphabétique (VALIDE sans numéro), puis APPEND
- * pour les validations tardives (dernier compteur + 1).
+ * Attribution alphabétique PAR CENTRE (pas globale au concours).
+ * APPEND : max(seq) pour le préfixe du centre + 1.
  */
 const { getAnneeAcademique } = require('./matricule.helper');
 
 const REJET_STATUTS = ['REJETE', 'REJETE_PAR_COMMISSION'];
+const NUMERO_TABLE_REGEX = /^\d{9}$/;
 
 function deriveSigleFromLibelleConcours(libelle = '') {
   const text = String(libelle).trim();
@@ -37,8 +38,39 @@ function resolveCodeConcours(concours) {
   return deriveSigleFromLibelleConcours(concours?.libelle);
 }
 
+/** @deprecated Ancien format CODE-ANNEE-SEQ4 — ne plus utiliser pour les n° de table. */
 function formatNumeroInscription(code, annee, sequence) {
   return `${code}-${annee}-${String(sequence).padStart(4, '0')}`;
+}
+
+function resolveAnneeYY(concours) {
+  const date =
+    concours?.dateDebutComposition
+    || concours?.dateComposition
+    || concours?.dateDebutDepot
+    || null;
+  let year = date ? new Date(date).getFullYear() : getAnneeAcademique();
+  if (!Number.isFinite(year)) {
+    year = getAnneeAcademique();
+  }
+  return String(year).slice(-2);
+}
+
+function buildPrefix(yy, codeVille, codeFiliere) {
+  return `${yy}${codeVille}${codeFiliere}`;
+}
+
+function formatNumeroTable(yy, codeVille, codeFiliere, seq) {
+  return `${buildPrefix(yy, codeVille, codeFiliere)}${String(seq).padStart(3, '0')}`;
+}
+
+function parseSeqFromNumero(numero, prefix) {
+  const n = String(numero || '');
+  if (!n.startsWith(prefix) || n.length !== 9 || !NUMERO_TABLE_REGEX.test(n)) {
+    return null;
+  }
+  const seq = Number(n.slice(6, 9));
+  return Number.isFinite(seq) ? seq : null;
 }
 
 function compareCandidatsAlpha(a, b) {
@@ -52,67 +84,62 @@ function compareCandidatsAlpha(a, b) {
 }
 
 /**
- * Verrouille le concours et retourne le prochain numéro (incrémente le compteur).
- * @param {import('@prisma/client').Prisma.TransactionClient} tx
- * @param {string} concoursId
+ * @deprecated Compteur global concours — remplacé par séquence par centre (format 9 chiffres).
+ * Conservé pour compat tests/legacy ; ne plus appeler depuis le flux DEC.
  */
-async function genererNumeroInscriptionPourConcours(tx, concoursId) {
-  const annee = getAnneeAcademique();
+async function genererNumeroInscriptionPourConcours() {
+  throw new Error(
+    'genererNumeroInscriptionPourConcours est obsolète. Utiliser attribuerNumerosTableParConcours (format YY+ville+filière+seq par centre).',
+  );
+}
 
-  // Concours.id est TEXT en Postgres. Prisma peut binder un UUID-like string
-  // comme type uuid → erreur "text = uuid". Forcer ::text sur le paramètre.
-  const concoursIdText = String(concoursId);
-  const rows = await tx.$queryRaw`
-    SELECT id, libelle, sigle, "inscriptionCompteur", "inscriptionCompteurAnnee"
-    FROM "Concours"
-    WHERE id = ${concoursIdText}::text
-    FOR UPDATE
-  `;
-
-  const concours = rows[0];
-  if (!concours) {
-    throw new Error('Concours introuvable');
-  }
-
-  const code = resolveCodeConcours(concours);
-  const compteurAnnee = Number(concours.inscriptionCompteurAnnee);
-  const compteur =
-    compteurAnnee === annee
-      ? (Number(concours.inscriptionCompteur) || 0) + 1
-      : 1;
-
-  const numero = formatNumeroInscription(code, annee, compteur);
-
-  await tx.concours.update({
-    where: { id: concoursId },
-    data: {
-      inscriptionCompteur: compteur,
-      inscriptionCompteurAnnee: annee,
-      ...(!concours.sigle ? { sigle: code } : {}),
+async function maxSeqPourPrefix(tx, concoursId, prefix) {
+  const existants = await tx.inscription.findMany({
+    where: {
+      concoursId,
+      numeroInscription: { startsWith: prefix },
     },
+    select: { numeroInscription: true },
   });
 
-  return numero;
+  let max = 0;
+  for (const row of existants) {
+    const seq = parseSeqFromNumero(row.numeroInscription, prefix);
+    if (seq != null && seq > max) max = seq;
+  }
+  return max;
 }
 
 /**
- * Attribue les n° de table aux dossiers VALIDE sans numéro, par ordre alphabétique
- * (nom, prénom). Les inscriptions déjà numérotées sont ignorées (APPEND).
+ * Attribue les n° de table (format 9 chiffres) aux dossiers VALIDE sans numéro,
+ * alphabétiquement PAR CENTRE.
  *
- * @param {import('@prisma/client').Prisma.TransactionClient} tx
- * @param {string} concoursId
- * @returns {Promise<Array<{ inscriptionId: string, candidatId: string, nom: string, prenom: string, numeroInscription: string }>>}
+ * @returns {Promise<{
+ *   attribues: Array<object>,
+ *   exclus: Array<{ inscriptionId: string, candidatId: string, nom: string, prenom: string, motif: string }>,
+ * }>}
  */
 async function attribuerNumerosTableParConcours(tx, concoursId) {
   const concours = await tx.concours.findUnique({
     where: { id: concoursId },
-    select: { id: true, libelle: true },
+    select: {
+      id: true,
+      libelle: true,
+      codeFiliere: true,
+      dateDebutComposition: true,
+      dateComposition: true,
+      dateDebutDepot: true,
+    },
   });
   if (!concours) {
     throw new Error('Concours introuvable');
   }
 
-  const eligibles = await tx.inscription.findMany({
+  const yy = resolveAnneeYY(concours);
+  const codeFiliere = concours.codeFiliere ? String(concours.codeFiliere).trim() : '';
+  const codeFiliereOk = /^\d{2}$/.test(codeFiliere);
+
+  const candidats = await tx.inscription.findMany({
     where: {
       concoursId,
       numeroInscription: null,
@@ -120,37 +147,120 @@ async function attribuerNumerosTableParConcours(tx, concoursId) {
     },
     include: {
       candidat: { select: { id: true, nom: true, prenom: true } },
+      dossierInscription: {
+        select: {
+          id: true,
+          concoursCentreId: true,
+          centreChoisi: {
+            select: {
+              id: true,
+              centre: {
+                select: { id: true, nom: true, ville: true, codeVille: true },
+              },
+            },
+          },
+        },
+      },
     },
   });
 
-  eligibles.sort(compareCandidatsAlpha);
-
   const attribues = [];
-  for (const inscription of eligibles) {
-    const numeroInscription = await genererNumeroInscriptionPourConcours(tx, concoursId);
-    await tx.inscription.update({
-      where: { id: inscription.id },
-      data: { numeroInscription },
-    });
-    attribues.push({
+  const exclus = [];
+  /** @type {Map<string, typeof candidats>} */
+  const parCentre = new Map();
+
+  for (const inscription of candidats) {
+    const base = {
       inscriptionId: inscription.id,
       candidatId: inscription.candidat.id,
       nom: inscription.candidat.nom,
       prenom: inscription.candidat.prenom,
-      numeroInscription,
-    });
+    };
+
+    if (!codeFiliereOk) {
+      exclus.push({
+        ...base,
+        motif: `Concours « ${concours.libelle} » sans codeFiliere configuré (2 chiffres requis)`,
+      });
+      continue;
+    }
+
+    const centre = inscription.dossierInscription?.centreChoisi?.centre;
+    const concoursCentreId = inscription.dossierInscription?.concoursCentreId;
+
+    if (!concoursCentreId || !centre) {
+      exclus.push({
+        ...base,
+        motif: 'Aucun centre de composition choisi',
+      });
+      continue;
+    }
+
+    const codeVille = centre.codeVille ? String(centre.codeVille).trim() : '';
+    if (!/^\d{2}$/.test(codeVille)) {
+      exclus.push({
+        ...base,
+        motif: `Centre « ${centre.nom} — ${centre.ville} » sans codeVille configuré (2 chiffres requis)`,
+      });
+      continue;
+    }
+
+    if (!parCentre.has(concoursCentreId)) {
+      parCentre.set(concoursCentreId, {
+        centre,
+        codeVille,
+        inscriptions: [],
+      });
+    }
+    parCentre.get(concoursCentreId).inscriptions.push(inscription);
   }
 
-  return attribues;
+  for (const [, group] of parCentre) {
+    const { centre, codeVille, inscriptions } = group;
+    const prefix = buildPrefix(yy, codeVille, codeFiliere);
+    let nextSeq = (await maxSeqPourPrefix(tx, concoursId, prefix)) + 1;
+
+    inscriptions.sort(compareCandidatsAlpha);
+
+    for (const inscription of inscriptions) {
+      if (nextSeq > 999) {
+        exclus.push({
+          inscriptionId: inscription.id,
+          candidatId: inscription.candidat.id,
+          nom: inscription.candidat.nom,
+          prenom: inscription.candidat.prenom,
+          motif: `Séquence épuisée (>999) pour le préfixe ${prefix} (centre ${centre.nom})`,
+        });
+        continue;
+      }
+
+      const numeroInscription = formatNumeroTable(yy, codeVille, codeFiliere, nextSeq);
+      await tx.inscription.update({
+        where: { id: inscription.id },
+        data: { numeroInscription },
+      });
+      attribues.push({
+        inscriptionId: inscription.id,
+        candidatId: inscription.candidat.id,
+        nom: inscription.candidat.nom,
+        prenom: inscription.candidat.prenom,
+        numeroInscription,
+        centreId: centre.id,
+        centreNom: centre.nom,
+        codeVille,
+        codeFiliere,
+      });
+      nextSeq += 1;
+    }
+  }
+
+  return { attribues, exclus };
 }
 
 function isInscriptionActive(statut) {
   return statut && !REJET_STATUTS.includes(statut);
 }
 
-/**
- * Retourne le numéro d'inscription le plus récent parmi les inscriptions actives.
- */
 function pickNumeroInscriptionRecent(inscriptions = []) {
   const actives = inscriptions
     .filter((ins) => ins?.numeroInscription && isInscriptionActive(ins.statut))
@@ -171,10 +281,15 @@ module.exports = {
   normalizeCodeConcours,
   resolveCodeConcours,
   formatNumeroInscription,
+  formatNumeroTable,
+  buildPrefix,
+  resolveAnneeYY,
+  parseSeqFromNumero,
   genererNumeroInscriptionPourConcours,
   attribuerNumerosTableParConcours,
   pickNumeroInscriptionRecent,
   isInscriptionActive,
   genererNumeroInscriptionUnique,
   compareCandidatsAlpha,
+  NUMERO_TABLE_REGEX,
 };

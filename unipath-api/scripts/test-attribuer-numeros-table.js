@@ -149,7 +149,7 @@ async function main() {
   const txOpts = { maxWait: 15_000, timeout: 60_000 };
 
   console.log('\n=== Batch 1 (attribution alphabétique) ===');
-  const batch1 = await prisma.$transaction(
+  const { attribues: batch1 } = await prisma.$transaction(
     (tx) => attribuerNumerosTableParConcours(tx, concours.id),
     txOpts,
   );
@@ -175,7 +175,7 @@ async function main() {
   const snapshot = batch1.map((r) => ({ id: r.inscriptionId, numero: r.numeroInscription }));
 
   console.log('\n=== Batch 2 (idempotent) ===');
-  const batch2 = await prisma.$transaction(
+  const { attribues: batch2 } = await prisma.$transaction(
     (tx) => attribuerNumerosTableParConcours(tx, concours.id),
     txOpts,
   );
@@ -211,7 +211,7 @@ async function main() {
     console.log(`Nouveau VALIDE temporaire : ${extraCandidat.nom} ${extraCandidat.prenom}`);
 
     const maxAvant = Math.max(0, ...snapshot.map((s) => parseSeq(s.numero)));
-    const batch3 = await prisma.$transaction(
+    const { attribues: batch3 } = await prisma.$transaction(
       (tx) => attribuerNumerosTableParConcours(tx, concours.id),
       txOpts,
     );

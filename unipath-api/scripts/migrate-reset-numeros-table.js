@@ -1,14 +1,15 @@
 /**
- * Migration one-shot — reset des n° de table (ancienne logique ordre d'arrivée).
+ * Reset des n° de table (ancien format EPAC-2026-0001 ou tout numéro existant).
  *
- * Avant attribution alphabétique groupée :
+ * Pour repartir propre avec le format Phase B (YY+codeVille+codeFiliere+seq) :
  * 1. Logue par concours combien d'inscriptions ont un numeroInscription
  * 2. Nullifie tous les Inscription.numeroInscription non nuls
  * 3. Remet Concours.inscriptionCompteur = 0 et inscriptionCompteurAnnee = null
+ *    (compteurs legacy obsolètes — la séquence est désormais par centre)
  *
- * Usage (après validation explicite) :
- *   node scripts/migrate-reset-numeros-table.js
+ * Usage :
  *   node scripts/migrate-reset-numeros-table.js --dry-run
+ *   node scripts/migrate-reset-numeros-table.js
  */
 require('dotenv').config();
 const prisma = require('../src/prisma');

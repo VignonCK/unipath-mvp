@@ -141,7 +141,7 @@ async function main() {
     return String(a.candidat.prenom).localeCompare(String(b.candidat.prenom), 'fr', { sensitivity: 'base' });
   });
 
-  const attribues = await prisma.$transaction(
+  const { attribues } = await prisma.$transaction(
     (tx) => attribuerNumerosTableParConcours(tx, concoursId),
     { maxWait: 15_000, timeout: 120_000 },
   );

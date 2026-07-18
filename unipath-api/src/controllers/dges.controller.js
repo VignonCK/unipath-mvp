@@ -278,15 +278,24 @@ exports.genererNumerosTableConcours = async (req, res) => {
       return res.status(404).json({ error: 'Concours non trouvé' });
     }
 
-    const attribues = await prisma.$transaction(
+    const { attribues, exclus } = await prisma.$transaction(
       (tx) => attribuerNumerosTableParConcours(tx, concoursId),
       { maxWait: 15_000, timeout: 120_000 },
     );
 
+    const parts = [];
+    if (attribues.length > 0) {
+      parts.push(`${attribues.length} numéro(s) de table attribué(s)`);
+    }
+    if (exclus.length > 0) {
+      parts.push(`${exclus.length} dossier(s) non traité(s)`);
+    }
+    if (parts.length === 0) {
+      parts.push('Aucun candidat VALIDE en attente de numéro pour ce concours');
+    }
+
     return res.json({
-      message: attribues.length > 0
-        ? `${attribues.length} numéro(s) de table attribué(s)`
-        : 'Aucun candidat VALIDE en attente de numéro pour ce concours',
+      message: parts.join(' — '),
       concours: {
         id: concours.id,
         libelle: concours.libelle,
@@ -295,6 +304,8 @@ exports.genererNumerosTableConcours = async (req, res) => {
       },
       count: attribues.length,
       attribues,
+      exclus,
+      nonTraites: exclus,
     });
   } catch (error) {
     console.error('genererNumerosTableConcours:', error);
