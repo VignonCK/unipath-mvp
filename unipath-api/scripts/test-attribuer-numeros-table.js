@@ -146,8 +146,13 @@ async function main() {
     data: { inscriptionCompteur: 0, inscriptionCompteurAnnee: null },
   });
 
+  const txOpts = { maxWait: 15_000, timeout: 60_000 };
+
   console.log('\n=== Batch 1 (attribution alphabétique) ===');
-  const batch1 = await prisma.$transaction((tx) => attribuerNumerosTableParConcours(tx, concours.id));
+  const batch1 = await prisma.$transaction(
+    (tx) => attribuerNumerosTableParConcours(tx, concours.id),
+    txOpts,
+  );
   batch1.forEach((r) => console.log(`  ${r.numeroInscription} → ${r.nom} ${r.prenom}`));
 
   all = check('batch1 numérote tous les VALIDE', batch1.length === valides.length, `n=${batch1.length}`) && all;
@@ -170,7 +175,10 @@ async function main() {
   const snapshot = batch1.map((r) => ({ id: r.inscriptionId, numero: r.numeroInscription }));
 
   console.log('\n=== Batch 2 (idempotent) ===');
-  const batch2 = await prisma.$transaction((tx) => attribuerNumerosTableParConcours(tx, concours.id));
+  const batch2 = await prisma.$transaction(
+    (tx) => attribuerNumerosTableParConcours(tx, concours.id),
+    txOpts,
+  );
   all = check('batch2 n\'attribue rien', batch2.length === 0, `n=${batch2.length}`) && all;
 
   const after2 = await prisma.inscription.findMany({
@@ -203,7 +211,10 @@ async function main() {
     console.log(`Nouveau VALIDE temporaire : ${extraCandidat.nom} ${extraCandidat.prenom}`);
 
     const maxAvant = Math.max(0, ...snapshot.map((s) => parseSeq(s.numero)));
-    const batch3 = await prisma.$transaction((tx) => attribuerNumerosTableParConcours(tx, concours.id));
+    const batch3 = await prisma.$transaction(
+      (tx) => attribuerNumerosTableParConcours(tx, concours.id),
+      txOpts,
+    );
     batch3.forEach((r) => console.log(`  ${r.numeroInscription} → ${r.nom} ${r.prenom}`));
 
     all = check('batch3 attribue 1 numéro', batch3.length === 1) && all;

@@ -59,14 +59,15 @@ function compareCandidatsAlpha(a, b) {
 async function genererNumeroInscriptionPourConcours(tx, concoursId) {
   const annee = getAnneeAcademique();
 
-  // Concours.id est de type TEXT en base (pas uuid) — ne pas caster en ::uuid
-  const rows = await tx.$queryRawUnsafe(
-    `SELECT id, libelle, sigle, "inscriptionCompteur", "inscriptionCompteurAnnee"
-     FROM "Concours"
-     WHERE id = $1
-     FOR UPDATE`,
-    concoursId,
-  );
+  // Concours.id est TEXT en Postgres. Prisma peut binder un UUID-like string
+  // comme type uuid → erreur "text = uuid". Forcer ::text sur le paramètre.
+  const concoursIdText = String(concoursId);
+  const rows = await tx.$queryRaw`
+    SELECT id, libelle, sigle, "inscriptionCompteur", "inscriptionCompteurAnnee"
+    FROM "Concours"
+    WHERE id = ${concoursIdText}::text
+    FOR UPDATE
+  `;
 
   const concours = rows[0];
   if (!concours) {
