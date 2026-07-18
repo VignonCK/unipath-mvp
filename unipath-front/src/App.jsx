@@ -9,6 +9,7 @@ import EmailConfirmation from './pages/EmailConfirmation';
 import DashboardCommission from './pages/DashboardCommission';
 import DetailCandidatCommission from './pages/DetailCandidatCommission';
 import DashboardDGES from './pages/DashboardDGES';
+import DashboardDEC from './pages/DashboardDEC';
 import GestionConcours from './pages/GestionConcours';
 import GestionNotes from './pages/GestionNotes';
 import ClassementConcours from './pages/ClassementConcours';
@@ -367,6 +368,16 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['DGES']}>
               <DashboardDGES />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Routes protégées - DEC (placeholder Phase 1/6) */}
+        <Route
+          path='/dashboard-dec'
+          element={
+            <ProtectedRoute allowedRoles={['DEC']}>
+              <DashboardDEC />
             </ProtectedRoute>
           }
         />

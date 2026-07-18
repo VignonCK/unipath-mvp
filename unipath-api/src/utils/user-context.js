@@ -41,6 +41,14 @@ async function resolveUserContext(userId, email) {
     return { role: dges.role, sousRole: null, profile: dges };
   }
 
+  const dec = await prisma.administrateurDEC.findUnique({
+    where: { id: userId },
+    select: { role: true, nom: true, prenom: true },
+  });
+  if (dec) {
+    return { role: dec.role, sousRole: null, profile: dec };
+  }
+
   const controleur = await prisma.controleur.findUnique({
     where: { id: userId },
     select: { role: true, nom: true, prenom: true },

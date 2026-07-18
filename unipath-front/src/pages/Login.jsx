@@ -85,8 +85,9 @@ export default function Login() {
         if (sousRole === 'EXAMINATEUR') navigate('/examinateur/dossiers');
         else if (sousRole === 'CONTROLEUR') navigate('/controleur-commission/tableau-de-bord');
         else navigate('/commission');
-      } else if (role === 'ETUDIANT' || role === 'CANDIDAT') navigate('/dashboard');
+      }       else if (role === 'ETUDIANT' || role === 'CANDIDAT') navigate('/dashboard');
       else if (role === 'DGES') navigate('/dashboard-dges');
+      else if (role === 'DEC') navigate('/dashboard-dec');
       else if (role === 'CONTROLEUR') navigate('/controleur-commission/tableau-de-bord');
       else if (role === 'ADMIN_ETABLISSEMENT') navigate(getDefaultRoute(role, sousRole));
       else navigate('/dashboard');

@@ -75,6 +75,36 @@ async function main() {
     console.log('⚠️  Erreur DGES:', error.message, '\n');
   }
 
+  // 2b. Créer un compte DEC
+  try {
+    console.log('📝 Création du compte DEC...');
+    const { data: decAuth, error: decError } = await supabase.auth.admin.createUser({
+      email: 'dec@test.com',
+      password: 'password123',
+      email_confirm: true,
+    });
+
+    if (decError) {
+      console.log('⚠️  DEC existe déjà ou erreur:', decError.message);
+    } else {
+      await prisma.administrateurDEC.create({
+        data: {
+          id: decAuth.user.id,
+          email: 'dec@test.com',
+          nom: 'TEST',
+          prenom: 'DEC',
+          telephone: '+22997000004',
+          role: 'DEC',
+        },
+      });
+      console.log('✅ Compte DEC créé');
+      console.log('   Email: dec@test.com');
+      console.log('   Password: password123\n');
+    }
+  } catch (error) {
+    console.log('⚠️  Erreur DEC:', error.message, '\n');
+  }
+
   // 3. Commission : 2 examinateurs + 1 contrôleur (double verdict)
   const sousRoleAccounts = [
     {
@@ -135,7 +165,8 @@ async function main() {
   console.log('   EXAMINATEUR 1         → examinateur@test.com / password123');
   console.log('   EXAMINATEUR 2         → examinateur2@test.com / password123');
   console.log('   CONTROLEUR COMMISSION → controleur-commission@test.com / password123');
-  console.log('   DGES                  → dges@test.com / password123\n');
+  console.log('   DGES                  → dges@test.com / password123');
+  console.log('   DEC                   → dec@test.com / password123\n');
 }
 
 main()

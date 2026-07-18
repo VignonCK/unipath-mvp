@@ -7,6 +7,7 @@ jest.mock('../../prisma', () => ({
   emailDelivery: { create: jest.fn() },
   membreCommission: { findUnique: jest.fn() },
   administrateurDGES: { findUnique: jest.fn() },
+  administrateurDEC: { findUnique: jest.fn() },
   controleur: { findUnique: jest.fn() },
   etablissement: { findUnique: jest.fn() },
 }));
@@ -88,6 +89,7 @@ describe('auth.controller — login', () => {
     });
     prisma.membreCommission.findUnique.mockResolvedValue(null);
     prisma.administrateurDGES.findUnique.mockResolvedValue(null);
+    prisma.administrateurDEC.findUnique.mockResolvedValue(null);
     prisma.controleur.findUnique.mockResolvedValue(null);
     prisma.etablissement.findUnique.mockResolvedValue(null);
 

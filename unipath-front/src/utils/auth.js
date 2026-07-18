@@ -22,6 +22,7 @@ export const ROLES = {
   CANDIDAT: 'CANDIDAT',
   COMMISSION: 'COMMISSION',
   DGES: 'DGES',
+  DEC: 'DEC',
   CONTROLEUR: 'CONTROLEUR',
   ADMIN_ETABLISSEMENT: 'ADMIN_ETABLISSEMENT',
 };
@@ -37,6 +38,7 @@ const DEFAULT_ROUTES = {
   [ROLES.CANDIDAT]: '/dashboard',
   [ROLES.COMMISSION]: '/commission',
   [ROLES.DGES]: '/dashboard-dges',
+  [ROLES.DEC]: '/dashboard-dec',
   [ROLES.CONTROLEUR]: '/controleur-commission/tableau-de-bord',
   [ROLES.ADMIN_ETABLISSEMENT]: '/admin-etablissement/campagnes',
 };

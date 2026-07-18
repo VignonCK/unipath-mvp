@@ -272,6 +272,19 @@ exports.login = async (req, res) => {
       }
     }
 
+    // Chercher dans AdministrateurDEC
+    if (!role) {
+      const dec = await prisma.administrateurDEC.findUnique({
+        where: { id: userId },
+        select: { role: true, nom: true, prenom: true },
+      });
+
+      if (dec) {
+        role = dec.role;
+        userData = dec;
+      }
+    }
+
     // Chercher dans Controleur
     if (!role) {
       const controleur = await prisma.controleur.findUnique({
@@ -665,6 +678,12 @@ async function resolveAccountByEmail(email) {
     select: { id: true },
   });
   if (dges) return dges;
+
+  const dec = await prisma.administrateurDEC.findUnique({
+    where: { email: normalized },
+    select: { id: true },
+  });
+  if (dec) return dec;
 
   const controleur = await prisma.controleur.findUnique({
     where: { email: normalized },
