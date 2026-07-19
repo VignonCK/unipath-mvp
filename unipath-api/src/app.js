@@ -74,6 +74,9 @@ app.use('/api/parcours', parcoursRoutes);
 app.use('/api/preinscriptions-etablissement', preinscriptionEtablissementRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/etablissement/campagnes', campagneAdminRoutes);
+app.use('/api/etablissement/demandes-filieres', require('./routes/demandeFiliereAdmin.routes'));
+app.use('/api/etablissement/unites-enseignement', require('./routes/uniteEnseignement.routes'));
+app.use('/api/etablissement/validations-ue', require('./routes/validationUe.routes'));
 app.use('/api/campagnes', campagneRoutes);
 
 // ── Health check ────────────────────────────────────────────────

@@ -6,6 +6,12 @@ import CandidatLayout from '../components/CandidatLayout';
 import EcolesPriveesNav from '../components/EcolesPriveesNav';
 import { ROUTES } from '../constants/routes';
 
+const LABEL_NIVEAU = {
+  LICENCE: 'Licence',
+  MASTER: 'Master',
+  AUTRE: 'Autres',
+};
+
 function findCampagneFiliereForFiliere(etablissement, filiereId) {
   if (!etablissement?.campagnes?.length || !filiereId) return null;
 
@@ -43,11 +49,10 @@ export default function EtablissementsPrives() {
   const [error, setError] = useState('');
   const [expandedEtabId, setExpandedEtabId] = useState(null);
 
-  const [aideActive, setAideActive] = useState(false);
-  const [choix, setChoix] = useState({ choix1: '', choix2: '', choix3: '' });
-  const [choixError, setChoixError] = useState('');
-  const [rechercheLoading, setRechercheLoading] = useState(false);
-  const [resultats, setResultats] = useState(null);
+  const [filtreVille, setFiltreVille] = useState('');
+  const [filtreFiliere, setFiltreFiliere] = useState('');
+  const [filtreNiveau, setFiltreNiveau] = useState('');
+  const [filtreRecherche, setFiltreRecherche] = useState('');
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -72,50 +77,51 @@ export default function EtablissementsPrives() {
     bootstrap();
   }, [navigate]);
 
-  const nomsFilieresUniques = useMemo(() => {
-    const noms = [...new Set(filieres.map((f) => f.nom))];
-    return noms.sort((a, b) => a.localeCompare(b, 'fr'));
+  const villes = useMemo(() => {
+    const set = new Set(
+      etablissements.map((e) => (e.ville || '').trim()).filter(Boolean),
+    );
+    return [...set].sort((a, b) => a.localeCompare(b, 'fr'));
+  }, [etablissements]);
+
+  const nomsFilieres = useMemo(() => {
+    const set = new Set(filieres.map((f) => f.nom).filter(Boolean));
+    return [...set].sort((a, b) => a.localeCompare(b, 'fr'));
   }, [filieres]);
 
-  const listeAffichee = resultats?.etablissements ?? etablissements;
+  const niveaux = useMemo(() => {
+    const set = new Set(filieres.map((f) => f.niveau).filter(Boolean));
+    return [...set].sort((a, b) => a.localeCompare(b, 'fr'));
+  }, [filieres]);
 
-  const validerChoix = () => {
-    const values = [choix.choix1, choix.choix2, choix.choix3].map((c) => c.trim()).filter(Boolean);
-    if (values.length !== 3) {
-      return 'Les trois choix de filière sont requis.';
-    }
-    if (new Set(values.map((v) => v.toLowerCase())).size !== 3) {
-      return 'Les trois choix doivent être différents.';
-    }
-    return '';
-  };
+  const listeAffichee = useMemo(() => {
+    const q = filtreRecherche.trim().toLowerCase();
+    return etablissements.filter((etab) => {
+      if (filtreVille && (etab.ville || '').trim() !== filtreVille) return false;
 
-  const handleRecherche = async (event) => {
-    event.preventDefault();
-    const validation = validerChoix();
-    if (validation) {
-      setChoixError(validation);
-      return;
-    }
-    setChoixError('');
-    setRechercheLoading(true);
-    setError('');
-    try {
-      const data = await etablissementService.rechercherParFilieres(choix);
-      setResultats(data);
-      setExpandedEtabId(null);
-    } catch (err) {
-      setError(err?.message || 'Erreur lors de la recherche');
-      setResultats(null);
-    } finally {
-      setRechercheLoading(false);
-    }
-  };
+      if (q) {
+        const hay = `${etab.nom || ''} ${etab.ville || ''} ${etab.adresse || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
 
-  const resetRecherche = () => {
-    setResultats(null);
-    setChoix({ choix1: '', choix2: '', choix3: '' });
-    setChoixError('');
+      if (!filtreFiliere && !filtreNiveau) return true;
+
+      const filieresEtab = mergeFilieresForEtab(etab, filieres);
+      return filieresEtab.some((f) => {
+        if (filtreFiliere && f.nom !== filtreFiliere) return false;
+        if (filtreNiveau && f.niveau !== filtreNiveau) return false;
+        return true;
+      });
+    });
+  }, [etablissements, filieres, filtreVille, filtreFiliere, filtreNiveau, filtreRecherche]);
+
+  const filtresActifs = Boolean(filtreVille || filtreFiliere || filtreNiveau || filtreRecherche.trim());
+
+  const resetFiltres = () => {
+    setFiltreVille('');
+    setFiltreFiliere('');
+    setFiltreNiveau('');
+    setFiltreRecherche('');
     setExpandedEtabId(null);
   };
 
@@ -185,100 +191,110 @@ export default function EtablissementsPrives() {
           </div>
         )}
 
-        <section className="rounded-2xl border border-blue-100 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-gray-900 mb-2">Aide à la décision</h2>
-          <p className="text-gray-600 mb-4">
-            Voulez-vous qu&apos;on vous aide à trouver les écoles appropriées ?
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => setAideActive(true)}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
-                aideActive ? 'bg-blue-900 text-white' : 'border border-blue-900 text-blue-900 hover:bg-blue-50'
-              }`}
-            >
-              Oui
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setAideActive(false);
-                resetRecherche();
-              }}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
-                !aideActive
-                  ? 'bg-orange-500 text-white'
-                  : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              Non, voir tous les établissements
-            </button>
+        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <h2 className="text-lg font-bold text-gray-900">Filtres</h2>
+            {filtresActifs && (
+              <button
+                type="button"
+                onClick={resetFiltres}
+                className="text-sm font-semibold text-blue-900 hover:underline"
+              >
+                Réinitialiser
+              </button>
+            )}
           </div>
-
-          {aideActive && (
-            <form onSubmit={handleRecherche} className="mt-6 space-y-4">
-              {['choix1', 'choix2', 'choix3'].map((key, index) => (
-                <div key={key}>
-                  <label htmlFor={key} className="block text-sm font-medium text-gray-700 mb-1">
-                    Choix {index + 1}
-                  </label>
-                  <select
-                    id={key}
-                    value={choix[key]}
-                    onChange={(e) => setChoix((prev) => ({ ...prev, [key]: e.target.value }))}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                  >
-                    <option value="">Sélectionnez une filière</option>
-                    {nomsFilieresUniques.map((nom) => (
-                      <option key={`${key}-${nom}`} value={nom}>
-                        {nom}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ))}
-              {choixError && <p className="text-sm text-red-600">{choixError}</p>}
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="submit"
-                  disabled={rechercheLoading}
-                  className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-60"
-                >
-                  {rechercheLoading ? 'Recherche…' : 'Rechercher les établissements'}
-                </button>
-                {resultats && (
-                  <button
-                    type="button"
-                    onClick={resetRecherche}
-                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    Réinitialiser
-                  </button>
-                )}
-              </div>
-            </form>
-          )}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <label htmlFor="filtre-recherche" className="block text-xs font-medium text-gray-600 mb-1">
+                Recherche
+              </label>
+              <input
+                id="filtre-recherche"
+                type="search"
+                value={filtreRecherche}
+                onChange={(e) => setFiltreRecherche(e.target.value)}
+                placeholder="Nom, ville…"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+              />
+            </div>
+            <div>
+              <label htmlFor="filtre-ville" className="block text-xs font-medium text-gray-600 mb-1">
+                Ville
+              </label>
+              <select
+                id="filtre-ville"
+                value={filtreVille}
+                onChange={(e) => setFiltreVille(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+              >
+                <option value="">Toutes les villes</option>
+                {villes.map((v) => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="filtre-filiere" className="block text-xs font-medium text-gray-600 mb-1">
+                Filière
+              </label>
+              <select
+                id="filtre-filiere"
+                value={filtreFiliere}
+                onChange={(e) => setFiltreFiliere(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+              >
+                <option value="">Toutes les filières</option>
+                {nomsFilieres.map((nom) => (
+                  <option key={nom} value={nom}>{nom}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="filtre-niveau" className="block text-xs font-medium text-gray-600 mb-1">
+                Niveau
+              </label>
+              <select
+                id="filtre-niveau"
+                value={filtreNiveau}
+                onChange={(e) => setFiltreNiveau(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+              >
+                <option value="">Tous les niveaux</option>
+                {niveaux.map((n) => (
+                  <option key={n} value={n}>{LABEL_NIVEAU[n] || n}</option>
+                ))}
+              </select>
+            </div>
+          </div>
         </section>
 
         <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-gray-900 mb-4">
-            {resultats
-              ? `${resultats.etablissements?.length ?? 0} établissement(s) correspondant à vos choix`
-              : `${listeAffichee.length} école${listeAffichee.length > 1 ? 's' : ''} privée${listeAffichee.length > 1 ? 's' : ''}`}
+            {listeAffichee.length} école{listeAffichee.length > 1 ? 's' : ''} privée
+            {listeAffichee.length > 1 ? 's' : ''}
+            {filtresActifs ? ' trouvée' : ''}
+            {filtresActifs && listeAffichee.length > 1 ? 's' : ''}
           </h2>
 
           {listeAffichee.length === 0 ? (
             <p className="text-gray-500 text-sm">
-              {resultats
-                ? 'Aucun établissement ne correspond à vos critères.'
+              {filtresActifs
+                ? 'Aucun établissement ne correspond à vos filtres.'
                 : 'Aucune école privée disponible pour le moment.'}
             </p>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {listeAffichee.map((etab) => {
                 const expanded = expandedEtabId === etab.id;
-                const filieresEtab = mergeFilieresForEtab(etab, filieres);
+                let filieresEtab = mergeFilieresForEtab(etab, filieres);
+                if (filtreFiliere || filtreNiveau) {
+                  filieresEtab = filieresEtab.filter((f) => {
+                    if (filtreFiliere && f.nom !== filtreFiliere) return false;
+                    if (filtreNiveau && f.niveau !== filtreNiveau) return false;
+                    return true;
+                  });
+                }
 
                 return (
                   <article
@@ -298,7 +314,7 @@ export default function EtablissementsPrives() {
                           <li key={f.id} className="flex flex-wrap items-center justify-between gap-2">
                             <span>
                               {f.nom}
-                              {f.niveau ? ` (${f.niveau})` : ''}
+                              {f.niveau ? ` (${LABEL_NIVEAU[f.niveau] || f.niveau})` : ''}
                             </span>
                             <button
                               type="button"

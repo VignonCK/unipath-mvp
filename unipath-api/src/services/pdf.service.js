@@ -2,7 +2,9 @@ const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { promisify } = require('util');
+const axios = require('axios');
 const localFileStorage = require('./local-file-storage.service');
+const prisma = require('../prisma');
 const {
   BUCKET_DOSSIERS_CANDIDATS,
   extractStorageRelativePath,
@@ -11,6 +13,7 @@ const {
   enrichDossierInscriptionForPdf,
   resolveCentreCompositionChoisiForPdf,
 } = require('../utils/centres-composition.helper');
+const { genererNumerosTableConcours } = require('../utils/numero-table.helper');
 
 const PDF_PHOTO_SIGNED_URL_EXPIRES_IN = 300;
 
@@ -90,45 +93,157 @@ function computePiecesFichePayload(inscription) {
   return { pieces_fournies: piecesFournies, pieces_manquantes: piecesManquantes };
 }
 
+function guessMimeFromPath(filePath) {
+  const ext = path.extname(String(filePath)).toLowerCase();
+  if (ext === '.png') return 'image/png';
+  if (ext === '.webp') return 'image/webp';
+  if (ext === '.gif') return 'image/gif';
+  return 'image/jpeg';
+}
+
+function readLocalPhotoBuffer(photoUrl) {
+  if (!photoUrl) return null;
+
+  const attempts = new Set();
+  const clean = String(photoUrl).trim().replace(/\\/g, '/');
+  const relativePath = extractStorageRelativePath(clean);
+
+  if (relativePath) attempts.add(relativePath);
+  attempts.add(clean);
+  if (clean.startsWith('/uploads/')) attempts.add(clean.replace(/^\//, ''));
+  if (clean.includes(`${BUCKET_DOSSIERS_CANDIDATS}/`)) {
+    attempts.add(clean.split(`${BUCKET_DOSSIERS_CANDIDATS}/`).pop());
+  }
+
+  for (const attempt of attempts) {
+    const buffer = localFileStorage.readFileBuffer(attempt);
+    if (buffer) {
+      return { buffer, sourcePath: attempt };
+    }
+  }
+
+  const uploadsRoot = path.join(__dirname, '../../uploads');
+  const directCandidates = [
+    path.join(uploadsRoot, clean.replace(/^uploads\//, '')),
+    path.join(uploadsRoot, BUCKET_DOSSIERS_CANDIDATS, clean),
+    path.join(uploadsRoot, BUCKET_DOSSIERS_CANDIDATS, relativePath || ''),
+  ].filter(Boolean);
+
+  for (const candidate of directCandidates) {
+    if (candidate && fs.existsSync(candidate)) {
+      return { buffer: fs.readFileSync(candidate), sourcePath: candidate };
+    }
+  }
+
+  return null;
+}
+
 async function downloadPhotoAsBase64(photoUrl) {
-  let photoBase64 = null;
-  let photoMime = null;
+  const empty = { photoBase64: null, photoMime: null, photoStoragePath: null };
 
   if (!photoUrl) {
-    return { photoBase64, photoMime };
+    return empty;
   }
 
   try {
-    const relativePath = extractStorageRelativePath(photoUrl);
-    if (!relativePath) {
-      return { photoBase64, photoMime };
+    const local = readLocalPhotoBuffer(photoUrl);
+    if (local?.buffer) {
+      console.log('[PDF] Photo récupérée en local ✅, taille:', local.buffer.length, 'bytes');
+      return {
+        photoBase64: local.buffer.toString('base64'),
+        photoMime: guessMimeFromPath(photoUrl),
+        photoStoragePath: local.sourcePath,
+      };
     }
 
-    const buffer = localFileStorage.readFileBuffer(relativePath);
-    if (buffer) {
-      photoBase64 = buffer.toString('base64');
-      const ext = path.extname(relativePath).toLowerCase();
-      photoMime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
-      console.log('[PDF] Photo récupérée en local ✅, taille:', buffer.length, 'bytes');
+    if (/^https?:\/\//i.test(String(photoUrl))) {
+      const response = await axios.get(photoUrl, {
+        responseType: 'arraybuffer',
+        timeout: 20000,
+      });
+      const buffer = Buffer.from(response.data);
+      const contentType = response.headers['content-type'] || guessMimeFromPath(photoUrl);
+      console.log('[PDF] Photo récupérée à distance ✅, taille:', buffer.length, 'bytes');
+      return {
+        photoBase64: buffer.toString('base64'),
+        photoMime: String(contentType).split(';')[0],
+        photoStoragePath: null,
+      };
     }
   } catch (photoError) {
     console.warn('[PDF] Erreur photo (non bloquant):', photoError.message);
   }
 
-  return { photoBase64, photoMime };
+  return empty;
 }
 
-function collectPhotoCandidateUrls({ photo, candidat, inscription }) {
+function collectPhotoCandidateUrls({ photo, candidat, inscription, documents }) {
   const extras = inscription?.dossierInscription?.piecesExtras || {};
+  const docUrls = Array.isArray(documents)
+    ? documents
+      .filter((d) => {
+        const code = String(d?.code || '').toLowerCase();
+        return (code === 'photo' || code === 'photo_identite' || code === 'photo-identite')
+          && d.documentUrl;
+      })
+      .map((d) => d.documentUrl)
+    : [];
   return [
     photo,
-    candidat?.dossier?.photo,
-    inscription?.candidat?.dossier?.photo,
-    candidat?.photoPath,
-    candidat?.photo,
+    ...docUrls,
     getPieceExtraUrl(extras, 'photo_identite'),
     getPieceExtraUrl(extras, 'photo'),
+    candidat?.photoPath,
+    candidat?.photo,
+    candidat?.dossier?.photo,
+    inscription?.candidat?.dossier?.photo,
   ].filter(Boolean);
+}
+
+/** Enrichit les sources photo pour les fiches établissement (dossier + documents application). */
+async function resolveEtablissementPhotoSources({ candidat, documents, photo, preinscriptionId, candidatId }) {
+  const urls = collectPhotoCandidateUrls({ photo, candidat, documents });
+
+  const resolvedCandidatId = candidatId || candidat?.id || null;
+  if (resolvedCandidatId) {
+    try {
+      const dossier = await prisma.dossier.findUnique({
+        where: { candidatId: resolvedCandidatId },
+        select: { photo: true },
+      });
+      if (dossier?.photo) urls.push(dossier.photo);
+    } catch (err) {
+      console.warn('[PDF] Impossible de charger dossier.photo:', err.message);
+    }
+  }
+
+  if (preinscriptionId || resolvedCandidatId) {
+    try {
+      const application = await prisma.application.findFirst({
+        where: {
+          ...(preinscriptionId ? { preinscriptionId } : {}),
+          ...(resolvedCandidatId && !preinscriptionId ? { candidatId: resolvedCandidatId } : {}),
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          documents: {
+            where: {
+              code: { in: ['photo', 'photo_identite', 'photo-identite'] },
+              status: 'PROVIDED',
+            },
+            select: { documentUrl: true, code: true },
+          },
+        },
+      });
+      for (const doc of application?.documents || []) {
+        if (doc.documentUrl) urls.push(doc.documentUrl);
+      }
+    } catch (err) {
+      console.warn('[PDF] Impossible de charger photo application:', err.message);
+    }
+  }
+
+  return downloadFirstAvailablePhotoAsBase64(urls);
 }
 
 async function downloadFirstAvailablePhotoAsBase64(urls) {
@@ -139,7 +254,7 @@ async function downloadFirstAvailablePhotoAsBase64(urls) {
       return result;
     }
   }
-  return { photoBase64: null, photoMime: null };
+  return { photoBase64: null, photoMime: null, photoStoragePath: null };
 }
 
 class PDFService {
@@ -175,7 +290,11 @@ class PDFService {
     
     try {
       const photoCandidateUrls = collectPhotoCandidateUrls({ photo, candidat, inscription });
-      const { photoBase64, photoMime } = await downloadFirstAvailablePhotoAsBase64(photoCandidateUrls);
+      const {
+        photoBase64,
+        photoMime,
+        photoStoragePath,
+      } = await downloadFirstAvailablePhotoAsBase64(photoCandidateUrls);
 
       const centreCompositionChoisi = data.centreCompositionChoisi
         || resolveCentreCompositionChoisiForPdf(inscription?.dossierInscription)
@@ -192,6 +311,7 @@ class PDFService {
         serie: serie ?? candidat?.serie ?? null,
         photoBase64,
         photoMime,
+        photoStoragePath: photoStoragePath || photo || candidat?.photoPath || null,
         centreCompositionChoisi,
       };
       if (inscription) payload.inscription = inscription;
@@ -203,18 +323,19 @@ class PDFService {
       
       console.log('📄 Génération fiche pré-inscription PDF...');
       const { stdout, stderr } = await execAsync(command);
-      
-      if (stderr && !stderr.includes('Succès')) {
+
+      if (!fs.existsSync(outputFile)) {
+        if (stdout) console.error('PHP stdout:', stdout);
+        if (stderr) console.error('Erreur PHP:', stderr);
+        throw new Error('Le fichier PDF n\'a pas été créé');
+      }
+
+      if (stderr && !/Succ[eè]s/i.test(stderr) && /Erreur|Fatal|Parse error/i.test(stderr)) {
         console.error('Erreur PHP:', stderr);
         throw new Error('Erreur lors de la génération du PDF');
       }
-      
+
       console.log('✅ Fiche pré-inscription générée:', outputFile);
-      
-      // Vérifier que le fichier existe
-      if (!fs.existsSync(outputFile)) {
-        throw new Error('Le fichier PDF n\'a pas été créé');
-      }
       
       return {
         success: true,
@@ -245,9 +366,9 @@ class PDFService {
       || inscription.id.substring(0, 8).toUpperCase();
     const { pieces_fournies, pieces_manquantes } = computePiecesFichePayload(inscription);
     const piecesExtras = inscription.dossierInscription?.piecesExtras || {};
-    const photoUrl = inscription.candidat?.dossier?.photo
-      || getPieceExtraUrl(piecesExtras, 'photo_identite')
+    const photoUrl = getPieceExtraUrl(piecesExtras, 'photo_identite')
       || getPieceExtraUrl(piecesExtras, 'photo')
+      || inscription.candidat?.dossier?.photo
       || null;
     const dossierEnrichi = enrichDossierInscriptionForPdf(inscription.dossierInscription);
 
@@ -305,12 +426,102 @@ class PDFService {
         candidat,
         inscription,
       });
-      const { photoBase64, photoMime } = await downloadFirstAvailablePhotoAsBase64(photoCandidateUrls);
+      const { photoBase64, photoMime, photoStoragePath } = await downloadFirstAvailablePhotoAsBase64(photoCandidateUrls);
+
+      // N° de table effectif : AA + code ville + code concours + rang alpha (par centre)
+      // Toujours recharger depuis la BD pour éviter un payload incomplet.
+      let numeroTable = null;
+      const concoursId = concours?.id || inscription?.concoursId || null;
+      const inscriptionId = inscription?.id || null;
+      const matricule = candidat?.matricule || null;
+
+      try {
+        if (inscriptionId) {
+          const row = await prisma.inscription.findUnique({
+            where: { id: inscriptionId },
+            select: { numeroTable: true, concoursId: true },
+          });
+          numeroTable = row?.numeroTable || null;
+          if (!concoursId && row?.concoursId) {
+            // used below
+          }
+        }
+
+        if (!numeroTable && matricule && (concoursId || inscription?.concoursId)) {
+          const cid = concoursId || inscription.concoursId;
+          const row = await prisma.inscription.findFirst({
+            where: {
+              concoursId: cid,
+              candidat: { matricule },
+            },
+            select: { id: true, numeroTable: true },
+          });
+          numeroTable = row?.numeroTable || null;
+          if (row?.id && !inscriptionId) {
+            // allow generation reload by id below
+            data._resolvedInscriptionId = row.id;
+          }
+        }
+      } catch (err) {
+        console.warn('[PDF] Impossible de recharger numeroTable:', err.message);
+      }
+
+      if (!numeroTable) {
+        numeroTable = inscription?.numeroTable || data.numeroTable || null;
+      }
+
+      const resolvedInscriptionId = inscriptionId || data._resolvedInscriptionId || null;
+      const resolvedConcoursId = concoursId || inscription?.concoursId || null;
+
+      if (!numeroTable && resolvedConcoursId) {
+        try {
+          const gen = await genererNumerosTableConcours(resolvedConcoursId, { regenerer: true });
+          console.log('[PDF] Génération N° de table:', {
+            ok: gen?.ok,
+            total: gen?.totalGeneres,
+            error: gen?.error,
+          });
+          if (gen?.ok && resolvedInscriptionId) {
+            const row = await prisma.inscription.findUnique({
+              where: { id: resolvedInscriptionId },
+              select: { numeroTable: true },
+            });
+            numeroTable = row?.numeroTable || null;
+          } else if (gen?.ok && matricule) {
+            const row = await prisma.inscription.findFirst({
+              where: {
+                concoursId: resolvedConcoursId,
+                candidat: { matricule },
+              },
+              select: { numeroTable: true },
+            });
+            numeroTable = row?.numeroTable || null;
+          }
+        } catch (err) {
+          console.warn('[PDF] Génération N° de table avant convocation:', err.message);
+        }
+      }
+
+      if (numeroTable) {
+        numeroTable = String(numeroTable).trim();
+      } else {
+        console.warn('[PDF] numeroTable manquant pour', {
+          inscriptionId: resolvedInscriptionId,
+          matricule,
+          concoursId: resolvedConcoursId,
+        });
+      }
 
       const payload = {
         candidat,
         concours,
+        inscription: {
+          id: resolvedInscriptionId,
+          numeroInscription: inscription?.numeroInscription || null,
+          numeroTable,
+        },
         numeroConvocation,
+        numeroTable,
         libelleConcours: concours?.libelle || 'Concours d\'entrée à l\'université',
         matieres: concours?.matieres || [],
         dateDebutComposition: concours?.dateDebutComposition || null,
@@ -322,6 +533,10 @@ class PDFService {
           || null,
         photoBase64,
         photoMime,
+        photoStoragePath: photoStoragePath
+          || candidat?.dossier?.photo
+          || candidat?.photoPath
+          || null,
       };
 
       await writeFileAsync(inputFile, JSON.stringify(payload));
@@ -332,16 +547,18 @@ class PDFService {
       console.log('📄 Génération convocation PDF...');
       const { stdout, stderr } = await execAsync(command);
 
-      if (stderr && !stderr.includes('Succès')) {
+      if (!fs.existsSync(outputFile)) {
+        if (stdout) console.error('PHP stdout:', stdout);
+        if (stderr) console.error('Erreur PHP:', stderr);
+        throw new Error('Le fichier PDF n\'a pas été créé');
+      }
+
+      if (stderr && /Fatal|Parse error|Erreur lors/i.test(stderr) && !/Succ[eè]s/i.test(stdout || '')) {
         console.error('Erreur PHP:', stderr);
         throw new Error('Erreur lors de la génération du PDF');
       }
 
       console.log('✅ Convocation générée:', outputFile);
-
-      if (!fs.existsSync(outputFile)) {
-        throw new Error('Le fichier PDF n\'a pas été créé');
-      }
 
       return {
         success: true,
@@ -416,16 +633,98 @@ class PDFService {
   }
 
   /**
+   * Génère une fiche d'inscription établissement (après validation Module 2)
+   */
+  async genererFicheInscriptionEtablissement(data) {
+    const { candidat, inscription, documents, photo, candidatId, preinscriptionId } = data;
+    const safeNum = inscription?.numeroInscription || inscription?.numeroPreinscription || Date.now();
+    const inputFile = path.join(this.tempDir, `input-inscription-etab-${Date.now()}.json`);
+    const outputFile = path.join(this.tempDir, `fiche-inscription-etab-${safeNum}.pdf`);
+
+    try {
+      const {
+        photoBase64,
+        photoMime,
+        photoStoragePath,
+      } = await resolveEtablissementPhotoSources({
+        candidat,
+        documents,
+        photo,
+        candidatId: candidatId || candidat?.id,
+        preinscriptionId: preinscriptionId || inscription?.preinscriptionId,
+      });
+
+      await writeFileAsync(inputFile, JSON.stringify({
+        candidat,
+        inscription,
+        photoBase64,
+        photoMime,
+        photoStoragePath,
+      }));
+
+      const phpScript = path.join(__dirname, '../../php/fiche-inscription-etablissement.php');
+      const command = `${this.phpPath} "${phpScript}" "${inputFile}" "${outputFile}"`;
+
+      console.log('📄 Génération fiche d\'inscription établissement PDF...');
+      const { stderr } = await execAsync(command);
+
+      if (stderr && !stderr.includes('Succes') && !stderr.includes('Succès')) {
+        console.error('Erreur PHP:', stderr);
+        throw new Error('Erreur lors de la génération de la fiche d\'inscription établissement');
+      }
+
+      if (!fs.existsSync(outputFile)) {
+        throw new Error('Le fichier PDF d\'inscription établissement n\'a pas été créé');
+      }
+
+      return {
+        success: true,
+        filePath: outputFile,
+        fileName: `fiche-inscription-etablissement-${safeNum}.pdf`,
+      };
+    } catch (error) {
+      console.error('❌ Erreur génération fiche inscription établissement:', error);
+      throw error;
+    } finally {
+      try {
+        if (fs.existsSync(inputFile)) {
+          await unlinkAsync(inputFile);
+        }
+      } catch (err) {
+        console.error('Erreur nettoyage fichier temporaire:', err);
+      }
+    }
+  }
+
+  /**
    * Génère une fiche de pré-inscription établissement (Module 2)
    */
   async genererFichePreinscriptionEtablissement(data) {
-    const { candidat, preinscription } = data;
+    const { candidat, preinscription, documents, photo, candidatId } = data;
     const safeNum = preinscription?.numeroPreinscription || Date.now();
     const inputFile = path.join(this.tempDir, `input-preinscription-etab-${Date.now()}.json`);
     const outputFile = path.join(this.tempDir, `fiche-preinscription-etab-${safeNum}.pdf`);
 
     try {
-      await writeFileAsync(inputFile, JSON.stringify({ candidat, preinscription }));
+      const {
+        photoBase64,
+        photoMime,
+        photoStoragePath,
+      } = await resolveEtablissementPhotoSources({
+        candidat,
+        documents,
+        photo,
+        candidatId: candidatId || candidat?.id,
+        preinscriptionId: preinscription?.id,
+      });
+
+      await writeFileAsync(inputFile, JSON.stringify({
+        candidat,
+        preinscription,
+        photoBase64,
+        photoMime,
+        photoStoragePath,
+      }));
 
       const phpScript = path.join(__dirname, '../../php/fiche-preinscription-etablissement.php');
       const command = `${this.phpPath} "${phpScript}" "${inputFile}" "${outputFile}"`;

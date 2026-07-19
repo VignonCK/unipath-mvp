@@ -32,7 +32,14 @@ async function findCompteByEmail(email) {
   return prisma.compte.findUnique({ where: { email: normalizeEmail(email) } });
 }
 
-async function createCompte({ email, password, profilType, profilId, emailConfirme = false }) {
+async function createCompte({
+  email,
+  password,
+  profilType,
+  profilId,
+  emailConfirme = false,
+  mustChangePassword = false,
+}) {
   const passwordHash = await hashPassword(password);
   return prisma.compte.create({
     data: {
@@ -42,6 +49,7 @@ async function createCompte({ email, password, profilType, profilId, emailConfir
       profilType,
       profilId,
       emailConfirme,
+      mustChangePassword,
     },
   });
 }
@@ -187,6 +195,7 @@ async function authenticate(email, password) {
       email: compte.email,
       ...safeUserData,
       role: profile.role,
+      mustChangePassword: !!compte.mustChangePassword,
       ...(profile.sousRole && { sousRole: profile.sousRole }),
       ...(profile.etablissementId && { etablissementId: profile.etablissementId }),
     },
@@ -243,8 +252,22 @@ async function changePassword(profilId, currentPassword, newPassword) {
   const passwordHash = await hashPassword(newPassword);
   await prisma.compte.update({
     where: { id: compte.id },
-    data: { passwordHash },
+    data: { passwordHash, mustChangePassword: false },
   });
+
+  if (compte.profilType === 'COMMISSION') {
+    await prisma.membreCommission.updateMany({
+      where: { id: profilId },
+      data: { motDePasseTemporaire: null },
+    });
+  }
+
+  if (compte.profilType === 'ADMIN_ETABLISSEMENT') {
+    await prisma.adminEtablissement.updateMany({
+      where: { id: profilId },
+      data: { motDePasseTemporaire: null },
+    });
+  }
 }
 
 module.exports = {

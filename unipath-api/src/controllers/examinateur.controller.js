@@ -25,7 +25,7 @@ const {
 exports.getDossiersAEvaluer = async (req, res) => {
   try {
     const examinateurId = req.user.id;
-    const { concoursId, limite = 50, offset = 0 } = req.query;
+    const { concoursId, limite = 50, offset = 0, filtre = 'a_evaluer' } = req.query;
     const now = new Date();
 
     const filter = await resolveConcoursFilterForMembre(
@@ -48,13 +48,29 @@ exports.getDossiersAEvaluer = async (req, res) => {
       ...(filter.concoursIds ? { id: { in: filter.concoursIds } } : {}),
     };
 
-    const whereClause = {
-      decisionControleurPar: null,
-      verdict1Par: null,
+    // filtre: a_evaluer (défaut) | evalues | tous
+    const filtreNormalise = ['a_evaluer', 'evalues', 'tous'].includes(filtre)
+      ? filtre
+      : 'a_evaluer';
+
+    let whereClause = {
       inscription: {
         concours: concoursWhere,
       },
     };
+
+    if (filtreNormalise === 'a_evaluer') {
+      whereClause = {
+        ...whereClause,
+        verdict1Par: null,
+        decisionControleurPar: null,
+      };
+    } else if (filtreNormalise === 'evalues') {
+      whereClause = {
+        ...whereClause,
+        verdict1Par: { not: null },
+      };
+    }
 
     const [dossiers, total] = await Promise.all([
       prisma.dossierInscription.findMany({
@@ -84,16 +100,31 @@ exports.getDossiersAEvaluer = async (req, res) => {
       prisma.dossierInscription.count({ where: whereClause }),
     ]);
 
-    const dossiersFormates = dossiers.map((d) => ({
-      dossierInscriptionId: d.id,
-      inscription: {
-        numeroInscription: d.inscription.numeroInscription,
-        candidat: d.inscription.candidat,
-        concours: d.inscription.concours,
-      },
-      dateCreation: d.createdAt,
-      nombreVerdictsRendus: d.verdict1Par ? 1 : 0,
-    }));
+    const dossiersFormates = dossiers.map((d) => {
+      const evalue = !!d.verdict1Par;
+      const monVerdict = d.verdict1Par === examinateurId;
+      return {
+        dossierInscriptionId: d.id,
+        inscription: {
+          numeroInscription: d.inscription.numeroInscription,
+          candidat: d.inscription.candidat,
+          concours: d.inscription.concours,
+        },
+        dateCreation: d.createdAt,
+        evalue,
+        monVerdict,
+        verdict: evalue
+          ? {
+              verdict: d.verdict1,
+              motif: d.verdict1Motif,
+              date: d.verdict1Date,
+              parMoi: monVerdict,
+            }
+          : null,
+        decisionControleur: d.decisionControleur || null,
+        nombreVerdictsRendus: d.verdict1Par ? 1 : 0,
+      };
+    });
 
     res.json({
       dossiers: dossiersFormates,
@@ -103,6 +134,7 @@ exports.getDossiersAEvaluer = async (req, res) => {
         offset: parseInt(offset),
         pages: Math.ceil(total / parseInt(limite)),
       },
+      filtre: filtreNormalise,
       regleExamen: {
         periodeEtudeRequise: true,
         message:

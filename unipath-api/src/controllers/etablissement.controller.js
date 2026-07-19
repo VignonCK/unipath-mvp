@@ -2,6 +2,7 @@ const prisma = require('../prisma');
 const fs = require('fs');
 const path = require('path');
 const authService = require('../services/auth.service');
+const { resolveEtablissementIdFromReq } = require('../utils/etablissement-access.helper');
 
 const LOGO_DIR = path.join(__dirname, '../../uploads/etablissements');
 
@@ -188,7 +189,7 @@ exports.getEtablissementById = async (req, res) => {
 exports.getEtudiantsEtablissement = async (req, res) => {
   try {
     const { id } = req.params;
-    const { filiere, annee } = req.query;
+    const { filiere, annee, niveau, sexe } = req.query;
 
     const etablissement = await prisma.etablissement.findUnique({
       where: { id },
@@ -199,10 +200,20 @@ exports.getEtudiantsEtablissement = async (req, res) => {
       return res.status(404).json({ error: 'Etablissement non trouve' });
     }
 
+    const sexeFilter = String(sexe || '').trim().toUpperCase();
+    const niveauNum = niveau !== undefined && niveau !== '' && niveau !== null
+      ? Number(niveau)
+      : null;
+
     const where = {
       etablissementId: id,
+      statut: { not: 'ABANDONNE' },
       ...(filiere ? { filiereId: filiere } : {}),
       ...(annee ? { anneeAcademique: annee } : {}),
+      ...(Number.isFinite(niveauNum) ? { niveau: niveauNum } : {}),
+      ...((sexeFilter === 'M' || sexeFilter === 'F')
+        ? { candidat: { sexe: sexeFilter } }
+        : {}),
     };
 
     const inscriptions = await prisma.inscriptionAcademique.findMany({
@@ -215,6 +226,7 @@ exports.getEtudiantsEtablissement = async (req, res) => {
             nom: true,
             prenom: true,
             email: true,
+            sexe: true,
           },
         },
         filiere: {
@@ -231,7 +243,15 @@ exports.getEtudiantsEtablissement = async (req, res) => {
 
     return res.json({
       message: 'Etudiants recuperes avec succes',
-      etudiants: inscriptions,
+      etudiants: inscriptions.map((ins) => ({
+        ...ins,
+        // Champ aplati pour l'UI (compat + clarté)
+        sexe: ins.candidat?.sexe ?? null,
+        candidat: {
+          ...ins.candidat,
+          sexe: ins.candidat?.sexe ?? null,
+        },
+      })),
     });
   } catch (error) {
     console.error('Erreur getEtudiantsEtablissement:', error);
@@ -271,7 +291,7 @@ exports.getStatistiquesEtablissement = async (req, res) => {
 
 exports.getMonProfilEtablissement = async (req, res) => {
   try {
-    const etablissementId = req.user?.id;
+    const etablissementId = resolveEtablissementIdFromReq(req);
     if (!etablissementId) {
       return res.status(401).json({ error: 'Utilisateur non authentifie' });
     }
@@ -305,7 +325,7 @@ exports.getMonProfilEtablissement = async (req, res) => {
 
 exports.updateMonProfilEtablissement = async (req, res) => {
   try {
-    const etablissementId = req.user?.id;
+    const etablissementId = resolveEtablissementIdFromReq(req);
     if (!etablissementId) {
       return res.status(401).json({ error: 'Utilisateur non authentifie' });
     }
@@ -347,7 +367,7 @@ exports.updateMonProfilEtablissement = async (req, res) => {
 
 exports.uploadMonLogoEtablissement = async (req, res) => {
   try {
-    const etablissementId = req.user?.id;
+    const etablissementId = resolveEtablissementIdFromReq(req);
     if (!etablissementId) {
       return res.status(401).json({ error: 'Utilisateur non authentifie' });
     }

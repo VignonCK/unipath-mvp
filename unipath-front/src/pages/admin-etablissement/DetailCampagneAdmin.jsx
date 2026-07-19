@@ -108,7 +108,6 @@ export default function DetailCampagneAdmin() {
                 <tr>
                   <th className="text-left px-6 py-3 font-semibold text-gray-600">Filière</th>
                   <th className="text-left px-6 py-3 font-semibold text-gray-600">Frais</th>
-                  <th className="text-left px-6 py-3 font-semibold text-gray-600">Places</th>
                   <th className="text-left px-6 py-3 font-semibold text-gray-600">Séries</th>
                   <th className="text-left px-6 py-3 font-semibold text-gray-600">Critères</th>
                 </tr>
@@ -118,7 +117,6 @@ export default function DetailCampagneAdmin() {
                   <tr key={cf.id}>
                     <td className="px-6 py-4 font-medium">{cf.filiere?.nom || cf.filiereId}</td>
                     <td className="px-6 py-4">{cf.fraisDossier?.toLocaleString('fr-FR')} FCFA</td>
-                    <td className="px-6 py-4">{cf.placesDisponibles ?? '—'}</td>
                     <td className="px-6 py-4">{(cf.seriesAcceptees || []).join(', ') || '—'}</td>
                     <td className="px-6 py-4 text-gray-600">{cf.criteresSelection || '—'}</td>
                   </tr>

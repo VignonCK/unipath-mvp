@@ -16,6 +16,7 @@ export const PIECE_IDS = {
   CARTE_IDENTITE: 'carte_identite',
   PHOTO_IDENTITE: 'photo_identite',
   RELEVE_BAC: 'releve_bac',
+  RELEVE_ANNEE_ANTERIEURE: 'releve_annee_anterieure',
   QUITTANCE: 'quittance',
 };
 
@@ -218,6 +219,13 @@ export function getDefaultPiecesRequises() {
   ];
 }
 
+/** Pièces par défaut pour une campagne école privée (quittance frais de dossier gérée à part). */
+export function getDefaultPiecesCampagne() {
+  return PIECES_PREDEFINIES
+    .filter((p) => p.id !== PIECE_IDS.QUITTANCE)
+    .map((p) => ({ ...p, formats: [...(p.formats || [])] }));
+}
+
 /**
  * Valide une configuration de pièces
  * @param {Array} pieces - Liste des pièces à valider
@@ -228,7 +236,7 @@ function normalizeFormat(format) {
   return format;
 }
 
-export function validatePiecesConfiguration(pieces) {
+export function validatePiecesConfiguration(pieces, { requireQuittance = true } = {}) {
   const errors = [];
 
   if (!Array.isArray(pieces) || pieces.length === 0) {
@@ -236,10 +244,11 @@ export function validatePiecesConfiguration(pieces) {
     return { valid: false, errors };
   }
 
-  // Vérifier que la quittance est présente
-  const hasQuittance = pieces.some((p) => convertLegacyId(p.id) === PIECE_IDS.QUITTANCE);
-  if (!hasQuittance) {
-    errors.push('La quittance de paiement est obligatoire');
+  if (requireQuittance) {
+    const hasQuittance = pieces.some((p) => convertLegacyId(p.id) === PIECE_IDS.QUITTANCE);
+    if (!hasQuittance) {
+      errors.push('La quittance de paiement est obligatoire');
+    }
   }
 
   // Vérifier que chaque pièce a au moins un format

@@ -21,16 +21,32 @@ const upload = multer({
 
 router.post('/', protect, checkRole(['CANDIDAT']), controller.createApplication);
 router.get('/mine', protect, checkRole(['CANDIDAT']), controller.getMyApplications);
+router.get(
+  '/niveau-autorise',
+  protect,
+  checkRole(['CANDIDAT']),
+  controller.getNiveauAutoriseTransfert
+);
 
-router.get('/etablissement/applications', protect, checkRole(['ETABLISSEMENT']), controller.getApplicationsForEtablissement);
-router.get('/etablissement/requirements', protect, checkRole(['ETABLISSEMENT']), controller.getMySchoolRequirements);
-router.post('/etablissement/requirements', protect, checkRole(['ETABLISSEMENT']), controller.upsertSchoolRequirement);
-router.delete('/etablissement/requirements/:id', protect, checkRole(['ETABLISSEMENT']), controller.deleteSchoolRequirement);
+router.get('/etablissement/applications', protect, checkRole(['ADMIN_ETABLISSEMENT', 'ETABLISSEMENT']), controller.getApplicationsForEtablissement);
+router.get('/etablissement/export/readiness', protect, checkRole(['ADMIN_ETABLISSEMENT', 'ETABLISSEMENT']), controller.getCandidaturesExportReadiness);
+router.get('/etablissement/export/pdf', protect, checkRole(['ADMIN_ETABLISSEMENT', 'ETABLISSEMENT']), controller.exportCandidaturesPdf);
+router.get('/etablissement/export/excel', protect, checkRole(['ADMIN_ETABLISSEMENT', 'ETABLISSEMENT']), controller.exportCandidaturesExcel);
+router.get('/etablissement/requirements', protect, checkRole(['ADMIN_ETABLISSEMENT', 'ETABLISSEMENT']), controller.getMySchoolRequirements);
+router.post('/etablissement/requirements', protect, checkRole(['ADMIN_ETABLISSEMENT', 'ETABLISSEMENT']), controller.upsertSchoolRequirement);
+router.delete('/etablissement/requirements/:id', protect, checkRole(['ADMIN_ETABLISSEMENT', 'ETABLISSEMENT']), controller.deleteSchoolRequirement);
 
 router.get('/requirements/etablissement/:etablissementId', protect, controller.getSchoolRequirements);
 router.get('/:id', protect, controller.getApplicationById);
 router.get('/:id/requirements', protect, checkRole(['CANDIDAT']), controller.getApplicationRequirements);
 router.post('/:id/payments/dossier-fees/mock-confirm', protect, checkRole(['CANDIDAT']), controller.payDossierFeesMock);
+router.post(
+  '/:id/payments/dossier-fees/quittance',
+  protect,
+  checkRole(['CANDIDAT']),
+  upload.single('fichier'),
+  controller.uploadQuittanceFraisDossier
+);
 router.post(
   '/:id/payments/droits-inscription/receipt',
   protect,

@@ -1,5 +1,5 @@
 // src/pages/MesConcoursCommission.jsx
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { commissionService } from '../services/api';
 import CommissionLayout from '../components/CommissionLayout';
@@ -20,6 +20,8 @@ const MesConcoursCommission = () => {
   const [affectations, setAffectations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [filtreRole, setFiltreRole] = useState('');
+  const [filtreConcoursId, setFiltreConcoursId] = useState('');
 
   const charger = useCallback(async () => {
     try {
@@ -37,6 +39,31 @@ const MesConcoursCommission = () => {
   useEffect(() => {
     charger();
   }, [charger]);
+
+  const concoursOptions = useMemo(() => {
+    const map = new Map();
+    for (const aff of affectations) {
+      const id = aff.concours?.id;
+      if (!id || map.has(id)) continue;
+      map.set(id, aff.concours.libelle || aff.concours.nom || id);
+    }
+    return [...map.entries()]
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'fr'));
+  }, [affectations]);
+
+  const rolesDisponibles = useMemo(() => {
+    const roles = new Set(affectations.map((a) => a.role).filter(Boolean));
+    return [...roles];
+  }, [affectations]);
+
+  const affectationsFiltrees = useMemo(() => {
+    return affectations.filter((aff) => {
+      if (filtreRole && aff.role !== filtreRole) return false;
+      if (filtreConcoursId && aff.concours?.id !== filtreConcoursId) return false;
+      return true;
+    });
+  }, [affectations, filtreRole, filtreConcoursId]);
 
   const entrer = (aff) => {
     const cid = aff.concours.id;
@@ -72,58 +99,128 @@ const MesConcoursCommission = () => {
             </p>
           </BentoCard>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {affectations.map((aff) => (
-              <BentoCard
-                key={`${aff.concours.id}-${aff.role}`}
-                className="p-0 overflow-hidden bg-white hover:shadow-lg transition-shadow"
-              >
-                <div className={`h-1 ${aff.role === 'CONTROLEUR' ? 'bg-amber-400' : 'bg-indigo-400'}`} />
-                <div className="p-5">
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-gray-900 truncate">
-                        {aff.concours.libelle || aff.concours.nom}
-                      </h3>
-                      {aff.concours.code && (
-                        <p className="text-xs text-gray-500 font-mono mt-0.5">Code {aff.concours.code}</p>
-                      )}
-                    </div>
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${ROLE_BADGE[aff.role]}`}
-                    >
-                      {ROLE_LABEL[aff.role] || aff.role}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2 mb-4">
-                    {aff.etudeCloturee ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 border border-gray-200">
-                        Étude clôturée
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        {aff.dossiersATraiter} dossier{aff.dossiersATraiter > 1 ? 's' : ''} à traiter
-                      </span>
+          <>
+            <BentoCard className="p-4 bg-white mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                    Filtrer par rôle
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 bg-white"
+                    value={filtreRole}
+                    onChange={(e) => setFiltreRole(e.target.value)}
+                  >
+                    <option value="">Tous les rôles</option>
+                    {rolesDisponibles.includes('EXAMINATEUR') && (
+                      <option value="EXAMINATEUR">Examinateur</option>
                     )}
-                  </div>
-
+                    {rolesDisponibles.includes('CONTROLEUR') && (
+                      <option value="CONTROLEUR">Contrôleur</option>
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                    Filtrer par concours
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 bg-white"
+                    value={filtreConcoursId}
+                    onChange={(e) => setFiltreConcoursId(e.target.value)}
+                  >
+                    <option value="">Tous les concours assignés</option>
+                    {concoursOptions.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {(filtreRole || filtreConcoursId) && (
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <p className="text-xs text-gray-500">
+                    {affectationsFiltrees.length} résultat
+                    {affectationsFiltrees.length > 1 ? 's' : ''}
+                  </p>
                   <button
                     type="button"
-                    disabled={aff.etudeCloturee}
-                    onClick={() => entrer(aff)}
-                    className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition ${
-                      aff.etudeCloturee
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-slate-700 text-white hover:bg-slate-800'
-                    }`}
+                    className="text-xs text-slate-600 hover:text-slate-800 underline"
+                    onClick={() => {
+                      setFiltreRole('');
+                      setFiltreConcoursId('');
+                    }}
                   >
-                    {aff.role === 'EXAMINATEUR' ? 'Évaluer les dossiers' : 'Contrôler les dossiers'}
+                    Réinitialiser les filtres
                   </button>
                 </div>
+              )}
+            </BentoCard>
+
+            {affectationsFiltrees.length === 0 ? (
+              <BentoCard className="p-6 bg-white text-center">
+                <p className="text-sm text-gray-500">
+                  Aucun concours ne correspond à ces filtres.
+                </p>
               </BentoCard>
-            ))}
-          </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {affectationsFiltrees.map((aff) => (
+                  <BentoCard
+                    key={`${aff.concours.id}-${aff.role}`}
+                    className="p-0 overflow-hidden bg-white hover:shadow-lg transition-shadow"
+                  >
+                    <div
+                      className={`h-1 ${aff.role === 'CONTROLEUR' ? 'bg-amber-400' : 'bg-indigo-400'}`}
+                    />
+                    <div className="p-5">
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="min-w-0">
+                          <h3 className="font-semibold text-gray-900 truncate">
+                            {aff.concours.libelle || aff.concours.nom}
+                          </h3>
+                        </div>
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${ROLE_BADGE[aff.role]}`}
+                        >
+                          {ROLE_LABEL[aff.role] || aff.role}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 mb-4">
+                        {aff.etudeCloturee ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 border border-gray-200">
+                            Étude clôturée
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            {aff.dossiersATraiter} dossier
+                            {aff.dossiersATraiter > 1 ? 's' : ''} à traiter
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={aff.etudeCloturee}
+                        onClick={() => entrer(aff)}
+                        className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition ${
+                          aff.etudeCloturee
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-slate-700 text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        {aff.role === 'EXAMINATEUR'
+                          ? 'Évaluer les dossiers'
+                          : 'Contrôler les dossiers'}
+                      </button>
+                    </div>
+                  </BentoCard>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </CommissionLayout>

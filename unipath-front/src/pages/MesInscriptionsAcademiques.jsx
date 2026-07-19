@@ -11,7 +11,7 @@ const STATUT_BADGES = {
   QUITTANCE_SOUMISE: { label: 'Quittance en vérification', className: 'bg-yellow-100 text-yellow-800' },
   VALIDE: { label: 'Inscrit(e)', className: 'bg-green-100 text-green-800' },
   REDOUBLANT: { label: 'Redoublant', className: 'bg-gray-100 text-gray-700' },
-  ABANDONNE: { label: 'Abandonné', className: 'bg-red-100 text-red-800' },
+  ABANDONNE: { label: 'Annulée', className: 'bg-red-100 text-red-800' },
 };
 
 function StatutBadge({ statut }) {
@@ -27,8 +27,11 @@ export default function MesInscriptionsAcademiques() {
   const navigate = useNavigate();
   const [candidat, setCandidat] = useState(null);
   const [inscriptions, setInscriptions] = useState([]);
+  const [needsConfirmationChoice, setNeedsConfirmationChoice] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [confirmBusyId, setConfirmBusyId] = useState(null);
   const [uploadModal, setUploadModal] = useState({ open: false, inscriptionId: null, label: '' });
   const [fichier, setFichier] = useState(null);
   const [uploadBusy, setUploadBusy] = useState(false);
@@ -38,6 +41,7 @@ export default function MesInscriptionsAcademiques() {
   const chargerInscriptions = useCallback(async () => {
     const data = await inscriptionAcadService.getMesInscriptions();
     setInscriptions(data.inscriptions || []);
+    setNeedsConfirmationChoice(Boolean(data.needsConfirmationChoice));
   }, []);
 
   useEffect(() => {
@@ -93,6 +97,27 @@ export default function MesInscriptionsAcademiques() {
     }
   };
 
+  const confirmerInscription = async (inscription) => {
+    if (!inscription?.id || !inscription.canConfirm) return;
+    const label = `${inscription.etablissement?.nom || 'cet établissement'} — ${inscription.filiere?.nom || 'cette filière'}`;
+    const ok = window.confirm(
+      `Confirmer votre inscription à ${label} ?\n\nVos autres inscriptions validées pour l'année ${inscription.anneeAcademique} seront définitivement annulées.`
+    );
+    if (!ok) return;
+    setConfirmBusyId(inscription.id);
+    setError('');
+    setSuccess('');
+    try {
+      const data = await inscriptionAcadService.confirmer(inscription.id);
+      setSuccess(data.message || 'Inscription confirmée.');
+      await chargerInscriptions();
+    } catch (err) {
+      setError(err?.message || 'Impossible de confirmer cette inscription');
+    } finally {
+      setConfirmBusyId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -113,6 +138,16 @@ export default function MesInscriptionsAcademiques() {
 
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+        )}
+        {success && (
+          <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div>
+        )}
+
+        {needsConfirmationChoice && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            Vous avez plusieurs dossiers validés. Choisissez <strong>une seule</strong> inscription via le bouton{' '}
+            <strong>Confirmé</strong> : les autres seront annulées.
+          </div>
         )}
 
         {inscriptions.length === 0 ? (
@@ -138,13 +173,36 @@ export default function MesInscriptionsAcademiques() {
                 </div>
 
                 <div className="mt-4 space-y-3">
+                  {ins.canConfirm && (
+                    <div className="rounded-lg border border-teal-200 bg-teal-50/80 px-3 py-3 space-y-2">
+                      <p className="text-sm text-teal-950">
+                        Cette admission est en concurrence avec d&apos;autres. Confirmez-la pour conserver
+                        uniquement cette inscription.
+                      </p>
+                      <button
+                        type="button"
+                        disabled={Boolean(confirmBusyId)}
+                        onClick={() => confirmerInscription(ins)}
+                        className="rounded-lg bg-teal-800 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition disabled:opacity-50"
+                      >
+                        {confirmBusyId === ins.id ? 'Confirmation…' : 'Confirmé'}
+                      </button>
+                    </div>
+                  )}
+
+                  {ins.statut === 'ABANDONNE' && (
+                    <p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-800">
+                      Inscription annulée suite au choix d&apos;une autre filière ou d&apos;un autre établissement.
+                    </p>
+                  )}
+
                   {ins.statut === 'EN_ATTENTE_QUITTANCE' && (
                     <p className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-900">
                       Votre dossier a été accepté. Déposez votre quittance bancaire pour finaliser votre inscription.
                     </p>
                   )}
 
-                  {['EN_COURS', 'EN_ATTENTE_QUITTANCE'].includes(ins.statut) && (
+                  {['EN_COURS', 'EN_ATTENTE_QUITTANCE'].includes(ins.statut) && !ins.canConfirm && (
                     <button
                       type="button"
                       onClick={() => ouvrirUpload(ins)}
@@ -152,6 +210,12 @@ export default function MesInscriptionsAcademiques() {
                     >
                       Soumettre ma quittance bancaire
                     </button>
+                  )}
+
+                  {ins.confirmeeAt && ins.statut !== 'ABANDONNE' && (
+                    <p className="text-sm text-green-800 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                      Inscription confirmée — vos autres choix pour cette année ont été annulés.
+                    </p>
                   )}
 
                   {ins.statut === 'QUITTANCE_SOUMISE' && (
@@ -165,6 +229,16 @@ export default function MesInscriptionsAcademiques() {
                       <p className="text-xs text-green-700 font-medium mb-1">Votre matricule</p>
                       <p className="text-lg font-mono font-bold text-green-900">{ins.matricule}</p>
                     </div>
+                  )}
+
+                  {ins.statut !== 'ABANDONNE' && (
+                    <button
+                      type="button"
+                      onClick={() => inscriptionAcadService.telechargerFicheInscription(ins.id)}
+                      className="rounded-lg border border-blue-900 px-4 py-2 text-sm font-semibold text-blue-900 hover:bg-blue-50 transition"
+                    >
+                      Télécharger ma fiche d&apos;inscription
+                    </button>
                   )}
                 </div>
               </BentoCard>

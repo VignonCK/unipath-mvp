@@ -9,7 +9,7 @@ const { handleDossierUpload } = require('../middleware/upload.middleware');
 router.get(
   '/signed-url',
   protect,
-  checkRole(['COMMISSION', 'CONTROLEUR', 'DEC', 'CANDIDAT']),
+  checkRole(['COMMISSION', 'CONTROLEUR', 'DEC', 'CANDIDAT', 'ADMIN_ETABLISSEMENT', 'DGES']),
   dossierController.getSignedUrl
 );
 

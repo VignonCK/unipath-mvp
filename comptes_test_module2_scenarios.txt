@@ -1,0 +1,320 @@
+================================================================================
+  UNIPATH — COMPTES DE TEST MODULE 2 (établissements privés)
+  Généré pour les jeux de données seed multi-années / validations UE /
+  transfert / tableau de bord DGES
+  Mot de passe par défaut (sauf mention contraire) : UniPath2026!
+================================================================================
+
+----------------------------------------------------------------------
+  0. COMPTES PILOTAGE (DGES)
+----------------------------------------------------------------------
+
+  Rôle          : DGES (tableau de bord national, catalogue, années)
+  Email         : dges@mesrs.bj
+  Mot de passe  : DGES2026!
+
+  Email         : dges@test.com
+  Mot de passe  : UniPath2026!
+
+  Année DGES en cours dans les seeds : 2026-2027
+  Années peuplées                    : 2025-2026 (archive), 2026-2027, 2027-2028
+
+
+----------------------------------------------------------------------
+  1. ADMINISTRATEURS D'ÉTABLISSEMENT (tests principaux)
+----------------------------------------------------------------------
+
+  [Pigier Bénin] — école pivot des scénarios GTL / RGL / Master / GI
+  Email         : forfait199@gmail.com
+  Mot de passe  : UniPath2026!
+  Nom           : Marcos ALI
+  Usages        : validations UE, bilan, décisions passant/redoublant,
+                  préinscriptions, campagnes
+
+  Compte établissement (même école)
+  Email         : contact@pigier-benin.bj
+  Mot de passe  : UniPath2026!
+
+  [UATM — Université Africaine de Technologie et de Management]
+  Email         : contact@uatm-gasa.bj
+  Mot de passe  : UniPath2026!
+  Usages        : transfert même filière GI, autre filière GC, taux réussite
+
+  [ESMA — École Supérieure de Management et d'Administration]
+  Email admin   : cadnelkanlinhanon@gmail.com
+  Mot de passe  : UniPath2026!
+  Email contact : contact@esma-benin.bj
+  Mot de passe  : UniPath2026!
+  Usages        : taux de réussite (passant), UE test
+
+  [HECM — Haute École de Commerce et de Management]
+  Email         : contact@hecm-benin.bj
+  Mot de passe  : UniPath2026!
+  Usages        : cohortes passants (taux 100 %) pour stats DGES
+
+  [IRGIB Africa University]
+  Email         : contact@irgib.bj
+  Mot de passe  : UniPath2026!
+  Usages        : cohortes passants (taux 100 %) pour stats DGES
+
+  [ESATIC — Ecole Superieure Africaine des TIC]
+  Email         : dhvrris@gmail.com  /  jerzeyshop8@gmail.com
+  Mot de passe  : UniPath2026!
+  Email contact : (voir comptes_connexion_unipath.txt)
+  Usages        : établissement privé secondaire (moins central dans les seeds)
+
+
+----------------------------------------------------------------------
+  2. ÉTUDIANTS / CANDIDATS — MATRICULES & CAS DE FIGURE
+----------------------------------------------------------------------
+
+  Mot de passe commun : UniPath2026!
+
+---------------------------------------------------------------------------
+  Candidat 1 — Koffi AGOSSOU
+  Email       : harrydedji+candidat1@gmail.com
+  Matricule   : DEMO-2026-001
+---------------------------------------------------------------------------
+  Cas de figure :
+    - Parcours Master Communication & Marketing (Pigier) :
+      2025-2026 L4 VALIDE (passant) → 2026-2027 L5 VALIDE (suite année)
+    - Aussi passant HECM Commerce International 2026-2027 (boost taux HECM)
+  Tests visés : suite année Master, bilan UE, stats multi-écoles
+
+
+---------------------------------------------------------------------------
+  Candidat 2 — Mireille HOUNGBO
+  Email       : harrydedji+candidat2@gmail.com
+  Matricule   : DEMO-2026-002
+---------------------------------------------------------------------------
+  Cas de figure :
+    - Passant GTL Pigier 2026-2027 L1 VALIDE
+    - Suite année suivante 2027-2028 GTL L2 EN_COURS
+    - Passant HECM Finance 2026-2027 (boost taux)
+  Tests visés : décision passant → inscription N+1 année suivante
+
+
+---------------------------------------------------------------------------
+  Candidat 3 — Romuald KPADONOU
+  Email       : harrydedji+candidat3@gmail.com
+  Matricule   : DEMO-2026-003
+---------------------------------------------------------------------------
+  Cas de figure :
+    - Archive 2025-2026 GTL L2 (ex-redoublant promu passant pour taux Pigier)
+    - Passant HECM 2026-2027
+  Tests visés : historique archive + taux de réussite Pigier / HECM
+
+
+---------------------------------------------------------------------------
+  Candidat 4 — Élodie DANSOU
+  Email       : harrydedji+candidat4@gmail.com
+  Matricule   : DEMO-2026-004
+---------------------------------------------------------------------------
+  Cas de figure :
+    - REDOUBLANT Pigier GTL L1 en 2026-2027
+    - Suite redoublement 2027-2028 GTL L1 EN_COURS (même niveau)
+    - Passant HECM Finance 2026-2027
+  Tests visés : redoublant → pas de niveau supérieur ; suite année redoublant
+
+
+---------------------------------------------------------------------------
+  Candidat 5 — Yves TOSSOU
+  Email       : harrydedji+candidat5@gmail.com
+  Matricule   : DEMO-2026-005
+---------------------------------------------------------------------------
+  Cas de figure :
+    - Archive GTL L1 (passant après boost taux)
+    - 2026-2027 GTL L1 REDOUBLANT (reste un redoublant Pigier)
+    - Passant IRGIB Administration des Affaires 2026-2027
+  Tests visés : redoublant Pigier ; stats IRGIB (taux élevé)
+
+
+---------------------------------------------------------------------------
+  Candidat 6 — Aïcha BIAOU
+  Email       : harrydedji+candidat6@gmail.com
+  Matricule   : DEMO-2026-006
+---------------------------------------------------------------------------
+  Cas de figure :
+    - Passant UATM GI L2 + suite 2027-2028 GI L3 EN_COURS
+    - Passant UATM GC / Pigier Master / IRGIB (multi-inscriptions)
+  Tests visés : continuum GI UATM, taux UATM élevé, multi-établissements
+
+
+---------------------------------------------------------------------------
+  Candidat 7 — Serge GANDONOU
+  Email       : harrydedji+candidat7@gmail.com
+  Matricule   : DEMO-2026-007
+---------------------------------------------------------------------------
+  Cas de figure :
+    - Passant UATM GC 2026-2027 puis suite 2027-2028 GC L1 EN_COURS
+      (scénario initial redoublant GC → suite même niveau)
+    - Aussi Pigier Master / IRGIB
+  Tests visés : suite année, multi-écoles
+
+
+---------------------------------------------------------------------------
+  Candidat 8 — Ayélé ADJOLO
+  Email       : harrydedji+candidat8@gmail.com
+  Matricule   : DEMO-2026-008
+---------------------------------------------------------------------------
+  Cas de figure :
+    - Fin de cycle Licence RGL L3 VALIDE (Pigier) — pas de suite N+1
+    - Autres inscriptions GTL / Master / IRGIB passantes
+  Tests visés : fin de cycle licence ; taux Pigier / IRGIB
+
+
+---------------------------------------------------------------------------
+  Candidat 9 — Marcel ZANNOU
+  Email       : harrydedji+candidat9@gmail.com
+  Matricule   : DEMO-2026-009
+---------------------------------------------------------------------------
+  Cas de figure :
+    - Archive RGL L1 passant Pigier
+    - Passant multi-écoles 2026-2027 (Pigier RGL, UATM GC/GI, IRGIB)
+  Tests visés : parcours multi-filières ; stats nationales
+
+
+---------------------------------------------------------------------------
+  Candidat 10 — Nadia KOUASSI
+  Email       : harrydedji+candidat10@gmail.com
+  Matricule   : DEMO-2026-010
+---------------------------------------------------------------------------
+  Cas de figure :
+    - Archive GTL L2 VALIDE → 2026-2027 GTL L3 VALIDE (suite passant)
+    - Aussi inscription Master Pigier
+  Tests visés : progression L2→L3 ; bilan validations UE
+
+
+---------------------------------------------------------------------------
+  Candidat 11 — Kévin DOSSOU
+  Email       : harrydedji+candidat11@gmail.com
+  Matricule   : DEMO-2026-011
+---------------------------------------------------------------------------
+  Cas de figure :
+    - Archive UATM MO L1 ABANDONNE
+    - 2026-2027 : REDOUBLANT Pigier RGL L1 + passant Pigier CM + passant UATM GI L2
+  Tests visés : abandon archive ; redoublant vs passant ; multi-filières
+
+
+---------------------------------------------------------------------------
+  Candidat 12 — Prisca AHOUANDJINOU
+  Email       : harrydedji+candidat12@gmail.com
+  Matricule   : DEMO-2026-012
+---------------------------------------------------------------------------
+  Cas de figure :
+    - Parcours GTL Pigier sur 3 années :
+      2025-2026 L1 VALIDE → 2026-2027 L2 VALIDE → 2027-2028 L3 EN_COURS
+  Tests visés : parcours chronologique / matricule DGES ; suite année
+
+
+---------------------------------------------------------------------------
+  Candidat 13 — Patrick SOSSOU
+  Email       : harrydedji+candidat13@gmail.com
+  Matricule   : DEMO-2026-013
+---------------------------------------------------------------------------
+  Cas de figure :
+    - TRANSFERT AUTRE FILIÈRE :
+      Archive UATM Génie Civil L2 VALIDE
+      → peut s'inscrire librement (niveau libre) dans une autre formation
+        (ex. Pigier GTL) — contrainte de même filière NON applicable
+    - Aussi passant UATM GC 2026-2027
+  Tests visés : règle transfert « autre filière = niveau libre »
+
+
+---------------------------------------------------------------------------
+  Candidat 14 — Christelle OGOUNCHILE
+  Email       : harrydedji+candidat14@gmail.com
+  Matricule   : DEMO-2026-014
+---------------------------------------------------------------------------
+  Cas de figure :
+    - TRANSFERT MÊME FILIÈRE — REDOUBLANT (historique) :
+      Archive UATM Génie Informatique (promu passant pour taux, mais
+      scénario initial = redoublant GI → ne pouvait pas viser un niveau
+      supérieur chez Pigier GI)
+    - 2026-2027 : REDOUBLANT Pigier GTL L1 + inscriptions UATM GI/GC
+  Tests visés : contrainte transfert même filière si redoublant
+                (niveau max = niveau antérieur, pas N+1)
+
+
+---------------------------------------------------------------------------
+  Candidat 15 — Raphaël BOCO
+  Email       : harrydedji+candidat15@gmail.com
+  Matricule   : DEMO-2026-015
+---------------------------------------------------------------------------
+  Cas de figure :
+    - TRANSFERT MÊME FILIÈRE — PASSANT :
+      Archive UATM Génie Informatique L1 VALIDE
+      → Pigier Génie Informatique (PIGIER-GI-L) L2 VALIDE 2026-2027
+      → 2027-2028 Pigier GI L3 EN_COURS
+    - Filières UATM-GI-L et PIGIER-GI-L considérées équivalentes
+      (même nom + référence catalogue)
+  Tests visés : passant → niveau suivant autorisé chez un autre privé ;
+                parcours multi-années après transfert
+
+
+---------------------------------------------------------------------------
+  Étudiant ESMA — Rémi GLIBA
+  Email       : bkoussedoh@gmail.com
+  Matricule   : UnP-2026-000001
+---------------------------------------------------------------------------
+  Cas de figure :
+    - Passant ESMA Informatique de gestion L2 2026-2027 (taux ESMA 100 %)
+  Tests visés : admin ESMA, validations UE hors Pigier/UATM
+
+
+----------------------------------------------------------------------
+  3. RÉCAP DES RÈGLES / SCÉNARIOS À TESTER (GUIDE RAPIDE)
+----------------------------------------------------------------------
+
+  A. Transfert privé → privé, AUTRE filière
+     Compte : candidat13 (DEMO-2026-013)
+     Attendu : choix de niveau libre
+
+  B. Transfert privé → privé, MÊME filière, passant
+     Compte : candidat15 (DEMO-2026-015)
+     Attendu : niveau max = niveau antérieur + 1
+     Déjà illustré : UATM GI L1 → Pigier GI L2
+
+  C. Transfert privé → privé, MÊME filière, redoublant
+     Compte : candidat14 (DEMO-2026-014) — logique métier
+     Attendu : pas de niveau supérieur au niveau antérieur
+
+  D. Suite année suivante — passant
+     Comptes : candidat2 (DEMO-2026-002), candidat12 (DEMO-2026-012)
+     Attendu : même filière, niveau + 1
+
+  E. Suite année suivante — redoublant
+     Compte : candidat4 (DEMO-2026-004)
+     Attendu : même filière, même niveau
+
+  F. Fin de cycle licence
+     Compte : candidat8 (DEMO-2026-008) — RGL L3 VALIDE
+     Attendu : pas d'inscription N+1 automatique
+
+  G. Tableau de bord DGES / taux de réussite
+     Admins/écoles : Pigier (~80 %), UATM (~92 %), ESMA/HECM/IRGIB (100 %)
+     Compte DGES : dges@mesrs.bj
+
+  H. Parcours par matricule (DGES ou admin)
+     Ex. matricules utiles : DEMO-2026-012, DEMO-2026-015, DEMO-2026-013
+
+
+----------------------------------------------------------------------
+  4. NOTES
+----------------------------------------------------------------------
+
+  - Les seeds ont pu créer plusieurs inscriptions académiques pour un
+    même étudiant (filières / écoles différentes) la même année :
+    utile pour stats, pas forcément un parcours « unique » métier.
+  - Mot de passe candidats / admins établissements importés : UniPath2026!
+  - Mot de passe DGES système : DGES2026! (dges@mesrs.bj)
+  - Fichier général historique : comptes_connexion_unipath.txt
+  - Scripts seed associés :
+      unipath-api/scripts/seed-multi-annees-qualite.js
+      unipath-api/scripts/seed-validation-ue-bilan.js
+      unipath-api/scripts/boost-passants-redoublants.js
+      unipath-api/scripts/boost-taux-reussite-etablissements.js
+
+================================================================================
+  Fin du fichier
+================================================================================

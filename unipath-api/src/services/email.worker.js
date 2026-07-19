@@ -23,6 +23,15 @@ class EmailWorker {
     this.nextDbRetryAt = null;
   }
 
+  recreateTransporter() {
+    try {
+      this.transporter?.close();
+    } catch (_) {
+      // ignore
+    }
+    this.transporter = nodemailer.createTransport(emailConfig.getTransporterConfig());
+  }
+
   /**
    * Start the email worker
    */
@@ -212,6 +221,9 @@ class EmailWorker {
 
     } catch (error) {
       console.error(`[EmailWorker] ❌ Error sending email ${email.id}:`, error.message);
+      if (['ECONNRESET', 'ETIMEDOUT', 'ESOCKET', 'EPIPE'].includes(error.code)) {
+        this.recreateTransporter();
+      }
 
       // Calculate next retry
       const nextRetry = this.calculateNextRetry(email.attempts);

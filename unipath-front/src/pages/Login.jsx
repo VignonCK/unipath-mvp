@@ -32,6 +32,8 @@ export default function Login() {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSent, setResetSent]   = useState(false);
   const [resetError, setResetError] = useState('');
+  const [resetMessage, setResetMessage] = useState('');
+  const [resetViaInstitution, setResetViaInstitution] = useState(null); // 'DEC' | 'DGES' | null
   
   const [emailNotConfirmed, setEmailNotConfirmed] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
@@ -135,6 +137,16 @@ export default function Login() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erreur lors de l\'envoi');
+      const via = data.demandeTransmiseADges ? 'DGES' : (data.demandeTransmiseADec ? 'DEC' : null);
+      setResetViaInstitution(via);
+      setResetMessage(
+        data.message
+        || (via === 'DGES'
+          ? 'Votre demande a été transmise à la DGES.'
+          : via === 'DEC'
+            ? 'Votre demande a été transmise à la DEC.'
+            : 'Si cet email existe, un lien de réinitialisation a été envoyé.')
+      );
       setResetSent(true);
     } catch (err) {
       setResetError(err.message);
@@ -160,7 +172,7 @@ export default function Login() {
           </h1>
           <p className='text-gray-500 text-xs sm:text-sm mb-4 sm:mb-6'>
             {resetMode
-              ? 'Entrez votre email pour recevoir un lien de réinitialisation.'
+              ? 'Entrez votre email. Selon votre type de compte, un lien vous sera envoyé ou la DEC / DGES traitera votre demande.'
               : premiereFois
               ? 'Connectez-vous pour accéder à votre espace.'
               : 'Connectez-vous à votre compte.'}
@@ -178,12 +190,37 @@ export default function Login() {
 
           {resetMode ? (
             resetSent ? (
-              <div className='bg-green-50 border border-green-200 text-green-700 px-4 py-4 rounded-xl text-sm'>
-                <p className='font-semibold mb-1'>Email envoyé !</p>
-                <p>Vérifiez votre boîte mail et cliquez sur le lien pour réinitialiser votre mot de passe.</p>
+              <div className={`px-4 py-4 rounded-xl text-sm border ${
+                resetViaInstitution
+                  ? 'bg-amber-50 border-amber-200 text-amber-900'
+                  : 'bg-green-50 border-green-200 text-green-700'
+              }`}>
+                <p className='font-semibold mb-1'>
+                  {resetViaInstitution === 'DGES'
+                    ? 'Demande transmise à la DGES'
+                    : resetViaInstitution === 'DEC'
+                      ? 'Demande transmise à la DEC'
+                      : 'Email envoyé !'}
+                </p>
+                <p>
+                  {resetMessage
+                    || (resetViaInstitution === 'DGES'
+                      ? 'La DGES réinitialisera votre mot de passe et vous l\'enverra par email.'
+                      : resetViaInstitution === 'DEC'
+                        ? 'La DEC réinitialisera votre mot de passe et vous l\'enverra par email.'
+                        : 'Vérifiez votre boîte mail et cliquez sur le lien pour réinitialiser votre mot de passe.')}
+                </p>
                 <button
-                  onClick={() => { setResetMode(false); setResetSent(false); setResetEmail(''); }}
-                  className='mt-3 text-green-700 font-semibold hover:underline text-xs'
+                  onClick={() => {
+                    setResetMode(false);
+                    setResetSent(false);
+                    setResetEmail('');
+                    setResetMessage('');
+                    setResetViaInstitution(null);
+                  }}
+                  className={`mt-3 font-semibold hover:underline text-xs ${
+                    resetViaInstitution ? 'text-amber-900' : 'text-green-700'
+                  }`}
                 >
                   ← Retour à la connexion
                 </button>

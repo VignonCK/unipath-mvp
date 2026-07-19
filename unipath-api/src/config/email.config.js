@@ -46,14 +46,19 @@ class EmailConfig {
    * Load and parse configuration from environment variables
    */
   loadConfig() {
+    const port = parseInt(process.env.SMTP_PORT || '587', 10);
+    // Mot de passe d'application Gmail : les espaces d'affichage doivent être retirés
+    const smtpPass = String(process.env.SMTP_PASS || '').replace(/\s+/g, '');
+
     // SMTP Configuration
     this.smtp = {
       host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: process.env.SMTP_PORT === '465', // true for 465, false for other ports
+      port,
+      secure: port === 465,
+      requireTLS: port === 587,
       auth: {
         user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        pass: smtpPass,
       },
       from: {
         email: process.env.SMTP_FROM_EMAIL,
@@ -113,13 +118,43 @@ class EmailConfig {
   /**
    * Get SMTP transporter configuration for Nodemailer
    */
-  getTransporterConfig() {
+  getTransporterConfig(overrides = {}) {
+    const port = overrides.port ?? this.smtp.port;
+    const secure = overrides.secure !== undefined ? overrides.secure : (port === 465);
+    const requireTLS = overrides.requireTLS !== undefined
+      ? overrides.requireTLS
+      : (!secure && port === 587);
+
     return {
       host: this.smtp.host,
-      port: this.smtp.port,
-      secure: this.smtp.secure,
+      port,
+      secure,
+      ...(requireTLS ? { requireTLS: true } : {}),
       auth: this.smtp.auth,
+      // Évite les timeouts intermittents liés à IPv6 sur Windows / certains réseaux
+      family: 4,
+      connectionTimeout: 25000,
+      greetingTimeout: 25000,
+      socketTimeout: 35000,
+      tls: {
+        minVersion: 'TLSv1.2',
+        servername: this.smtp.host,
+      },
     };
+  }
+
+  /**
+   * Configs de secours si la connexion principale time out (ex. 587 → 465).
+   */
+  getFallbackTransporterConfigs() {
+    const configs = [this.getTransporterConfig()];
+    if (this.smtp.port !== 465) {
+      configs.push(this.getTransporterConfig({ port: 465, secure: true, requireTLS: false }));
+    }
+    if (this.smtp.port !== 587) {
+      configs.push(this.getTransporterConfig({ port: 587, secure: false, requireTLS: true }));
+    }
+    return configs;
   }
 
   /**

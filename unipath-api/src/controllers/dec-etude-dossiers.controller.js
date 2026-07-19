@@ -10,15 +10,20 @@ const {
 const { notifierDecEtudeIncomplete } = require('../jobs/periode-etude-dossiers.job');
 const { notifierDecSiEtudeIncomplete } = require('../utils/notif-etude-incomplete.helper');
 const { getAnneeEnCours } = require('../utils/annee-academique.helper');
+const {
+  countAffectationsConcours,
+  mapAffectationsParConcours,
+} = require('../utils/affectation-commission.helper');
+const { genererNumerosTableConcours } = require('../utils/numero-table.helper');
 
 async function concoursEstAnneeEnCours(concours, anneeEnCours = null) {
   const enCours = anneeEnCours || (await getAnneeEnCours());
   if (!enCours) return false;
-  if (concours.annee?.enCours === true) return true;
+  if (concours.annee?.enCoursDec === true) return true;
   return concours.anneeAcademiqueId === enCours.id;
 }
 
-async function buildEtudeStatus(concours, now = new Date(), anneeEnCours = null) {
+async function buildEtudeStatus(concours, now = new Date(), anneeEnCours = null, affectationInfo = null) {
   const totalDossiers = await prisma.dossierInscription.count({
     where: { inscription: { concoursId: concours.id } },
   });
@@ -26,6 +31,12 @@ async function buildEtudeStatus(concours, now = new Date(), anneeEnCours = null)
     where: {
       inscription: { concoursId: concours.id },
       ...whereDossierNonEtudie(),
+    },
+  });
+  const dossiersSousReserve = await prisma.dossierInscription.count({
+    where: {
+      inscription: { concoursId: concours.id },
+      statut: { in: ['SOUS_RESERVE', 'SOUS_RESERVE_PAR_COMMISSION'] },
     },
   });
   const dossiersEtudies = totalDossiers - dossiersNonEtudies;
@@ -37,10 +48,16 @@ async function buildEtudeStatus(concours, now = new Date(), anneeEnCours = null)
   const cloturee = etudeEstCloturee(concours);
   const anneeCourante = await concoursEstAnneeEnCours(concours, anneeEnCours);
 
+  const commission = affectationInfo || (await countAffectationsConcours(concours.id));
+  const commissionComplete = !!commission.commissionComplete;
+
   const peutRelancerEtude =
-    anneeCourante && inscriptionsCloses && cloturee && !tousEtudies;
+    anneeCourante && inscriptionsCloses && cloturee && !tousEtudies && commissionComplete;
   const peutLancerEtude =
-    anneeCourante && inscriptionsCloses && (!lancee || peutRelancerEtude);
+    anneeCourante
+    && inscriptionsCloses
+    && commissionComplete
+    && (!lancee || peutRelancerEtude);
 
   return {
     concoursId: concours.id,
@@ -55,13 +72,20 @@ async function buildEtudeStatus(concours, now = new Date(), anneeEnCours = null)
     totalDossiers,
     dossiersEtudies,
     dossiersNonEtudies,
+    dossiersSousReserve,
     tousEtudies,
+    nbExaminateurs: commission.nbExaminateurs || 0,
+    nbControleurs: commission.nbControleurs || 0,
+    commissionComplete,
     /** Uniquement sur l'année académique en cours */
     peutLancerEtude,
     peutRelancerEtude,
     peutCloturerEtude: anneeCourante && active,
     /** Bouton temporaire de test : clôturer les inscriptions avant la date prévue */
     peutCloturerInscriptions: anneeCourante && !inscriptionsCloses,
+    /** Restaurer la date de fin d'inscription d'origine après une clôture anticipée */
+    peutRestaurerDateFinDepot: anneeCourante && !!concours.dateFinDepotAvantCloture,
+    dateFinDepotAvantCloture: concours.dateFinDepotAvantCloture || null,
     alerteEnvoyee: !!concours.etudeDossiersAlerteAt,
   };
 }
@@ -88,17 +112,20 @@ exports.getEtudeStatuses = async (req, res) => {
         libelle: true,
         dateFinDepot: true,
         dateFin: true,
+        dateFinDepotAvantCloture: true,
         dateDebutEtudeDossiers: true,
         dateFinEtudeDossiers: true,
         etudeDossiersClotureeAt: true,
         etudeDossiersAlerteAt: true,
         anneeAcademiqueId: true,
-        annee: { select: { id: true, libelle: true, enCours: true } },
+        annee: { select: { id: true, libelle: true, enCoursDec: true, enCoursDges: true } },
       },
     });
 
+    const affectationsMap = await mapAffectationsParConcours(concoursList.map((c) => c.id));
+
     const statuses = await Promise.all(
-      concoursList.map((c) => buildEtudeStatus(c, now, anneeEnCours))
+      concoursList.map((c) => buildEtudeStatus(c, now, anneeEnCours, affectationsMap[c.id]))
     );
     return res.json({
       message: 'Statuts étude dossiers récupérés',
@@ -115,7 +142,7 @@ exports.getEtudeStatus = async (req, res) => {
     const { concoursId } = req.params;
     const concours = await prisma.concours.findUnique({
       where: { id: concoursId },
-      include: { annee: { select: { id: true, libelle: true, enCours: true } } },
+      include: { annee: { select: { id: true, libelle: true, enCoursDec: true, enCoursDges: true } } },
     });
     if (!concours) {
       return res.status(404).json({ error: 'Concours non trouvé' });
@@ -136,7 +163,7 @@ exports.lancerEtude = async (req, res) => {
 
     const concours = await prisma.concours.findUnique({
       where: { id: concoursId },
-      include: { annee: { select: { id: true, libelle: true, enCours: true } } },
+      include: { annee: { select: { id: true, libelle: true, enCoursDec: true, enCoursDges: true } } },
     });
     if (!concours) {
       return res.status(404).json({ error: 'Concours non trouvé' });
@@ -153,6 +180,21 @@ exports.lancerEtude = async (req, res) => {
     if (!inscriptionsSontCloses(concours, now)) {
       return res.status(400).json({
         error: "Impossible de lancer l'étude avant la clôture des inscriptions.",
+      });
+    }
+
+    const commission = await countAffectationsConcours(concoursId);
+    if (!commission.commissionComplete) {
+      const manques = [];
+      if (commission.nbExaminateurs === 0) manques.push('au moins un examinateur');
+      if (commission.nbControleurs === 0) manques.push('au moins un contrôleur');
+      return res.status(400).json({
+        error:
+          `Impossible de lancer l'étude des dossiers : affectez ${manques.join(' et ')} `
+          + 'à ce concours avant de démarrer.',
+        code: 'COMMISSION_INCOMPLETE',
+        nbExaminateurs: commission.nbExaminateurs,
+        nbControleurs: commission.nbControleurs,
       });
     }
 
@@ -207,7 +249,7 @@ exports.setPeriodeEtude = async (req, res) => {
 
 /**
  * TEMPORAIRE (tests) — force la clôture des inscriptions en avançant dateFinDepot.
- * À retirer avant le déploiement en production.
+ * Conserve la date d'origine pour pouvoir la restaurer ensuite.
  */
 exports.cloturerInscriptionsTest = async (req, res) => {
   try {
@@ -218,7 +260,7 @@ exports.cloturerInscriptionsTest = async (req, res) => {
 
     const concours = await prisma.concours.findUnique({
       where: { id: concoursId },
-      include: { annee: { select: { id: true, libelle: true, enCours: true } } },
+      include: { annee: { select: { id: true, libelle: true, enCoursDec: true, enCoursDges: true } } },
     });
     if (!concours) {
       return res.status(404).json({ error: 'Concours non trouvé' });
@@ -238,11 +280,24 @@ exports.cloturerInscriptionsTest = async (req, res) => {
       });
     }
 
+    const dateFinActuelle = concours.dateFinDepot || concours.dateFin;
+    const debutJour = new Date(now);
+    debutJour.setHours(0, 0, 0, 0);
+    const finJour = new Date(now);
+    finJour.setHours(23, 59, 59, 999);
+    const dateOriginaleEstAujourdhui = dateFinActuelle
+      && dateFinActuelle >= debutJour
+      && dateFinActuelle <= finJour;
+
     const updated = await prisma.concours.update({
       where: { id: concoursId },
       data: {
         dateFinDepot: dateFinForcee,
         dateFin: dateFinForcee,
+        // Ne conserver la date d'origine que si la clôture est anticipée (pas le jour prévu)
+        ...(!dateOriginaleEstAujourdhui && dateFinActuelle
+          ? { dateFinDepotAvantCloture: dateFinActuelle }
+          : {}),
       },
     });
 
@@ -254,12 +309,70 @@ exports.cloturerInscriptionsTest = async (req, res) => {
         id: updated.id,
         dateFinDepot: updated.dateFinDepot,
         dateFin: updated.dateFin,
+        dateFinDepotAvantCloture: updated.dateFinDepotAvantCloture,
       },
       status,
       _tempTest: true,
     });
   } catch (error) {
     console.error('Erreur cloturerInscriptionsTest:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+/**
+ * Restaure la date de fin d'inscription d'origine après une clôture anticipée (test).
+ */
+exports.restaurerDateFinDepot = async (req, res) => {
+  try {
+    const { concoursId } = req.params;
+    const now = new Date();
+
+    const concours = await prisma.concours.findUnique({
+      where: { id: concoursId },
+      include: { annee: { select: { id: true, libelle: true, enCoursDec: true, enCoursDges: true } } },
+    });
+    if (!concours) {
+      return res.status(404).json({ error: 'Concours non trouvé' });
+    }
+
+    if (!(await concoursEstAnneeEnCours(concours))) {
+      return res.status(400).json({
+        error: "Réservé aux concours de l'année académique en cours.",
+        code: 'ANNEE_ARCHIVE',
+      });
+    }
+
+    if (!concours.dateFinDepotAvantCloture) {
+      return res.status(400).json({
+        error: "Aucune date d'inscription d'origine à restaurer pour ce concours.",
+        code: 'PAS_DE_DATE_A_RESTAURER',
+      });
+    }
+
+    const dateRestauree = concours.dateFinDepotAvantCloture;
+    const updated = await prisma.concours.update({
+      where: { id: concoursId },
+      data: {
+        dateFinDepot: dateRestauree,
+        dateFin: dateRestauree,
+        dateFinDepotAvantCloture: null,
+      },
+    });
+
+    const status = await buildEtudeStatus(updated, now);
+    return res.json({
+      message: `Date de fin d'inscription restaurée au ${dateRestauree.toLocaleDateString('fr-FR')}.`,
+      concours: {
+        id: updated.id,
+        dateFinDepot: updated.dateFinDepot,
+        dateFin: updated.dateFin,
+        dateFinDepotAvantCloture: updated.dateFinDepotAvantCloture,
+      },
+      status,
+    });
+  } catch (error) {
+    console.error('Erreur restaurerDateFinDepot:', error);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 };
@@ -272,7 +385,7 @@ exports.cloturerEtude = async (req, res) => {
 
     const concours = await prisma.concours.findUnique({
       where: { id: concoursId },
-      include: { annee: { select: { id: true, libelle: true, enCours: true } } },
+      include: { annee: { select: { id: true, libelle: true, enCoursDec: true, enCoursDges: true } } },
     });
     if (!concours) {
       return res.status(404).json({ error: 'Concours non trouvé' });
@@ -302,6 +415,17 @@ exports.cloturerEtude = async (req, res) => {
       },
     });
 
+    // Attribution des N° de table aux candidats retenus dès la clôture
+    let numerosTable = null;
+    try {
+      numerosTable = await genererNumerosTableConcours(concoursId, { regenerer: true });
+      if (!numerosTable?.ok) {
+        console.warn('Clôture étude — génération N° de table:', numerosTable?.error || numerosTable);
+      }
+    } catch (numErr) {
+      console.error('Erreur génération N° de table à la clôture:', numErr);
+    }
+
     let alerte = {
       incomplete: false,
       dossiersNonEtudies: 0,
@@ -327,6 +451,9 @@ exports.cloturerEtude = async (req, res) => {
       },
       status,
       alerte,
+      numerosTable: numerosTable?.ok
+        ? { generes: numerosTable.totalGeneres ?? null, message: 'Numéros de table attribués' }
+        : null,
     });
   } catch (error) {
     console.error('Erreur cloturerEtude:', error);

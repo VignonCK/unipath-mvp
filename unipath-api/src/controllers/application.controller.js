@@ -1,10 +1,31 @@
 const fs = require('fs');
 const prisma = require('../prisma');
 const localFileStorage = require('../services/local-file-storage.service');
-const paymentService = require('../services/payment.service');
 const pdfService = require('../services/pdf.service');
 const emailService = require('../services/email.service');
 const { runInBackground } = require('../utils/background-task');
+const { getOrCreateAnneeEnCoursDges } = require('../utils/annee-academique.helper');
+const {
+  resolveEtablissementIdFromReq,
+  canAccessEtablissementResource,
+} = require('../utils/etablissement-access.helper');
+const {
+  extractPiecesList,
+  piecesToVirtualRequirements,
+  withNiveauSuperieurRequirements,
+  getDefaultPiecesCampagne,
+} = require('../utils/campagne-pieces.helper');
+const {
+  parseExportFilters,
+  getExportReadiness,
+  loadCandidaturesForExport,
+  rowsToCsv,
+  streamCandidaturesPdf,
+} = require('../utils/candidatures-export.helper');
+const {
+  resolveContrainteNiveauTransfert,
+  assertNiveauTransfertAutorise,
+} = require('../utils/transfert-filiere.helper');
 
 const REQUIRED_PROFILE_FIELDS = {
   nom: (c) => c?.nom,
@@ -77,6 +98,15 @@ const buildApplicationIncludes = () => ({
   filiere: {
     select: { id: true, nom: true, code: true },
   },
+  campagneFiliere: {
+    select: {
+      id: true,
+      fraisDossier: true,
+      campagne: {
+        select: { id: true, titre: true, piecesRequises: true },
+      },
+    },
+  },
   documents: true,
   payments: true,
   receipts: true,
@@ -89,17 +119,61 @@ const getRequirementValue = (candidate, profileFieldKey) => {
   return getter(candidate);
 };
 
-const getRequirementsAndAutoDocs = async ({ application, candidate }) => {
-  const requirements = await prisma.schoolRequirement.findMany({
+const loadCampagnePiecesForApplication = async (application) => {
+  if (application.campagneFiliere?.campagne?.piecesRequises) {
+    return extractPiecesList(application.campagneFiliere.campagne.piecesRequises);
+  }
+  if (application.campagneFiliereId) {
+    const cf = await prisma.campagneFiliere.findUnique({
+      where: { id: application.campagneFiliereId },
+      include: { campagne: { select: { piecesRequises: true } } },
+    });
+    return extractPiecesList(cf?.campagne?.piecesRequises);
+  }
+  const cf = await prisma.campagneFiliere.findFirst({
+    where: {
+      filiereId: application.filiereId,
+      campagne: {
+        etablissementId: application.etablissementId,
+        anneeAcademique: application.anneeAcademique,
+        statut: { in: ['PUBLIEE', 'CLOTUREE', 'BROUILLON'] },
+      },
+    },
+    include: { campagne: { select: { piecesRequises: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  return extractPiecesList(cf?.campagne?.piecesRequises);
+};
+
+const resolveApplicationRequirements = async (application) => {
+  let pieces = await loadCampagnePiecesForApplication(application);
+  if (pieces && pieces.length > 0) {
+    return withNiveauSuperieurRequirements(piecesToVirtualRequirements(pieces), application.niveau);
+  }
+
+  const schoolReqs = await prisma.schoolRequirement.findMany({
     where: { etablissementId: application.etablissementId },
     orderBy: { createdAt: 'asc' },
   });
+  if (schoolReqs.length > 0) {
+    return withNiveauSuperieurRequirements(schoolReqs, application.niveau);
+  }
+
+  // Campagne sans pièces configurées → défauts Module 2 (acte, CNI, photo, relevé Bac)
+  return withNiveauSuperieurRequirements(
+    piecesToVirtualRequirements(getDefaultPiecesCampagne()),
+    application.niveau
+  );
+};
+
+const getRequirementsAndAutoDocs = async ({ application, candidate }) => {
+  const requirements = await resolveApplicationRequirements(application);
 
   const autoSatisfied = [];
   const missing = [];
 
   requirements.forEach((req) => {
-    if (!req.isRequired) return;
+    if (req.isRequired === false) return;
     if (req.requirementType === 'PROFILE_FIELD' && req.profileFieldKey) {
       const value = getRequirementValue(candidate, req.profileFieldKey);
       if (value !== null && value !== undefined && value !== '') {
@@ -107,7 +181,7 @@ const getRequirementsAndAutoDocs = async ({ application, candidate }) => {
           code: req.code,
           label: req.label,
           value: typeof value === 'object' ? JSON.stringify(value) : String(value),
-          schoolRequirementId: req.id,
+          schoolRequirementId: req.fromCampagne ? null : req.id,
         });
       } else {
         missing.push({ code: req.code, label: req.label, requirementType: req.requirementType });
@@ -155,46 +229,126 @@ const computeCompletion = async (applicationId) => {
       documents: true,
       payments: true,
       etablissement: { select: { id: true } },
+      campagneFiliere: {
+        select: {
+          id: true,
+          campagne: { select: { piecesRequises: true } },
+        },
+      },
+      candidat: {
+        select: {
+          nom: true,
+          prenom: true,
+          email: true,
+          telephone: true,
+          sexe: true,
+          nationalite: true,
+          dateNaiss: true,
+          lieuNaiss: true,
+          anip: true,
+          matricule: true,
+          dossier: {
+            select: {
+              acteNaissance: true,
+              carteIdentite: true,
+              photo: true,
+              releve: true,
+            },
+          },
+        },
+      },
     },
   });
   if (!app) return null;
 
-  const requirements = await prisma.schoolRequirement.findMany({
-    where: {
-      etablissementId: app.etablissementId,
-      isRequired: true,
-    },
+  const requirements = (await resolveApplicationRequirements(app)).filter(
+    (req) => req.isRequired !== false
+  );
+
+  const missingDocs = requirements.filter((req) => {
+    const provided = app.documents.some((doc) => doc.code === req.code && doc.status === 'PROVIDED');
+    if (provided) return false;
+    if (req.requirementType === 'PROFILE_FIELD' && req.profileFieldKey) {
+      const value = getRequirementValue(app.candidat, req.profileFieldKey);
+      return value === null || value === undefined || value === '';
+    }
+    return true;
   });
 
-  const missingDocs = requirements.filter((req) =>
-    !app.documents.some((doc) => doc.code === req.code && doc.status === 'PROVIDED')
-  );
-
+  // Preuve des frais de dossier = quittance uploadée (style module 1) ou paiement confirmé
   const dossierFeesPaid = app.payments.some(
     (p) => p.paymentType === 'DOSSIER_FEES' && p.status === 'CONFIRMED'
+  ) || app.documents.some(
+    (d) => d.code === 'quittance_frais_dossier' && d.status === 'PROVIDED' && d.documentUrl
   );
+
+  // Droits d'inscription : après acceptation de l'école (hors complétude du dépôt initial)
   const droitsPaid = app.payments.some(
     (p) => p.paymentType === 'DROITS_INSCRIPTION' && p.status === 'CONFIRMED'
   );
+
+  const totalRequired = requirements.length;
+  const providedCount = totalRequired - missingDocs.length;
+  // Inclure la quittance / frais de dossier dans le % (même règle que isComplete)
+  const totalSteps = totalRequired + 1;
+  const doneSteps = providedCount + (dossierFeesPaid ? 1 : 0);
+  const percentage = totalSteps === 0 ? 100 : Math.round((doneSteps / totalSteps) * 100);
 
   return {
     dossierFeesPaid,
     droitsInscriptionPaid: droitsPaid,
     missingDocuments: missingDocs,
-    isComplete: dossierFeesPaid && droitsPaid && missingDocs.length === 0,
+    providedCount,
+    totalRequired,
+    percentage,
+    pourcentage: percentage,
+    isComplete: dossierFeesPaid && missingDocs.length === 0,
   };
+};
+
+const resolveFraisDossierAmount = async (application) => {
+  if (application.campagneFiliere?.fraisDossier != null) {
+    return Number(application.campagneFiliere.fraisDossier);
+  }
+  if (application.campagneFiliereId) {
+    const linked = await prisma.campagneFiliere.findUnique({
+      where: { id: application.campagneFiliereId },
+      select: { fraisDossier: true },
+    });
+    if (linked?.fraisDossier != null) return Number(linked.fraisDossier);
+  }
+  const campagneFiliere = await prisma.campagneFiliere.findFirst({
+    where: {
+      filiereId: application.filiereId,
+      campagne: {
+        etablissementId: application.etablissementId,
+        anneeAcademique: application.anneeAcademique,
+        statut: { in: ['PUBLIEE', 'CLOTUREE', 'BROUILLON'] },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { fraisDossier: true },
+  });
+  if (campagneFiliere?.fraisDossier != null) return Number(campagneFiliere.fraisDossier);
+  return DEFAULT_DOSSIER_FEES;
 };
 
 exports.createApplication = async (req, res) => {
   try {
     const candidatId = req.user?.id;
-    const { etablissementId, filiereId, anneeAcademique, niveau } = req.body;
+    let { etablissementId, filiereId, niveau, campagneFiliereId } = req.body;
 
     if (!candidatId) {
       return res.status(401).json({ error: 'Utilisateur non authentifie' });
     }
-    if (!etablissementId || !filiereId || !anneeAcademique || !niveau) {
-      return res.status(400).json({ error: 'etablissementId, filiereId, anneeAcademique et niveau sont requis' });
+    if (!etablissementId || !filiereId || !niveau) {
+      return res.status(400).json({ error: 'etablissementId, filiereId et niveau sont requis' });
+    }
+
+    let anneeLibelle = '';
+    {
+      const anneeDges = await getOrCreateAnneeEnCoursDges();
+      anneeLibelle = anneeDges.libelle;
     }
 
     const etablissement = await prisma.etablissement.findUnique({
@@ -219,6 +373,68 @@ exports.createApplication = async (req, res) => {
       return res.status(400).json({ error: 'La filiere ne correspond pas a cet etablissement' });
     }
 
+    const contrainte = await resolveContrainteNiveauTransfert({
+      candidatId,
+      filiereIdCible: filiereId,
+      etablissementIdCible: etablissementId,
+    });
+    const checkNiveau = assertNiveauTransfertAutorise(niveau, contrainte);
+    if (!checkNiveau.ok) {
+      return res.status(400).json({
+        error: checkNiveau.error,
+        contrainte: {
+          constrained: contrainte.constrained,
+          niveauMax: contrainte.niveauMax,
+          niveauMin: contrainte.niveauMin,
+          niveauAnterieur: contrainte.niveauAnterieur,
+          statutAnterieur: contrainte.statutAnterieur,
+          motif: contrainte.motif,
+          message: contrainte.message,
+        },
+      });
+    }
+
+    let resolvedCampagneFiliereId = null;
+    if (campagneFiliereId) {
+      const cf = await prisma.campagneFiliere.findUnique({
+        where: { id: campagneFiliereId },
+        include: {
+          campagne: {
+            select: {
+              id: true,
+              etablissementId: true,
+              anneeAcademique: true,
+              statut: true,
+            },
+          },
+        },
+      });
+      if (!cf) {
+        return res.status(404).json({ error: 'Offre de campagne introuvable' });
+      }
+      if (cf.filiereId !== filiereId || cf.campagne.etablissementId !== etablissementId) {
+        return res.status(400).json({ error: 'L\'offre de campagne ne correspond pas a la filiere/etablissement' });
+      }
+      if (!['PUBLIEE', 'CLOTUREE'].includes(cf.campagne.statut)) {
+        return res.status(400).json({ error: 'Cette campagne n\'est pas ouverte aux depots' });
+      }
+      resolvedCampagneFiliereId = cf.id;
+    } else {
+      const cf = await prisma.campagneFiliere.findFirst({
+        where: {
+          filiereId,
+          campagne: {
+            etablissementId,
+            anneeAcademique: anneeLibelle,
+            statut: 'PUBLIEE',
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      });
+      resolvedCampagneFiliereId = cf?.id || null;
+    }
+
     const numeroApplication = buildApplicationNumber();
     const application = await prisma.application.create({
       data: {
@@ -226,8 +442,9 @@ exports.createApplication = async (req, res) => {
         candidatId,
         etablissementId,
         filiereId,
-        anneeAcademique,
+        anneeAcademique: anneeLibelle,
         niveau: Number(niveau),
+        ...(resolvedCampagneFiliereId ? { campagneFiliereId: resolvedCampagneFiliereId } : {}),
       },
       include: buildApplicationIncludes(),
     });
@@ -282,16 +499,25 @@ exports.getMyApplications = async (req, res) => {
 
 exports.getApplicationsForEtablissement = async (req, res) => {
   try {
-    const etablissementId = req.user?.id;
+    const etablissementId = resolveEtablissementIdFromReq(req);
     if (!etablissementId) {
       return res.status(401).json({ error: 'Utilisateur non authentifie' });
     }
     const applications = await prisma.application.findMany({
       where: { etablissementId },
       include: {
-        candidat: { select: { id: true, matricule: true, nom: true, prenom: true, email: true } },
+        candidat: { select: { id: true, matricule: true, nom: true, prenom: true, email: true, sexe: true } },
         filiere: { select: { id: true, nom: true, code: true } },
         payments: { select: { paymentType: true, status: true } },
+        preinscription: {
+          select: {
+            id: true,
+            numeroPreinscription: true,
+            statut: true,
+            niveau: true,
+            motifDecision: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -306,7 +532,6 @@ exports.getApplicationById = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id;
-    const userRole = req.user?.role || req.userRole;
     const application = await prisma.application.findUnique({
       where: { id },
       include: buildApplicationIncludes(),
@@ -318,7 +543,7 @@ exports.getApplicationById = async (req, res) => {
 
     const canAccess =
       application.candidatId === userId ||
-      (userRole === 'ETABLISSEMENT' && application.etablissementId === userId);
+      canAccessEtablissementResource(req, application.etablissementId);
     if (!canAccess) {
       return res.status(403).json({ error: 'Acces refuse' });
     }
@@ -346,13 +571,19 @@ exports.getApplicationRequirements = async (req, res) => {
       return res.status(403).json({ error: 'Acces refuse' });
     }
 
-    const { requirements, missing } = await getRequirementsAndAutoDocs({
+    const { requirements, missing, autoSatisfied } = await getRequirementsAndAutoDocs({
       application,
       candidate: application.candidat,
     });
+    await ensureAutoDocuments(application.id, autoSatisfied);
+
+    const refreshedDocs = await prisma.applicationDocument.findMany({
+      where: { applicationId: id },
+      select: { code: true, status: true },
+    });
 
     const providedCodes = new Set(
-      application.documents.filter((d) => d.status === 'PROVIDED').map((d) => d.code)
+      refreshedDocs.filter((d) => d.status === 'PROVIDED').map((d) => d.code)
     );
 
     const normalized = requirements.map((req) => ({
@@ -361,9 +592,9 @@ exports.getApplicationRequirements = async (req, res) => {
       label: req.label,
       requirementType: req.requirementType,
       profileFieldKey: req.profileFieldKey,
-      isRequired: req.isRequired,
+      isRequired: req.isRequired !== false,
       provided: providedCodes.has(req.code),
-      needsUpload: req.requirementType === 'DOCUMENT_UPLOAD' && !providedCodes.has(req.code),
+      needsUpload: !providedCodes.has(req.code),
       missing: missing.some((m) => m.code === req.code),
     }));
 
@@ -375,6 +606,14 @@ exports.getApplicationRequirements = async (req, res) => {
 };
 
 exports.payDossierFeesMock = async (req, res) => {
+  return res.status(410).json({
+    error:
+      'Le paiement simulé n\'est plus disponible. Déposez la quittance des frais de dossier comme pour un concours.',
+  });
+};
+
+/** Upload de la quittance des frais de dossier (paiement hors plateforme — comme Module 1). */
+exports.uploadQuittanceFraisDossier = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id;
@@ -388,67 +627,98 @@ exports.payDossierFeesMock = async (req, res) => {
     if (application.candidatId !== userId) {
       return res.status(403).json({ error: 'Acces refuse' });
     }
+    if (['FICHE_GENERATED'].includes(application.status)) {
+      return res.status(400).json({
+        error:
+          'Ce dossier a déjà été soumis. Les pièces ne peuvent plus être modifiées, sauf si l\'école le remet sous réserve.',
+      });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'Aucun fichier reçu (PDF ou image).' });
+    }
 
-    const amount = DEFAULT_DOSSIER_FEES;
-    const initiated = await paymentService.initiatePayment({
-      applicationId: id,
-      amount,
-      paymentType: 'DOSSIER_FEES',
-      currency: 'XOF',
-    });
-    const confirmed = await paymentService.confirmPaymentMock({ reference: initiated.reference });
+    const ext = req.file.originalname.split('.').pop();
+    const fileName = `quittance-frais-dossier-${Date.now()}.${ext}`;
+    const storagePath = `applications/${id}/receipts/${fileName}`;
+    const receiptUrl = await uploadBufferToLocal(req.file.buffer, storagePath, req.file.mimetype);
+    const amount = await resolveFraisDossierAmount(application);
 
-    const payment = await prisma.payment.create({
-      data: {
-        applicationId: id,
-        paymentType: 'DOSSIER_FEES',
-        amount,
-        currency: 'XOF',
-        paymentProvider: initiated.provider,
-        paymentMethod: 'PLATFORM_GATEWAY',
-        status: confirmed.status,
-        externalRef: initiated.reference,
-        providerPayload: confirmed.providerPayload,
-      },
+    const existingPayment = await prisma.payment.findFirst({
+      where: { applicationId: id, paymentType: 'DOSSIER_FEES', status: 'CONFIRMED' },
+      orderBy: { createdAt: 'desc' },
+      include: { receipt: true },
     });
 
-    const receiptNumber = buildReceiptNumber('QFD');
-    const receiptPayload = {
-      receiptNumber,
-      type: 'DOSSIER_FEES_RECEIPT',
-      applicationNumber: application.numeroApplication,
-      amount,
-      currency: 'XOF',
-      paymentReference: initiated.reference,
-      issuedAt: new Date().toISOString(),
-      candidat: {
-        matricule: application.candidat.matricule,
-        nom: application.candidat.nom,
-        prenom: application.candidat.prenom,
-      },
-      etablissement: {
-        nom: application.etablissement.nom,
-      },
-      filiere: application.filiere.nom,
-    };
+    let payment = existingPayment;
+    let receipt = existingPayment?.receipt || null;
 
-    const storagePath = `applications/${id}/receipts/${receiptNumber}.json`;
-    const receiptUrl = await uploadBufferToLocal(
-      Buffer.from(JSON.stringify(receiptPayload, null, 2), 'utf-8'),
-      storagePath,
-      'application/json'
-    );
+    if (existingPayment) {
+      if (existingPayment.receipt) {
+        receipt = await prisma.receipt.update({
+          where: { id: existingPayment.receipt.id },
+          data: {
+            receiptUrl,
+            metadata: {
+              originalFileName: req.file.originalname,
+              mimeType: req.file.mimetype,
+              uploadedAt: new Date().toISOString(),
+              amount,
+              replaced: true,
+            },
+          },
+        });
+      } else {
+        receipt = await prisma.receipt.create({
+          data: {
+            paymentId: existingPayment.id,
+            applicationId: id,
+            receiptNumber: buildReceiptNumber('QFD'),
+            receiptType: 'DOSSIER_FEES_RECEIPT',
+            receiptUrl,
+            metadata: {
+              originalFileName: req.file.originalname,
+              mimeType: req.file.mimetype,
+              uploadedAt: new Date().toISOString(),
+              amount,
+            },
+          },
+        });
+      }
+    } else {
+      payment = await prisma.payment.create({
+        data: {
+          applicationId: id,
+          paymentType: 'DOSSIER_FEES',
+          amount,
+          currency: 'XOF',
+          paymentProvider: 'BANQUE_EXTERNE',
+          paymentMethod: 'BANK_TRANSFER',
+          status: 'CONFIRMED',
+          externalRef: `QFD-UPLOAD-${Date.now()}`,
+          providerPayload: {
+            uploadedByStudent: true,
+            originalFileName: req.file.originalname,
+            mimeType: req.file.mimetype,
+          },
+        },
+      });
 
-    const receipt = await prisma.receipt.create({
-      data: {
-        paymentId: payment.id,
-        applicationId: id,
-        receiptNumber,
-        receiptType: 'DOSSIER_FEES_RECEIPT',
-        receiptUrl,
-        metadata: receiptPayload,
-      },
-    });
+      receipt = await prisma.receipt.create({
+        data: {
+          paymentId: payment.id,
+          applicationId: id,
+          receiptNumber: buildReceiptNumber('QFD'),
+          receiptType: 'DOSSIER_FEES_RECEIPT',
+          receiptUrl,
+          metadata: {
+            originalFileName: req.file.originalname,
+            mimeType: req.file.mimetype,
+            uploadedAt: new Date().toISOString(),
+            amount,
+          },
+        },
+      });
+    }
 
     await prisma.applicationDocument.upsert({
       where: {
@@ -459,7 +729,7 @@ exports.payDossierFeesMock = async (req, res) => {
       },
       update: {
         label: 'Quittance frais de dossier',
-        source: 'SYSTEM_GENERATED',
+        source: 'STUDENT_UPLOAD',
         status: 'PROVIDED',
         documentUrl: receiptUrl,
       },
@@ -467,7 +737,7 @@ exports.payDossierFeesMock = async (req, res) => {
         applicationId: id,
         code: 'quittance_frais_dossier',
         label: 'Quittance frais de dossier',
-        source: 'SYSTEM_GENERATED',
+        source: 'STUDENT_UPLOAD',
         status: 'PROVIDED',
         documentUrl: receiptUrl,
       },
@@ -482,13 +752,13 @@ exports.payDossierFeesMock = async (req, res) => {
     });
 
     return res.json({
-      message: 'Paiement des frais de dossier confirme (mode mock)',
+      message: existingPayment ? 'Quittance des frais de dossier remplacée' : 'Quittance des frais de dossier enregistrée',
       payment,
       receipt,
       completion,
     });
   } catch (error) {
-    console.error('Erreur payDossierFeesMock:', error);
+    console.error('Erreur uploadQuittanceFraisDossier:', error);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 };
@@ -607,6 +877,12 @@ exports.uploadApplicationDocument = async (req, res) => {
       where: { id },
       include: {
         etablissement: { select: { id: true } },
+        campagneFiliere: {
+          select: {
+            id: true,
+            campagne: { select: { piecesRequises: true } },
+          },
+        },
       },
     });
     if (!application) {
@@ -615,24 +891,31 @@ exports.uploadApplicationDocument = async (req, res) => {
     if (application.candidatId !== userId) {
       return res.status(403).json({ error: 'Acces refuse' });
     }
-
-    const requirement = await prisma.schoolRequirement.findFirst({
-      where: {
-        etablissementId: application.etablissementId,
-        code,
-      },
-    });
-    if (!requirement) {
-      return res.status(404).json({ error: 'Exigence non trouvee pour cet etablissement' });
+    if (['FICHE_GENERATED'].includes(application.status)) {
+      return res.status(400).json({
+        error:
+          'Ce dossier a déjà été soumis. Les pièces ne peuvent plus être modifiées, sauf si l\'école le remet sous réserve.',
+      });
     }
-    if (requirement.requirementType !== 'DOCUMENT_UPLOAD') {
-      return res.status(400).json({ error: 'Ce document est recuperable automatiquement depuis le profil' });
+
+    const requirements = await resolveApplicationRequirements(application);
+    const requirement = requirements.find((r) => r.code === code);
+    if (!requirement) {
+      return res.status(404).json({ error: 'Exigence non trouvee pour ce dossier' });
+    }
+    if (requirement.requirementType !== 'DOCUMENT_UPLOAD' && requirement.requirementType !== 'PROFILE_FIELD') {
+      return res.status(400).json({ error: 'Type de piece non supporté pour l\'upload' });
     }
 
     const ext = req.file.originalname.split('.').pop();
     const fileName = `${code}-${Date.now()}.${ext}`;
     const storagePath = `applications/${id}/documents/${fileName}`;
     const documentUrl = await uploadBufferToLocal(req.file.buffer, storagePath, req.file.mimetype);
+
+    const schoolRequirementId =
+      requirement.fromCampagne || requirement.fromSysteme
+        ? null
+        : requirement.id;
 
     const document = await prisma.applicationDocument.upsert({
       where: {
@@ -646,11 +929,11 @@ exports.uploadApplicationDocument = async (req, res) => {
         source: 'STUDENT_UPLOAD',
         status: 'PROVIDED',
         documentUrl,
-        schoolRequirementId: requirement.id,
+        schoolRequirementId,
       },
       create: {
         applicationId: id,
-        schoolRequirementId: requirement.id,
+        schoolRequirementId,
         code,
         label: requirement.label,
         source: 'STUDENT_UPLOAD',
@@ -696,7 +979,7 @@ exports.finalizeApplication = async (req, res) => {
     const completion = await computeCompletion(id);
     if (!completion?.isComplete) {
       return res.status(400).json({
-        error: 'Le dossier n est pas complet ou les paiements ne sont pas confirmes',
+        error: 'Dossier incomplet : déposez la quittance des frais de dossier et toutes les pièces requises.',
         completion,
       });
     }
@@ -739,13 +1022,23 @@ exports.finalizeApplication = async (req, res) => {
 
     const preinscriptionPayload = {
       candidat: {
+        id: application.candidat.id,
         nom: application.candidat.nom,
         prenom: application.candidat.prenom,
         matricule: application.candidat.matricule,
         email: application.candidat.email,
         telephone: application.candidat.telephone,
+        dossier: application.candidat.dossier || undefined,
       },
+      candidatId: application.candidatId,
+      documents: application.documents || [],
+      photo: (application.documents || []).find(
+        (d) => ['photo', 'photo_identite', 'photo-identite'].includes(d.code) && d.documentUrl
+      )?.documentUrl
+        || application.candidat?.dossier?.photo
+        || null,
       preinscription: {
+        id: preinscription.id,
         numeroPreinscription: preinscription.numeroPreinscription,
         etablissementNom: application.etablissement.nom,
         filiereNom: application.filiere.nom,
@@ -826,7 +1119,6 @@ exports.downloadPreinscriptionFiche = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id;
-    const role = req.user?.role || req.userRole;
 
     const application = await prisma.application.findUnique({
       where: { id },
@@ -838,7 +1130,7 @@ exports.downloadPreinscriptionFiche = async (req, res) => {
 
     const canAccess =
       application.candidatId === userId ||
-      (role === 'ETABLISSEMENT' && application.etablissementId === userId);
+      canAccessEtablissementResource(req, application.etablissementId);
     if (!canAccess) {
       return res.status(403).json({ error: 'Acces refuse' });
     }
@@ -853,13 +1145,23 @@ exports.downloadPreinscriptionFiche = async (req, res) => {
 
     const pdfResult = await pdfService.genererFichePreinscriptionEtablissement({
       candidat: {
+        id: application.candidat.id,
         nom: application.candidat.nom,
         prenom: application.candidat.prenom,
         matricule: application.candidat.matricule,
         email: application.candidat.email,
         telephone: application.candidat.telephone,
+        dossier: application.candidat.dossier || undefined,
       },
+      candidatId: application.candidatId,
+      documents: application.documents || [],
+      photo: (application.documents || []).find(
+        (d) => ['photo', 'photo_identite', 'photo-identite'].includes(d.code) && d.documentUrl
+      )?.documentUrl
+        || application.candidat?.dossier?.photo
+        || null,
       preinscription: {
+        id: preinscription.id,
         numeroPreinscription: preinscription.numeroPreinscription,
         etablissementNom: application.etablissement.nom,
         filiereNom: application.filiere.nom,
@@ -899,7 +1201,7 @@ exports.getSchoolRequirements = async (req, res) => {
 
 exports.getMySchoolRequirements = async (req, res) => {
   try {
-    const etablissementId = req.user?.id;
+    const etablissementId = resolveEtablissementIdFromReq(req);
     if (!etablissementId) {
       return res.status(401).json({ error: 'Utilisateur non authentifie' });
     }
@@ -916,7 +1218,7 @@ exports.getMySchoolRequirements = async (req, res) => {
 
 exports.upsertSchoolRequirement = async (req, res) => {
   try {
-    const etablissementId = req.user?.id;
+    const etablissementId = resolveEtablissementIdFromReq(req);
     const { code, label, requirementType, profileFieldKey, isRequired = true } = req.body;
     if (!etablissementId) {
       return res.status(401).json({ error: 'Utilisateur non authentifie' });
@@ -966,7 +1268,7 @@ exports.upsertSchoolRequirement = async (req, res) => {
 
 exports.deleteSchoolRequirement = async (req, res) => {
   try {
-    const etablissementId = req.user?.id;
+    const etablissementId = resolveEtablissementIdFromReq(req);
     const { id } = req.params;
     if (!etablissementId) {
       return res.status(401).json({ error: 'Utilisateur non authentifie' });
@@ -987,6 +1289,154 @@ exports.deleteSchoolRequirement = async (req, res) => {
     return res.json({ message: 'Exigence supprimee avec succes' });
   } catch (error) {
     console.error('Erreur deleteSchoolRequirement:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+exports.getCandidaturesExportReadiness = async (req, res) => {
+  try {
+    const etablissementId = resolveEtablissementIdFromReq(req);
+    if (!etablissementId) {
+      return res.status(401).json({ error: 'Utilisateur non authentifie' });
+    }
+    const annee = req.query.annee ? String(req.query.annee).trim() : null;
+    const readiness = await getExportReadiness(etablissementId, annee || null);
+    return res.json(readiness);
+  } catch (error) {
+    console.error('Erreur getCandidaturesExportReadiness:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+async function assertExportAllowed(etablissementId, annee) {
+  const readiness = await getExportReadiness(etablissementId, annee || null);
+  if (!readiness.exportReady) {
+    const err = new Error(readiness.message || 'Exports non disponibles');
+    err.status = 403;
+    err.readiness = readiness;
+    throw err;
+  }
+  return readiness;
+}
+
+exports.exportCandidaturesPdf = async (req, res) => {
+  try {
+    const etablissementId = resolveEtablissementIdFromReq(req);
+    if (!etablissementId) {
+      return res.status(401).json({ error: 'Utilisateur non authentifie' });
+    }
+    const filters = parseExportFilters(req.query);
+    await assertExportAllowed(etablissementId, filters.annee);
+
+    const [etablissement, filiere, rows] = await Promise.all([
+      prisma.etablissement.findUnique({
+        where: { id: etablissementId },
+        select: { nom: true },
+      }),
+      filters.filiere
+        ? prisma.filiere.findFirst({
+            where: { id: filters.filiere, etablissementId },
+            select: { nom: true },
+          })
+        : Promise.resolve(null),
+      loadCandidaturesForExport(etablissementId, filters),
+    ]);
+
+    await streamCandidaturesPdf(res, {
+      etablissementNom: etablissement?.nom,
+      filters,
+      rows,
+      filiereNom: filiere?.nom,
+    });
+  } catch (error) {
+    console.error('Erreur exportCandidaturesPdf:', error);
+    if (res.headersSent) return;
+    const status = error.status || 500;
+    return res.status(status).json({
+      error: error.message || 'Erreur serveur',
+      ...(error.readiness ? { readiness: error.readiness } : {}),
+    });
+  }
+};
+
+exports.exportCandidaturesExcel = async (req, res) => {
+  try {
+    const etablissementId = resolveEtablissementIdFromReq(req);
+    if (!etablissementId) {
+      return res.status(401).json({ error: 'Utilisateur non authentifie' });
+    }
+    const filters = parseExportFilters(req.query);
+    await assertExportAllowed(etablissementId, filters.annee);
+
+    const rows = await loadCandidaturesForExport(etablissementId, filters);
+    const csv = rowsToCsv(rows);
+    const filename = `candidatures-etablissement-${Date.now()}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(csv);
+  } catch (error) {
+    console.error('Erreur exportCandidaturesExcel:', error);
+    if (res.headersSent) return;
+    const status = error.status || 500;
+    return res.status(status).json({
+      error: error.message || 'Erreur serveur',
+      ...(error.readiness ? { readiness: error.readiness } : {}),
+    });
+  }
+};
+
+/**
+ * Contraintes de niveau pour un dépôt vers une filière (transfert inter-établissements).
+ * GET ?filiereId=&etablissementId=
+ */
+exports.getNiveauAutoriseTransfert = async (req, res) => {
+  try {
+    const candidatId = req.user?.id;
+    if (!candidatId) {
+      return res.status(401).json({ error: 'Utilisateur non authentifie' });
+    }
+    const filiereId = String(req.query.filiereId || '').trim();
+    const etablissementId = String(req.query.etablissementId || '').trim();
+    if (!filiereId || !etablissementId) {
+      return res.status(400).json({ error: 'filiereId et etablissementId sont requis' });
+    }
+
+    const filiere = await prisma.filiere.findFirst({
+      where: { id: filiereId, etablissementId },
+      select: { id: true },
+    });
+    if (!filiere) {
+      return res.status(404).json({ error: 'Filiere non trouvee pour cet etablissement' });
+    }
+
+    const contrainte = await resolveContrainteNiveauTransfert({
+      candidatId,
+      filiereIdCible: filiereId,
+      etablissementIdCible: etablissementId,
+    });
+
+    const niveauxAutorises = [];
+    for (let n = contrainte.niveauMin; n <= contrainte.niveauMax; n++) {
+      niveauxAutorises.push(n);
+    }
+
+    return res.json({
+      contrainte: {
+        constrained: contrainte.constrained,
+        niveauMin: contrainte.niveauMin,
+        niveauMax: contrainte.niveauMax,
+        niveauAnterieur: contrainte.niveauAnterieur,
+        statutAnterieur: contrainte.statutAnterieur,
+        motif: contrainte.motif,
+        message: contrainte.message,
+        etablissementSource: contrainte.etablissementSource,
+        filiereSource: contrainte.filiereSource,
+      },
+      niveauxAutorises,
+    });
+  } catch (error) {
+    console.error('Erreur getNiveauAutoriseTransfert:', error);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 };

@@ -1,0 +1,7 @@
+{
+  "candidat": {"matricule":"TEST001","nom":"DOE","prenom":"John","email":"test@example.com","telephone":"22900000000"},
+  "concours": {"id":"c1","libelle":"Concours Test EPAC","dateComposition":"2026-08-01T08:00:00.000Z","heureComposition":"08:00","etablissement":"EPAC"},
+  "numeroConvocation":"CONV-TEST-2026-001",
+  "libelleConcours":"Concours Test EPAC",
+  "centreCompositionChoisi":{"nom":"Lycee Behanzin","ville":"Porto-Novo","adresse":"Centre-ville"}
+}

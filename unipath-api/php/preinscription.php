@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require(__DIR__ . '/fpdf.php');
 
 // Lire les données depuis le fichier passé en argument
@@ -44,7 +44,7 @@ if (file_exists($logo)) {
     $pdf->Image($logo, 170, 10, 25, 18);
 }
 
-$pdf->SetFont('Helvetica', '', 9);
+$pdf->SetFont('Times', '', 9);
 $pdf->SetTextColor(0, 0, 0);
 $pdf->SetY(12);
 $pdf->Cell(0, 5, 'REPUBLIQUE DU BENIN', 0, 1, 'C');
@@ -62,14 +62,14 @@ $pdf->Rect(135, 32, 60, 3, 'F');
 // ── TITRE ─────────────────────────────────────────────────────
 $pdf->SetFillColor(0, 135, 81);
 $pdf->Rect(15, 40, 180, 14, 'F');
-$pdf->SetFont('Helvetica', 'B', 16);
+$pdf->SetFont('Times', 'B', 16);
 $pdf->SetTextColor(255, 255, 255);
 $pdf->SetY(43);
 $pdf->Cell(0, 8, cleanText('FICHE DE PRE-INSCRIPTION'), 0, 1, 'C');
 
 $pdf->SetFillColor(252, 209, 22);
 $pdf->Rect(15, 54, 180, 8, 'F');
-$pdf->SetFont('Helvetica', '', 10);
+$pdf->SetFont('Times', '', 10);
 $pdf->SetTextColor(0, 0, 0);
 $pdf->SetY(56);
 $pdf->Cell(0, 5, cleanText('Concours d\'entree a l\'universite - Annee 2025-2026'), 0, 1, 'C');
@@ -78,7 +78,7 @@ $pdf->Cell(0, 5, cleanText('Concours d\'entree a l\'universite - Annee 2025-2026
 $pdf->SetY(68);
 $pdf->SetFillColor(240, 240, 240);
 $pdf->Rect(15, 68, 180, 10, 'F');
-$pdf->SetFont('Helvetica', 'B', 11);
+$pdf->SetFont('Times', 'B', 11);
 $pdf->SetTextColor(0, 0, 0);
 $pdf->SetY(70);
 $pdf->Cell(0, 6, cleanText('N° de dossier : ' . strtoupper(substr($inscription['id'] ?? 'XXXXXXXX', 0, 8))), 0, 1, 'C');
@@ -87,7 +87,7 @@ $pdf->Cell(0, 6, cleanText('N° de dossier : ' . strtoupper(substr($inscription[
 $pdf->SetY(83);
 $pdf->SetFillColor(0, 135, 81);
 $pdf->Rect(15, 83, 180, 8, 'F');
-$pdf->SetFont('Helvetica', 'B', 11);
+$pdf->SetFont('Times', 'B', 11);
 $pdf->SetTextColor(255, 255, 255);
 $pdf->SetY(85);
 $pdf->SetX(15);
@@ -106,11 +106,11 @@ foreach ($infos as $i => $info) {
         $pdf->SetFillColor(240, 255, 244);
         $pdf->Rect(15, $y, 180, 8, 'F');
     }
-    $pdf->SetFont('Helvetica', 'B', 10);
+    $pdf->SetFont('Times', 'B', 10);
     $pdf->SetTextColor(0, 135, 81);
     $pdf->SetXY(18, $y + 1);
     $pdf->Cell(55, 6, $info[0] . ' :', 0, 0, 'L');
-    $pdf->SetFont('Helvetica', '', 10);
+    $pdf->SetFont('Times', '', 10);
     $pdf->SetTextColor(0, 0, 0);
     $pdf->Cell(120, 6, $info[1], 0, 1, 'L');
     $y += 9;
@@ -120,7 +120,7 @@ foreach ($infos as $i => $info) {
 $y += 5;
 $pdf->SetFillColor(232, 17, 45);
 $pdf->Rect(15, $y, 180, 8, 'F');
-$pdf->SetFont('Helvetica', 'B', 11);
+$pdf->SetFont('Times', 'B', 11);
 $pdf->SetTextColor(255, 255, 255);
 $pdf->SetXY(15, $y + 1);
 $pdf->Cell(180, 6, 'INFORMATIONS DU CONCOURS', 0, 1, 'L');
@@ -141,11 +141,11 @@ foreach ($infoConcours as $i => $info) {
         $pdf->SetFillColor(255, 248, 225);
         $pdf->Rect(15, $y, 180, 8, 'F');
     }
-    $pdf->SetFont('Helvetica', 'B', 10);
+    $pdf->SetFont('Times', 'B', 10);
     $pdf->SetTextColor(232, 17, 45);
     $pdf->SetXY(18, $y + 1);
     $pdf->Cell(55, 6, $info[0] . ' :', 0, 0, 'L');
-    $pdf->SetFont('Helvetica', '', 10);
+    $pdf->SetFont('Times', '', 10);
     $pdf->SetTextColor(0, 0, 0);
     $pdf->Cell(120, 6, $info[1], 0, 1, 'L');
     $y += 9;
@@ -157,17 +157,17 @@ $pdf->SetFillColor(252, 209, 22);
 $pdf->Rect(15, $y, 180, 20, 'F');
 $pdf->SetFillColor(255, 253, 231);
 $pdf->Rect(17, $y + 2, 176, 16, 'F');
-$pdf->SetFont('Helvetica', 'B', 10);
+$pdf->SetFont('Times', 'B', 10);
 $pdf->SetTextColor(0, 0, 0);
 $pdf->SetXY(20, $y + 4);
 $pdf->Cell(0, 5, cleanText('Statut : EN ATTENTE DE TRAITEMENT PAR LA COMMISSION'), 0, 1, 'L');
-$pdf->SetFont('Helvetica', '', 9);
+$pdf->SetFont('Times', '', 9);
 $pdf->SetXY(20, $y + 11);
 $pdf->Cell(0, 5, cleanText('Vous recevrez un email de notification apres examen de votre dossier.'), 0, 1, 'L');
 
 // ── DATE D'INSCRIPTION ────────────────────────────────────────
 $y += 35;
-$pdf->SetFont('Helvetica', '', 10);
+$pdf->SetFont('Times', '', 10);
 $pdf->SetTextColor(0, 0, 0);
 $pdf->SetY($y);
 $pdf->Cell(0, 6, cleanText('Date d\'inscription : ' . date('d/m/Y H:i')), 0, 1, 'R');
@@ -182,7 +182,7 @@ $pdf->SetFillColor(232, 17, 45);
 $pdf->Rect(140, 282, 70, 8, 'F');
 
 // ── PIED DE PAGE ──────────────────────────────────────────────
-$pdf->SetFont('Helvetica', '', 7);
+$pdf->SetFont('Times', '', 7);
 $pdf->SetTextColor(136, 136, 136);
 $pdf->SetY(275);
 $pdf->Cell(0, 4, cleanText('Document genere automatiquement par UniPath (PHP) - ' . date('Y-m-d H:i:s')), 0, 1, 'C');

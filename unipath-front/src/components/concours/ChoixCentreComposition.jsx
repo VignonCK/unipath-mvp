@@ -58,7 +58,7 @@ export default function ChoixCentreComposition({
       <div className='rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900'>
         <div className='flex flex-wrap items-center gap-2'>
           <p className='font-semibold'>Centre de composition</p>
-          {statut !== 'EN_ATTENTE' && (
+          {centreVerrouille && (
             <span className='inline-flex items-center rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-semibold text-gray-700'>
               Verrouillé
             </span>
@@ -74,7 +74,7 @@ export default function ChoixCentreComposition({
       <div>
         <p className='font-semibold text-blue-900 text-sm'>Centre de composition</p>
         <p className='text-xs text-blue-800 mt-1'>
-          Vous pouvez modifier votre choix tant que votre dossier est en attente d&apos;examen.
+          Vous pouvez modifier votre choix tant que les inscriptions sont ouvertes.
         </p>
       </div>
 

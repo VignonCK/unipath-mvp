@@ -62,7 +62,7 @@ function whereConcoursPeriodeEtudeActive() {
   return {
     dateDebutEtudeDossiers: { not: null },
     etudeDossiersClotureeAt: null,
-    annee: { enCours: true },
+    annee: { enCoursDec: true },
   };
 }
 

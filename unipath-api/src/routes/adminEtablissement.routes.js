@@ -33,6 +33,13 @@ router.get(
   adminEtablissementController.listerAdmins
 );
 
+router.post(
+  '/:etablissementId/admins/:adminId/reinitialiser-mot-de-passe',
+  protect,
+  checkRole(['DGES']),
+  adminEtablissementController.reinitialiserMotDePasseAdmin
+);
+
 router.delete(
   '/:etablissementId/admins/:adminId',
   protect,

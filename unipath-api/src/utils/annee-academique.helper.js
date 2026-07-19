@@ -1,9 +1,17 @@
 /**
- * Année académique des concours (année en cours + archives DEC).
+ * Années académiques :
+ * - Module 1 (concours) → année en cours DEC (enCoursDec)
+ * - Module 2 (établissements privés) → année en cours DGES (enCoursDges)
  */
 const prisma = require('../prisma');
 
 const LIBELLE_REGEX = /^\d{4}-\d{4}$/;
+const SCOPE_DEC = 'DEC';
+const SCOPE_DGES = 'DGES';
+
+function enCoursFlag(scope) {
+  return scope === SCOPE_DGES ? 'enCoursDges' : 'enCoursDec';
+}
 
 function normalizeLibelle(value) {
   return String(value || '').trim();
@@ -21,28 +29,59 @@ function validateLibelleAnnee(libelle) {
   return { ok: true, libelle: value };
 }
 
-async function getAnneeEnCours(client = prisma) {
+async function getAnneeEnCoursDec(client = prisma) {
   return client.anneeAcademique.findFirst({
-    where: { enCours: true },
+    where: { enCoursDec: true },
     orderBy: { libelle: 'desc' },
   });
 }
 
-async function getOrCreateAnneeEnCours(client = prisma) {
-  let annee = await getAnneeEnCours(client);
+async function getAnneeEnCoursDges(client = prisma) {
+  return client.anneeAcademique.findFirst({
+    where: { enCoursDges: true },
+    orderBy: { libelle: 'desc' },
+  });
+}
+
+/** @deprecated Prefer getAnneeEnCoursDec — alias Module 1 */
+async function getAnneeEnCours(client = prisma) {
+  return getAnneeEnCoursDec(client);
+}
+
+async function getOrCreateAnneeEnCoursDec(client = prisma) {
+  let annee = await getAnneeEnCoursDec(client);
   if (annee) return annee;
 
   const year = new Date().getFullYear();
   const libelle = `${year}-${year + 1}`;
   annee = await client.anneeAcademique.upsert({
     where: { libelle },
-    create: { libelle, enCours: true },
-    update: { enCours: true },
+    create: { libelle, enCoursDec: true, enCoursDges: false },
+    update: { enCoursDec: true },
   });
   return annee;
 }
 
-/** DEC peut voir n'importe quelle année via query ; les autres comptes = année en cours uniquement. */
+async function getOrCreateAnneeEnCoursDges(client = prisma) {
+  let annee = await getAnneeEnCoursDges(client);
+  if (annee) return annee;
+
+  const year = new Date().getFullYear();
+  const libelle = `${year}-${year + 1}`;
+  annee = await client.anneeAcademique.upsert({
+    where: { libelle },
+    create: { libelle, enCoursDec: false, enCoursDges: true },
+    update: { enCoursDges: true },
+  });
+  return annee;
+}
+
+/** @deprecated Prefer getOrCreateAnneeEnCoursDec */
+async function getOrCreateAnneeEnCours(client = prisma) {
+  return getOrCreateAnneeEnCoursDec(client);
+}
+
+/** DEC peut voir n'importe quelle année via query ; les autres comptes Module 1 = année DEC en cours. */
 async function resolveFiltreAnneePourListe(req) {
   const role = req.user?.role;
   const queryId = req.query?.anneeAcademiqueId;
@@ -57,7 +96,7 @@ async function resolveFiltreAnneePourListe(req) {
     }
   }
 
-  const annee = await getAnneeEnCours();
+  const annee = await getAnneeEnCoursDec();
   if (!annee) {
     return { where: { anneeAcademiqueId: '__none__' }, annee: null, scope: 'current' };
   }
@@ -68,9 +107,9 @@ async function assertConcoursAccessible(concours, req) {
   if (!concours) return { ok: false, status: 404, error: 'Concours non trouvé' };
   if (req.user?.role === 'DEC') return { ok: true };
 
-  const annee = await getAnneeEnCours();
+  const annee = await getAnneeEnCoursDec();
   if (!annee) {
-    return { ok: false, status: 403, error: 'Aucune année académique en cours.' };
+    return { ok: false, status: 403, error: 'Aucune année académique en cours (Module 1).' };
   }
   if (concours.anneeAcademiqueId !== annee.id) {
     return {
@@ -106,8 +145,6 @@ function getBornesAnneeAcademique(libelle) {
 
 /**
  * Vérifie que les dates du concours restent dans l'année académique.
- * @param {object} dates - champs date possibles
- * @param {string} libelleAnnee - ex. "2025-2026"
  */
 function validateDatesDansAnneeAcademique(dates, libelleAnnee) {
   const bornes = getBornesAnneeAcademique(libelleAnnee);
@@ -145,8 +182,8 @@ function validateDatesDansAnneeAcademique(dates, libelleAnnee) {
     return {
       ok: false,
       error:
-        `Pour l'année académique ${bornes.libelle}, chaque date doit être en ${bornes.anneeDebut} ou ${bornes.anneeFin}. ` +
-        `Hors période : ${horsPeriode.join(', ')}.`,
+        `Pour l'année académique ${bornes.libelle}, chaque date doit être en ${bornes.anneeDebut} ou ${bornes.anneeFin}. `
+        + `Hors période : ${horsPeriode.join(', ')}.`,
       bornes,
       champsInvalides: horsPeriode,
     };
@@ -157,10 +194,17 @@ function validateDatesDansAnneeAcademique(dates, libelleAnnee) {
 
 module.exports = {
   LIBELLE_REGEX,
+  SCOPE_DEC,
+  SCOPE_DGES,
+  enCoursFlag,
   normalizeLibelle,
   validateLibelleAnnee,
   getAnneeEnCours,
+  getAnneeEnCoursDec,
+  getAnneeEnCoursDges,
   getOrCreateAnneeEnCours,
+  getOrCreateAnneeEnCoursDec,
+  getOrCreateAnneeEnCoursDges,
   resolveFiltreAnneePourListe,
   assertConcoursAccessible,
   getBornesAnneeAcademique,

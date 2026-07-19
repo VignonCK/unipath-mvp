@@ -109,10 +109,66 @@ async function getConcoursDuMembre(membreId) {
     }));
 }
 
+/**
+ * Compte les affectations examinateur / contrôleur pour un concours.
+ */
+async function countAffectationsConcours(concoursId) {
+  const [nbExaminateurs, nbControleurs] = await Promise.all([
+    prisma.affectationCommissionConcours.count({
+      where: { concoursId, roleAffectation: 'EXAMINATEUR' },
+    }),
+    prisma.affectationCommissionConcours.count({
+      where: { concoursId, roleAffectation: 'CONTROLEUR' },
+    }),
+  ]);
+  return {
+    nbExaminateurs,
+    nbControleurs,
+    commissionComplete: nbExaminateurs > 0 && nbControleurs > 0,
+  };
+}
+
+/**
+ * Map concoursId → { nbExaminateurs, nbControleurs, commissionComplete }
+ * pour une liste de concours (1 requête groupBy).
+ */
+async function mapAffectationsParConcours(concoursIds) {
+  const map = {};
+  for (const id of concoursIds) {
+    map[id] = { nbExaminateurs: 0, nbControleurs: 0, commissionComplete: false };
+  }
+  if (!concoursIds.length) return map;
+
+  const rows = await prisma.affectationCommissionConcours.groupBy({
+    by: ['concoursId', 'roleAffectation'],
+    where: { concoursId: { in: concoursIds } },
+    _count: { _all: true },
+  });
+
+  for (const row of rows) {
+    const entry = map[row.concoursId] || {
+      nbExaminateurs: 0,
+      nbControleurs: 0,
+      commissionComplete: false,
+    };
+    if (row.roleAffectation === 'EXAMINATEUR') {
+      entry.nbExaminateurs = row._count._all;
+    } else if (row.roleAffectation === 'CONTROLEUR') {
+      entry.nbControleurs = row._count._all;
+    }
+    entry.commissionComplete = entry.nbExaminateurs > 0 && entry.nbControleurs > 0;
+    map[row.concoursId] = entry;
+  }
+
+  return map;
+}
+
 module.exports = {
   getConcoursIdsAffectes,
   resolveConcoursFilterForMembre,
   applyConcoursIdsToWhere,
   membreEstAffecte,
   getConcoursDuMembre,
+  countAffectationsConcours,
+  mapAffectationsParConcours,
 };

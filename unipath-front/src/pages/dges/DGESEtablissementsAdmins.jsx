@@ -20,6 +20,9 @@ export default function DGESEtablissementsAdmins() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
   const [modalError, setModalError] = useState('');
+  const [passwordsVisible, setPasswordsVisible] = useState({});
+  const [resettingId, setResettingId] = useState(null);
+  const [messageIsWarning, setMessageIsWarning] = useState(false);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [etabForm, setEtabForm] = useState(ETAB_FORM_INIT);
@@ -47,7 +50,10 @@ export default function DGESEtablissementsAdmins() {
     setModalOpen(true);
     setForm(FORM_INIT);
     setMessage('');
+    setMessageIsWarning(false);
     setModalError('');
+    setPasswordsVisible({});
+    setResettingId(null);
     setLoadingAdmins(true);
     try {
       const data = await dgesService.listerAdminsEtablissement(etab.id);
@@ -63,6 +69,70 @@ export default function DGESEtablissementsAdmins() {
     setModalOpen(false);
     setSelectedEtab(null);
     setAdmins([]);
+    setPasswordsVisible({});
+    setResettingId(null);
+  };
+
+  const togglePasswordVisible = (adminId) => {
+    setPasswordsVisible((prev) => ({ ...prev, [adminId]: !prev[adminId] }));
+  };
+
+  const handleResetPassword = async (admin) => {
+    if (!selectedEtab) return;
+    const label = admin.motDePasseTemporaire
+      ? `réutiliser le mot de passe temporaire « ${admin.motDePasseTemporaire} »`
+      : 'générer un mot de passe temporaire';
+    if (!window.confirm(
+      `Réinitialiser le mot de passe de ${admin.prenom} ${admin.nom} ?\n`
+      + `Cela va ${label} et l'envoyer par email à ${admin.email}.`
+    )) {
+      return;
+    }
+    setResettingId(admin.id);
+    setModalError('');
+    setMessage('');
+    setMessageIsWarning(false);
+    try {
+      const res = await dgesService.reinitialiserMotDePasseAdmin(selectedEtab.id, admin.id);
+      const x = res.admin?.motDePasseTemporaire || res.motDePasseTemporaire;
+      setAdmins((prev) =>
+        prev.map((a) =>
+          a.id === admin.id
+            ? {
+                ...a,
+                motDePasseTemporaire: x || a.motDePasseTemporaire,
+                demandeResetMotDePasse: false,
+                demandeResetMotDePasseAt: null,
+              }
+            : a
+        )
+      );
+      setMessageIsWarning(res.emailEnvoye === false);
+      setMessage(res.message || 'Mot de passe réinitialisé');
+      if (x) setPasswordsVisible((prev) => ({ ...prev, [admin.id]: true }));
+    } catch (err) {
+      const x = err.data?.motDePasseTemporaire || err.response?.data?.motDePasseTemporaire
+        || err.data?.admin?.motDePasseTemporaire;
+      if (x) {
+        setAdmins((prev) =>
+          prev.map((a) =>
+            a.id === admin.id
+              ? {
+                  ...a,
+                  motDePasseTemporaire: x,
+                  demandeResetMotDePasse: false,
+                  demandeResetMotDePasseAt: null,
+                }
+              : a
+          )
+        );
+        setPasswordsVisible((prev) => ({ ...prev, [admin.id]: true }));
+      }
+      setMessageIsWarning(false);
+      setModalError(err.message || 'Erreur lors de la réinitialisation');
+    } finally {
+      setResettingId(null);
+    }
   };
 
   const handleCreate = async (e) => {
@@ -71,13 +141,24 @@ export default function DGESEtablissementsAdmins() {
     setSubmitting(true);
     setModalError('');
     setMessage('');
+    setMessageIsWarning(false);
     try {
-      const data = await dgesService.creerAdminEtablissement(selectedEtab.id, form);
+      const data = await dgesService.creerAdminEtablissement(selectedEtab.id, {
+        nom: form.nom.trim(),
+        prenom: form.prenom.trim(),
+        email: form.email.trim().toLowerCase(),
+        telephone: form.telephone.trim() || undefined,
+      });
+      setMessageIsWarning(data.emailEnvoye === false);
       setMessage(data.message || 'Administrateur créé');
       setForm(FORM_INIT);
       const refreshed = await dgesService.listerAdminsEtablissement(selectedEtab.id);
       setAdmins(refreshed.admins || []);
+      if (data.admin?.motDePasseTemporaire) {
+        setPasswordsVisible((prev) => ({ ...prev, [data.admin.id]: true }));
+      }
     } catch (err) {
+      setMessageIsWarning(false);
       setModalError(err.message || 'Erreur lors de la création');
     } finally {
       setSubmitting(false);
@@ -225,8 +306,8 @@ export default function DGESEtablissementsAdmins() {
 
       {modalOpen && selectedEtab && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
               <div>
                 <h2 className="text-lg font-bold text-gray-900">Admins — {selectedEtab.nom}</h2>
                 <p className="text-xs text-gray-500">{selectedEtab.ville} · {selectedEtab.type}</p>
@@ -235,7 +316,17 @@ export default function DGESEtablissementsAdmins() {
             </div>
 
             <div className="p-6 space-y-6">
-              {message && <div className="rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3">{message}</div>}
+              {message && (
+                <div
+                  className={`rounded-lg text-sm px-4 py-3 border ${
+                    messageIsWarning
+                      ? 'bg-amber-50 border-amber-200 text-amber-900'
+                      : 'bg-green-50 border-green-200 text-green-800'
+                  }`}
+                >
+                  {message}
+                </div>
+              )}
               {modalError && <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{modalError}</div>}
 
               <section>
@@ -247,20 +338,87 @@ export default function DGESEtablissementsAdmins() {
                 ) : admins.length === 0 ? (
                   <p className="text-sm text-gray-400">Aucun administrateur pour cet établissement.</p>
                 ) : (
-                  <ul className="space-y-2">
+                  <ul className="space-y-3">
                     {admins.map((admin) => (
-                      <li key={admin.id} className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3">
-                        <div>
-                          <p className="font-medium text-gray-900">{admin.prenom} {admin.nom}</p>
-                          <p className="text-xs text-gray-500">{admin.email}{admin.telephone ? ` · ${admin.telephone}` : ''}</p>
+                      <li key={admin.id} className="rounded-lg border border-gray-100 px-4 py-3 space-y-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-medium text-gray-900">{admin.prenom} {admin.nom}</p>
+                            <p className="text-xs text-gray-500">{admin.email}{admin.telephone ? ` · ${admin.telephone}` : ''}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(admin.id)}
+                            className="text-xs font-semibold text-red-600 hover:text-red-800 shrink-0"
+                          >
+                            Supprimer
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(admin.id)}
-                          className="text-xs font-semibold text-red-600 hover:text-red-800"
-                        >
-                          Supprimer
-                        </button>
+                        <div className="flex flex-col gap-2 min-w-[12rem]">
+                          {admin.motDePasseTemporaire ? (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <code className="px-2 py-1 rounded bg-slate-100 text-slate-800 text-xs font-mono tracking-wide">
+                                {passwordsVisible[admin.id]
+                                  ? admin.motDePasseTemporaire
+                                  : '•'.repeat(Math.max(8, admin.motDePasseTemporaire.length))}
+                              </code>
+                              <button
+                                type="button"
+                                onClick={() => togglePasswordVisible(admin.id)}
+                                className="text-xs font-semibold text-sky-700 hover:text-sky-900"
+                              >
+                                {passwordsVisible[admin.id] ? 'Masquer' : 'Afficher'}
+                              </button>
+                              {admin.demandeResetMotDePasse && (
+                                <span
+                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-800 ring-1 ring-amber-300"
+                                  title={
+                                    admin.demandeResetMotDePasseAt
+                                      ? `Demande du ${new Date(admin.demandeResetMotDePasseAt).toLocaleString('fr-FR')}`
+                                      : 'L\'administrateur a demandé une réinitialisation'
+                                  }
+                                >
+                                  Mot de passe oublié
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs text-gray-400">Aucun mot de passe temporaire</span>
+                              {admin.demandeResetMotDePasse && (
+                                <span
+                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-800 ring-1 ring-amber-300"
+                                  title={
+                                    admin.demandeResetMotDePasseAt
+                                      ? `Demande du ${new Date(admin.demandeResetMotDePasseAt).toLocaleString('fr-FR')}`
+                                      : 'L\'administrateur a demandé une réinitialisation'
+                                  }
+                                >
+                                  Mot de passe oublié
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            disabled={resettingId === admin.id}
+                            onClick={() => handleResetPassword(admin)}
+                            title="Réinitialise le mot de passe et l'envoie par email à l'administrateur"
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 transition w-fit ${
+                              admin.demandeResetMotDePasse
+                                ? 'bg-amber-500 text-white hover:bg-amber-600 ring-2 ring-amber-300'
+                                : 'bg-sky-600 text-white hover:bg-sky-700'
+                            }`}
+                          >
+                            {resettingId === admin.id
+                              ? 'Envoi…'
+                              : admin.demandeResetMotDePasse
+                                ? 'Réinitialiser (demande en attente)'
+                                : admin.motDePasseTemporaire
+                                  ? 'Réinitialiser (renvoyer par email)'
+                                  : 'Réinitialiser le mot de passe'}
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -268,7 +426,11 @@ export default function DGESEtablissementsAdmins() {
               </section>
 
               <section className="border-t border-gray-100 pt-6">
-                <h3 className="text-sm font-bold text-gray-800 mb-3">Créer un administrateur</h3>
+                <h3 className="text-sm font-bold text-gray-800 mb-1">Créer un administrateur</h3>
+                <p className="text-xs text-gray-500 mb-3">
+                  Un mot de passe temporaire sera généré automatiquement et envoyé par email à l&apos;administrateur.
+                  Il devra le changer à la première connexion.
+                </p>
                 <form onSubmit={handleCreate} className="grid sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Nom</label>
@@ -292,7 +454,7 @@ export default function DGESEtablissementsAdmins() {
                       disabled={submitting}
                       className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-blue-900 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-60"
                     >
-                      {submitting ? 'Création…' : 'Créer et envoyer les credentials'}
+                      {submitting ? 'Création…' : 'Créer et envoyer les identifiants'}
                     </button>
                   </div>
                 </form>

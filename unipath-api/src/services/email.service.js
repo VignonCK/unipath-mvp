@@ -6,6 +6,7 @@
  */
 
 const { PrismaClient } = require('@prisma/client');
+const nodemailer = require('nodemailer');
 const { validateEmail, validateParams } = require('../utils/validation');
 const rateLimiter = require('./rate-limiter');
 const emailConfig = require('../config/email.config');
@@ -14,11 +15,55 @@ const { getFrontendUrl } = require('../utils/url.helper');
 
 const prisma = require('../prisma');
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientSmtpError(err) {
+  const code = String(err?.code || '');
+  const message = String(err?.message || '').toLowerCase();
+  return (
+    code === 'ECONNRESET'
+    || code === 'ETIMEDOUT'
+    || code === 'ECONNREFUSED'
+    || code === 'ESOCKET'
+    || code === 'EPIPE'
+    || message.includes('econnreset')
+    || message.includes('timeout')
+    || message.includes('socket')
+  );
+}
+
 class EmailService {
+  constructor() {
+    this._transporter = null;
+  }
+
+  getTransporter(config = null) {
+    if (!this._transporter || config) {
+      this.resetTransporter();
+      this._transporter = nodemailer.createTransport(
+        config || emailConfig.getTransporterConfig()
+      );
+    }
+    return this._transporter;
+  }
+
+  resetTransporter() {
+    if (this._transporter) {
+      try {
+        this._transporter.close();
+      } catch (_) {
+        // ignore
+      }
+      this._transporter = null;
+    }
+  }
+
   /**
    * Generic method to create an email in the queue
    * @param {Object} params - Email parameters
-   * @returns {Promise<Object>} { emailId, status: 'QUEUED' }
+   * @returns {Promise<Object>} { emailId, status: 'QUEUED' | 'SENT' }
    */
   async createEmail({ userId, recipient, subject, htmlBody, textBody, attachments = [], emailType }) {
     // 1. Validation
@@ -40,6 +85,8 @@ class EmailService {
       }
     }
 
+    const plainText = textBody || this.htmlToText(htmlBody);
+
     // 3. Create email entry in database with content
     const email = await prisma.emailDelivery.create({
       data: {
@@ -47,7 +94,7 @@ class EmailService {
         recipient,
         subject,
         htmlBody,
-        textBody: textBody || this.htmlToText(htmlBody),
+        textBody: plainText,
         attachments: attachments.length > 0 ? attachments : null,
         status: 'QUEUED',
         attempts: 0,
@@ -58,7 +105,105 @@ class EmailService {
     logger.emailQueued(email.id, recipient, subject, userId);
     console.log(`[EmailService] ✅ Email queued: ${email.id} to ${recipient}`);
 
+    // 4. Si le worker est désactivé, envoyer immédiatement (SMTP requis)
+    if (!emailConfig.isQueueEnabled()) {
+      await this.sendEmailNow(email, plainText);
+      return { emailId: email.id, status: 'SENT' };
+    }
+
     return { emailId: email.id, status: 'QUEUED' };
+  }
+
+  /**
+   * Envoi SMTP synchrone (utilisé quand EMAIL_QUEUE_ENABLED=false).
+   * Retries + bascule 587 ↔ 465 sur erreurs réseau transitoires.
+   */
+  async sendEmailNow(email, plainText, { maxAttemptsPerConfig = 2 } = {}) {
+    if (!emailConfig.smtp?.host || !emailConfig.smtp?.auth?.user) {
+      throw new Error(
+        'Envoi email impossible : SMTP non configuré et EMAIL_QUEUE_ENABLED=false. '
+        + 'Configurez SMTP_* dans .env ou activez EMAIL_QUEUE_ENABLED=true.'
+      );
+    }
+
+    const configs = emailConfig.getFallbackTransporterConfigs();
+    let lastError = null;
+    let attemptGlobal = 0;
+
+    // Pièces jointes stockées en JSON (path ou content)
+    let attachments = [];
+    if (email.attachments) {
+      const raw = typeof email.attachments === 'string'
+        ? JSON.parse(email.attachments)
+        : email.attachments;
+      if (Array.isArray(raw)) attachments = raw;
+    }
+
+    for (const config of configs) {
+      for (let attempt = 1; attempt <= maxAttemptsPerConfig; attempt++) {
+        attemptGlobal += 1;
+        try {
+          const transporter = this.getTransporter(config);
+          const info = await transporter.sendMail({
+            from: emailConfig.getFromAddress(),
+            to: email.recipient,
+            subject: email.subject,
+            html: email.htmlBody,
+            text: plainText || email.textBody || undefined,
+            ...(attachments.length > 0 ? { attachments } : {}),
+          });
+
+          await prisma.emailDelivery.update({
+            where: { id: email.id },
+            data: {
+              status: 'SENT',
+              messageId: info.messageId || null,
+              sentAt: new Date(),
+              attempts: (email.attempts || 0) + attemptGlobal,
+              lastAttemptAt: new Date(),
+              errorMessage: null,
+              smtpCode: null,
+            },
+          });
+          console.log(
+            `[EmailService] ✅ Email envoyé: ${email.id} → ${email.recipient}`
+            + ` via ${config.host}:${config.port}`
+            + (attachments.length ? ` (${attachments.length} pièce(s) jointe(s))` : '')
+            + (attemptGlobal > 1 ? ` (essai ${attemptGlobal})` : '')
+          );
+          return info;
+        } catch (err) {
+          lastError = err;
+          console.warn(
+            `[EmailService] ⚠️ Échec envoi ${email.id}`
+            + ` via ${config.host}:${config.port}`
+            + ` (essai ${attempt}/${maxAttemptsPerConfig}):`,
+            err.code || '',
+            err.message
+          );
+          this.resetTransporter();
+          if (attempt < maxAttemptsPerConfig && isTransientSmtpError(err)) {
+            await sleep(600 * attempt);
+            continue;
+          }
+          // Erreur non transitoire ou fin des essais pour cette config → config suivante
+          break;
+        }
+      }
+    }
+
+    await prisma.emailDelivery.update({
+      where: { id: email.id },
+      data: {
+        status: 'FAILED',
+        attempts: (email.attempts || 0) + attemptGlobal,
+        lastAttemptAt: new Date(),
+        errorMessage: lastError?.message?.slice(0, 500) || 'Erreur SMTP',
+        smtpCode: lastError?.code || null,
+      },
+    }).catch(() => {});
+
+    throw lastError;
   }
 
   /**
@@ -482,33 +627,49 @@ class EmailService {
   }
 
   /**
-   * Email de confirmation d'inscription academique (Module 2)
-   * @param {Object} data - { candidatEmail, candidatNom, candidatPrenom, filiereNom, etablissementNom, anneeAcademique, niveau, userId }
-   * @returns {Promise<Object>} { emailId, status }
+   * Email sous réserve — pré-inscription établissement (Module 2)
    */
-  async envoyerEmailInscriptionAcademique(data) {
-    validateParams(data, ['candidatEmail', 'candidatNom', 'candidatPrenom', 'filiereNom', 'etablissementNom', 'anneeAcademique', 'niveau']);
+  async envoyerEmailSousReserveEtablissement(data) {
+    validateParams(data, [
+      'candidatEmail',
+      'candidatNom',
+      'candidatPrenom',
+      'etablissementNom',
+      'filiereNom',
+      'numeroPreinscription',
+      'motif',
+    ]);
 
-    const subject = '[UniPath] Confirmation de votre inscription academique';
+    const frontendUrl = getFrontendUrl();
+    const subject = '[UniPath] Dossier accepté sous réserve — action requise';
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: linear-gradient(135deg, #1e3a8a 0%, #008751 100%); padding: 30px; text-align: center;">
-          <h1 style="color: white; margin: 0; font-size: 26px;">📘 Inscription academique enregistree</h1>
+        <div style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); padding: 30px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">Dossier sous réserve</h1>
         </div>
         <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb;">
           <p style="font-size: 16px; color: #374151;">Bonjour <strong>${data.candidatPrenom} ${data.candidatNom}</strong>,</p>
           <p style="font-size: 14px; color: #6b7280; line-height: 1.6;">
-            Votre inscription academique a bien ete creee sur UniPath.
+            Votre pré-inscription à <strong>${data.etablissementNom}</strong>
+            (${data.filiereNom}) a été acceptée <strong>sous réserve</strong>.
           </p>
-          <div style="background: #f3f4f6; padding: 18px; border-radius: 8px; margin: 20px 0;">
-            <p style="margin: 0; font-size: 14px; color: #374151;"><strong>Filiere :</strong> ${data.filiereNom}</p>
-            <p style="margin: 8px 0 0 0; font-size: 14px; color: #374151;"><strong>Etablissement :</strong> ${data.etablissementNom}</p>
-            <p style="margin: 8px 0 0 0; font-size: 14px; color: #374151;"><strong>Annee :</strong> ${data.anneeAcademique}</p>
-            <p style="margin: 8px 0 0 0; font-size: 14px; color: #374151;"><strong>Niveau :</strong> ${data.niveau}</p>
+          <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 18px 0;">
+            <p style="margin: 0; font-size: 14px;"><strong>N° :</strong> ${data.numeroPreinscription}</p>
+            <p style="margin: 8px 0 0 0; font-size: 14px;"><strong>Niveau :</strong> ${data.niveau ?? '—'}</p>
+          </div>
+          <div style="background: #fff7ed; border-left: 4px solid #f97316; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; color: #9a3412; font-size: 14px;"><strong>À corriger / compléter :</strong></p>
+            <p style="margin: 10px 0 0 0; color: #9a3412; font-size: 13px; white-space: pre-wrap;">${data.motif}</p>
           </div>
           <p style="font-size: 13px; color: #6b7280;">
-            Vous pouvez suivre l'evolution de votre parcours directement depuis votre espace etudiant.
+            Vous pouvez remplacer les pièces demandées et/ou modifier votre niveau d'étude, puis resoumettre votre dossier depuis votre espace UniPath.
           </p>
+          <div style="text-align: center; margin: 28px 0;">
+            <a href="${frontendUrl}/parcours/dossiers"
+               style="background: #f97316; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold;">
+              Corriger mon dossier
+            </a>
+          </div>
         </div>
       </div>
     `;
@@ -518,6 +679,63 @@ class EmailService {
       recipient: data.candidatEmail,
       subject,
       htmlBody,
+      emailType: 'SOUS_RESERVE',
+    });
+  }
+
+  /**
+   * Email de confirmation d'inscription academique (Module 2)
+   * @param {Object} data - { candidatEmail, candidatNom, candidatPrenom, filiereNom, etablissementNom, anneeAcademique, niveau, userId, numeroInscription? }
+   * @param {string|null} pdfPath - Fiche d'inscription PDF (optionnel)
+   */
+  async envoyerEmailInscriptionAcademique(data, pdfPath = null) {
+    validateParams(data, ['candidatEmail', 'candidatNom', 'candidatPrenom', 'filiereNom', 'etablissementNom', 'anneeAcademique', 'niveau']);
+
+    const subject = '[UniPath] Confirmation de votre inscription academique';
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #1e3a8a 0%, #008751 100%); padding: 30px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 26px;">📘 Inscription academique validee</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb;">
+          <p style="font-size: 16px; color: #374151;">Bonjour <strong>${data.candidatPrenom} ${data.candidatNom}</strong>,</p>
+          <p style="font-size: 14px; color: #6b7280; line-height: 1.6;">
+            Votre dossier a ete valide par l'etablissement. Votre inscription academique est confirmee.
+          </p>
+          <div style="background: #f3f4f6; padding: 18px; border-radius: 8px; margin: 20px 0;">
+            ${data.numeroInscription ? `<p style="margin: 0; font-size: 14px; color: #374151;"><strong>Numero :</strong> ${data.numeroInscription}</p>` : ''}
+            <p style="margin: 8px 0 0 0; font-size: 14px; color: #374151;"><strong>Filiere :</strong> ${data.filiereNom}</p>
+            <p style="margin: 8px 0 0 0; font-size: 14px; color: #374151;"><strong>Etablissement :</strong> ${data.etablissementNom}</p>
+            <p style="margin: 8px 0 0 0; font-size: 14px; color: #374151;"><strong>Annee :</strong> ${data.anneeAcademique}</p>
+            <p style="margin: 8px 0 0 0; font-size: 14px; color: #374151;"><strong>Niveau :</strong> ${data.niveau}</p>
+          </div>
+          ${pdfPath ? `
+            <div style="background: #dcfce7; border-left: 4px solid #16a34a; padding: 15px; margin: 20px 0;">
+              <p style="margin: 0; color: #166534; font-size: 14px;">
+                <strong>📎 Fiche jointe</strong><br/>
+                <span style="font-size: 13px;">Votre fiche officielle d'inscription est jointe a cet email. Vous pouvez aussi la telecharger depuis votre espace etudiant.</span>
+              </p>
+            </div>
+          ` : `
+          <p style="font-size: 13px; color: #6b7280;">
+            Vous pouvez suivre l'evolution de votre parcours directement depuis votre espace etudiant.
+          </p>
+          `}
+        </div>
+      </div>
+    `;
+
+    const attachments = pdfPath ? [{
+      filename: `fiche-inscription-${data.numeroInscription || 'etablissement'}.pdf`,
+      path: pdfPath,
+    }] : [];
+
+    return this.createEmail({
+      userId: data.userId || data.candidatId,
+      recipient: data.candidatEmail,
+      subject,
+      htmlBody,
+      attachments,
       emailType: 'SYSTEME',
     });
   }
@@ -725,6 +943,137 @@ class EmailService {
       subject,
       htmlBody,
       emailType: 'ARBITRAGE_DIVERGENT_EXAMINATEUR',
+    });
+  }
+
+  /**
+   * Email d'envoi des identifiants à la création d'un membre commission.
+   * @param {Object} data - { email, nom, prenom, motDePasse, loginUrl }
+   */
+  async envoyerEmailIdentifiantsMembreCommission(data) {
+    validateParams(data, ['email', 'nom', 'prenom', 'motDePasse', 'loginUrl']);
+    const subject = '[UniPath] Accès membre de commission';
+    const htmlBody = [
+      '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">',
+      '<h2>Bienvenue sur UniPath</h2>',
+      `<p>Bonjour ${data.prenom} ${data.nom},</p>`,
+      '<p>La DEC a créé votre compte membre de commission.</p>',
+      `<p><strong>Email :</strong> ${data.email}</p>`,
+      `<p><strong>Mot de passe temporaire :</strong> ${data.motDePasse}</p>`,
+      `<p>Connexion : <a href="${data.loginUrl}">${data.loginUrl}</a></p>`,
+      '<p><strong>Important :</strong> changez ce mot de passe dès votre première connexion.</p>',
+      '</div>',
+    ].join('');
+    return this.createEmail({
+      userId: data.userId || null,
+      recipient: data.email,
+      subject,
+      htmlBody,
+      textBody:
+        `Bonjour ${data.prenom} ${data.nom}, votre compte commission UniPath : email ${data.email}, `
+        + `mot de passe temporaire ${data.motDePasse}. Connexion : ${data.loginUrl}. `
+        + 'Changez-le dès la première connexion.',
+      emailType: 'COMMISSION_CREDENTIALS',
+    });
+  }
+
+  /**
+   * Email d'envoi d'un mot de passe temporaire (membre commission).
+   * @param {Object} data - { email, nom, prenom, motDePasse, loginUrl }
+   */
+  async envoyerEmailMotDePasseTemporaireCommission(data) {
+    validateParams(data, ['email', 'nom', 'prenom', 'motDePasse', 'loginUrl']);
+    const subject = '[UniPath] Mot de passe temporaire Commission';
+    const htmlBody = [
+      '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">',
+      '<h2>Mot de passe temporaire</h2>',
+      `<p>Bonjour ${data.prenom} ${data.nom},</p>`,
+      '<p>La DEC a réinitialisé votre mot de passe UniPath.</p>',
+      `<p><strong>Email :</strong> ${data.email}</p>`,
+      `<p><strong>Mot de passe temporaire :</strong> ${data.motDePasse}</p>`,
+      `<p>Connexion : <a href="${data.loginUrl}">${data.loginUrl}</a></p>`,
+      '<p><strong>Important :</strong> changez ce mot de passe dès votre première connexion.</p>',
+      '</div>',
+    ].join('');
+    return this.createEmail({
+      userId: data.userId || null,
+      recipient: data.email,
+      subject,
+      htmlBody,
+      textBody:
+        `Bonjour ${data.prenom} ${data.nom}, votre mot de passe temporaire UniPath est : ${data.motDePasse}. `
+        + `Connectez-vous sur ${data.loginUrl} et modifiez-le dès la première connexion.`,
+      emailType: 'COMMISSION_TEMP_PASSWORD',
+    });
+  }
+
+  /**
+   * Email d'envoi des identifiants à la création d'un admin établissement privé.
+   * @param {Object} data - { email, nom, prenom, motDePasse, loginUrl, etablissementNom? }
+   */
+  async envoyerEmailIdentifiantsAdminEtablissement(data) {
+    validateParams(data, ['email', 'nom', 'prenom', 'motDePasse', 'loginUrl']);
+    const etabLabel = data.etablissementNom
+      ? ` pour l'établissement <strong>${data.etablissementNom}</strong>`
+      : '';
+    const subject = data.etablissementNom
+      ? `[UniPath] Accès administrateur — ${data.etablissementNom}`
+      : '[UniPath] Accès administrateur établissement';
+    const htmlBody = [
+      '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">',
+      '<h2>Bienvenue sur UniPath</h2>',
+      `<p>Bonjour ${data.prenom} ${data.nom},</p>`,
+      `<p>La DGES a créé votre compte administrateur d'établissement${etabLabel}.</p>`,
+      `<p><strong>Email :</strong> ${data.email}</p>`,
+      `<p><strong>Mot de passe temporaire :</strong> ${data.motDePasse}</p>`,
+      `<p>Connexion : <a href="${data.loginUrl}">${data.loginUrl}</a></p>`,
+      '<p><strong>Important :</strong> changez ce mot de passe dès votre première connexion.</p>',
+      '</div>',
+    ].join('');
+    return this.createEmail({
+      userId: data.userId || null,
+      recipient: data.email,
+      subject,
+      htmlBody,
+      textBody:
+        `Bonjour ${data.prenom} ${data.nom}, votre compte admin UniPath`
+        + (data.etablissementNom ? ` pour ${data.etablissementNom}` : '')
+        + ` : email ${data.email}, mot de passe temporaire ${data.motDePasse}. `
+        + `Connexion : ${data.loginUrl}. Changez-le dès la première connexion.`,
+      emailType: 'ADMIN_ETABLISSEMENT_CREDENTIALS',
+    });
+  }
+
+  /**
+   * Email d'envoi d'un mot de passe temporaire (admin établissement privé).
+   * @param {Object} data - { email, nom, prenom, motDePasse, loginUrl, etablissementNom? }
+   */
+  async envoyerEmailMotDePasseTemporaireAdminEtablissement(data) {
+    validateParams(data, ['email', 'nom', 'prenom', 'motDePasse', 'loginUrl']);
+    const etabLabel = data.etablissementNom
+      ? ` pour l'établissement <strong>${data.etablissementNom}</strong>`
+      : '';
+    const subject = '[UniPath] Mot de passe temporaire — Administrateur établissement';
+    const htmlBody = [
+      '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">',
+      '<h2>Mot de passe temporaire</h2>',
+      `<p>Bonjour ${data.prenom} ${data.nom},</p>`,
+      `<p>La DGES a réinitialisé votre mot de passe UniPath${etabLabel}.</p>`,
+      `<p><strong>Email :</strong> ${data.email}</p>`,
+      `<p><strong>Mot de passe temporaire :</strong> ${data.motDePasse}</p>`,
+      `<p>Connexion : <a href="${data.loginUrl}">${data.loginUrl}</a></p>`,
+      '<p><strong>Important :</strong> changez ce mot de passe dès votre première connexion.</p>',
+      '</div>',
+    ].join('');
+    return this.createEmail({
+      userId: data.userId || null,
+      recipient: data.email,
+      subject,
+      htmlBody,
+      textBody:
+        `Bonjour ${data.prenom} ${data.nom}, votre mot de passe temporaire UniPath est : ${data.motDePasse}. `
+        + `Connectez-vous sur ${data.loginUrl} et modifiez-le dès la première connexion.`,
+      emailType: 'ADMIN_ETABLISSEMENT_TEMP_PASSWORD',
     });
   }
 

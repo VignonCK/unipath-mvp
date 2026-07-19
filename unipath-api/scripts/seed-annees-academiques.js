@@ -1,5 +1,5 @@
 /**
- * Crée l'année académique en cours et rattache les concours existants.
+ * Crée l'année académique en cours (DEC + DGES) et rattache les concours existants.
  * Usage: node scripts/seed-annees-academiques.js
  */
 require('dotenv').config();
@@ -21,14 +21,14 @@ async function main() {
   console.log(`Année en cours cible : ${currentLibelle}`);
 
   await prisma.anneeAcademique.updateMany({
-    where: { enCours: true },
-    data: { enCours: false },
+    where: { OR: [{ enCoursDec: true }, { enCoursDges: true }] },
+    data: { enCoursDec: false, enCoursDges: false },
   });
 
   const current = await prisma.anneeAcademique.upsert({
     where: { libelle: currentLibelle },
-    create: { libelle: currentLibelle, enCours: true },
-    update: { enCours: true },
+    create: { libelle: currentLibelle, enCoursDec: true, enCoursDges: true },
+    update: { enCoursDec: true, enCoursDges: true },
   });
 
   const concours = await prisma.concours.findMany({
@@ -45,7 +45,7 @@ async function main() {
     if (!annee) {
       annee = await prisma.anneeAcademique.upsert({
         where: { libelle: inferred },
-        create: { libelle: inferred, enCours: false },
+        create: { libelle: inferred, enCoursDec: false, enCoursDges: false },
         update: {},
       });
       cache.set(inferred, annee);
@@ -60,7 +60,7 @@ async function main() {
   const totalAnnees = await prisma.anneeAcademique.count();
   console.log(`Années en base        : ${totalAnnees}`);
   console.log(`Concours rattachés    : ${linked}`);
-  console.log(`Année en cours        : ${current.libelle} (${current.id})`);
+  console.log(`Année en cours DEC/DGES : ${current.libelle} (${current.id})`);
 }
 
 main()

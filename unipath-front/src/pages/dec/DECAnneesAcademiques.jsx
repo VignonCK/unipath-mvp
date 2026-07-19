@@ -71,7 +71,7 @@ export default function DECAnneesAcademiques() {
 
   const handleDefinirEnCours = async (annee) => {
     if (annee.enCours) return;
-    if (!window.confirm(`Définir « ${annee.libelle} » comme année académique en cours ?\nLes autres comptes ne verront que les concours de cette année.`)) {
+    if (!window.confirm(`Définir « ${annee.libelle} » comme année académique en cours (Module 1 — concours) ?\nLes autres comptes ne verront que les concours de cette année.`)) {
       return;
     }
     setSettingId(annee.id);
@@ -94,8 +94,9 @@ export default function DECAnneesAcademiques() {
         <div>
           <h1 className="text-2xl font-black text-gray-900">Années académiques</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Définissez l&apos;année en cours et archivez les concours par année. Les candidats,
-            examinateurs et contrôleurs ne voient que l&apos;année active.
+            Module 1 — concours. Définissez l&apos;année en cours : les candidats, examinateurs et
+            contrôleurs ne voient que les concours de cette année. Indépendante de l&apos;année
+            gérée par la DGES pour les établissements privés (Module 2).
           </p>
         </div>
 

@@ -1,5 +1,6 @@
 const prisma = require('../prisma');
 const { resolveCommuneCode } = require('../constants/communes-benin.constants');
+const { allocuerCodeCentre } = require('../utils/numero-table.helper');
 
 function mapConcoursCentreRow(row) {
   const inscritsCount = row._count?.dossiers ?? 0;
@@ -27,11 +28,19 @@ exports.creerCentre = async (req, res) => {
     }
 
     const villeTrim = ville.trim();
+    let centreCode;
+    try {
+      centreCode = await allocuerCodeCentre();
+    } catch (err) {
+      return res.status(400).json({ error: err.message || 'Impossible d\'attribuer un code centre' });
+    }
+
     const centre = await prisma.centreComposition.create({
       data: {
         nom: nom.trim(),
         ville: villeTrim,
         communeCode: resolveCommuneCode(villeTrim),
+        code: centreCode,
         adresse: adresse?.trim() || null,
         telephone: telephone?.trim() || null,
       },

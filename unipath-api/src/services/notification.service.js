@@ -2,6 +2,7 @@ const emailService = require('./email.service');
 const pdfService = require('./pdf.service');
 const prisma = require('../prisma');
 const { runInBackground } = require('../utils/background-task');
+const { DOSSIER_CENTRE_INCLUDE } = require('../utils/centres-composition.helper');
 
 class NotificationService {
   async sendNotification({ event, userId, data, priority = 'NORMAL', sendEmail = true, syncEmail = false }) {
@@ -83,27 +84,47 @@ class NotificationService {
       // Générer le PDF selon le type d'événement
       if (event === 'PRE_INSCRIPTION') {
         console.log('📄 Génération fiche de pré-inscription...');
-        const pdfResult = await pdfService.genererFichePreInscription({
-          candidat: {
-            matricule: data.candidatMatricule || 'En attente',
-            nom: data.candidatNom,
-            prenom: data.candidatPrenom,
-            email: data.candidatEmail,
-            telephone: data.candidatTelephone,
-            dateNaiss: data.candidatDateNaiss,
-            lieuNaiss: data.candidatLieuNaiss
-          },
-          concours: {
-            libelle: data.concours,
-            dateDebut: data.concoursDateDebut,
-            dateFin: data.concoursDateFin,
-            description: data.concoursDescription,
-            etablissement: data.etablissement,
-          },
-          numeroDossier: data.numeroDossier,
-          centreCompositionChoisi: data.centreCompositionChoisi || null,
-        });
-        pdfPath = pdfResult.filePath;
+        if (data.inscriptionId) {
+          const inscription = await prisma.inscription.findUnique({
+            where: { id: data.inscriptionId },
+            include: {
+              candidat: {
+                include: {
+                  dossier: { select: { photo: true } },
+                },
+              },
+              concours: true,
+              dossierInscription: { include: DOSSIER_CENTRE_INCLUDE },
+            },
+          });
+          if (inscription) {
+            const pdfResult = await pdfService.genererFichePreInscriptionDepuisInscription(inscription);
+            pdfPath = pdfResult.filePath;
+          }
+        }
+        if (!pdfPath) {
+          const pdfResult = await pdfService.genererFichePreInscription({
+            candidat: {
+              matricule: data.candidatMatricule || 'En attente',
+              nom: data.candidatNom,
+              prenom: data.candidatPrenom,
+              email: data.candidatEmail,
+              telephone: data.candidatTelephone,
+              dateNaiss: data.candidatDateNaiss,
+              lieuNaiss: data.candidatLieuNaiss,
+            },
+            concours: {
+              libelle: data.concours,
+              dateDebut: data.concoursDateDebut,
+              dateFin: data.concoursDateFin,
+              description: data.concoursDescription,
+              etablissement: data.etablissement,
+            },
+            numeroDossier: data.numeroDossier,
+            centreCompositionChoisi: data.centreCompositionChoisi || null,
+          });
+          pdfPath = pdfResult.filePath;
+        }
       } 
       else if (event === 'VALIDATION' || event === 'CONVOCATION') {
         console.log('📄 Génération convocation...');

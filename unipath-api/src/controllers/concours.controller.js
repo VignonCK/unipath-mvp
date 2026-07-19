@@ -114,7 +114,7 @@ exports.getAllConcours = async (req, res) => {
       where: filtreAnnee.where,
       orderBy: { dateDebut: 'asc' },
       include: {
-        annee: { select: { id: true, libelle: true, enCours: true } },
+        annee: { select: { id: true, libelle: true, enCoursDec: true, enCoursDges: true } },
         centresActifs: {
           where: { estActif: true },
           select: { id: true },
@@ -304,6 +304,7 @@ exports.getClassement = async (req, res) => {
                     nom: true,
                     ville: true,
                     communeCode: true,
+                    code: true,
                   },
                 },
               },
@@ -314,20 +315,40 @@ exports.getClassement = async (req, res) => {
       orderBy: [{ note: 'desc' }],
     });
 
-    const classement = inscriptions.map((inscription, index) => ({
-      rang: inscription.note !== null ? index + 1 : null,
-      candidat: inscription.candidat,
-      note: inscription.note,
-      numeroTable: inscription.numeroTable || null,
-      centre: inscription.dossierInscription?.centreChoisi?.centre || null,
-      statut: inscription.note !== null ? 'Présent' : 'Absent',
-    }));
+    const userRole = req.user?.role;
+    const isDec = userRole === 'DEC';
+
+    const classement = inscriptions.map((inscription, index) => {
+      const centreRaw = inscription.dossierInscription?.centreChoisi?.centre || null;
+      const centre = centreRaw
+        ? {
+            id: centreRaw.id,
+            nom: centreRaw.nom,
+            ville: centreRaw.ville,
+            ...(isDec
+              ? {
+                  communeCode: centreRaw.communeCode || null,
+                  code: centreRaw.code || null,
+                }
+              : {}),
+          }
+        : null;
+
+      return {
+        rang: inscription.note !== null ? index + 1 : null,
+        candidat: inscription.candidat,
+        note: inscription.note,
+        numeroTable: inscription.numeroTable || null,
+        centre,
+        statut: inscription.note !== null ? 'Présent' : 'Absent',
+      };
+    });
 
     res.json({
       concours: {
         id: concours.id,
         libelle: concours.libelle,
-        code: concours.code || null,
+        ...(isDec ? { code: concours.code || null } : {}),
         etablissement: concours.etablissement,
         dateComposition: concours.dateComposition,
       },
@@ -512,7 +533,7 @@ exports.createConcours = async (req, res) => {
     const withCentres = await prisma.concours.findUnique({
       where: { id: concours.id },
       include: {
-        annee: { select: { id: true, libelle: true, enCours: true } },
+        annee: { select: { id: true, libelle: true, enCoursDec: true, enCoursDges: true } },
         centresActifs: { include: { centre: true } },
       },
     });

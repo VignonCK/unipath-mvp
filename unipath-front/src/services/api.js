@@ -12,10 +12,9 @@ export const API_ORIGIN = BASE_URL.replace(/\/api\/?$/, '');
 export function resolvePublicAssetUrl(assetPath) {
   if (!assetPath) return null;
   if (assetPath.startsWith('http://') || assetPath.startsWith('https://')) return assetPath;
-  if (assetPath.startsWith('/api/public/')) return `${API_ORIGIN}${assetPath}`;
-  if (assetPath.startsWith('/uploads/etablissements/')) {
-    const filename = assetPath.split('/').pop();
-    return `${API_ORIGIN}/api/public/etablissements/${filename}`;
+  // Servis en static Express sur /uploads (hors préfixe /api)
+  if (assetPath.startsWith('/uploads/')) {
+    return `${API_ORIGIN}${assetPath}`;
   }
   if (assetPath.startsWith('/api/')) return `${API_ORIGIN}${assetPath}`;
   return `${API_ORIGIN}${assetPath.startsWith('/') ? assetPath : `/${assetPath}`}`;
@@ -371,6 +370,9 @@ export const inscriptionService = {
   renvoyerFiche: (inscriptionId) =>
     request(`/inscriptions/${inscriptionId}/renvoyer-fiche`, { method: 'POST' }),
 
+  annuler: (inscriptionId) =>
+    request(`/inscriptions/${inscriptionId}`, { method: 'DELETE' }),
+
   telechargerFiche: (inscriptionId) =>
     telechargerFichePreInscriptionBlob(inscriptionId, 'fiche-preinscription.pdf'),
 
@@ -446,8 +448,18 @@ export async function ouvrirPiece(pieceUrl) {
 
   try {
     const { signedUrl } = await dossierService.getSignedUrl(pieceUrl);
-    window.open(signedUrl, '_blank');
+    window.open(signedUrl, '_blank', 'noopener,noreferrer');
   } catch (error) {
+    // Fallback : fichiers servis en static sur /uploads (ex. candidatures établissement)
+    const fallback = resolvePublicAssetUrl(
+      String(pieceUrl).includes('uploads/') || String(pieceUrl).startsWith('/uploads/')
+        ? (String(pieceUrl).startsWith('/') ? pieceUrl : `/${pieceUrl}`)
+        : `/uploads/dossiers-candidats/${String(pieceUrl).replace(/^\//, '')}`
+    );
+    if (fallback) {
+      window.open(fallback, '_blank', 'noopener,noreferrer');
+      return;
+    }
     console.error('Erreur ouverture pièce:', error);
     alert('Impossible d\'ouvrir ce document. Veuillez réessayer.');
   }
@@ -479,6 +491,56 @@ export const commissionService = {
 
 // ── DGES (module 2 — établissements privés) ───────────────────────
 export const dgesService = {
+  getAnneeEnCours: () => request('/dges/annee-en-cours'),
+
+  listerAnneesAcademiques: () => request('/dges/annees-academiques'),
+  creerAnneeAcademique: (data) =>
+    request('/dges/annees-academiques', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  definirAnneeEnCours: (id) =>
+    request(`/dges/annees-academiques/${id}/en-cours`, {
+      method: 'PUT',
+    }),
+
+  listerDemandesFilieres: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && String(v).trim() !== '')
+      )
+    ).toString();
+    return request(`/dges/demandes-filieres${qs ? `?${qs}` : ''}`);
+  },
+  validerDemandeFiliere: (id) =>
+    request(`/dges/demandes-filieres/${id}/valider`, { method: 'POST' }),
+  rejeterDemandeFiliere: (id, motifDecision = '') =>
+    request(`/dges/demandes-filieres/${id}/rejeter`, {
+      method: 'POST',
+      body: JSON.stringify({ motifDecision }),
+    }),
+
+  listerFilieresReference: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && String(v).trim() !== '')
+      )
+    ).toString();
+    return request(`/dges/filieres-reference${qs ? `?${qs}` : ''}`);
+  },
+  creerFiliereReference: (data) =>
+    request('/dges/filieres-reference', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  modifierFiliereReference: (id, data) =>
+    request(`/dges/filieres-reference/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  desactiverFiliereReference: (id) =>
+    request(`/dges/filieres-reference/${id}`, { method: 'DELETE' }),
+
   listerAdminsEtablissement: (etablissementId) =>
     request(`/dges/etablissements/${etablissementId}/admins`),
 
@@ -493,6 +555,11 @@ export const dgesService = {
       method: 'DELETE',
     }),
 
+  reinitialiserMotDePasseAdmin: (etablissementId, adminId) =>
+    request(`/dges/etablissements/${etablissementId}/admins/${adminId}/reinitialiser-mot-de-passe`, {
+      method: 'POST',
+    }),
+
   creerEtablissement: (data) =>
     request('/dges/etablissements', {
       method: 'POST',
@@ -503,12 +570,111 @@ export const dgesService = {
     request(`/dges/etablissements/${etablissementId}`, {
       method: 'DELETE',
     }),
+
+  getTableauDeBord: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && String(v).trim() !== '')
+      )
+    ).toString();
+    return request(`/dges/tableau-de-bord${qs ? `?${qs}` : ''}`);
+  },
+  telechargerTableauDeBordPdf: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && String(v).trim() !== '')
+      )
+    ).toString();
+    return downloadAuthenticatedFile(
+      `/dges/tableau-de-bord/pdf${qs ? `?${qs}` : ''}`,
+      'stats-dges.pdf'
+    );
+  },
+  telechargerTableauDeBordExcel: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && String(v).trim() !== '')
+      )
+    ).toString();
+    return downloadAuthenticatedFile(
+      `/dges/tableau-de-bord/csv${qs ? `?${qs}` : ''}`,
+      'stats-dges.csv'
+    );
+  },
 };
 
 // ── DEC (module 1 — concours / établissements publics) ────────────
 export const decService = {
   getStatistiques: () => request('/dec/statistiques'),
   getStatistiquesConcours: (id) => request(`/dec/statistiques/${id}`),
+  getTableauDeBord: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && String(v).trim() !== '')
+      )
+    ).toString();
+    return request(`/dec/tableau-de-bord${qs ? `?${qs}` : ''}`);
+  },
+  telechargerTableauDeBordPdf: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && String(v).trim() !== '')
+      )
+    ).toString();
+    return downloadAuthenticatedFile(
+      `/dec/tableau-de-bord/pdf${qs ? `?${qs}` : ''}`,
+      'stats-dec.pdf'
+    );
+  },
+  telechargerTableauDeBordExcel: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && String(v).trim() !== '')
+      )
+    ).toString();
+    return downloadAuthenticatedFile(
+      `/dec/tableau-de-bord/csv${qs ? `?${qs}` : ''}`,
+      'stats-dec.csv'
+    );
+  },
+  getEnTetePdf: () => request('/dec/parametres/en-tete-pdf'),
+  getEnTetePdfImageBlob: async () => {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${BASE_URL}/dec/parametres/en-tete-pdf/image?t=${Date.now()}`, {
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+    });
+    if (redirectToLoginOn401(response.status)) {
+      return new Promise(() => {});
+    }
+    if (!response.ok) {
+      throw new Error('Impossible de charger l\'aperçu de l\'en-tête');
+    }
+    return response.blob();
+  },
+  uploadEnTetePdf: async (file) => {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('fichier', file);
+    const response = await fetch(`${BASE_URL}/dec/parametres/en-tete-pdf`, {
+      method: 'POST',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+    if (redirectToLoginOn401(response.status)) {
+      return new Promise(() => {});
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `Erreur upload (${response.status})`);
+    }
+    return data;
+  },
+  restoreEnTetePdf: () =>
+    request('/dec/parametres/en-tete-pdf', { method: 'DELETE' }),
 
   getEtudeDossiersStatuses: (params = {}) => {
     const searchParams = new URLSearchParams();
@@ -532,6 +698,11 @@ export const decService = {
     request(`/dec/concours/${concoursId}/cloturer-inscriptions-test`, {
       method: 'POST',
     }),
+  /** Restaurer la date de fin d'inscription d'origine après clôture anticipée */
+  restaurerDateFinDepot: (concoursId) =>
+    request(`/dec/concours/${concoursId}/restaurer-date-fin-depot`, {
+      method: 'POST',
+    }),
 
   listerCommunes: () => request('/dec/communes'),
   listerNumerosTable: (concoursId) =>
@@ -543,6 +714,23 @@ export const decService = {
     }),
 
   listerMembresCommission: () => request('/dec/membres-commission'),
+  creerMembreCommission: (data) =>
+    request('/dec/membres-commission', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  reinitialiserMotDePasseMembre: (membreId) =>
+    request(`/dec/membres-commission/${membreId}/reinitialiser-mot-de-passe`, {
+      method: 'POST',
+    }),
+  getStatsDossiersCommission: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && String(v).trim() !== '')
+      )
+    ).toString();
+    return request(`/dec/commission/stats-dossiers${qs ? `?${qs}` : ''}`);
+  },
   getAffectationsConcours: (concoursId) =>
     request(`/dec/concours/${concoursId}/affectations`),
   setAffectationsConcours: (concoursId, data) =>
@@ -551,8 +739,80 @@ export const decService = {
       body: JSON.stringify(data),
     }),
 
-  getListeRetenus: (concoursId) =>
-    request(`/dec/concours/${concoursId}/liste-retenus`),
+  getListeRetenus: (concoursId, params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && String(v).trim() !== '')
+      )
+    ).toString();
+    return request(`/dec/concours/${concoursId}/liste-retenus${qs ? `?${qs}` : ''}`);
+  },
+  getResultatsSelection: (concoursId, params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && String(v).trim() !== '')
+      )
+    ).toString();
+    return request(`/dec/concours/${concoursId}/resultats-selection${qs ? `?${qs}` : ''}`);
+  },
+  deciderResultatComposition: (concoursId, inscriptionId, resultat) =>
+    request(`/dec/concours/${concoursId}/resultats-selection/${inscriptionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ resultat }),
+    }),
+  importerAdmisCsv: async (concoursId, file) => {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('fichier', file);
+    const response = await fetch(
+      `${BASE_URL}/dec/concours/${concoursId}/resultats-selection/import-admis`,
+      {
+        method: 'POST',
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: formData,
+      }
+    );
+    if (redirectToLoginOn401(response.status)) {
+      return new Promise(() => {});
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `Erreur import (${response.status})`);
+    }
+    return data;
+  },
+  marquerAutresRefuses: (concoursId) =>
+    request(`/dec/concours/${concoursId}/resultats-selection/marquer-autres-refuses`, {
+      method: 'POST',
+    }),
+  annulerToutesDecisions: (concoursId) =>
+    request(`/dec/concours/${concoursId}/resultats-selection/annuler-toutes-decisions`, {
+      method: 'POST',
+    }),
+  telechargerResultatsSelectionPdf: (concoursId, params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && String(v).trim() !== '')
+      )
+    ).toString();
+    return downloadAuthenticatedFile(
+      `/dec/concours/${concoursId}/resultats-selection/pdf${qs ? `?${qs}` : ''}`,
+      `resultats-selection-${concoursId}.pdf`
+    );
+  },
+  telechargerResultatsSelectionCsv: (concoursId, params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && String(v).trim() !== '')
+      )
+    ).toString();
+    return downloadAuthenticatedFile(
+      `/dec/concours/${concoursId}/resultats-selection/csv${qs ? `?${qs}` : ''}`,
+      `resultats-selection-${concoursId}.csv`
+    );
+  },
   preparerListeRetenus: (concoursId) =>
     request(`/dec/concours/${concoursId}/preparer-liste-retenus`, {
       method: 'POST',
@@ -562,16 +822,28 @@ export const decService = {
       method: 'POST',
       body: JSON.stringify({ regenererNumeros }),
     }),
-  telechargerListeRetenusPdf: (concoursId) =>
-    downloadAuthenticatedFile(
-      `/dec/concours/${concoursId}/liste-retenus/pdf`,
+  telechargerListeRetenusPdf: (concoursId, params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && String(v).trim() !== '')
+      )
+    ).toString();
+    return downloadAuthenticatedFile(
+      `/dec/concours/${concoursId}/liste-retenus/pdf${qs ? `?${qs}` : ''}`,
       `liste-retenus-${concoursId}.pdf`
-    ),
-  telechargerListeRetenusExcel: (concoursId) =>
-    downloadAuthenticatedFile(
-      `/dec/concours/${concoursId}/liste-retenus/excel`,
+    );
+  },
+  telechargerListeRetenusExcel: (concoursId, params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && String(v).trim() !== '')
+      )
+    ).toString();
+    return downloadAuthenticatedFile(
+      `/dec/concours/${concoursId}/liste-retenus/excel${qs ? `?${qs}` : ''}`,
       `liste-retenus-${concoursId}.csv`
-    ),
+    );
+  },
 
   listerAnneesAcademiques: () => request('/dec/annees-academiques'),
   creerAnneeAcademique: (data) =>
@@ -654,6 +926,8 @@ export const etablissementService = {
     const searchParams = new URLSearchParams();
     if (params.filiere) searchParams.set('filiere', params.filiere);
     if (params.annee) searchParams.set('annee', params.annee);
+    if (params.niveau) searchParams.set('niveau', params.niveau);
+    if (params.sexe) searchParams.set('sexe', params.sexe);
     const query = searchParams.toString();
     return request(`/etablissements/${id}/etudiants${query ? `?${query}` : ''}`);
   },
@@ -700,8 +974,97 @@ export const filiereAdminService = {
     request(`/etablissement/filieres/${id}`, { method: 'DELETE' }),
 };
 
+/** Unités d'enseignement (UE) par filière / semestre S1–S10 */
+export const uniteEnseignementService = {
+  getMeta: () => request('/etablissement/unites-enseignement/meta/semestres'),
+  lister: ({ filiereId, semestre, anneeEtude } = {}) => {
+    const qs = new URLSearchParams();
+    if (filiereId) qs.set('filiereId', filiereId);
+    if (semestre != null && semestre !== '') qs.set('semestre', String(semestre));
+    if (anneeEtude != null && anneeEtude !== '') qs.set('anneeEtude', String(anneeEtude));
+    const q = qs.toString();
+    return request(`/etablissement/unites-enseignement${q ? `?${q}` : ''}`);
+  },
+  creer: (data) =>
+    request('/etablissement/unites-enseignement', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  modifier: (id, data) =>
+    request(`/etablissement/unites-enseignement/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  supprimer: (id) =>
+    request(`/etablissement/unites-enseignement/${id}`, { method: 'DELETE' }),
+};
+
+/** Validation des UE (Validé / Non validé) pour l'année académique en cours */
+export const validationUeService = {
+  listerUes: ({ anneeEtude, filiereId, semestre } = {}) => {
+    const qs = new URLSearchParams();
+    if (anneeEtude != null) qs.set('anneeEtude', String(anneeEtude));
+    if (filiereId) qs.set('filiereId', filiereId);
+    if (semestre != null && semestre !== '') qs.set('semestre', String(semestre));
+    const q = qs.toString();
+    return request(`/etablissement/validations-ue/ues${q ? `?${q}` : ''}`);
+  },
+  listerEtudiants: ({ anneeEtude, uniteId } = {}) => {
+    const qs = new URLSearchParams();
+    if (anneeEtude != null) qs.set('anneeEtude', String(anneeEtude));
+    if (uniteId) qs.set('uniteId', uniteId);
+    const q = qs.toString();
+    return request(`/etablissement/validations-ue/etudiants${q ? `?${q}` : ''}`);
+  },
+  listerBilan: ({ filiereId, anneeEtude, semestre } = {}) => {
+    const qs = new URLSearchParams();
+    if (filiereId) qs.set('filiereId', filiereId);
+    if (anneeEtude != null) qs.set('anneeEtude', String(anneeEtude));
+    if (semestre != null && semestre !== '') qs.set('semestre', String(semestre));
+    const q = qs.toString();
+    return request(`/etablissement/validations-ue/bilan${q ? `?${q}` : ''}`);
+  },
+  listerBilanAnnee: ({ filiereId, anneeEtude } = {}) => {
+    const qs = new URLSearchParams();
+    if (filiereId) qs.set('filiereId', filiereId);
+    if (anneeEtude != null) qs.set('anneeEtude', String(anneeEtude));
+    const q = qs.toString();
+    return request(`/etablissement/validations-ue/bilan-annee${q ? `?${q}` : ''}`);
+  },
+  deciderPassage: ({ inscriptionId, decision }) =>
+    request('/etablissement/validations-ue/decision-passage', {
+      method: 'POST',
+      body: JSON.stringify({ inscriptionId, decision }),
+    }),
+  marquer: (data) =>
+    request('/etablissement/validations-ue/marquer', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+/** Demandes d'ajout de filière (admin → DGES) */
+export const demandeFiliereAdminService = {
+  getAll: (statut = '') =>
+    request(`/etablissement/demandes-filieres${statut ? `?statut=${statut}` : ''}`),
+  creer: (data) =>
+    request('/etablissement/demandes-filieres', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
 export const inscriptionAcadService = {
   getMesInscriptions: () => request('/inscriptions-academiques/mes-inscriptions'),
+  confirmer: (id) =>
+    request(`/inscriptions-academiques/${id}/confirmer`, {
+      method: 'POST',
+    }),
+  telechargerFicheInscription: (id) =>
+    telechargerPDF(
+      `${BASE_URL}/inscriptions-academiques/${id}/fiche-inscription`,
+      `fiche_inscription_${id}.pdf`,
+    ),
   soumettreQuittance: async (id, formData) => {
     const token = localStorage.getItem('token');
     const response = await fetch(`${BASE_URL}/inscriptions-academiques/${id}/quittance`, {
@@ -722,6 +1085,24 @@ export const preinscriptionEtablissementService = {
       ),
     ),
   getMesPreinscriptions: () => request('/preinscriptions-etablissement/mes-preinscriptions'),
+  getContexteCorrection: (id) => request(`/preinscriptions-etablissement/${id}/correction`),
+  remplacerPiece: async (id, code, fichier) => {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('code', code);
+    formData.append('fichier', fichier);
+    const response = await fetch(`${BASE_URL}/preinscriptions-etablissement/${id}/pieces`, {
+      method: 'POST',
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      body: formData,
+    });
+    return handleMultipartResponse(response, 'Erreur remplacement piece');
+  },
+  modifierNiveau: (id, niveau) =>
+    request(`/preinscriptions-etablissement/${id}/niveau`, {
+      method: 'PATCH',
+      body: JSON.stringify({ niveau: Number(niveau) }),
+    }),
   telechargerFiche: (id) =>
     telechargerPDF(`${BASE_URL}/preinscriptions-etablissement/${id}/pdf`, `fiche_preinscription_${id}.pdf`),
   getDemandesEtablissement: (statut = '') =>
@@ -731,15 +1112,6 @@ export const preinscriptionEtablissementService = {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
-  ajouterDocumentCompl: async (id, formData) => {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${BASE_URL}/preinscriptions-etablissement/${id}/documents-complementaires`, {
-      method: 'POST',
-      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
-      body: formData,
-    });
-    return handleMultipartResponse(response, 'Erreur upload document complementaire');
-  },
   resoumettre: (id) =>
     request(`/preinscriptions-etablissement/${id}/resoumettre`, { method: 'POST' }),
 };
@@ -769,12 +1141,31 @@ export const applicationService = {
       body: JSON.stringify(data),
     }),
   getMesDemandes: () => request('/applications/mine'),
+  getNiveauAutorise: ({ filiereId, etablissementId } = {}) => {
+    const qs = new URLSearchParams();
+    if (filiereId) qs.set('filiereId', filiereId);
+    if (etablissementId) qs.set('etablissementId', etablissementId);
+    const q = qs.toString();
+    return request(`/applications/niveau-autorise${q ? `?${q}` : ''}`);
+  },
   getById: (id) => request(`/applications/${id}`),
   getRequirements: (id) => request(`/applications/${id}/requirements`),
   payerFraisDossierMock: (id) =>
     request(`/applications/${id}/payments/dossier-fees/mock-confirm`, {
       method: 'POST',
     }),
+  /** Quittance des frais de dossier (paiement hors plateforme, comme Module 1). */
+  uploadQuittanceFraisDossier: async (id, fichier) => {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('fichier', fichier);
+    const response = await fetch(`${BASE_URL}/applications/${id}/payments/dossier-fees/quittance`, {
+      method: 'POST',
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      body: formData,
+    });
+    return handleMultipartResponse(response, 'Erreur upload quittance frais de dossier');
+  },
   uploadQuittanceBancaire: async (id, fichier) => {
     const token = localStorage.getItem('token');
     const formData = new FormData();
@@ -805,6 +1196,34 @@ export const applicationService = {
   telechargerFiche: (id) =>
     telechargerPDF(`${BASE_URL}/applications/${id}/fiche-preinscription`, `fiche_preinscription_${id}.pdf`),
   getDemandesEtablissement: () => request('/applications/etablissement/applications'),
+  getExportReadiness: (params = {}) => {
+    const qs = new URLSearchParams();
+    if (params.annee) qs.set('annee', params.annee);
+    const q = qs.toString();
+    return request(`/applications/etablissement/export/readiness${q ? `?${q}` : ''}`);
+  },
+  telechargerExportPdf: (params = {}) => {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && String(v).trim() !== '') qs.set(k, String(v));
+    });
+    const q = qs.toString();
+    return downloadAuthenticatedFile(
+      `/applications/etablissement/export/pdf${q ? `?${q}` : ''}`,
+      'candidatures-etablissement.pdf'
+    );
+  },
+  telechargerExportExcel: (params = {}) => {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && String(v).trim() !== '') qs.set(k, String(v));
+    });
+    const q = qs.toString();
+    return downloadAuthenticatedFile(
+      `/applications/etablissement/export/excel${q ? `?${q}` : ''}`,
+      'candidatures-etablissement.csv'
+    );
+  },
   getMyRequirementsEtablissement: () => request('/applications/etablissement/requirements'),
   upsertRequirementEtablissement: (payload) =>
     request('/applications/etablissement/requirements', {
@@ -832,6 +1251,10 @@ export const parcoursService = {
   getMonParcours: () => request('/parcours/mon-parcours'),
   getMonReleve: () => request('/parcours/mon-releve'),
   telechargerMonReleve: () => telechargerPDF(`${BASE_URL}/parcours/mon-releve/pdf`, 'releve_academique.pdf'),
+  getByMatricule: (matricule) => {
+    const qs = new URLSearchParams({ matricule: String(matricule || '').trim() });
+    return request(`/parcours/par-matricule?${qs.toString()}`);
+  },
 };
 
 // ── Fiche pré-inscription (blob binaire, pas de parsing JSON) ───────

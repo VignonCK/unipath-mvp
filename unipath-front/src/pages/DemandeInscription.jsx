@@ -6,6 +6,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   applicationService,
   candidatService,
+  dgesService,
   etablissementService,
   filiereService,
   inscriptionAcadService,
@@ -13,15 +14,12 @@ import {
 } from '../services/api';
 import { handleSessionError } from '../utils/auth';
 import { getApplicationStatus, PREINSCRIPTION_STATUS } from '../utils/adminParcoursInscription';
+import { labelNiveauEtude, NIVEAUX_ETUDE } from '../utils/niveaux-etude';
 import CandidatLayout from '../components/CandidatLayout';
 import BentoCard from '../components/BentoCard';
 import { ROUTES } from '../constants/routes';
 
-const NIVEAUX = [
-  { value: '1', label: 'Licence 1' },
-  { value: '2', label: 'Licence 2' },
-  { value: '3', label: 'Licence 3' },
-];
+const NIVEAUX = NIVEAUX_ETUDE.map((n) => ({ value: String(n.value), label: n.label }));
 
 const STATUS_ORDER = ['DRAFT', 'DOSSIER_FEES_PAID', 'PENDING_DOCUMENTS', 'READY_FOR_PREINSCRIPTION', 'FICHE_GENERATED'];
 
@@ -119,19 +117,20 @@ function RecapitulatifFrais({ fraisDossier, filiere }) {
         </table>
       </div>
       <p className='mt-3 text-xs leading-relaxed text-amber-900/80'>
-        * Les frais de dossier sont à régler maintenant. Les frais d&apos;inscription et de scolarité seront exigés
-        après acceptation de votre dossier.
+        * Réglez les frais de dossier hors plateforme, puis déposez la quittance avec vos pièces
+        (comme pour un concours). Les frais d&apos;inscription et de scolarité seront exigés après
+        acceptation de votre dossier.
       </p>
     </div>
   );
 }
 
 const APPLICATION_ACTION_MESSAGES = {
-  DRAFT: 'Votre dossier est en brouillon. Cliquez pour continuer.',
-  DOSSIER_FEES_PAID: 'Paiement reçu — complétez les pièces de votre dossier.',
+  DRAFT: 'Déposez votre quittance et vos pièces, puis soumettez le dossier.',
+  DOSSIER_FEES_PAID: 'Quittance reçue — complétez les pièces manquantes.',
   PENDING_DOCUMENTS: 'Votre dossier est incomplet — action de votre part requise.',
-  READY_FOR_PREINSCRIPTION: 'Votre dossier est complet — vous pouvez le finaliser.',
-  FICHE_GENERATED: 'Votre fiche a été générée. En attente de réponse de l\'école.',
+  READY_FOR_PREINSCRIPTION: 'Dossier complet — vous pouvez le soumettre à l\'école.',
+  FICHE_GENERATED: 'Dossier soumis. En attente de réponse de l\'école.',
 };
 
 const PREINSCRIPTION_ACTION_MESSAGES = {
@@ -147,7 +146,7 @@ const INSCRIPTION_ACAD_BADGES = {
   QUITTANCE_SOUMISE: { label: 'Quittance en vérification', className: 'bg-yellow-100 text-yellow-800' },
   VALIDE: { label: 'Inscrit(e)', className: 'bg-green-100 text-green-800' },
   REDOUBLANT: { label: 'Redoublant', className: 'bg-gray-100 text-gray-700' },
-  ABANDONNE: { label: 'Abandonné', className: 'bg-red-100 text-red-800' },
+  ABANDONNE: { label: 'Annulée', className: 'bg-red-100 text-red-800' },
 };
 
 function tabButtonClass(active) {
@@ -173,13 +172,6 @@ const STATUS_CARD_STYLES = {
 
 function getStatusCardStyle(status, type = 'application') {
   return STATUS_CARD_STYLES[type]?.[status] || { border: '', badge: null };
-}
-
-function parseDocumentsCompl(documentsCompl) {
-  if (documentsCompl?.pieces && Array.isArray(documentsCompl.pieces)) {
-    return documentsCompl.pieces;
-  }
-  return [];
 }
 
 function statusIndex(status) {
@@ -220,9 +212,9 @@ function StatusBadge({ status, type = 'application', badgeClass }) {
 
 function WorkflowStepper({ status }) {
   const steps = [
-    { label: 'Paiement', min: 1 },
+    { label: 'Quittance', min: 1 },
     { label: 'Pièces', min: 2 },
-    { label: 'Finalisation', min: 4 },
+    { label: 'Soumission', min: 4 },
   ];
   const current = statusIndex(status);
 
@@ -265,6 +257,8 @@ export default function DemandeInscription() {
   const location = useLocation();
   const prefill = location.state || {};
   const hasPrefill = Boolean(prefill.etablissementId || prefill.filiereId);
+  const etablissementLocked = Boolean(prefill.etablissementId);
+  const filiereLocked = Boolean(prefill.filiereId);
 
   const [initialLoading, setInitialLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(hasPrefill ? 'nouvelle' : 'dossiers');
@@ -284,21 +278,27 @@ export default function DemandeInscription() {
   const [applicationDetail, setApplicationDetail] = useState(null);
   const [requirements, setRequirements] = useState([]);
   const [uploadFiles, setUploadFiles] = useState({});
+  const [quittanceFichier, setQuittanceFichier] = useState(null);
   const [preinscriptions, setPreinscriptions] = useState([]);
   const [loadingPreinscriptions, setLoadingPreinscriptions] = useState(true);
-  const [docModal, setDocModal] = useState({ open: false, preinscriptionId: null });
-  const [docFichier, setDocFichier] = useState(null);
+  const [correctionById, setCorrectionById] = useState({});
+  const [correctionBusyId, setCorrectionBusyId] = useState(null);
+  const [pieceFiles, setPieceFiles] = useState({});
   const [preinBusy, setPreinBusy] = useState(false);
   const [preinMessage, setPreinMessage] = useState('');
   const [preinError, setPreinError] = useState('');
 
   const [inscriptionsAcad, setInscriptionsAcad] = useState([]);
+  const [needsConfirmationChoice, setNeedsConfirmationChoice] = useState(false);
   const [loadingInscriptionsAcad, setLoadingInscriptionsAcad] = useState(true);
+  const [confirmBusyId, setConfirmBusyId] = useState(null);
   const [acadUploadModal, setAcadUploadModal] = useState({ open: false, inscriptionId: null, label: '' });
   const [acadFichier, setAcadFichier] = useState(null);
   const [acadUploadBusy, setAcadUploadBusy] = useState(false);
   const [acadUploadMessage, setAcadUploadMessage] = useState('');
   const [acadUploadError, setAcadUploadError] = useState('');
+  const [contrainteNiveau, setContrainteNiveau] = useState(null);
+  const [niveauxAutorises, setNiveauxAutorises] = useState(() => NIVEAUX.map((n) => Number(n.value)));
 
   const [recapFiliere, setRecapFiliere] = useState(null);
   const [confirmedFraisDossier, setConfirmedFraisDossier] = useState(null);
@@ -306,10 +306,42 @@ export default function DemandeInscription() {
   const [form, setForm] = useState({
     etablissementId: prefill.etablissementId || '',
     filiereId: prefill.filiereId || '',
-    anneeAcademique: prefill.anneeAcademique || `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
+    anneeAcademique: '',
     niveau: prefill.niveau || '',
     campagneFiliereId: prefill.campagneFiliereId || '',
   });
+
+  useEffect(() => {
+    dgesService
+      .getAnneeEnCours()
+      .then((data) => {
+        const libelle = data?.annee?.libelle;
+        if (libelle) {
+          setForm((p) => (p.anneeAcademique === libelle ? p : { ...p, anneeAcademique: libelle }));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Reprendre le contexte si l'étudiant clique « Déposer un dossier » depuis une autre offre
+  useEffect(() => {
+    if (!prefill.etablissementId && !prefill.filiereId && !prefill.campagneFiliereId) return;
+    setForm((p) => ({
+      ...p,
+      etablissementId: prefill.etablissementId || p.etablissementId,
+      filiereId: prefill.filiereId || (prefill.etablissementId ? '' : p.filiereId),
+      niveau: prefill.niveau || p.niveau,
+      campagneFiliereId: prefill.campagneFiliereId || '',
+      ...(prefill.anneeAcademique ? { anneeAcademique: prefill.anneeAcademique } : {}),
+    }));
+    setActiveTab('nouvelle');
+  }, [
+    prefill.etablissementId,
+    prefill.filiereId,
+    prefill.campagneFiliereId,
+    prefill.niveau,
+    prefill.anneeAcademique,
+  ]);
 
   const selectedApplication = useMemo(
     () => applications.find((a) => a.id === selectedApplicationId) || null,
@@ -354,6 +386,9 @@ export default function DemandeInscription() {
       Boolean(
         applicationDetail?.payments?.some(
           (p) => p.paymentType === 'DOSSIER_FEES' && p.status === 'CONFIRMED',
+        )
+        || applicationDetail?.documents?.some(
+          (d) => d.code === 'quittance_frais_dossier' && d.status === 'PROVIDED',
         ),
       ),
     [applicationDetail],
@@ -390,23 +425,12 @@ export default function DemandeInscription() {
     };
   }, [recapFiliereId, recapEtablissementId, filieres]);
 
-  const loadPreinscriptions = useCallback(async () => {
-    setLoadingPreinscriptions(true);
-    try {
-      const data = await preinscriptionEtablissementService.getMesPreinscriptions();
-      setPreinscriptions(data.preinscriptions || []);
-    } catch (err) {
-      setPreinError(err.message || 'Erreur chargement réponses de l\'école');
-    } finally {
-      setLoadingPreinscriptions(false);
-    }
-  }, []);
-
   const loadInscriptionsAcad = useCallback(async () => {
     setLoadingInscriptionsAcad(true);
     try {
       const data = await inscriptionAcadService.getMesInscriptions();
       setInscriptionsAcad(data.inscriptions || []);
+      setNeedsConfirmationChoice(Boolean(data.needsConfirmationChoice));
     } catch (err) {
       setError(err.message || 'Erreur chargement inscriptions');
     } finally {
@@ -440,6 +464,37 @@ export default function DemandeInscription() {
     setRequirements(req.requirements || []);
     setLoadingDetail(false);
   }, []);
+
+  const loadCorrectionContext = useCallback(async (preinscriptionId) => {
+    try {
+      const data = await preinscriptionEtablissementService.getContexteCorrection(preinscriptionId);
+      setCorrectionById((prev) => ({
+        ...prev,
+        [preinscriptionId]: {
+          niveau: String(data.preinscription?.niveau || ''),
+          pieces: data.pieces || [],
+          motifDecision: data.preinscription?.motifDecision || '',
+        },
+      }));
+    } catch (err) {
+      setPreinError(err.message || 'Erreur chargement correction');
+    }
+  }, []);
+
+  const loadPreinscriptions = useCallback(async () => {
+    setLoadingPreinscriptions(true);
+    try {
+      const data = await preinscriptionEtablissementService.getMesPreinscriptions();
+      const list = data.preinscriptions || [];
+      setPreinscriptions(list);
+      const sousReserve = list.filter((p) => p.statut === 'SOUS_RESERVE');
+      await Promise.all(sousReserve.map((p) => loadCorrectionContext(p.id)));
+    } catch (err) {
+      setPreinError(err.message || 'Erreur chargement pré-inscriptions');
+    } finally {
+      setLoadingPreinscriptions(false);
+    }
+  }, [loadCorrectionContext]);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -487,8 +542,50 @@ export default function DemandeInscription() {
     });
   }, [loadApplicationDetails, selectedApplicationId]);
 
+  useEffect(() => {
+    if (!form.etablissementId || !form.filiereId) {
+      setContrainteNiveau(null);
+      setNiveauxAutorises(NIVEAUX.map((n) => Number(n.value)));
+      return;
+    }
+    let cancelled = false;
+    applicationService
+      .getNiveauAutorise({
+        filiereId: form.filiereId,
+        etablissementId: form.etablissementId,
+      })
+      .then((data) => {
+        if (cancelled) return;
+        const autorises = (data.niveauxAutorises || []).map(Number);
+        setContrainteNiveau(data.contrainte || null);
+        setNiveauxAutorises(autorises.length ? autorises : NIVEAUX.map((n) => Number(n.value)));
+        setForm((prev) => {
+          const current = Number(prev.niveau);
+          if (prev.niveau && autorises.length && !autorises.includes(current)) {
+            return { ...prev, niveau: String(autorises[0]) };
+          }
+          return prev;
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setContrainteNiveau(null);
+        setNiveauxAutorises(NIVEAUX.map((n) => Number(n.value)));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.etablissementId, form.filiereId]);
+
+  const niveauxDisponibles = useMemo(
+    () => NIVEAUX.filter((n) => niveauxAutorises.includes(Number(n.value))),
+    [niveauxAutorises]
+  );
+
   const handleChange = (event) => {
     const { name, value } = event.target;
+    if (name === 'etablissementId' && etablissementLocked) return;
+    if (name === 'filiereId' && filiereLocked) return;
     setError('');
     setMessage('');
     setForm((prev) => ({
@@ -508,6 +605,11 @@ export default function DemandeInscription() {
       setLoadingCreate(true);
       setError('');
       setMessage('');
+      if (!form.anneeAcademique) {
+        setError('Année académique en cours indisponible. Réessayez dans un instant.');
+        setLoadingCreate(false);
+        return;
+      }
       const payload = {
         etablissementId: form.etablissementId,
         filiereId: form.filiereId,
@@ -523,6 +625,7 @@ export default function DemandeInscription() {
       if (chosenId) await loadApplicationDetails(chosenId);
       setMessage(data.message || 'Dossier créé avec succès');
       setActiveTab('dossiers');
+      navigate(location.pathname, { replace: true, state: {} });
     } catch (err) {
       setError(err.message || 'Erreur lors de la création');
     } finally {
@@ -530,20 +633,24 @@ export default function DemandeInscription() {
     }
   };
 
-  const payDossierFees = async () => {
-    if (!selectedApplicationId) return;
+  const uploadQuittanceFraisDossier = async () => {
+    if (!selectedApplicationId || !quittanceFichier) return;
     try {
       setActionBusy(true);
       setError('');
-      const data = await applicationService.payerFraisDossierMock(selectedApplicationId);
-      if (data.amount != null) {
-        setConfirmedFraisDossier(data.amount);
+      const data = await applicationService.uploadQuittanceFraisDossier(
+        selectedApplicationId,
+        quittanceFichier,
+      );
+      if (data.payment?.amount != null) {
+        setConfirmedFraisDossier(data.payment.amount);
       }
+      setQuittanceFichier(null);
       await loadApplicationDetails(selectedApplicationId);
       await loadApplications(selectedApplicationId);
-      setMessage(data.message || 'Paiement confirmé');
+      setMessage(data.message || 'Quittance enregistrée');
     } catch (err) {
-      setError(err.message || 'Erreur paiement frais dossier');
+      setError(err.message || 'Erreur upload quittance');
     } finally {
       setActionBusy(false);
     }
@@ -566,7 +673,7 @@ export default function DemandeInscription() {
     }
   };
 
-  const finalizeApplication = async () => {
+  const soumettreDossier = async () => {
     if (!selectedApplicationId) return;
     try {
       setActionBusy(true);
@@ -574,42 +681,66 @@ export default function DemandeInscription() {
       const data = await applicationService.finaliser(selectedApplicationId);
       await loadApplicationDetails(selectedApplicationId);
       await loadApplications(selectedApplicationId);
-      setMessage(data.message || 'Fiche générée');
+      await loadPreinscriptions();
+      setMessage(data.message || 'Dossier soumis avec succès');
     } catch (err) {
-      setError(err.message || 'Erreur finalisation dossier');
+      setError(err.message || 'Erreur lors de la soumission');
     } finally {
       setActionBusy(false);
     }
   };
 
-  const ajouterDocumentCompl = async () => {
-    if (!docModal.preinscriptionId || !docFichier) return;
+  const remplacerPieceSousReserve = async (preinscriptionId, code) => {
+    const fileKey = `${preinscriptionId}:${code}`;
+    const fichier = pieceFiles[fileKey];
+    if (!fichier) return;
     try {
-      setPreinBusy(true);
+      setCorrectionBusyId(preinscriptionId);
       setPreinError('');
       setPreinMessage('');
-      const formData = new FormData();
-      formData.append('fichier', docFichier);
-      const data = await preinscriptionEtablissementService.ajouterDocumentCompl(docModal.preinscriptionId, formData);
-      setPreinMessage(data.message || 'Document ajouté');
-      setDocFichier(null);
-      setDocModal({ open: false, preinscriptionId: null });
+      const data = await preinscriptionEtablissementService.remplacerPiece(preinscriptionId, code, fichier);
+      setPieceFiles((prev) => ({ ...prev, [fileKey]: null }));
+      setPreinMessage(data.message || 'Pièce remplacée');
+      await loadCorrectionContext(preinscriptionId);
       await loadPreinscriptions();
     } catch (err) {
-      setPreinError(err.message || 'Erreur upload document');
+      setPreinError(err.message || 'Erreur remplacement pièce');
     } finally {
-      setPreinBusy(false);
+      setCorrectionBusyId(null);
+    }
+  };
+
+  const modifierNiveauSousReserve = async (preinscriptionId) => {
+    const ctx = correctionById[preinscriptionId];
+    if (!ctx?.niveau) return;
+    try {
+      setCorrectionBusyId(preinscriptionId);
+      setPreinError('');
+      setPreinMessage('');
+      const data = await preinscriptionEtablissementService.modifierNiveau(preinscriptionId, ctx.niveau);
+      setPreinMessage(data.message || 'Niveau mis à jour');
+      await loadCorrectionContext(preinscriptionId);
+      await loadPreinscriptions();
+    } catch (err) {
+      setPreinError(err.message || 'Erreur modification niveau');
+    } finally {
+      setCorrectionBusyId(null);
     }
   };
 
   const resoumettreDossier = async (id) => {
-    if (!window.confirm('Confirmer la resoumission de votre dossier ?')) return;
+    if (!window.confirm('Confirmer la resoumission de votre dossier après correction ?')) return;
     try {
       setPreinBusy(true);
       setPreinError('');
       setPreinMessage('');
       const data = await preinscriptionEtablissementService.resoumettre(id);
       setPreinMessage(data.message || 'Dossier resoumis');
+      setCorrectionById((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
       await loadPreinscriptions();
     } catch (err) {
       setPreinError(err.message || 'Erreur resoumission');
@@ -652,6 +783,26 @@ export default function DemandeInscription() {
       setAcadUploadError(err.message || 'Erreur lors de la soumission');
     } finally {
       setAcadUploadBusy(false);
+    }
+  };
+
+  const confirmerInscriptionAcad = async (inscription) => {
+    if (!inscription?.id || !inscription.canConfirm) return;
+    const label = `${inscription.etablissement?.nom || 'cet établissement'} — ${inscription.filiere?.nom || 'cette filière'}`;
+    const ok = window.confirm(
+      `Confirmer votre inscription à ${label} ?\n\nVos autres inscriptions validées pour l'année ${inscription.anneeAcademique} seront définitivement annulées.`
+    );
+    if (!ok) return;
+    setConfirmBusyId(inscription.id);
+    setError('');
+    try {
+      const data = await inscriptionAcadService.confirmer(inscription.id);
+      setMessage(data.message || 'Inscription confirmée.');
+      await loadInscriptionsAcad();
+    } catch (err) {
+      setError(err.message || 'Impossible de confirmer cette inscription');
+    } finally {
+      setConfirmBusyId(null);
     }
   };
 
@@ -804,59 +955,125 @@ export default function DemandeInscription() {
                     <div className='space-y-6'>
                       <RecapitulatifFrais fraisDossier={fraisDossierRecap} filiere={recapFiliere} />
 
-                      <div className='grid gap-4 md:grid-cols-3'>
+                      <div className='grid gap-4 md:grid-cols-2'>
                         <div className='rounded-2xl border border-blue-100 bg-blue-50/50 p-4'>
                           <div className='mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-blue-900 text-white'>
-                            <span className='text-lg'>💳</span>
+                            <span className='text-lg'>🧾</span>
                           </div>
-                          <h3 className='font-semibold text-gray-900'>Frais de dossier</h3>
+                          <h3 className='font-semibold text-gray-900'>Quittance frais de dossier</h3>
                           <p className='mt-1 text-xs text-gray-600'>
-                            {dossierFeesPaid ? 'Paiement confirmé' : 'Paiement simulé'} —{' '}
+                            {dossierFeesPaid ? 'Quittance déposée' : 'À régler hors plateforme, puis déposer ici'} —{' '}
                             {fraisDossierAffiche.toLocaleString('fr-FR')} FCFA
                           </p>
-                          <button
-                            type='button'
-                            onClick={payDossierFees}
-                            disabled={actionBusy || applicationDetail.status !== 'DRAFT'}
-                            className='mt-4 w-full rounded-xl bg-blue-900 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50'
-                          >
-                            Payer (mock)
-                          </button>
+                          {dossierFeesPaid ? (
+                            <div className='mt-4 space-y-2'>
+                              <p className='rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800'>
+                                {applicationDetail.status === 'FICHE_GENERATED'
+                                  ? '✓ Quittance enregistrée'
+                                  : '✓ Quittance enregistrée — vous pouvez la remplacer si besoin'}
+                              </p>
+                              {applicationDetail.status !== 'FICHE_GENERATED' && (
+                                <>
+                                  <label className='block cursor-pointer rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 hover:border-blue-300'>
+                                    {quittanceFichier?.name || 'Choisir un nouveau fichier'}
+                                    <input
+                                      type='file'
+                                      accept='application/pdf,image/png,image/jpeg'
+                                      onChange={(e) => setQuittanceFichier(e.target.files?.[0] || null)}
+                                      className='hidden'
+                                      disabled={actionBusy}
+                                    />
+                                  </label>
+                                  <button
+                                    type='button'
+                                    onClick={uploadQuittanceFraisDossier}
+                                    disabled={actionBusy || !quittanceFichier}
+                                    className='w-full rounded-xl bg-blue-900 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50'
+                                  >
+                                    Remplacer la quittance
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          ) : (
+                            <div className='mt-4 space-y-2'>
+                              <label className='block cursor-pointer rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 hover:border-blue-300'>
+                                {quittanceFichier?.name || 'Choisir PDF / image'}
+                                <input
+                                  type='file'
+                                  accept='application/pdf,image/png,image/jpeg'
+                                  onChange={(e) => setQuittanceFichier(e.target.files?.[0] || null)}
+                                  className='hidden'
+                                  disabled={actionBusy || applicationDetail.status === 'FICHE_GENERATED'}
+                                />
+                              </label>
+                              <button
+                                type='button'
+                                onClick={uploadQuittanceFraisDossier}
+                                disabled={
+                                  actionBusy
+                                  || !quittanceFichier
+                                  || applicationDetail.status === 'FICHE_GENERATED'
+                                }
+                                className='w-full rounded-xl bg-blue-900 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50'
+                              >
+                                Déposer la quittance
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         <div className='rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4'>
                           <div className='mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-700 text-white'>
                             <span className='text-lg'>🏦</span>
                           </div>
-                          <h3 className='font-semibold text-gray-900'>Quittance bancaire</h3>
+                          <h3 className='font-semibold text-gray-900'>Quittance bancaire (après acceptation)</h3>
                           <p className='mt-2 text-xs leading-relaxed text-indigo-900/80'>
-                            Votre quittance bancaire sera demandée uniquement après acceptation de votre dossier.
-                          </p>
-                          <p className='mt-2 text-xs text-gray-500'>
-                            Vous pourrez la déposer depuis{' '}
+                            Les droits d&apos;inscription / scolarité se déposent uniquement après acceptation
+                            de votre dossier, depuis{' '}
                             <Link to={ROUTES.parcours.mesInscriptions} className='font-semibold text-indigo-700 underline'>
                               Mes inscriptions académiques
                             </Link>
                             .
                           </p>
                         </div>
+                      </div>
 
-                        <div className='rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4'>
-                          <div className='mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white'>
-                            <span className='text-lg'>📄</span>
-                          </div>
-                          <h3 className='font-semibold text-gray-900'>Finalisation</h3>
-                          <p className='mt-1 text-xs text-gray-600'>Génère votre fiche pour l&apos;école</p>
+                      {['DRAFT', 'DOSSIER_FEES_PAID', 'PENDING_DOCUMENTS', 'READY_FOR_PREINSCRIPTION'].includes(
+                        applicationDetail.status,
+                      ) && (
+                        <div className='rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4'>
+                          <h3 className='font-semibold text-gray-900'>Soumettre mon dossier</h3>
+                          <p className='mt-1 text-xs text-gray-600'>
+                            Une fois la quittance et toutes les pièces déposées, soumettez votre dossier à l&apos;école
+                            (comme pour un concours).
+                          </p>
                           <button
                             type='button'
-                            onClick={finalizeApplication}
+                            onClick={soumettreDossier}
                             disabled={actionBusy || applicationDetail.status !== 'READY_FOR_PREINSCRIPTION'}
-                            className='mt-4 w-full rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50'
+                            className='mt-4 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50'
                           >
-                            Finaliser mon dossier
+                            Soumettre mon dossier
                           </button>
                         </div>
-                      </div>
+                      )}
+
+                      {applicationDetail.status === 'FICHE_GENERATED' && (
+                        <div className='rounded-2xl border border-blue-200 bg-blue-50/60 p-4 text-sm text-blue-950'>
+                          <p className='font-semibold'>Dossier soumis avec succès.</p>
+                          <p className='mt-1 text-xs text-blue-900/80'>
+                            Votre fiche de préinscription est disponible. L&apos;école examine maintenant votre dossier.
+                          </p>
+                          <button
+                            type='button'
+                            onClick={() => applicationService.telechargerFiche(selectedApplicationId)}
+                            className='mt-3 rounded-xl border border-blue-300 bg-white px-4 py-2 text-sm font-semibold text-blue-900 hover:bg-blue-50'
+                          >
+                            Télécharger la fiche
+                          </button>
+                        </div>
+                      )}
 
                       <div className='rounded-2xl border border-gray-200 bg-gray-50/50 p-5'>
                         <div className='mb-4 flex flex-wrap items-center justify-between gap-3'>
@@ -869,13 +1086,15 @@ export default function DemandeInscription() {
                               </p>
                             )}
                           </div>
-                          <button
-                            type='button'
-                            onClick={() => applicationService.telechargerFiche(selectedApplicationId)}
-                            className='rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 transition hover:bg-gray-50'
-                          >
-                            Télécharger la fiche
-                          </button>
+                          {applicationDetail.status === 'FICHE_GENERATED' && (
+                            <button
+                              type='button'
+                              onClick={() => applicationService.telechargerFiche(selectedApplicationId)}
+                              className='rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 transition hover:bg-gray-50'
+                            >
+                              Télécharger la fiche
+                            </button>
+                          )}
                         </div>
 
                         {requirements.length > 0 && (
@@ -893,7 +1112,9 @@ export default function DemandeInscription() {
 
                         {requirements.length > 0 && (
                           <div className='space-y-3'>
-                            {requirements.map((req) => (
+                            {requirements.map((req) => {
+                              const dossierLocked = applicationDetail.status === 'FICHE_GENERATED';
+                              return (
                               <div
                                 key={req.code}
                                 className={`rounded-xl border p-4 transition ${
@@ -901,26 +1122,29 @@ export default function DemandeInscription() {
                                 }`}
                               >
                                 <div className='flex flex-wrap items-start justify-between gap-2'>
-                                  <div>
+                                  <div className='min-w-0 flex-1'>
                                     <p className='text-sm font-semibold text-gray-900'>{req.label}</p>
                                     <p className='mt-1 text-xs text-gray-500'>
                                       {req.provided
-                                        ? '✓ Fourni'
+                                        ? (dossierLocked
+                                          ? '✓ Fourni'
+                                          : '✓ Fourni — vous pouvez le remplacer si besoin')
                                         : req.requirementType === 'PROFILE_FIELD'
-                                          ? 'Attendu depuis votre profil'
+                                          ? 'À fournir (dossier personnel ou dépôt ici)'
                                           : 'Upload requis'}
                                     </p>
                                   </div>
                                   {req.provided && (
-                                    <span className='rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800'>
+                                    <span className='shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800'>
                                       OK
                                     </span>
                                   )}
                                 </div>
-                                {req.requirementType === 'DOCUMENT_UPLOAD' && !req.provided && (
+                                {!dossierLocked && (
                                   <div className='mt-3 flex flex-wrap items-center gap-2'>
-                                    <label className='cursor-pointer rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 hover:border-blue-300'>
-                                      {uploadFiles[req.code]?.name || 'Choisir un fichier'}
+                                    <label className='cursor-pointer rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 hover:border-blue-300'>
+                                      {uploadFiles[req.code]?.name
+                                        || (req.provided ? 'Choisir un nouveau fichier' : 'Choisir un fichier')}
                                       <input
                                         type='file'
                                         accept='application/pdf,image/png,image/jpeg'
@@ -936,12 +1160,18 @@ export default function DemandeInscription() {
                                       disabled={actionBusy || !uploadFiles[req.code]}
                                       className='rounded-lg bg-blue-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50'
                                     >
-                                      Envoyer
+                                      {req.provided ? 'Remplacer' : 'Envoyer'}
                                     </button>
                                   </div>
                                 )}
+                                {dossierLocked && (
+                                  <p className='mt-2 text-[11px] text-gray-400'>
+                                    Dossier soumis : modification impossible ici. En cas de sous réserve, corrigez depuis la section réponses de l&apos;école.
+                                  </p>
+                                )}
                               </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -991,7 +1221,6 @@ export default function DemandeInscription() {
                 {!loadingPreinscriptions && preinscriptions.length > 0 && (
                   <div className='grid gap-4 md:grid-cols-2'>
                     {preinscriptions.map((p) => {
-                      const pieces = parseDocumentsCompl(p.documentsCompl);
                       const cardStyle = getStatusCardStyle(p.statut, 'preinscription');
                       const actionMessage = PREINSCRIPTION_ACTION_MESSAGES[p.statut];
 
@@ -1016,58 +1245,145 @@ export default function DemandeInscription() {
                           )}
 
                           {p.statut === 'SOUS_RESERVE' && (
-                            <div className='mt-4 space-y-3'>
+                            <div className='mt-4 space-y-4'>
                               <div className='rounded-xl border border-amber-200 bg-amber-50 p-4'>
                                 <p className='text-sm font-semibold text-amber-900'>Action requise</p>
                                 <p className='mt-1 whitespace-pre-wrap text-sm text-amber-800'>
-                                  {p.commentaireAdmin || 'Veuillez compléter votre dossier avec les documents demandés.'}
+                                  {correctionById[p.id]?.motifDecision
+                                    || p.motifDecision
+                                    || 'Veuillez corriger les pièces et/ou le niveau d\'étude, puis resoumettre.'}
                                 </p>
                               </div>
 
-                              {pieces.length > 0 && (
-                                <div>
-                                  <p className='mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500'>
-                                    Documents déposés
-                                  </p>
-                                  <ul className='space-y-1'>
-                                    {pieces.map((doc) => (
-                                      <li key={doc.id || doc.url}>
-                                        <a
-                                          href={doc.url}
-                                          target='_blank'
-                                          rel='noopener noreferrer'
-                                          className='text-sm font-medium text-blue-800 hover:underline'
-                                        >
-                                          {doc.nom || 'Document'}
-                                        </a>
-                                      </li>
+                              <div>
+                                <label className='mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500'>
+                                  Niveau d&apos;étude
+                                </label>
+                                <div className='flex flex-wrap items-center gap-2'>
+                                  <select
+                                    value={correctionById[p.id]?.niveau || String(p.niveau || '')}
+                                    onChange={(e) =>
+                                      setCorrectionById((prev) => ({
+                                        ...prev,
+                                        [p.id]: {
+                                          ...(prev[p.id] || { pieces: [] }),
+                                          niveau: e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    className='rounded-lg border border-gray-300 px-3 py-2 text-sm'
+                                  >
+                                    {niveauxDisponibles.map((n) => (
+                                      <option key={n.value} value={n.value}>
+                                        {n.label}
+                                      </option>
                                     ))}
-                                  </ul>
+                                  </select>
+                                  <button
+                                    type='button'
+                                    onClick={() => modifierNiveauSousReserve(p.id)}
+                                    disabled={correctionBusyId === p.id}
+                                    className='rounded-lg border border-teal-800 px-3 py-2 text-xs font-semibold text-teal-900 hover:bg-teal-50 disabled:opacity-60'
+                                  >
+                                    Enregistrer le niveau
+                                  </button>
                                 </div>
-                              )}
-
-                              <div className='flex flex-wrap gap-2'>
-                                <button
-                                  type='button'
-                                  onClick={() => {
-                                    setDocModal({ open: true, preinscriptionId: p.id });
-                                    setDocFichier(null);
-                                  }}
-                                  disabled={preinBusy}
-                                  className='rounded-xl bg-blue-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60'
-                                >
-                                  Ajouter un document
-                                </button>
-                                <button
-                                  type='button'
-                                  onClick={() => resoumettreDossier(p.id)}
-                                  disabled={preinBusy || pieces.length === 0}
-                                  className='rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60'
-                                  title={pieces.length === 0 ? 'Ajoutez au moins un document avant de resoumettre' : undefined}
-                                >
-                                  Resoumettre mon dossier
-                                </button>
+                                {contrainteNiveau?.constrained && contrainteNiveau?.message && (
+                                  <p className='mt-2 text-xs text-blue-900'>{contrainteNiveau.message}</p>
+                                )}
+                                {Number(correctionById[p.id]?.niveau || p.niveau) > 1 && (
+                                  <p className='mt-2 text-xs text-amber-800'>
+                                    Au-delà de la 1ʳᵉ année, le relevé / bulletins de l&apos;année antérieure est obligatoire.
+                                  </p>
+                                )}
                               </div>
+
+                              <div>
+                                <p className='mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500'>
+                                  Vos pièces téléversées
+                                </p>
+                                <p className='mb-3 text-xs text-gray-500'>
+                                  Consultez chaque fichier déposé et remplacez ceux qui doivent être corrigés.
+                                </p>
+                                <div className='space-y-3'>
+                                  {(correctionById[p.id]?.pieces || []).map((piece) => {
+                                    const fileKey = `${p.id}:${piece.code}`;
+                                    const hasFile = Boolean(piece.document?.documentUrl);
+                                    const docUrl = hasFile
+                                      ? `/${String(piece.document.documentUrl).replace(/^\//, '')}`
+                                      : null;
+                                    return (
+                                      <div
+                                        key={piece.code}
+                                        className={`rounded-xl border p-3 ${
+                                          hasFile
+                                            ? 'border-emerald-200 bg-emerald-50/40'
+                                            : 'border-amber-200 bg-amber-50/40'
+                                        }`}
+                                      >
+                                        <div className='flex flex-wrap items-start justify-between gap-2'>
+                                          <div className='min-w-0 flex-1'>
+                                            <p className='text-sm font-semibold text-gray-900'>{piece.label}</p>
+                                            <p className='mt-0.5 text-xs text-gray-600'>
+                                              {hasFile
+                                                ? piece.document?.source === 'PROFILE_AUTO'
+                                                  ? 'Issu du dossier personnel — vous pouvez le remplacer par un nouveau fichier'
+                                                  : 'Fichier déjà téléversé'
+                                                : 'Aucun fichier pour le moment — à fournir'}
+                                            </p>
+                                          </div>
+                                          {docUrl && (
+                                            <a
+                                              href={docUrl}
+                                              target='_blank'
+                                              rel='noopener noreferrer'
+                                              className='shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-50'
+                                            >
+                                              Voir le fichier
+                                            </a>
+                                          )}
+                                        </div>
+                                        <div className='mt-3 flex flex-wrap items-center gap-2'>
+                                          <label className='cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-700 hover:border-blue-400'>
+                                            {pieceFiles[fileKey]?.name || (hasFile ? 'Choisir un nouveau fichier' : 'Choisir un fichier')}
+                                            <input
+                                              type='file'
+                                              accept='application/pdf,image/png,image/jpeg'
+                                              className='hidden'
+                                              onChange={(e) =>
+                                                setPieceFiles((prev) => ({
+                                                  ...prev,
+                                                  [fileKey]: e.target.files?.[0] || null,
+                                                }))
+                                              }
+                                            />
+                                          </label>
+                                          <button
+                                            type='button'
+                                            onClick={() => remplacerPieceSousReserve(p.id, piece.code)}
+                                            disabled={correctionBusyId === p.id || !pieceFiles[fileKey]}
+                                            className='rounded-lg bg-blue-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50'
+                                          >
+                                            {hasFile ? 'Remplacer' : 'Déposer'}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                  {!correctionById[p.id]?.pieces?.length && (
+                                    <p className='text-xs text-gray-500'>Chargement des pièces…</p>
+                                  )}
+                                </div>
+                              </div>
+
+                              <button
+                                type='button'
+                                onClick={() => resoumettreDossier(p.id)}
+                                disabled={preinBusy || correctionBusyId === p.id}
+                                className='rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60'
+                              >
+                                Resoumettre mon dossier
+                              </button>
                             </div>
                           )}
                         </div>
@@ -1086,6 +1402,14 @@ export default function DemandeInscription() {
                     Vos inscriptions effectives dans les établissements privés.
                   </p>
                 </div>
+
+                {needsConfirmationChoice && (
+                  <div className='rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950'>
+                    Vous avez plusieurs dossiers validés. Choisissez <strong>une seule</strong> inscription
+                    via le bouton <strong>Confirmé</strong> : les autres seront annulées.
+                  </div>
+                )}
+
                 <div className='space-y-4'>
                   {inscriptionsAcad.map((ins) => {
                     const badgeInfo = INSCRIPTION_ACAD_BADGES[ins.statut] || {
@@ -1102,7 +1426,7 @@ export default function DemandeInscription() {
                             </h3>
                             <p className='mt-0.5 text-sm text-gray-600'>{ins.filiere?.nom || 'Filière'}</p>
                             <p className='mt-1 text-xs text-gray-400'>
-                              Année {ins.anneeAcademique} — Niveau L{ins.niveau}
+                              Année {ins.anneeAcademique} — {labelNiveauEtude(ins.niveau)}
                             </p>
                           </div>
                           <span
@@ -1113,13 +1437,36 @@ export default function DemandeInscription() {
                         </div>
 
                         <div className='mt-4 space-y-3'>
+                          {ins.canConfirm && (
+                            <div className='rounded-lg border border-teal-200 bg-teal-50/80 px-3 py-3 space-y-2'>
+                              <p className='text-sm text-teal-950'>
+                                Cette admission est en concurrence avec d&apos;autres. Confirmez-la pour
+                                conserver uniquement cette inscription.
+                              </p>
+                              <button
+                                type='button'
+                                disabled={Boolean(confirmBusyId)}
+                                onClick={() => confirmerInscriptionAcad(ins)}
+                                className='rounded-lg bg-teal-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700 disabled:opacity-50'
+                              >
+                                {confirmBusyId === ins.id ? 'Confirmation…' : 'Confirmé'}
+                              </button>
+                            </div>
+                          )}
+
+                          {ins.statut === 'ABANDONNE' && (
+                            <p className='rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-800'>
+                              Inscription annulée suite au choix d&apos;une autre filière ou d&apos;un autre établissement.
+                            </p>
+                          )}
+
                           {ins.statut === 'EN_ATTENTE_QUITTANCE' && (
                             <p className='rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-900'>
                               Votre dossier a été accepté. Déposez votre quittance bancaire pour finaliser votre inscription.
                             </p>
                           )}
 
-                          {['EN_COURS', 'EN_ATTENTE_QUITTANCE'].includes(ins.statut) && (
+                          {['EN_COURS', 'EN_ATTENTE_QUITTANCE'].includes(ins.statut) && !ins.canConfirm && (
                             <button
                               type='button'
                               onClick={() => ouvrirUploadAcad(ins)}
@@ -1135,11 +1482,27 @@ export default function DemandeInscription() {
                             </p>
                           )}
 
+                          {ins.confirmeeAt && ins.statut !== 'ABANDONNE' && (
+                            <p className='text-sm text-green-800 bg-green-50 border border-green-200 rounded-lg px-3 py-2'>
+                              Inscription confirmée — vos autres choix pour cette année ont été annulés.
+                            </p>
+                          )}
+
                           {ins.statut === 'VALIDE' && ins.matricule && (
                             <div className='rounded-lg border-2 border-green-300 bg-green-50 px-4 py-3'>
                               <p className='mb-1 text-xs font-medium text-green-700'>Votre matricule</p>
                               <p className='font-mono text-lg font-bold text-green-900'>{ins.matricule}</p>
                             </div>
+                          )}
+
+                          {(ins.ficheInscriptionUrl || ['EN_COURS', 'VALIDE', 'EN_ATTENTE_QUITTANCE', 'QUITTANCE_SOUMISE'].includes(ins.statut)) && (
+                            <button
+                              type='button'
+                              onClick={() => inscriptionAcadService.telechargerFicheInscription(ins.id)}
+                              className='rounded-lg border border-teal-800 px-4 py-2 text-sm font-semibold text-teal-900 transition hover:bg-teal-50'
+                            >
+                              Télécharger ma fiche d&apos;inscription
+                            </button>
                           )}
                         </div>
                       </BentoCard>
@@ -1155,7 +1518,11 @@ export default function DemandeInscription() {
           <BentoCard size='full' variant='solid' className='!min-h-0 !p-0 overflow-hidden !bg-white dark:!bg-white'>
             <div className='border-b border-gray-100 bg-gradient-to-r from-orange-50/80 to-white px-6 py-4'>
               <h2 className='text-lg font-bold text-gray-900'>Nouvelle demande</h2>
-              <p className='mt-1 text-sm text-gray-500'>Choisissez l&apos;établissement et la filière visés.</p>
+              <p className='mt-1 text-sm text-gray-500'>
+                {etablissementLocked || filiereLocked
+                  ? 'Établissement et filière sont fixés selon l’offre choisie. Pour changer, déposez un dossier depuis une autre offre.'
+                  : 'Choisissez l’établissement et la filière visés.'}
+              </p>
             </div>
             <form className='space-y-5 p-6' onSubmit={handleCreateApplication}>
               <div>
@@ -1167,8 +1534,9 @@ export default function DemandeInscription() {
                   name='etablissementId'
                   value={form.etablissementId}
                   onChange={handleChange}
-                  className={inputClass}
+                  className={`${inputClass} disabled:bg-gray-50 disabled:text-gray-700`}
                   required
+                  disabled={etablissementLocked}
                 >
                   <option value=''>Sélectionner…</option>
                   {etablissements.map((e) => (
@@ -1188,9 +1556,9 @@ export default function DemandeInscription() {
                   name='filiereId'
                   value={form.filiereId}
                   onChange={handleChange}
-                  className={`${inputClass} disabled:bg-gray-50 disabled:text-gray-400`}
+                  className={`${inputClass} disabled:bg-gray-50 disabled:text-gray-700 disabled:opacity-100`}
                   required
-                  disabled={!form.etablissementId}
+                  disabled={!form.etablissementId || filiereLocked}
                 >
                   <option value=''>Sélectionner…</option>
                   {filieres.map((f) => (
@@ -1201,41 +1569,36 @@ export default function DemandeInscription() {
                 </select>
               </div>
 
-              <div className='grid gap-4 sm:grid-cols-2'>
-                <div>
-                  <label htmlFor='anneeAcademique' className={labelClass}>
-                    Année académique
-                  </label>
-                  <input
-                    id='anneeAcademique'
-                    name='anneeAcademique'
-                    value={form.anneeAcademique}
-                    onChange={handleChange}
-                    placeholder='2025-2026'
-                    className={inputClass}
-                    required
-                  />
-                </div>
-                <div>
-                  <label htmlFor='niveau' className={labelClass}>
-                    Niveau
-                  </label>
-                  <select
-                    id='niveau'
-                    name='niveau'
-                    value={form.niveau}
-                    onChange={handleChange}
-                    className={inputClass}
-                    required
-                  >
-                    <option value=''>Sélectionner…</option>
-                    {NIVEAUX.map((n) => (
-                      <option key={n.value} value={n.value}>
-                        {n.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label htmlFor='niveau' className={labelClass}>
+                  Niveau
+                </label>
+                <select
+                  id='niveau'
+                  name='niveau'
+                  value={form.niveau}
+                  onChange={handleChange}
+                  className={inputClass}
+                  required
+                >
+                  <option value=''>Sélectionner…</option>
+                  {niveauxDisponibles.map((n) => (
+                    <option key={n.value} value={n.value}>
+                      {n.label}
+                    </option>
+                  ))}
+                </select>
+                {contrainteNiveau?.constrained && contrainteNiveau?.message && (
+                  <p className='mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900'>
+                    {contrainteNiveau.message}
+                  </p>
+                )}
+                {Number(form.niveau) > 1 && (
+                  <p className='mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900'>
+                    Pour une inscription au-delà de la 1ʳᵉ année, vous devrez fournir le relevé de notes
+                    ou les bulletins de l&apos;année antérieure dans votre dossier.
+                  </p>
+                )}
               </div>
 
               <RecapitulatifFrais fraisDossier={fraisDossierPreview} filiere={recapFiliere} />
@@ -1251,48 +1614,6 @@ export default function DemandeInscription() {
           </BentoCard>
         )}
       </div>
-
-      {docModal.open && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center bg-white/60 p-4 backdrop-blur-sm'>
-          <div className='w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl'>
-            <div className='border-b border-gray-100 bg-gradient-to-r from-blue-50 to-white px-6 py-4'>
-              <h3 className='font-bold text-gray-900'>Document complémentaire</h3>
-              <p className='mt-1 text-sm text-gray-500'>PDF ou image (PNG, JPEG)</p>
-            </div>
-            <div className='px-6 py-5'>
-              <label className='flex cursor-pointer flex-col items-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 px-6 py-8 text-center hover:border-blue-400'>
-                <span className='text-3xl'>📎</span>
-                <span className='mt-2 text-sm font-medium text-gray-700'>
-                  {docFichier ? docFichier.name : 'Cliquez pour choisir un fichier'}
-                </span>
-                <input
-                  type='file'
-                  accept='application/pdf,image/png,image/jpeg'
-                  onChange={(e) => setDocFichier(e.target.files?.[0] || null)}
-                  className='hidden'
-                />
-              </label>
-            </div>
-            <div className='flex justify-end gap-3 border-t border-gray-100 px-6 py-4'>
-              <button
-                type='button'
-                onClick={() => setDocModal({ open: false, preinscriptionId: null })}
-                className='rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50'
-              >
-                Annuler
-              </button>
-              <button
-                type='button'
-                onClick={ajouterDocumentCompl}
-                disabled={preinBusy || !docFichier}
-                className='rounded-xl bg-blue-900 px-5 py-2 text-sm font-semibold text-white disabled:opacity-60'
-              >
-                {preinBusy ? 'Envoi…' : 'Envoyer'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {acadUploadModal.open && (
         <div className='fixed inset-0 z-50 flex items-center justify-center bg-white/60 p-4 backdrop-blur-sm'>

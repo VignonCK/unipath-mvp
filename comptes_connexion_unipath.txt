@@ -1,5 +1,4 @@
 UNIPATH — INFORMATIONS DE CONNEXION
-Généré le : 09/07/2026 15:37:22
 Source    : import_unipath_mysql.sql
 
 IMPORTANT :
@@ -12,20 +11,13 @@ IMPORTANT :
 ======================================================================
 
   [1]
-  Nom           : EPAC Commission
-  Email         : commission@epac.bj
-  Mot de passe  : Commission2026!
-  Téléphone     : +22997000001
-  Note          : Compte créé via npm run create-admins (peut ne pas être en base si import SQL effectué)
-
-  [2]
   Nom           : MESRS DGES
   Email         : dges@mesrs.bj
   Mot de passe  : DGES2026!
   Téléphone     : +22997000002
   Note          : Module 2 (établissements privés) — créé via npm run create-admins
 
-  [3]
+  [2]
   Nom           : MESRS DEC
   Email         : dec@mesrs.bj
   Mot de passe  : DEC2026!
@@ -43,50 +35,56 @@ IMPORTANT :
   Téléphone     : +22997000003
 
 ======================================================================
-  COMMISSION — Membres
+  COMMISSION — COMPTES UNIFIÉS
 ======================================================================
 
+  IMPORTANT :
+  - Il n'existe pas de compte « contrôleur » ou « examinateur » séparé.
+  - Tous les comptes ci-dessous sont des comptes de membre de commission.
+  - La DEC affecte un membre comme EXAMINATEUR ou CONTRÔLEUR pour chaque concours.
+  - Un même membre peut être examinateur pour un concours et contrôleur pour un autre.
+  - Un membre ne peut pas cumuler les deux rôles sur un même concours.
+
   [1]
+  Nom           : EPAC Commission
+  Email         : commission@epac.bj
+  Mot de passe  : Commission2026!
+  Téléphone     : +22997000001
+  Rôle          : COMMISSION (affectation variable selon le concours)
+
+  [2]
   Nom           : Commission TEST
   Email         : commission@test.com
   Mot de passe  : UniPath2026!
   Téléphone     : +22997000002
-  Sous-rôle     : MEMBRE
+  Rôle          : COMMISSION (affectation variable selon le concours)
 
-======================================================================
-  COMMISSION — Examinateurs
-======================================================================
-
-  [1]
+  [3]
   Nom           : Examinateur TEST
   Email         : examinateur@test.com
   Mot de passe  : UniPath2026!
   Téléphone     : +22997000004
-  Sous-rôle     : EXAMINATEUR
+  Rôle          : COMMISSION (affectation variable selon le concours)
 
-  [2]
+  [4]
   Nom           : Examinateur2 TEST
   Email         : examinateur2@test.com
   Mot de passe  : UniPath2026!
   Téléphone     : +22997000006
-  Sous-rôle     : EXAMINATEUR
+  Rôle          : COMMISSION (affectation variable selon le concours)
 
-  [3]
+  [5]
   Nom           : Paul FASSINOU
   Email         : forsuree15@gmail.com
   Mot de passe  : UniPath2026!
-  Sous-rôle     : EXAMINATEUR
+  Rôle          : COMMISSION (affectation variable selon le concours)
 
-======================================================================
-  COMMISSION — Contrôleurs
-======================================================================
-
-  [1]
+  [6]
   Nom           : Controleur TEST
   Email         : controleur-commission@test.com
   Mot de passe  : UniPath2026!
   Téléphone     : +22997000005
-  Sous-rôle     : CONTROLEUR
+  Rôle          : COMMISSION (affectation variable selon le concours)
 
 ======================================================================
   ADMINISTRATEURS ÉTABLISSEMENT
@@ -238,6 +236,7 @@ IMPORTANT :
   [1]
   Nom           : Koffi AGOSSOU
   Matricule     : DEMO-2026-001
+  Série         : G1
   Email         : harrydedji+candidat1@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +2296100001
@@ -246,6 +245,7 @@ IMPORTANT :
   [2]
   Nom           : Kofi MENSAH
   Matricule     : TEMP
+  Série         : Non renseignée
   Email         : kofi.mensah@test.bj
   Mot de passe  : UniPath2026!
   Téléphone     : +22961000001
@@ -254,6 +254,7 @@ IMPORTANT :
   [3]
   Nom           : Mireille HOUNGBO
   Matricule     : DEMO-2026-002
+  Série         : G2
   Email         : harrydedji+candidat2@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +2296100002
@@ -262,6 +263,7 @@ IMPORTANT :
   [4]
   Nom           : Romuald KPADONOU
   Matricule     : DEMO-2026-003
+  Série         : G3
   Email         : harrydedji+candidat3@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +2296100003
@@ -270,6 +272,7 @@ IMPORTANT :
   [5]
   Nom           : Élodie DANSOU
   Matricule     : DEMO-2026-004
+  Série         : A
   Email         : harrydedji+candidat4@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +2296100004
@@ -278,6 +281,7 @@ IMPORTANT :
   [6]
   Nom           : Yves TOSSOU
   Matricule     : DEMO-2026-005
+  Série         : C
   Email         : harrydedji+candidat5@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +2296100005
@@ -286,6 +290,7 @@ IMPORTANT :
   [7]
   Nom           : Aïcha BIAOU
   Matricule     : DEMO-2026-006
+  Série         : D
   Email         : harrydedji+candidat6@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +2296100006
@@ -294,6 +299,7 @@ IMPORTANT :
   [8]
   Nom           : Serge GANDONOU
   Matricule     : DEMO-2026-007
+  Série         : G1
   Email         : harrydedji+candidat7@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +2296100007
@@ -302,6 +308,7 @@ IMPORTANT :
   [9]
   Nom           : Ayélé ADJOLO
   Matricule     : DEMO-2026-008
+  Série         : G2
   Email         : harrydedji+candidat8@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +2296100008
@@ -310,6 +317,7 @@ IMPORTANT :
   [10]
   Nom           : Marcel ZANNOU
   Matricule     : DEMO-2026-009
+  Série         : B
   Email         : harrydedji+candidat9@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +2296100009
@@ -318,6 +326,7 @@ IMPORTANT :
   [11]
   Nom           : Nadia KOUASSI
   Matricule     : DEMO-2026-010
+  Série         : G3
   Email         : harrydedji+candidat10@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +2296100010
@@ -326,6 +335,7 @@ IMPORTANT :
   [12]
   Nom           : Kévin DOSSOU
   Matricule     : DEMO-2026-011
+  Série         : G1
   Email         : harrydedji+candidat11@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +2296100011
@@ -334,6 +344,7 @@ IMPORTANT :
   [13]
   Nom           : Prisca AHOUANDJINOU
   Matricule     : DEMO-2026-012
+  Série         : A
   Email         : harrydedji+candidat12@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +2296100012
@@ -342,6 +353,7 @@ IMPORTANT :
   [14]
   Nom           : Patrick SOSSOU
   Matricule     : DEMO-2026-013
+  Série         : C
   Email         : harrydedji+candidat13@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +2296100013
@@ -350,6 +362,7 @@ IMPORTANT :
   [15]
   Nom           : Christelle OGOUNCHILE
   Matricule     : DEMO-2026-014
+  Série         : D
   Email         : harrydedji+candidat14@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +2296100014
@@ -358,6 +371,7 @@ IMPORTANT :
   [16]
   Nom           : Raphaël BOCO
   Matricule     : DEMO-2026-015
+  Série         : G2
   Email         : harrydedji+candidat15@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +2296100015
@@ -366,6 +380,7 @@ IMPORTANT :
   [17]
   Nom           : Rémi GLIBA
   Matricule     : UnP-2026-000001
+  Série         : G2
   Email         : bkoussedoh@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +229 0155337788
@@ -374,6 +389,7 @@ IMPORTANT :
   [18]
   Nom           : Candidat1 TESTONE
   Matricule     : UnP-2026-000002
+  Série         : D
   Email         : candidat.test1@unipath.test
   Mot de passe  : UniPath2026!
   Téléphone     : +22997000101
@@ -382,6 +398,7 @@ IMPORTANT :
   [19]
   Nom           : Candidat2 TESTTWO
   Matricule     : UnP-2026-000003
+  Série         : C
   Email         : candidat.test2@unipath.test
   Mot de passe  : UniPath2026!
   Téléphone     : +22997000102
@@ -390,6 +407,7 @@ IMPORTANT :
   [20]
   Nom           : TestPrenom TestNom
   Matricule     : UnP-2026-000005
+  Série         : A
   Email         : test_candidat_1782243949123@example.com
   Mot de passe  : UniPath2026!
   Téléphone     : +22990000000
@@ -398,6 +416,7 @@ IMPORTANT :
   [21]
   Nom           : Vignon KANLINHANON
   Matricule     : UnP-2026-000006
+  Série         : E
   Email         : vignonkanlinhanon5@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : 0141822980
@@ -406,6 +425,7 @@ IMPORTANT :
   [22]
   Nom           : Sidney DEVI
   Matricule     : UnP-2026-000004
+  Série         : F4
   Email         : unipathepac@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +229 0144269133
@@ -414,6 +434,7 @@ IMPORTANT :
   [23]
   Nom           : Keren FAVI
   Matricule     : UnP-2026-000007
+  Série         : D
   Email         : thechill000@gmail.com
   Mot de passe  : UniPath2026!
   Téléphone     : +229 0144443333
@@ -422,6 +443,7 @@ IMPORTANT :
   [24]
   Nom           : Candidat TEST
   Matricule     : SEED-CAND-50924558
+  Série         : D
   Email         : candidat@test.com
   Mot de passe  : UniPath2026!
   Téléphone     : +22997000088
@@ -432,7 +454,7 @@ IMPORTANT :
 ======================================================================
   Administrateurs système (manuels) : 2
   DGES                            : 1
-  Membres commission              : 5
+  Membres commission              : 6
   Administrateurs établissement   : 3
   Établissements (avec email)     : 19
   Candidats / étudiants           : 24

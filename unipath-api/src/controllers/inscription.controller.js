@@ -18,6 +18,7 @@ const {
   flattenCentreChoisi,
   concoursHasCentresActifs,
 } = require('../utils/centres-composition.helper');
+const { inscriptionsSontCloses } = require('../utils/periode-depot.helper');
 
 /**
  * @deprecated Utiliser POST /api/inscriptions/soumettre (soumettreDossierComplet).
@@ -721,7 +722,7 @@ exports.soumettreDossier = async (req, res) => {
 };
 
 /**
- * Annuler une inscription (si statut EN_ATTENTE)
+ * Annuler une inscription tant que l'étude des dossiers du concours n'est pas clôturée.
  */
 exports.annulerInscription = async (req, res) => {
   try {
@@ -734,27 +735,45 @@ exports.annulerInscription = async (req, res) => {
         candidatId,
       },
       include: {
-        dossierInscription: true
-      }
+        concours: {
+          select: {
+            id: true,
+            libelle: true,
+            etudeDossiersClotureeAt: true,
+          },
+        },
+        dossierInscription: {
+          select: { id: true, statut: true },
+        },
+      },
     });
 
     if (!inscription) {
       return res.status(404).json({ error: 'Inscription non trouvée ou non autorisée' });
     }
 
-    // Vérifier que le statut est EN_ATTENTE
-    if (inscription.dossierInscription && inscription.dossierInscription.statut !== 'EN_ATTENTE') {
+    if (inscription.concours?.etudeDossiersClotureeAt) {
       return res.status(400).json({
-        error: 'Impossible d\'annuler une inscription déjà traitée',
+        error: "L'étude des dossiers de ce concours est terminée. Vous ne pouvez plus supprimer votre candidature.",
+        code: 'ETUDE_CLOTUREE',
       });
     }
 
-    // Supprimer l'inscription (cascade supprimera DossierInscription et ActionHistory)
+    const statut = inscription.dossierInscription?.statut ?? 'EN_ATTENTE';
+    if (['VALIDE', 'REJETE'].includes(statut)) {
+      return res.status(400).json({
+        error: 'Impossible de supprimer une candidature déjà acceptée ou rejetée.',
+        code: 'DECISION_FINALE',
+      });
+    }
+
     await prisma.inscription.delete({
       where: { id: inscriptionId },
     });
 
-    res.json({ message: 'Inscription annulée avec succès' });
+    res.json({
+      message: 'Candidature supprimée avec succès. Vous pouvez vous inscrire à un autre concours.',
+    });
   } catch (error) {
     console.error('Erreur annulation inscription:', error);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -1077,6 +1096,13 @@ exports.choisirCentreComposition = async (req, res) => {
 
     if (!inscription?.dossierInscription) {
       return res.status(404).json({ error: 'Inscription non trouvée' });
+    }
+
+    if (inscriptionsSontCloses(inscription.concours)) {
+      return res.status(400).json({
+        error: 'Les inscriptions sont closes. Le centre de composition ne peut plus être modifié.',
+        code: 'INSCRIPTIONS_CLOSES',
+      });
     }
 
     const statut = inscription.dossierInscription.statut;

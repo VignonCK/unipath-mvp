@@ -36,13 +36,21 @@ async function envoyerEmailDecisionFinale({ candidat, concours, inscription, dec
     let pdfPath = null;
     try {
       let dossierInscription = inscription.dossierInscription;
-      if (!dossierInscription?.centreChoisi && inscription.id) {
+      let numeroTable = inscription.numeroTable || null;
+
+      if (inscription.id) {
         const full = await prisma.inscription.findUnique({
           where: { id: inscription.id },
           include: { dossierInscription: { include: DOSSIER_CENTRE_INCLUDE } },
         });
-        dossierInscription = full?.dossierInscription;
+        if (full) {
+          numeroTable = full.numeroTable || numeroTable;
+          if (!dossierInscription?.centreChoisi) {
+            dossierInscription = full.dossierInscription;
+          }
+        }
       }
+
       const enriched = enrichDossierInscriptionForPdf(dossierInscription);
       const centreChoisi = enriched?.centreCompositionChoisi;
       if (centreChoisi?.nom) {
@@ -54,8 +62,13 @@ async function envoyerEmailDecisionFinale({ candidat, concours, inscription, dec
       const pdfResult = await pdfService.genererConvocation({
         candidat,
         concours,
-        inscription: { ...inscription, dossierInscription: enriched },
+        inscription: {
+          ...inscription,
+          numeroTable,
+          dossierInscription: enriched,
+        },
         centreCompositionChoisi: centreChoisi || null,
+        numeroTable,
       });
       pdfPath = pdfResult.filePath;
       await emailService.envoyerEmailValidation(emailData, pdfPath);

@@ -12,7 +12,6 @@ import DetailCandidatCommission from './pages/DetailCandidatCommission';
 import DashboardDGES from './pages/DashboardDGES';
 import DashboardDEC from './pages/DashboardDEC';
 import GestionConcours from './pages/GestionConcours';
-import GestionNotes from './pages/GestionNotes';
 import ClassementConcours from './pages/ClassementConcours';
 import PageConcours from './pages/PageConcours';
 import DetailConcours from './pages/DetailConcours';
@@ -35,8 +34,16 @@ import DashboardEtudiant from './pages/DashboardEtudiant';
 import DemandeInscription from './pages/DemandeInscription';
 import MesInscriptionsAcademiques from './pages/MesInscriptionsAcademiques';
 import DGESEtablissementsAdmins from './pages/dges/DGESEtablissementsAdmins';
+import DGESAnneesAcademiques from './pages/dges/DGESAnneesAcademiques';
+import DGESDemandesFilieres from './pages/dges/DGESDemandesFilieres';
+import DGESCatalogueFilieres from './pages/dges/DGESCatalogueFilieres';
 import DECEtablissementsPublics from './pages/dec/DECEtablissementsPublics';
 import DECAnneesAcademiques from './pages/dec/DECAnneesAcademiques';
+import DECCommission from './pages/dec/DECCommission';
+import DECStatsCommission from './pages/dec/DECStatsCommission';
+import DECListesRetenus from './pages/dec/DECListesRetenus';
+import DECParametresDocuments from './pages/dec/DECParametresDocuments';
+import DECSelectionResultats from './pages/dec/DECSelectionResultats';
 import DGESCommissionEtablissement from './pages/dges/DGESCommissionEtablissement';
 import MesCampagnes from './pages/admin-etablissement/MesCampagnes';
 import CampagneForm from './pages/admin-etablissement/CampagneForm';
@@ -49,6 +56,11 @@ import DetailCandidatureAdmin from './pages/admin-etablissement/DetailCandidatur
 import PreinscriptionsAdmin from './pages/admin-etablissement/PreinscriptionsAdmin';
 import ValidationQuittances from './pages/admin-etablissement/ValidationQuittances';
 import EtudiantsAdmin from './pages/admin-etablissement/EtudiantsAdmin';
+import UnitesEnseignementAdmin from './pages/admin-etablissement/UnitesEnseignementAdmin';
+import ValidationUeAdmin from './pages/admin-etablissement/ValidationUeAdmin';
+import BilanValidationsAdmin from './pages/admin-etablissement/BilanValidationsAdmin';
+import ParcoursEtudiantAdmin from './pages/admin-etablissement/ParcoursEtudiantAdmin';
+import DGESParcoursEtudiant from './pages/dges/DGESParcoursEtudiant';
 import ResetPassword from './pages/ResetPassword';
 import PageCampagnesInscription from './pages/campagnes/PageCampagnesInscription';
 import DetailCampagneCandidat from './pages/campagnes/DetailCampagneCandidat';
@@ -300,15 +312,6 @@ function App() {
         />
 
         <Route
-          path='/commission/notes'
-          element={
-            <ProtectedRoute allowedRoles={['COMMISSION']}>
-              <GestionNotes />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
           path='/commission/candidat/:inscriptionId'
           element={
             <ProtectedRoute allowedRoles={['COMMISSION']}>
@@ -392,6 +395,42 @@ function App() {
           }
         />
 
+        <Route
+          path='/dges-annees-academiques'
+          element={
+            <ProtectedRoute allowedRoles={['DGES']}>
+              <DGESAnneesAcademiques />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/dges-demandes-filieres'
+          element={
+            <ProtectedRoute allowedRoles={['DGES']}>
+              <DGESDemandesFilieres />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/dges-catalogue-filieres'
+          element={
+            <ProtectedRoute allowedRoles={['DGES']}>
+              <DGESCatalogueFilieres />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/dges-parcours-etudiant'
+          element={
+            <ProtectedRoute allowedRoles={['DGES']}>
+              <DGESParcoursEtudiant />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Routes protégées - DEC (module 1) */}
         <Route
           path='/dashboard-dec'
@@ -425,6 +464,51 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['DEC']}>
               <DECAnneesAcademiques />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/dec-commission'
+          element={
+            <ProtectedRoute allowedRoles={['DEC']}>
+              <DECCommission />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/dec-suivi-commission'
+          element={
+            <ProtectedRoute allowedRoles={['DEC']}>
+              <DECStatsCommission />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/dec-selection-resultats'
+          element={
+            <ProtectedRoute allowedRoles={['DEC']}>
+              <DECSelectionResultats />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/dec-listes-retenus'
+          element={
+            <ProtectedRoute allowedRoles={['DEC']}>
+              <DECListesRetenus />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/dec-parametres-documents'
+          element={
+            <ProtectedRoute allowedRoles={['DEC']}>
+              <DECParametresDocuments />
             </ProtectedRoute>
           }
         />
@@ -534,6 +618,42 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
               <EtudiantsAdmin />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/admin-etablissement/unites-enseignement'
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+              <UnitesEnseignementAdmin />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/admin-etablissement/validation-ue'
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+              <ValidationUeAdmin />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/admin-etablissement/bilan-validations'
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+              <BilanValidationsAdmin />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path='/admin-etablissement/parcours-etudiant'
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN_ETABLISSEMENT']}>
+              <ParcoursEtudiantAdmin />
             </ProtectedRoute>
           }
         />

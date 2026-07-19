@@ -3,7 +3,8 @@ import {
   applicationService,
   etablissementService,
   filiereService,
-  filiereAdminService,
+  demandeFiliereAdminService,
+  dgesService,
   resolvePublicAssetUrl,
 } from '../../services/api';
 import { getUser } from '../../utils/auth';
@@ -11,63 +12,76 @@ import AdminEtablissementLayout from '../../components/AdminEtablissementLayout'
 import { BentoCard } from '../../components/AcademicLayout';
 
 const EMPTY_FILIERE = {
+  modeNom: 'catalogue', // catalogue | autre
+  filiereReferenceId: '',
   nom: '',
   code: '',
   niveau: 'LICENCE',
-  dureeAnnees: '3',
+  /// true si le catalogue n'impose pas Licence/Master (niveau null)
+  niveauLibre: true,
+  dureeAnnees: '',
   fraisScolariteAnnuels: '',
   fraisInscriptionEffective: '',
   fraisAutres: '',
   debouches: '',
   partenariatsEntreprises: '',
   partenariatsUniversites: '',
-  tauxReussite: '',
   dureeStage: '',
   langueEnseignement: '',
 };
 
-const buildFilierePayload = (form) => ({
-  nom: form.nom.trim(),
-  code: form.code.trim() || undefined,
-  niveau: form.niveau,
-  dureeAnnees: Number(form.dureeAnnees),
-  fraisScolariteAnnuels: form.fraisScolariteAnnuels !== '' ? Number(form.fraisScolariteAnnuels) : null,
-  fraisInscriptionEffective: form.fraisInscriptionEffective !== '' ? Number(form.fraisInscriptionEffective) : null,
-  fraisAutres: form.fraisAutres.trim() || null,
-  debouches: form.debouches.trim() || null,
-  partenariatsEntreprises: form.partenariatsEntreprises.trim() || null,
-  partenariatsUniversites: form.partenariatsUniversites.trim() || null,
-  tauxReussite: form.tauxReussite !== '' ? Number(form.tauxReussite) : null,
-  dureeStage: form.dureeStage.trim() || null,
-  langueEnseignement: form.langueEnseignement.trim() || null,
-});
+const LABEL_NIVEAU = {
+  LICENCE: 'Licence',
+  MASTER: 'Master',
+  AUTRE: 'Autres',
+};
 
-const filiereToForm = (filiere) => ({
-  nom: filiere.nom || '',
-  code: filiere.code || '',
-  niveau: filiere.niveau || 'LICENCE',
-  dureeAnnees: filiere.dureeAnnees != null ? String(filiere.dureeAnnees) : '3',
-  fraisScolariteAnnuels: filiere.fraisScolariteAnnuels != null ? String(filiere.fraisScolariteAnnuels) : '',
-  fraisInscriptionEffective: filiere.fraisInscriptionEffective != null ? String(filiere.fraisInscriptionEffective) : '',
-  fraisAutres: filiere.fraisAutres || '',
-  debouches: filiere.debouches || '',
-  partenariatsEntreprises: filiere.partenariatsEntreprises || '',
-  partenariatsUniversites: filiere.partenariatsUniversites || '',
-  tauxReussite: filiere.tauxReussite != null ? String(filiere.tauxReussite) : '',
-  dureeStage: filiere.dureeStage || '',
-  langueEnseignement: filiere.langueEnseignement || '',
-});
+const dureePourNiveau = (niveau) => {
+  if (niveau === 'MASTER') return 2;
+  if (niveau === 'LICENCE') return 3;
+  return null;
+};
+
+const buildFilierePayload = (form) => {
+  const dureeFixe = dureePourNiveau(form.niveau);
+  const dureeAnnees = dureeFixe != null ? dureeFixe : Number(form.dureeAnnees);
+
+  return {
+    filiereReferenceId: form.modeNom === 'catalogue' && form.filiereReferenceId
+      ? form.filiereReferenceId
+      : undefined,
+    nom: form.modeNom === 'autre' ? form.nom.trim() : form.nom.trim() || undefined,
+    code: form.code.trim() || undefined,
+    niveau: form.niveau,
+    dureeAnnees,
+    fraisScolariteAnnuels: form.fraisScolariteAnnuels !== '' ? Number(form.fraisScolariteAnnuels) : null,
+    fraisInscriptionEffective: form.fraisInscriptionEffective !== '' ? Number(form.fraisInscriptionEffective) : null,
+    fraisAutres: form.fraisAutres.trim() || null,
+    debouches: form.debouches.trim() || null,
+    partenariatsEntreprises: form.partenariatsEntreprises.trim() || null,
+    partenariatsUniversites: form.partenariatsUniversites.trim() || null,
+    dureeStage: form.dureeStage.trim() || null,
+    langueEnseignement: form.langueEnseignement.trim() || null,
+  };
+};
+
+const STATUT_DEMANDE = {
+  EN_ATTENTE: { label: 'En attente DGES', className: 'bg-amber-100 text-amber-900' },
+  VALIDE: { label: 'Validée', className: 'bg-emerald-100 text-emerald-800' },
+  REJETE: { label: 'Rejetée', className: 'bg-red-100 text-red-800' },
+};
 
 export default function MonEtablissementAdmin() {
   const user = getUser();
   const [etablissement, setEtablissement] = useState(null);
   const [filieres, setFilieres] = useState([]);
+  const [catalogueFilieres, setCatalogueFilieres] = useState([]);
+  const [demandesFiliere, setDemandesFiliere] = useState([]);
   const [requirements, setRequirements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [filiereForm, setFiliereForm] = useState(EMPTY_FILIERE);
-  const [editingFiliereId, setEditingFiliereId] = useState(null);
   const [profilForm, setProfilForm] = useState({
     ville: '',
     adresse: '',
@@ -89,7 +103,6 @@ export default function MonEtablissementAdmin() {
     isRequired: true,
   });
   const [submitting, setSubmitting] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [savingProfil, setSavingProfil] = useState(false);
@@ -106,8 +119,10 @@ export default function MonEtablissementAdmin() {
       etablissementService.getMonProfil(),
       filiereService.getByEtablissement(user.etablissementId),
       applicationService.getMyRequirementsEtablissement(),
+      demandeFiliereAdminService.getAll(),
+      dgesService.listerFilieresReference({ actifs: '1' }),
     ])
-      .then(([profilData, filData, reqData]) => {
+      .then(([profilData, filData, reqData, demandesData, catalogueData]) => {
         const etab = profilData.etablissement;
         setEtablissement(etab);
         setProfilForm({
@@ -125,6 +140,8 @@ export default function MonEtablissementAdmin() {
         });
         setFilieres(filData.filieres || []);
         setRequirements(reqData.requirements || []);
+        setDemandesFiliere(demandesData.demandes || []);
+        setCatalogueFilieres(catalogueData.references || []);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -132,61 +149,36 @@ export default function MonEtablissementAdmin() {
 
   useEffect(() => { charger(); }, [user?.etablissementId]);
 
-  const handleSaveFiliere = async (e) => {
+  const handleDemandeFiliere = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
-    if (!filiereForm.nom.trim()) {
+    if (filiereForm.modeNom === 'catalogue' && !filiereForm.filiereReferenceId) {
+      setError('Sélectionnez une filière dans le catalogue DGES, ou choisissez « Autre ».');
+      return;
+    }
+    if (filiereForm.modeNom === 'autre' && !filiereForm.nom.trim()) {
       setError('Le nom de la filière est obligatoire.');
       return;
+    }
+    if (filiereForm.niveau === 'AUTRE') {
+      const d = Number(filiereForm.dureeAnnees);
+      if (!Number.isFinite(d) || d < 1 || d > 5) {
+        setError('Pour « Autres », indiquez la durée de la formation (entre 1 et 5 ans).');
+        return;
+      }
     }
     setSubmitting(true);
     try {
       const payload = buildFilierePayload(filiereForm);
-      if (editingFiliereId) {
-        await filiereAdminService.modifier(editingFiliereId, payload);
-        setSuccess('Filière mise à jour.');
-      } else {
-        await filiereAdminService.creer(payload);
-        setSuccess('Filière ajoutée.');
-      }
+      const res = await demandeFiliereAdminService.creer(payload);
+      setSuccess(res.message || 'Demande envoyée à la DGES.');
       setFiliereForm(EMPTY_FILIERE);
-      setEditingFiliereId(null);
       charger();
     } catch (err) {
-      setError(err.message || 'Impossible d\'enregistrer la filière');
+      setError(err.message || 'Impossible d\'envoyer la demande');
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const startEditFiliere = (filiere) => {
-    setEditingFiliereId(filiere.id);
-    setFiliereForm(filiereToForm(filiere));
-    setError('');
-    setSuccess('');
-    requestAnimationFrame(() => {
-      filiereFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  };
-
-  const cancelEditFiliere = () => {
-    setEditingFiliereId(null);
-    setFiliereForm(EMPTY_FILIERE);
-  };
-
-  const handleDeleteFiliere = async (id) => {
-    if (!window.confirm('Supprimer cette filière ?')) return;
-    setDeletingId(id);
-    setError('');
-    try {
-      await filiereAdminService.supprimer(id);
-      setSuccess('Filière supprimée.');
-      charger();
-    } catch (err) {
-      setError(err.message || 'Suppression impossible');
-    } finally {
-      setDeletingId(null);
     }
   };
 
@@ -261,6 +253,10 @@ export default function MonEtablissementAdmin() {
   };
 
   const logoSrc = resolvePublicAssetUrl(etablissement?.logoUrl);
+  // cache-bust après upload (évite une image cassée en cache navigateur)
+  const logoDisplaySrc = logoSrc
+    ? `${logoSrc}${logoSrc.includes('?') ? '&' : '?'}t=${etablissement?.updatedAt || Date.now()}`
+    : null;
 
   return (
     <AdminEtablissementLayout>
@@ -285,8 +281,8 @@ export default function MonEtablissementAdmin() {
                   </span>
                 </div>
                 <div className="flex flex-col items-start gap-2">
-                  {logoSrc ? (
-                    <img src={logoSrc} alt="Logo" className="h-20 w-20 rounded border object-contain bg-white" />
+                  {logoDisplaySrc ? (
+                    <img src={logoDisplaySrc} alt="Logo" className="h-20 w-20 rounded border object-contain bg-white" />
                   ) : (
                     <div className="h-20 w-20 rounded border bg-gray-50 flex items-center justify-center text-xs text-gray-400">Aucun logo</div>
                   )}
@@ -420,32 +416,97 @@ export default function MonEtablissementAdmin() {
             </BentoCard>
 
             <div ref={filiereFormRef} className="scroll-mt-6">
-            <BentoCard
-              className={`p-6 space-y-4 transition-shadow ${
-                editingFiliereId ? 'ring-2 ring-teal-600 ring-offset-2' : ''
-              }`}
-            >
-              <h3 className="font-bold text-gray-900">Filières</h3>
-              <form onSubmit={handleSaveFiliere} className="grid gap-3 sm:grid-cols-2">
-                <div className="sm:col-span-2 flex items-center justify-between gap-2">
-                  <p className={`text-sm font-semibold ${editingFiliereId ? 'text-teal-900' : 'text-gray-700'}`}>
-                    {editingFiliereId ? 'Modifier la filière' : 'Nouvelle filière'}
-                  </p>
-                  {editingFiliereId && (
-                    <button type="button" onClick={cancelEditFiliere} className="text-xs text-gray-500 hover:underline">
-                      Annuler
-                    </button>
-                  )}
-                </div>
+            <BentoCard className="p-6 space-y-4">
+              <div>
+                <h3 className="font-bold text-gray-900">Filières</h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  L&apos;ajout d&apos;une filière passe par une demande à la DGES. Une fois validée, la filière apparaît dans la liste ci-dessous.
+                </p>
+              </div>
+              <form onSubmit={handleDemandeFiliere} className="grid gap-3 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <input
-                    type="text"
-                    placeholder="Nom de la filière *"
-                    value={filiereForm.nom}
-                    onChange={(e) => setFiliereForm((p) => ({ ...p, nom: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                    required
-                  />
+                  <p className="text-sm font-semibold text-gray-700">Demander l&apos;ajout d&apos;une filière</p>
+                </div>
+                <div className="sm:col-span-2 space-y-2">
+                  <label className="block text-xs font-semibold text-gray-600">Nom de la filière *</label>
+                  <div className="flex flex-wrap gap-4 text-sm text-gray-700">
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="modeNom"
+                        checked={filiereForm.modeNom === 'catalogue'}
+                        onChange={() => setFiliereForm((p) => ({
+                          ...p,
+                          modeNom: 'catalogue',
+                          nom: '',
+                          niveauLibre: true,
+                          dureeAnnees: '',
+                        }))}
+                      />
+                      Choisir dans le catalogue DGES
+                    </label>
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="modeNom"
+                        checked={filiereForm.modeNom === 'autre'}
+                        onChange={() => setFiliereForm((p) => ({
+                          ...p,
+                          modeNom: 'autre',
+                          filiereReferenceId: '',
+                          niveauLibre: true,
+                          dureeAnnees: p.niveau === 'AUTRE' ? (p.dureeAnnees || '') : '',
+                        }))}
+                      />
+                      Autre (saisie libre)
+                    </label>
+                  </div>
+                  {filiereForm.modeNom === 'catalogue' ? (
+                    <select
+                      required
+                      value={filiereForm.filiereReferenceId}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        const ref = catalogueFilieres.find((r) => r.id === id);
+                        const niveauImpose = ref?.niveau === 'LICENCE' || ref?.niveau === 'MASTER'
+                          ? ref.niveau
+                          : null;
+                        setFiliereForm((p) => ({
+                          ...p,
+                          filiereReferenceId: id,
+                          nom: ref?.nom || '',
+                          niveau: niveauImpose || p.niveau,
+                          niveauLibre: !niveauImpose,
+                          dureeAnnees: (niveauImpose || p.niveau) === 'AUTRE' ? (p.dureeAnnees || '') : '',
+                        }));
+                      }}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                    >
+                      <option value="">
+                        {catalogueFilieres.length === 0
+                          ? 'Aucune filière définie par la DGES'
+                          : 'Sélectionner une filière'}
+                      </option>
+                      {catalogueFilieres.map((ref) => (
+                        <option key={ref.id} value={ref.id}>
+                          {ref.nom}
+                          {ref.niveau ? ` (${ref.niveau})` : ' (niveau indifférent)'}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="Nom de la filière *"
+                      value={filiereForm.nom}
+                      onChange={(e) => setFiliereForm((p) => ({ ...p, nom: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                      required
+                    />
+                  )}
+                  <p className="text-[11px] text-gray-400">
+                    Si la filière n&apos;est pas dans le catalogue, utilisez « Autre » pour saisir le nom.
+                  </p>
                 </div>
                 <input
                   type="text"
@@ -453,26 +514,69 @@ export default function MonEtablissementAdmin() {
                   value={filiereForm.code}
                   onChange={(e) => setFiliereForm((p) => ({ ...p, code: e.target.value }))}
                   className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                  disabled={Boolean(editingFiliereId)}
                 />
-                <select
-                  value={filiereForm.niveau}
-                  onChange={(e) => setFiliereForm((p) => ({ ...p, niveau: e.target.value }))}
-                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                >
-                  <option value="LICENCE">Licence</option>
-                  <option value="MASTER">Master</option>
-                </select>
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  placeholder="Durée (années)"
-                  value={filiereForm.dureeAnnees}
-                  onChange={(e) => setFiliereForm((p) => ({ ...p, dureeAnnees: e.target.value }))}
-                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                  required
-                />
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Niveau / Durée de la formation *
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={filiereForm.niveau}
+                      onChange={(e) => {
+                        const niveau = e.target.value;
+                        setFiliereForm((p) => ({
+                          ...p,
+                          niveau,
+                          dureeAnnees: niveau === 'AUTRE' ? (p.dureeAnnees || '') : '',
+                        }));
+                      }}
+                      className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                      aria-label="Niveau"
+                      disabled={!filiereForm.niveauLibre}
+                    >
+                      <option value="LICENCE">Licence</option>
+                      <option value="MASTER">Master</option>
+                      {filiereForm.niveauLibre && <option value="AUTRE">Autres</option>}
+                    </select>
+                    {filiereForm.niveau === 'AUTRE' ? (
+                      <>
+                        <input
+                          type="number"
+                          min={1}
+                          max={5}
+                          required
+                          value={filiereForm.dureeAnnees}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            if (raw === '') {
+                              setFiliereForm((p) => ({ ...p, dureeAnnees: '' }));
+                              return;
+                            }
+                            const n = Number(raw);
+                            if (!Number.isFinite(n)) return;
+                            setFiliereForm((p) => ({
+                              ...p,
+                              dureeAnnees: String(Math.min(5, Math.max(1, Math.round(n)))),
+                            }));
+                          }}
+                          placeholder="Durée"
+                          className="w-28 px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                          aria-label="Durée en années"
+                        />
+                        <span className="text-sm text-gray-500">an(s)</span>
+                      </>
+                    ) : (
+                      <span className="text-sm text-gray-600">
+                        — {dureePourNiveau(filiereForm.niveau)} ans
+                      </span>
+                    )}
+                  </div>
+                  {filiereForm.niveau === 'AUTRE' && (
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      Précisez la durée de la formation (1 à 5 ans).
+                    </p>
+                  )}
+                </div>
                 <input
                   type="number"
                   min={0}
@@ -487,16 +591,6 @@ export default function MonEtablissementAdmin() {
                   placeholder="Frais inscription effective (FCFA)"
                   value={filiereForm.fraisInscriptionEffective}
                   onChange={(e) => setFiliereForm((p) => ({ ...p, fraisInscriptionEffective: e.target.value }))}
-                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  max={1}
-                  step="0.01"
-                  placeholder="Taux de réussite (0.85 = 85%)"
-                  value={filiereForm.tauxReussite}
-                  onChange={(e) => setFiliereForm((p) => ({ ...p, tauxReussite: e.target.value }))}
                   className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
                 />
                 <input
@@ -546,51 +640,52 @@ export default function MonEtablissementAdmin() {
                   disabled={submitting}
                   className="sm:col-span-2 px-4 py-2 text-sm font-semibold bg-teal-900 text-white rounded-lg disabled:opacity-50"
                 >
-                  {submitting ? 'Enregistrement...' : editingFiliereId ? 'Mettre à jour la filière' : 'Ajouter la filière'}
+                  {submitting ? 'Envoi…' : 'Envoyer la demande à la DGES'}
                 </button>
               </form>
-              {filieres.length === 0 ? (
-                <p className="text-sm text-gray-400">Aucune filière.</p>
-              ) : (
-                <ul className="divide-y divide-gray-100">
-                  {filieres.map((f) => (
-                    <li
-                      key={f.id}
-                      className={`py-3 flex justify-between items-start gap-3 text-sm rounded-lg px-2 -mx-2 ${
-                        editingFiliereId === f.id ? 'bg-teal-50 border border-teal-200' : ''
-                      }`}
-                    >
-                      <div>
+
+              {demandesFiliere.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-gray-100">
+                  <h4 className="text-sm font-semibold text-gray-800">Mes demandes</h4>
+                  <ul className="divide-y divide-gray-100">
+                    {demandesFiliere.map((d) => {
+                      const st = STATUT_DEMANDE[d.statut] || { label: d.statut, className: 'bg-slate-100 text-slate-700' };
+                      return (
+                        <li key={d.id} className="py-3 flex justify-between items-start gap-3 text-sm">
+                          <div>
+                            <span className="font-medium">{d.nom}</span>
+                            {d.code && <span className="text-gray-500 ml-2">({d.code})</span>}
+                            <p className="text-xs text-gray-400">{LABEL_NIVEAU[d.niveau] || d.niveau} · {d.dureeAnnees} an(s)</p>
+                            {d.motifDecision && (
+                              <p className="text-xs text-red-600 mt-1">Motif : {d.motifDecision}</p>
+                            )}
+                          </div>
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold shrink-0 ${st.className}`}>
+                            {st.label}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              <div className="space-y-2 pt-2 border-t border-gray-100">
+                <h4 className="text-sm font-semibold text-gray-800">Filières validées</h4>
+                {filieres.length === 0 ? (
+                  <p className="text-sm text-gray-400">Aucune filière validée pour le moment.</p>
+                ) : (
+                  <ul className="divide-y divide-gray-100">
+                    {filieres.map((f) => (
+                      <li key={f.id} className="py-3 text-sm">
                         <span className="font-medium">{f.nom}</span>
                         <span className="text-gray-500 ml-2">({f.code})</span>
-                        <p className="text-xs text-gray-400">{f.niveau} · {f.dureeAnnees} an(s)</p>
-                        {f.fraisScolariteAnnuels != null && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            Scolarité : {f.fraisScolariteAnnuels.toLocaleString('fr-FR')} FCFA/an
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => startEditFiliere(f)}
-                          className="text-xs text-teal-900 font-semibold hover:underline"
-                        >
-                          Modifier
-                        </button>
-                        <button
-                          type="button"
-                          disabled={deletingId === f.id}
-                          onClick={() => handleDeleteFiliere(f.id)}
-                          className="text-xs text-red-600 font-semibold disabled:opacity-50"
-                        >
-                          Supprimer
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                        <p className="text-xs text-gray-400">{LABEL_NIVEAU[f.niveau] || f.niveau} · {f.dureeAnnees} an(s)</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </BentoCard>
             </div>
 

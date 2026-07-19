@@ -4,14 +4,8 @@ const STEPS = [
   {
     key: 'candidatures',
     title: 'Candidatures',
-    desc: 'Consulter le dossier et les pièces',
+    desc: 'Consulter les pièces et donner le verdict',
     path: '/admin-etablissement/candidatures',
-  },
-  {
-    key: 'preinscriptions',
-    title: 'Pré-inscriptions',
-    desc: 'Valider, mettre sous réserve ou rejeter',
-    path: '/admin-etablissement/preinscriptions',
   },
   {
     key: 'etudiants',
@@ -28,8 +22,9 @@ export default function ParcoursInscriptionGuide({ active, pendingCount = 0 }) {
   return (
     <div className="rounded-xl border border-teal-100 bg-teal-50/60 p-4 space-y-3">
       <p className="text-sm text-teal-900">
-        <strong>Parcours d&apos;admission :</strong> le candidat dépose un dossier, vous consultez puis vous décidez.
-        {pendingCount > 0 && active !== 'preinscriptions' && (
+        <strong>Parcours d&apos;admission :</strong> ouvrez un dossier, consultez les pièces, puis validez,
+        mettez sous réserve ou rejetez.
+        {pendingCount > 0 && active === 'candidatures' && (
           <span className="ml-1 font-semibold text-orange-700">
             {pendingCount} décision{pendingCount > 1 ? 's' : ''} en attente.
           </span>

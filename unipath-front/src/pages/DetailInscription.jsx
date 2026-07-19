@@ -10,6 +10,11 @@ import CorrectionPiecesSousReserve from '../components/CorrectionPiecesSousReser
 
 const STATUTS_CHOIX_CENTRE = ['EN_ATTENTE'];
 
+function inscriptionsSontCloses(concours) {
+  const dateFin = concours?.dateFinDepot || concours?.dateFin;
+  return dateFin ? new Date() > new Date(dateFin) : false;
+}
+
 function resolveCentreChoisi(inscription) {
   if (!inscription) return null;
   return inscription.centreChoisi
@@ -91,6 +96,7 @@ export default function DetailInscription() {
   const [peutResoumettre, setPeutResoumettre] = useState(false);
   const [centreBusy, setCentreBusy] = useState(false);
   const [centresRelational, setCentresRelational] = useState([]);
+  const [showSuppressionModal, setShowSuppressionModal] = useState(false);
 
   const loadProfil = useCallback(() => {
     return candidatService.getProfil()
@@ -191,6 +197,22 @@ export default function DetailInscription() {
     }
   };
 
+  const handleSupprimerCandidature = async () => {
+    if (!inscription) return;
+    try {
+      setActionBusy(true);
+      const data = await inscriptionService.annuler(inscriptionId);
+      setShowSuppressionModal(false);
+      showMessage(data.message || 'Candidature supprimée', 'success');
+      setTimeout(() => navigate(ROUTES.concours.home), 1200);
+    } catch (err) {
+      setShowSuppressionModal(false);
+      showMessage(err.message || 'Erreur lors de la suppression', 'error');
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
   if (loading) return (
     <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
       <div className='w-10 h-10 border-4 border-blue-900 border-t-orange-500 rounded-full animate-spin' />
@@ -201,6 +223,9 @@ export default function DetailInscription() {
 
   const cfg = STATUT_CONFIG[inscription.statut] || STATUT_CONFIG.EN_ATTENTE;
   const centreChoisi = resolveCentreChoisi(inscription);
+  const peutSupprimerCandidature =
+    !inscription.concours?.etudeDossiersClotureeAt
+    && !['VALIDE', 'REJETE'].includes(inscription.statut);
 
   return (
     <CandidatLayout candidat={candidat} photoUrl={photoUrl}>
@@ -291,9 +316,9 @@ export default function DetailInscription() {
                 <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' />
               </svg>
               <div>
-                <p className='font-semibold text-yellow-800 text-sm'>Dossier en cours d'examen</p>
+                <p className='font-semibold text-yellow-800 text-sm'>Dossier envoyé</p>
                 <p className='text-yellow-700 text-xs mt-1'>
-                  La commission étudie actuellement votre candidature. Vous recevrez un email dès qu'une décision sera prise.
+                  La commission étudiera votre candidature à la fin des inscriptions. Vous recevrez un email à la fin de l'étude des dossiers.
                 </p>
               </div>
             </div>
@@ -316,7 +341,10 @@ export default function DetailInscription() {
             statut={inscription.statut}
             onSave={handleSaveCentre}
             busy={centreBusy}
-            readOnly={!STATUTS_CHOIX_CENTRE.includes(inscription.statut)}
+            readOnly={
+              !STATUTS_CHOIX_CENTRE.includes(inscription.statut)
+              || inscriptionsSontCloses(inscription.concours)
+            }
           />
         )}
 
@@ -508,6 +536,24 @@ export default function DetailInscription() {
           </div>
         </BentoCard>
 
+        {peutSupprimerCandidature && (
+          <BentoCard className='p-6 border border-red-100 bg-red-50/40'>
+            <h2 className='text-base font-bold text-red-900 mb-2'>Supprimer ma candidature</h2>
+            <p className='text-sm text-red-800 mb-4'>
+              Vous pouvez retirer votre candidature à ce concours tant que l&apos;étude des dossiers
+              n&apos;est pas terminée, par exemple pour vous inscrire à un autre concours.
+            </p>
+            <button
+              type='button'
+              onClick={() => setShowSuppressionModal(true)}
+              disabled={actionBusy}
+              className='px-4 py-2 rounded-lg text-sm font-semibold bg-white border border-red-300 text-red-700 hover:bg-red-50 transition disabled:opacity-50'
+            >
+              Supprimer ma candidature
+            </button>
+          </BentoCard>
+        )}
+
         {/* Informations importantes */}
         <BentoCard className='p-6 bg-blue-50/50 border-l-4 border-blue-500'>
           <h3 className='font-bold text-blue-900 text-sm mb-3 flex items-center gap-2'>
@@ -537,6 +583,43 @@ export default function DetailInscription() {
         </BentoCard>
 
       </div>
+
+      {showSuppressionModal && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4'>
+          <div className='bg-white rounded-xl shadow-xl w-full max-w-md'>
+            <div className='px-6 py-4 border-b border-gray-100'>
+              <h2 className='text-lg font-bold text-gray-900'>Supprimer ma candidature ?</h2>
+              <p className='text-xs text-gray-500 mt-1'>{inscription.concours?.libelle}</p>
+            </div>
+            <div className='px-6 py-4 space-y-3'>
+              <p className='text-sm text-gray-600'>
+                Souhaitez-vous vraiment supprimer votre candidature à ce concours ?
+              </p>
+              <p className='text-sm text-red-700'>
+                Cette action est irréversible. Vous pourrez ensuite vous inscrire à un autre concours.
+              </p>
+            </div>
+            <div className='px-6 py-4 border-t border-gray-100 flex justify-end gap-2'>
+              <button
+                type='button'
+                disabled={actionBusy}
+                onClick={() => setShowSuppressionModal(false)}
+                className='px-3 py-2 text-sm rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50'
+              >
+                Annuler
+              </button>
+              <button
+                type='button'
+                disabled={actionBusy}
+                onClick={handleSupprimerCandidature}
+                className='px-3 py-2 text-sm rounded-lg font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50'
+              >
+                {actionBusy ? 'Suppression…' : 'Oui, supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </CandidatLayout>
   );
 }

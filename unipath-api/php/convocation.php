@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require(__DIR__ . '/fpdf.php');
 require(__DIR__ . '/pdf-common.php');
 
@@ -11,66 +11,6 @@ function convocationText($text) {
     }
     $converted = @iconv('UTF-8', 'ISO-8859-1//TRANSLIT//IGNORE', (string) $text);
     return $converted !== false ? $converted : (string) $text;
-}
-
-function renderConvocationPhotoFromBase64($pdf, $photoBase64, $photoMime, $photoX, $photoY, $photoW, $photoH) {
-    $pdf->SetDrawColor(120, 120, 120);
-    $pdf->Rect($photoX, $photoY, $photoW, $photoH);
-
-    if (empty($photoBase64)) {
-        $pdf->SetXY($photoX, $photoY + ($photoH / 2) - 3);
-        $pdf->SetFont('Helvetica', 'I', 8);
-        $pdf->SetTextColor(150, 150, 150);
-        $pdf->Cell($photoW, 6, convocationText('Photo'), 0, 0, 'C');
-        $pdf->SetTextColor(0, 0, 0);
-        return;
-    }
-
-    $imageData = base64_decode($photoBase64, true);
-    if ($imageData === false || strlen($imageData) === 0) {
-        $pdf->SetXY($photoX, $photoY + ($photoH / 2) - 3);
-        $pdf->SetFont('Helvetica', 'I', 8);
-        $pdf->SetTextColor(150, 150, 150);
-        $pdf->Cell($photoW, 6, convocationText('Photo'), 0, 0, 'C');
-        $pdf->SetTextColor(0, 0, 0);
-        return;
-    }
-
-    $mime = $photoMime ?? 'image/jpeg';
-    $extension = 'jpg';
-    if ($mime === 'image/png') {
-        $extension = 'png';
-    } elseif ($mime === 'image/webp') {
-        $extension = 'webp';
-    }
-
-    $tempPhoto = tempnam(sys_get_temp_dir(), 'unipath_conv_') . '.' . $extension;
-    file_put_contents($tempPhoto, $imageData);
-
-    if ($mime === 'image/webp' && function_exists('imagecreatefromwebp')) {
-        $webpImage = @imagecreatefromwebp($tempPhoto);
-        if ($webpImage !== false) {
-            $jpgPath = tempnam(sys_get_temp_dir(), 'unipath_conv_') . '.jpg';
-            imagejpeg($webpImage, $jpgPath, 90);
-            imagedestroy($webpImage);
-            unlink($tempPhoto);
-            $tempPhoto = $jpgPath;
-        }
-    }
-
-    try {
-        $pdf->Image($tempPhoto, $photoX + 1, $photoY + 1, $photoW - 2, $photoH - 2);
-    } catch (Exception $e) {
-        $pdf->SetXY($photoX, $photoY + ($photoH / 2) - 3);
-        $pdf->SetFont('Helvetica', 'I', 8);
-        $pdf->SetTextColor(150, 150, 150);
-        $pdf->Cell($photoW, 6, convocationText('Photo'), 0, 0, 'C');
-        $pdf->SetTextColor(0, 0, 0);
-    }
-
-    if (file_exists($tempPhoto)) {
-        unlink($tempPhoto);
-    }
 }
 
 function ensureSpaceConvocation($pdf, $minYNeeded, $leftMargin, $rightMargin, $contentWidth, $subtitle) {
@@ -119,6 +59,10 @@ $libelleConcours = $data['libelleConcours'] ?? ($concours['libelle'] ?? 'Concour
 $subtitleHeader = convocationText($libelleConcours);
 $photoBase64 = $data['photoBase64'] ?? null;
 $photoMime = $data['photoMime'] ?? null;
+$photoStoragePath = $data['photoStoragePath']
+    ?? ($candidat['photoPath'] ?? null)
+    ?? (($candidat['dossier'] ?? [])['photo'] ?? null)
+    ?? ($candidat['photo'] ?? null);
 
 $requiredFields = ['matricule', 'nom', 'prenom', 'email'];
 foreach ($requiredFields as $field) {
@@ -147,50 +91,47 @@ try {
         $subtitleHeader
     );
 
-    $numeroConvocation = !empty($data['numeroConvocation'])
-        ? strtoupper(convocationText($data['numeroConvocation']))
-        : strtoupper(convocationText($concours['id'] ?? 'N/A')) . '-' . strtoupper(convocationText($candidat['matricule']));
-
-    $pdf->SetFillColor(245, 247, 250);
-    $pdf->SetDrawColor(200, 210, 220);
-    $pdf->Rect($leftMargin, $pdf->GetY(), $contentWidth, 9, 'FD');
-    $pdf->SetFont('Helvetica', 'B', 12);
-    $pdf->SetX($leftMargin + 2);
-    $pdf->Cell($contentWidth - 4, 9, convocationText('Numéro convocation : ') . $numeroConvocation, 0, 1, 'L');
-    $pdf->Ln(3);
-
     renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Identification du candidat', 'blue');
     $rowStartY = $pdf->GetY();
 
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
     $pdf->SetX($leftMargin + 2);
     $pdf->Cell(42, 6, convocationText('Nom et prénom :'), 0, 0, 'L');
-    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetFont('Times', 'B', 12);
     $pdf->Cell(95, 6, strtoupper(convocationText(($candidat['nom'] ?? '') . ' ' . ($candidat['prenom'] ?? ''))), 0, 1, 'L');
 
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
     $pdf->SetX($leftMargin + 2);
     $pdf->Cell(42, 6, convocationText('Matricule :'), 0, 0, 'L');
-    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetFont('Times', 'B', 12);
     $pdf->Cell(95, 6, strtoupper(convocationText($candidat['matricule'] ?? 'N/A')), 0, 1, 'L');
 
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
     $pdf->SetX($leftMargin + 2);
     $pdf->Cell(42, 6, convocationText('Email :'), 0, 0, 'L');
     $pdf->Cell(95, 6, convocationText($candidat['email'] ?? 'N/A'), 0, 1, 'L');
 
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
     $pdf->SetX($leftMargin + 2);
     $pdf->Cell(42, 6, convocationText('Téléphone :'), 0, 0, 'L');
     $pdf->Cell(95, 6, convocationText($candidat['telephone'] ?? 'Non renseigné'), 0, 1, 'L');
 
+    $photoW = 28;
+    $photoH = 34;
     $photoX = $leftMargin + $contentWidth - 35;
     $photoY = $rowStartY + 1;
-    renderConvocationPhotoFromBase64($pdf, $photoBase64, $photoMime, $photoX, $photoY, 28, 34);
+    renderIdentityPhotoZone($pdf, $photoBase64, $photoMime, $photoX, $photoY, $photoW, $photoH, $photoStoragePath, 'Photo');
 
-    $pdf->Ln(3);
+    // Descendre sous la photo pour ne pas chevaucher la barre suivante
+    $afterPhotoY = $photoY + $photoH + 4;
+    if ($pdf->GetY() < $afterPhotoY) {
+        $pdf->SetY($afterPhotoY);
+    } else {
+        $pdf->Ln(3);
+    }
+
     ensureSpaceConvocation($pdf, 55, $leftMargin, $rightMargin, $contentWidth, $subtitleHeader);
-    renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Détails du concours', 'blue');
+    renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Details du concours', 'blue');
 
     $dateDebutComposition = !empty($data['dateDebutComposition'])
         ? date('d/m/Y', strtotime($data['dateDebutComposition']))
@@ -199,7 +140,13 @@ try {
         ? date('d/m/Y', strtotime($data['dateFinComposition']))
         : (!empty($concours['dateFinComposition']) ? date('d/m/Y', strtotime($concours['dateFinComposition'])) : 'N/A');
     $dateComposition = !empty($concours['dateComposition']) ? date('d/m/Y', strtotime($concours['dateComposition'])) : convocationText('À définir');
-    $heureComposition = !empty($concours['heureComposition']) ? convocationText($concours['heureComposition']) : convocationText('À définir');
+    $numeroTableRaw = $data['numeroTable']
+        ?? ($data['inscription']['numeroTable'] ?? null)
+        ?? ($candidat['numeroTable'] ?? null);
+    // Tiret ASCII si absent (évite mojibake UTF-8 "—" → â€")
+    $numeroTable = (isset($numeroTableRaw) && $numeroTableRaw !== '' && $numeroTableRaw !== null)
+        ? convocationText((string) $numeroTableRaw)
+        : '-';
 
     $centreAffiche = convocationText('Centre de composition à confirmer');
     if (!empty($data['centreCompositionChoisi']['nom'])) {
@@ -231,11 +178,11 @@ try {
         $centreAffiche = convocationText($concours['lieuComposition']);
     }
 
-    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetFont('Times', 'B', 12);
     $pdf->SetX($leftMargin + 2);
     $pdf->MultiCell($contentWidth - 4, 6, strtoupper(convocationText($libelleConcours)), 0, 'L');
 
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
     $pdf->SetX($leftMargin + 2);
     $pdf->Cell(55, 6, convocationText('Période de composition :'), 0, 0, 'L');
     $pdf->Cell(0, 6, convocationText('Du ') . $dateDebutComposition . convocationText(' au ') . $dateFinComposition, 0, 1, 'L');
@@ -243,8 +190,10 @@ try {
     $pdf->Cell(55, 6, convocationText('Date de composition :'), 0, 0, 'L');
     $pdf->Cell(0, 6, $dateComposition, 0, 1, 'L');
     $pdf->SetX($leftMargin + 2);
-    $pdf->Cell(55, 6, convocationText('Heure de convocation :'), 0, 0, 'L');
-    $pdf->Cell(0, 6, $heureComposition, 0, 1, 'L');
+    $pdf->Cell(55, 6, convocationText('Numéro de table :'), 0, 0, 'L');
+    $pdf->SetFont('Times', 'B', 13);
+    $pdf->Cell(0, 6, $numeroTable, 0, 1, 'L');
+    $pdf->SetFont('Times', '', 12);
     $pdf->SetX($leftMargin + 2);
     $pdf->Cell(55, 6, convocationText('Centre / Salle :'), 0, 0, 'L');
     $pdf->MultiCell($contentWidth - 59, 6, strtoupper($centreAffiche), 0, 'L');
@@ -253,7 +202,7 @@ try {
     ensureSpaceConvocation($pdf, 28, $leftMargin, $rightMargin, $contentWidth, $subtitleHeader);
 
     $pdf->SetFillColor(232, 240, 254);
-    $pdf->SetFont('Helvetica', 'B', 11);
+    $pdf->SetFont('Times', 'B', 11);
     $pdf->SetX($leftMargin);
     $pdf->Cell($contentWidth, 8, convocationText('MATIÈRES / ÉPREUVES'), 1, 1, 'L', true);
 
@@ -265,18 +214,18 @@ try {
     }
 
     if (empty($matieres)) {
-        $pdf->SetFont('Helvetica', 'I', 10);
+        $pdf->SetFont('Times', 'I', 10);
         $pdf->SetTextColor(150, 150, 150);
         $pdf->Cell(0, 6, convocationText('Les matières seront communiquées ultérieurement.'), 0, 1);
         $pdf->SetTextColor(0, 0, 0);
     } else {
-        $pdf->SetFont('Helvetica', 'B', 10);
+        $pdf->SetFont('Times', 'B', 10);
         $pdf->SetFillColor(200, 210, 240);
         $pdf->SetX($leftMargin);
         $pdf->Cell(15, 7, 'N', 1, 0, 'C', true);
         $pdf->Cell($contentWidth - 15, 7, convocationText('Épreuve'), 1, 1, 'L', true);
 
-        $pdf->SetFont('Helvetica', '', 10);
+        $pdf->SetFont('Times', '', 10);
         foreach ($matieres as $index => $matiere) {
             if ($pdf->GetY() + 8 > 270) {
                 $pdf->AddPage();
@@ -289,15 +238,15 @@ try {
                     $subtitleHeader
                 );
                 $pdf->SetFillColor(232, 240, 254);
-                $pdf->SetFont('Helvetica', 'B', 11);
+                $pdf->SetFont('Times', 'B', 11);
                 $pdf->SetX($leftMargin);
                 $pdf->Cell($contentWidth, 8, convocationText('MATIÈRES / ÉPREUVES'), 1, 1, 'L', true);
-                $pdf->SetFont('Helvetica', 'B', 10);
+                $pdf->SetFont('Times', 'B', 10);
                 $pdf->SetFillColor(200, 210, 240);
                 $pdf->SetX($leftMargin);
                 $pdf->Cell(15, 7, 'N', 1, 0, 'C', true);
                 $pdf->Cell($contentWidth - 15, 7, convocationText('Épreuve'), 1, 1, 'L', true);
-                $pdf->SetFont('Helvetica', '', 10);
+                $pdf->SetFont('Times', '', 10);
             }
             $fill = ($index % 2 === 0);
             $pdf->SetFillColor(245, 247, 255);
@@ -310,12 +259,12 @@ try {
     $pdf->Ln(4);
     ensureSpaceConvocation($pdf, 35, $leftMargin, $rightMargin, $contentWidth, $subtitleHeader);
     $pdf->SetFillColor(232, 240, 254);
-    $pdf->SetFont('Helvetica', 'B', 11);
+    $pdf->SetFont('Times', 'B', 11);
     $pdf->SetX($leftMargin);
     $pdf->Cell($contentWidth, 8, convocationText('PIÈCES À APPORTER LE JOUR DES ÉPREUVES'), 1, 1, 'L', true);
 
     $pdf->Ln(2);
-    $pdf->SetFont('Helvetica', '', 10);
+    $pdf->SetFont('Times', '', 10);
 
     $piecesAApporter = [
         'La présente convocation (imprimée obligatoirement)',
@@ -339,7 +288,7 @@ try {
         'Les téléphones et appareils connectés sont strictement interdits en salle.',
         'Tout retard majeur ou fraude entraîne l\'annulation de la participation.',
     ];
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
     foreach ($consignes as $consigne) {
         if ($pdf->GetY() + 8 > 270) {
             $pdf->AddPage();
@@ -352,7 +301,7 @@ try {
                 $subtitleHeader
             );
             renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Consignes obligatoires', 'red');
-            $pdf->SetFont('Helvetica', '', 12);
+            $pdf->SetFont('Times', '', 12);
         }
         $pdf->SetX($leftMargin + 2);
         $pdf->MultiCell($contentWidth - 4, 5, convocationText('- ') . convocationText($consigne), 0, 'L');

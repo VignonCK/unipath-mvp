@@ -15,6 +15,9 @@ model Compte {
   profilType    ProfilType
   profilId      String     @unique
   emailConfirme Boolean    @default(false)
+  mustChangePassword Boolean @default(false)
+  /// Demande « mot de passe oublié » : COMMISSION → DEC, ADMIN_ETABLISSEMENT → DGES
+  demandeResetMotDePasseAt DateTime?
   resetToken    String?    @unique
   resetExpires  DateTime?
   createdAt     DateTime   @default(now())
@@ -71,6 +74,8 @@ model MembreCommission {
   createdAt    DateTime                       @default(now())
   updatedAt    DateTime                       @updatedAt
   sousRole     SousRoleCommission             @default(MEMBRE)
+  /// Mot de passe temporaire affiché côté DEC (réutilisé à chaque réinit)
+  motDePasseTemporaire String?
   affectations AffectationCommissionConcours[]
 
   @@index([sousRole])
@@ -126,16 +131,22 @@ model Controleur {
   updatedAt DateTime @updatedAt
 }
 
-/// Année académique des concours (archives + année en cours définie par la DEC)
+/// Années académiques partagées :
+/// - enCoursDec  → Module 1 (concours), géré par la DEC
+/// - enCoursDges → Module 2 (établissements privés), géré par la DGES
 model AnneeAcademique {
-  id        String     @id @default(uuid())
-  libelle   String     @unique
-  enCours   Boolean    @default(false)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  concours  Concours[]
+  id          String     @id @default(uuid())
+  libelle     String     @unique
+  /// Année en cours pour le Module 1 (concours) — définie par la DEC
+  enCoursDec  Boolean    @default(false)
+  /// Année en cours pour le Module 2 (établissements privés) — définie par la DGES
+  enCoursDges Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  concours    Concours[]
 
-  @@index([enCours])
+  @@index([enCoursDec])
+  @@index([enCoursDges])
 }
 
 model Concours {
@@ -155,6 +166,8 @@ model Concours {
   centresComposition   Json?
   dateDebutDepot       DateTime?
   dateFinDepot         DateTime?
+  /// Date de fin de dépôt avant une clôture anticipée (test) — permet de restaurer
+  dateFinDepotAvantCloture DateTime?
   dateDebutComposition DateTime?
   dateFinComposition   DateTime?
   dateDebutEtudeDossiers DateTime?
@@ -178,11 +191,16 @@ model Concours {
 model Inscription {
   id                 String              @id @default(uuid())
   numeroInscription  String?             @unique
-  /// Numéro de table : AAVVCCOOORD où AA=année, VV=commune, CC=concours, ORD=rang alpha (ex: 260140601)
+  /// Numéro de table : AAVVFFCEORD (11 chiffres)
+  /// AA=année, VV=commune, FF=filière/concours, CE=centre, ORD=rang alpha (ex: 26014015601)
   numeroTable        String?             @unique
   candidatId         String
   concoursId         String
   note               Float?
+  /// Décision DEC après composition (uniquement pour dossiers VALIDE)
+  resultatComposition ResultatComposition @default(EN_ATTENTE)
+  resultatCompositionAt DateTime?
+  resultatCompositionPar String?
   createdAt          DateTime            @default(now())
   dossierInscription DossierInscription?
   candidat           Candidat            @relation(fields: [candidatId], references: [id])
@@ -192,6 +210,7 @@ model Inscription {
   @@index([candidatId])
   @@index([concoursId])
   @@index([numeroTable])
+  @@index([resultatComposition])
 }
 
 /// Référentiel des 77 communes du Bénin (codes 01–77)
@@ -255,6 +274,8 @@ model CentreComposition {
   ville       String
   /// Code commune Bénin (01–77), lié au référentiel Commune
   communeCode String?
+  /// Code unique du centre de composition (01–99) pour les N° de table
+  code        String?                      @unique
   adresse     String?
   telephone   String?
   actif       Boolean                      @default(true)
@@ -266,6 +287,7 @@ model CentreComposition {
   @@index([ville])
   @@index([actif])
   @@index([communeCode])
+  @@index([code])
 }
 
 model ConcoursCentreComposition {
@@ -373,8 +395,8 @@ model EmailDelivery {
   smtpCode       String?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
-  htmlBody       String?
-  textBody       String?
+  htmlBody       String?        @db.Text
+  textBody       String?        @db.Text
   attachments    Json?
   nextRetryAt    DateTime?
 
@@ -440,11 +462,12 @@ model Etablissement {
   createdAt       DateTime                      @default(now())
   adresse         String?
   email           String?                       @unique
-  filieres        Filiere[]
-  inscriptions    InscriptionAcademique[]
-  preinscriptions PreinscriptionEtablissement[]
-  admins          AdminEtablissement[]
-  applications    Application[]
+  filieres             Filiere[]
+  demandesAjoutFiliere DemandeAjoutFiliere[]
+  inscriptions         InscriptionAcademique[]
+  preinscriptions      PreinscriptionEtablissement[]
+  admins               AdminEtablissement[]
+  applications         Application[]
   campagnes       CampagneInscription[]
   requirements    SchoolRequirement[]
 
@@ -460,15 +483,66 @@ model Filiere {
   createdAt       DateTime                      @default(now())
   code            String                        @unique
   niveau          NiveauFiliere
-  diplomes        Diplome[]
-  etablissement   Etablissement                 @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
-  inscriptions    InscriptionAcademique[]
-  preinscriptions PreinscriptionEtablissement[]
-  applications    Application[]
-  campagneFilieres CampagneFiliere[]
+  diplomes             Diplome[]
+  etablissement        Etablissement                 @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  inscriptions         InscriptionAcademique[]
+  preinscriptions      PreinscriptionEtablissement[]
+  applications         Application[]
+  campagneFilieres     CampagneFiliere[]
+  demandeAjoutSource   DemandeAjoutFiliere?
+  unitesEnseignement   UniteEnseignement[]
 
   @@index([etablissementId])
   @@index([niveau])
+}
+
+/// Unité d'enseignement définie par filière et semestre d'étude (S1–S10).
+/// Semestres : pour l'année d'étude a (1–5), semestres 2a-1 et 2a.
+model UniteEnseignement {
+  id          String   @id @default(uuid())
+  filiereId   String
+  code        String
+  libelle     String
+  credits     Int      @default(0)
+  /// Semestre d'étude : 1 à 10 (S1…S10)
+  semestre    Int
+  /// Année d'étude : 1 à 5 (dérivée de ceil(semestre/2))
+  anneeEtude  Int
+  coefficient Float?
+  description String?
+  ordre       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  filiere     Filiere  @relation(fields: [filiereId], references: [id], onDelete: Cascade)
+  validations ValidationUE[]
+
+  @@unique([filiereId, code, semestre])
+  @@index([filiereId, semestre])
+  @@index([filiereId, anneeEtude])
+  @@index([semestre])
+}
+
+enum StatutValidationUE {
+  VALIDE
+  NON_VALIDE
+}
+
+/// Validation d'une UE pour un étudiant inscrit (année académique en cours).
+model ValidationUE {
+  id                   String              @id @default(uuid())
+  inscriptionAcadId    String
+  uniteEnseignementId  String
+  statut               StatutValidationUE
+  decidedAt            DateTime            @default(now())
+  decidedBy            String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  inscriptionAcademique InscriptionAcademique @relation(fields: [inscriptionAcadId], references: [id], onDelete: Cascade)
+  uniteEnseignement     UniteEnseignement     @relation(fields: [uniteEnseignementId], references: [id], onDelete: Cascade)
+
+  @@unique([inscriptionAcadId, uniteEnseignementId])
+  @@index([uniteEnseignementId, statut])
+  @@index([inscriptionAcadId])
 }
 
 model InscriptionAcademique {
@@ -480,10 +554,15 @@ model InscriptionAcademique {
   createdAt            DateTime                     @default(now())
   niveau               Int
   statut               StatutInscriptionAcad        @default(EN_COURS)
+  /// Date de confirmation par le candidat (choix exclusif parmi plusieurs admissions)
+  confirmeeAt          DateTime?
+  /// Chemin relatif de la fiche d'inscription PDF (après validation)
+  ficheInscriptionUrl  String?
   candidat             Candidat                     @relation(fields: [candidatId], references: [id], onDelete: Cascade)
   etablissement        Etablissement                @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
   filiere              Filiere                      @relation(fields: [filiereId], references: [id], onDelete: Cascade)
   notes                Note[]
+  validationsUE        ValidationUE[]
   preinscriptionSource PreinscriptionEtablissement?
 
   @@unique([candidatId, filiereId, anneeAcademique])
@@ -563,6 +642,13 @@ enum StatutDossier {
   VALIDE
   REJETE
   SOUS_RESERVE
+}
+
+/// Décision DEC après composition du concours
+enum ResultatComposition {
+  EN_ATTENTE
+  ADMIS
+  REFUSE
 }
 
 enum Verdict {
@@ -664,6 +750,59 @@ enum TypeEtablissement {
 enum NiveauFiliere {
   LICENCE
   MASTER
+  AUTRE
+}
+
+enum StatutDemandeFiliere {
+  EN_ATTENTE
+  VALIDE
+  REJETE
+}
+
+/// Catalogue de filières de référence géré par la DGES
+model FiliereReference {
+  id        String         @id @default(uuid())
+  nom       String         @unique
+  niveau    NiveauFiliere?
+  actif     Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  demandes  DemandeAjoutFiliere[]
+
+  @@index([actif])
+  @@index([nom])
+}
+
+/// Demande d'ajout de filière par un admin établissement — validée par la DGES
+model DemandeAjoutFiliere {
+  id                 String                @id @default(uuid())
+  etablissementId    String
+  demandeParId       String
+  nom                String
+  code               String?
+  niveau             NiveauFiliere
+  dureeAnnees        Int
+  /// Référence catalogue DGES si choisie dans la liste (null = saisie libre)
+  filiereReferenceId String?
+  /// Champs complémentaires du formulaire (frais, débouchés, etc.)
+  details            Json?
+  statut             StatutDemandeFiliere  @default(EN_ATTENTE)
+  motifDecision      String?
+  decidedAt          DateTime?
+  decidedBy          String?
+  filiereId          String?               @unique
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  etablissement      Etablissement         @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  demandePar         AdminEtablissement    @relation(fields: [demandeParId], references: [id], onDelete: Cascade)
+  filiere            Filiere?              @relation(fields: [filiereId], references: [id], onDelete: SetNull)
+  filiereReference   FiliereReference?     @relation(fields: [filiereReferenceId], references: [id], onDelete: SetNull)
+
+  @@index([etablissementId])
+  @@index([demandeParId])
+  @@index([filiereReferenceId])
+  @@index([statut])
+  @@index([createdAt(sort: Desc)])
 }
 
 enum StatutInscriptionAcad {
@@ -693,9 +832,12 @@ model AdminEtablissement {
   telephone       String?
   role            Role          @default(ADMIN_ETABLISSEMENT)
   etablissementId String
+  /// Mot de passe temporaire affiché côté DGES (réutilisé à chaque réinit)
+  motDePasseTemporaire String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
-  etablissement   Etablissement @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  etablissement        Etablissement         @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
+  demandesAjoutFiliere DemandeAjoutFiliere[]
 
   @@index([etablissementId])
 }
@@ -710,12 +852,15 @@ model Application {
   niveau            Int
   status            ApplicationStatus            @default(DRAFT)
   preinscriptionId  String?                      @unique
+  /// Offre de campagne d'où part le dépôt (pièces requises = celles de la campagne)
+  campagneFiliereId String?
   createdAt         DateTime                     @default(now())
   updatedAt         DateTime                     @updatedAt
   candidat          Candidat                     @relation(fields: [candidatId], references: [id], onDelete: Cascade)
   etablissement     Etablissement                @relation(fields: [etablissementId], references: [id], onDelete: Cascade)
   filiere           Filiere                      @relation(fields: [filiereId], references: [id], onDelete: Cascade)
   preinscription    PreinscriptionEtablissement? @relation(fields: [preinscriptionId], references: [id])
+  campagneFiliere   CampagneFiliere?             @relation(fields: [campagneFiliereId], references: [id], onDelete: SetNull)
   documents         ApplicationDocument[]
   payments          Payment[]
   receipts          Receipt[]
@@ -724,6 +869,7 @@ model Application {
   @@index([candidatId])
   @@index([createdAt])
   @@index([etablissementId, status])
+  @@index([campagneFiliereId])
 }
 
 model ApplicationDocument {
@@ -807,6 +953,8 @@ model CampagneInscription {
   dateOuverture   DateTime
   dateCloture     DateTime
   description     String?
+  /// Pièces à fournir pour le dépôt (hors quittance frais de dossier, gérée à part)
+  piecesRequises  Json?
   statut          StatutCampagne    @default(BROUILLON)
   createdBy       String
   createdAt       DateTime          @default(now())
@@ -833,6 +981,7 @@ model CampagneFiliere {
   updatedAt         DateTime            @updatedAt
   campagne          CampagneInscription @relation(fields: [campagneId], references: [id], onDelete: Cascade)
   filiere           Filiere             @relation(fields: [filiereId], references: [id], onDelete: Cascade)
+  applications      Application[]
 
   @@unique([campagneId, filiereId])
   @@index([campagneId])
@@ -890,4 +1039,17 @@ enum StatutCampagne {
   PUBLIEE
   CLOTUREE
   ANNULEE
+}
+
+/// Paramètres système configurables (ex. en-tête PDF DEC)
+model ParametreSysteme {
+  id          String   @id @default(uuid())
+  cle         String   @unique
+  /// JSON sérialisé selon la clé (chemin fichier, dimensions, etc.)
+  valeur      String?  @db.Text
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([cle])
 }

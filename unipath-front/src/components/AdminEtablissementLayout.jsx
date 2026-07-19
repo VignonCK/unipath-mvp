@@ -30,15 +30,9 @@ export default function AdminEtablissementLayout({ children }) {
     },
     {
       name: 'Candidatures',
-      subtitle: 'Consulter les dossiers',
+      subtitle: 'Dossiers & décisions',
       path: '/admin-etablissement/candidatures',
       icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-    },
-    {
-      name: 'Pré-inscriptions',
-      subtitle: 'Décider (valider / rejeter)',
-      path: '/admin-etablissement/preinscriptions',
-      icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
     },
     {
       name: 'Validation quittances',
@@ -50,6 +44,30 @@ export default function AdminEtablissementLayout({ children }) {
       name: 'Étudiants',
       path: '/admin-etablissement/etudiants',
       icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
+    },
+    {
+      name: "Unités d'enseignement",
+      subtitle: 'UE par filière / semestre',
+      path: '/admin-etablissement/unites-enseignement',
+      icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253',
+    },
+    {
+      name: 'Validation des UE',
+      subtitle: 'Validé / Non validé',
+      path: '/admin-etablissement/validation-ue',
+      icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
+    },
+    {
+      name: 'Bilan validations',
+      subtitle: 'Passant / Redoublant',
+      path: '/admin-etablissement/bilan-validations',
+      icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+    },
+    {
+      name: 'Parcours étudiant',
+      subtitle: 'Recherche par matricule',
+      path: '/admin-etablissement/parcours-etudiant',
+      icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
     },
     {
       name: 'Mon Établissement',

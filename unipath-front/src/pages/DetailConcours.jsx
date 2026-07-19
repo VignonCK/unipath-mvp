@@ -540,6 +540,7 @@ export default function DetailConcours() {
               </p>
             )}
             {STATUTS_CHOIX_CENTRE.includes(inscriptionExistante.statut)
+              && !depotEstFerme(concours)
               && concoursHasCentres(centresRelational) && (
               <ChoixCentreComposition
                 centresRelational={centresRelational}
@@ -549,7 +550,8 @@ export default function DetailConcours() {
                 busy={centreBusy}
               />
             )}
-            {!STATUTS_CHOIX_CENTRE.includes(inscriptionExistante.statut)
+            {(!STATUTS_CHOIX_CENTRE.includes(inscriptionExistante.statut)
+              || depotEstFerme(concours))
               && concoursHasCentres(centresRelational)
               && inscriptionExistante.centreChoisi?.nom && (
               <ChoixCentreComposition

@@ -1,0 +1,18 @@
+{
+  "receiptNumber": "QFD-2026-312513",
+  "type": "DOSSIER_FEES_RECEIPT",
+  "applicationNumber": "APP-2026-85398",
+  "amount": 5000,
+  "currency": "XOF",
+  "paymentReference": "PAY-1784376643582-2281",
+  "issuedAt": "2026-07-18T12:10:43.609Z",
+  "candidat": {
+    "matricule": "UnP-2026-000001",
+    "nom": "GLIBA",
+    "prenom": "Rémi"
+  },
+  "etablissement": {
+    "nom": "Institut Supérieur des Métiers de l'Audiovisuel"
+  },
+  "filiere": "Management de la Communication"
+}

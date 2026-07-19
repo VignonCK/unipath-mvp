@@ -197,10 +197,46 @@ exports.login = async (req, res) => {
 exports.resetPassword = async (req, res) => {
   try {
     const { email } = req.body;
-    const resetData = await authService.createPasswordResetToken(email);
+    const compte = await authService.findCompteByEmail(email);
 
+    // Réponse générique pour ne pas divulguer l'existence du compte
+    const messageGenerique = 'Si cet email existe, un lien de réinitialisation a été envoyé.';
+
+    if (!compte) {
+      return res.json({ message: messageGenerique });
+    }
+
+    // Commission / admins établissements privés : pas de lien email — signalement DEC / DGES
+    if (compte.profilType === 'COMMISSION' || compte.profilType === 'ADMIN_ETABLISSEMENT') {
+      await prisma.compte.update({
+        where: { id: compte.id },
+        data: {
+          demandeResetMotDePasseAt: new Date(),
+          resetToken: null,
+          resetExpires: null,
+        },
+      });
+
+      if (compte.profilType === 'COMMISSION') {
+        return res.json({
+          message:
+            'Votre demande a été transmise à la Direction des Examens et Concours (DEC). '
+            + 'Elle réinitialisera votre mot de passe et vous l\'enverra par email.',
+          demandeTransmiseADec: true,
+        });
+      }
+
+      return res.json({
+        message:
+          'Votre demande a été transmise à la Direction Générale de l\'Enseignement Supérieur (DGES). '
+          + 'Elle réinitialisera votre mot de passe et vous l\'enverra par email.',
+        demandeTransmiseADges: true,
+      });
+    }
+
+    const resetData = await authService.createPasswordResetToken(email);
     if (!resetData) {
-      return res.json({ message: 'Si cet email existe, un lien de réinitialisation a été envoyé.' });
+      return res.json({ message: messageGenerique });
     }
 
     const resetUrl = `${buildFrontendUrl('/reset-password')}?token=${resetData.resetToken}`;
@@ -227,7 +263,7 @@ exports.resetPassword = async (req, res) => {
       },
     });
 
-    res.json({ message: 'Si cet email existe, un lien de réinitialisation a été envoyé.' });
+    res.json({ message: messageGenerique });
   } catch (error) {
     console.error('❌ Erreur serveur:', error);
     res.status(500).json({ error: 'Erreur serveur' });

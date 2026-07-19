@@ -1,9 +1,10 @@
 /**
- * Numéro de table concours — format AAVVCCOOORD (9 chiffres)
- * Exemple: 260140601
- *  - 26  : année de composition
- *  - 01  : code commune du centre (Cotonou)
- *  - 40  : code unique du concours
+ * Numéro de table concours — format AAVVFFCEORD (11 chiffres)
+ * Exemple: 26014015601
+ *  - 26  : année de composition (AA)
+ *  - 01  : code commune / ville du centre (VV)
+ *  - 40  : code filière / concours (FF)
+ *  - 15  : code unique du centre de composition (CE)
  *  - 601 : rang alphabétique dans le centre (001, 002, …)
  */
 const prisma = require('../prisma');
@@ -41,7 +42,7 @@ function compareAlpha(a, b) {
 }
 
 /**
- * Alloue le prochain code concours unique sur 2 chiffres (01–99).
+ * Alloue le prochain code concours (filière) unique sur 2 chiffres (01–99).
  */
 async function allocuerCodeConcours(tx = prisma) {
   const rows = await tx.concours.findMany({
@@ -57,7 +58,23 @@ async function allocuerCodeConcours(tx = prisma) {
 }
 
 /**
- * Garantit qu'un concours a un code ; en crée un si besoin.
+ * Alloue le prochain code centre de composition unique sur 2 chiffres (01–99).
+ */
+async function allocuerCodeCentre(tx = prisma) {
+  const rows = await tx.centreComposition.findMany({
+    where: { code: { not: null } },
+    select: { code: true },
+  });
+  const used = new Set(rows.map((r) => String(r.code).padStart(2, '0')));
+  for (let i = 1; i <= 99; i += 1) {
+    const code = pad2(i);
+    if (!used.has(code)) return code;
+  }
+  throw new Error('Plus de code centre disponible (01–99)');
+}
+
+/**
+ * Garantit qu'un concours a un code filière ; en crée un si besoin.
  */
 async function ensureConcoursCode(concoursId, tx = prisma) {
   const concours = await tx.concours.findUnique({
@@ -90,6 +107,27 @@ async function ensureCentreCommuneCode(centre, tx = prisma) {
 }
 
 /**
+ * Garantit qu'un centre a un code unique (01–99).
+ */
+async function ensureCentreCode(centre, tx = prisma) {
+  if (centre.code) return String(centre.code).padStart(2, '0');
+  const code = await allocuerCodeCentre(tx);
+  await tx.centreComposition.update({
+    where: { id: centre.id },
+    data: { code },
+  });
+  centre.code = code;
+  return code;
+}
+
+/**
+ * Construit le N° de table 11 chiffres : AA + VV + FF + CE + ORD
+ */
+function buildNumeroTable({ annee, codeVille, codeFiliere, codeCentre, ordre }) {
+  return `${annee}${codeVille}${codeFiliere}${codeCentre}${pad3(ordre)}`;
+}
+
+/**
  * Génère / régénère les numéros de table pour les candidats retenus d'un concours.
  * Groupement par centre de composition, tri alphabétique nom/prénom.
  */
@@ -108,7 +146,7 @@ async function genererNumerosTableConcours(concoursId, { regenerer = true } = {}
     };
   }
 
-  const codeConcours = await ensureConcoursCode(concoursId);
+  const codeFiliere = await ensureConcoursCode(concoursId);
 
   const inscriptions = await prisma.inscription.findMany({
     where: {
@@ -176,17 +214,36 @@ async function genererNumerosTableConcours(concoursId, { regenerer = true } = {}
       continue;
     }
 
+    let codeCentre;
+    try {
+      codeCentre = await ensureCentreCode(centre);
+    } catch (err) {
+      errors.push({
+        centreId,
+        centre: centre.nom,
+        ville: centre.ville,
+        error: err.message || 'Impossible d\'attribuer un code centre',
+      });
+      continue;
+    }
+
     group.sort(compareAlpha);
 
     const lignes = [];
     group.forEach((insc, index) => {
-      const ordre = pad3(index + 1);
-      const numeroTable = `${annee}${codeVille}${codeConcours}${ordre}`;
+      const ordre = index + 1;
+      const numeroTable = buildNumeroTable({
+        annee,
+        codeVille,
+        codeFiliere,
+        codeCentre,
+        ordre,
+      });
       updates.push({ id: insc.id, numeroTable });
       lignes.push({
         inscriptionId: insc.id,
         candidat: insc.candidat,
-        ordre: index + 1,
+        ordre,
         numeroTable,
       });
     });
@@ -196,6 +253,7 @@ async function genererNumerosTableConcours(concoursId, { regenerer = true } = {}
       centreNom: centre.nom,
       ville: centre.ville,
       communeCode: codeVille,
+      centreCode: codeCentre,
       total: group.length,
       candidats: lignes,
     });
@@ -205,7 +263,7 @@ async function genererNumerosTableConcours(concoursId, { regenerer = true } = {}
     return {
       ok: false,
       status: 400,
-      error: 'Impossible de générer les numéros de table : communes non résolues',
+      error: 'Impossible de générer les numéros de table : communes ou codes centre non résolus',
       details: { errors },
     };
   }
@@ -227,11 +285,11 @@ async function genererNumerosTableConcours(concoursId, { regenerer = true } = {}
 
   return {
     ok: true,
-    format: 'AAVVCCORD (ex: 260140601)',
+    format: 'AAVVFFCEORD (ex: 26014015601)',
     concours: {
       id: concours.id,
       libelle: concours.libelle,
-      code: codeConcours,
+      code: codeFiliere,
       anneeComposition: annee,
     },
     totalGeneres: updates.length,
@@ -290,6 +348,7 @@ async function listerNumerosTableConcours(concoursId) {
             nom: i.dossierInscription.centreChoisi.centre.nom,
             ville: i.dossierInscription.centreChoisi.centre.ville,
             communeCode: i.dossierInscription.centreChoisi.centre.communeCode,
+            code: i.dossierInscription.centreChoisi.centre.code,
           }
         : null,
     })),
@@ -300,8 +359,11 @@ module.exports = {
   STATUTS_RETENUS,
   anneeCompositionFromConcours,
   allocuerCodeConcours,
+  allocuerCodeCentre,
   ensureConcoursCode,
   ensureCentreCommuneCode,
+  ensureCentreCode,
+  buildNumeroTable,
   genererNumerosTableConcours,
   listerNumerosTableConcours,
 };

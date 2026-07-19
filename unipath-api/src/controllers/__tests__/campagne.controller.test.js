@@ -5,6 +5,7 @@ const {
 
 jest.mock('../../prisma', () => ({
   adminEtablissement: { findUnique: jest.fn() },
+  anneeAcademique: { findFirst: jest.fn(), upsert: jest.fn() },
   campagneInscription: {
     findMany: jest.fn(),
     findFirst: jest.fn(),

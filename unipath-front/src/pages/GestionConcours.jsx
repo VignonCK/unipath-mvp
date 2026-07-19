@@ -1,6 +1,7 @@
 // src/pages/GestionConcours.jsx
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { concoursService, etablissementService, centreCompositionService, decService } from '../services/api';
 import { PiecesConfiguration } from '../components/PiecesConfiguration';
 import GestionCentresConcours from '../components/concours/GestionCentresConcours';
@@ -78,6 +79,7 @@ function resolvePublicEtablissement(concours, publicEtablissements = []) {
 }
 
 export default function GestionConcours() {
+  const navigate = useNavigate();
   const [concours, setConcours] = useState([]);
   const [publicEtablissements, setPublicEtablissements] = useState([]);
   const [etudeStatuses, setEtudeStatuses] = useState({});
@@ -86,6 +88,7 @@ export default function GestionConcours() {
   const [filterEtablissement, setFilterEtablissement] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [infoMessage, setInfoMessage] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingConcours, setEditingConcours] = useState(null);
   const [formData, setFormData] = useState({
@@ -117,6 +120,8 @@ export default function GestionConcours() {
   const [savingAffectation, setSavingAffectation] = useState(false);
   const [postEtudeBusy, setPostEtudeBusy] = useState(false);
   const [detailsConcours, setDetailsConcours] = useState(null);
+  const [clotureEtudeModal, setClotureEtudeModal] = useState(null);
+  const [clotureEtudeBusy, setClotureEtudeBusy] = useState(false);
 
   const anneeQueryParams = () => {
     if (filterAnnee === 'toutes') return { toutesAnnees: true };
@@ -187,7 +192,7 @@ export default function GestionConcours() {
     if (!window.confirm(
       `[TEST] Clôturer immédiatement les inscriptions de « ${c.libelle} » ?\n`
       + 'La date de fin de dépôt sera avancée à maintenant.\n'
-      + 'Ce bouton est temporaire et sera retiré avant le déploiement.'
+      + 'Si la date prévue n\'était pas aujourd\'hui, vous pourrez la restaurer ensuite.'
     )) {
       return;
     }
@@ -205,9 +210,26 @@ export default function GestionConcours() {
                   ...item,
                   dateFinDepot: res.concours.dateFinDepot,
                   dateFin: res.concours.dateFin || res.concours.dateFinDepot,
+                  dateFinDepotAvantCloture: res.concours.dateFinDepotAvantCloture ?? null,
                 }
               : item
           )
+        );
+        setDetailsConcours((prev) =>
+          prev?.id === c.id
+            ? {
+                ...prev,
+                dateFinDepot: res.concours.dateFinDepot,
+                dateFin: res.concours.dateFin || res.concours.dateFinDepot,
+                dateFinDepotAvantCloture: res.concours.dateFinDepotAvantCloture ?? null,
+              }
+            : prev
+        );
+      }
+      if (res.concours?.dateFinDepotAvantCloture) {
+        setInfoMessage(
+          `Inscriptions clôturées pour « ${c.libelle} ». `
+          + 'Vous pouvez restaurer la date de fin d\'origine via le bouton dédié.'
         );
       }
     } catch (err) {
@@ -215,25 +237,106 @@ export default function GestionConcours() {
     }
   };
 
-  const handleCloturerEtude = async (c) => {
-    if (!window.confirm(`Clôturer l'étude des dossiers pour « ${c.libelle} » ? Les examinateurs et contrôleurs n'y auront plus accès.`)) {
+  const handleRestaurerDateFinDepot = async (c) => {
+    const dateOrigine = etudeStatuses[c.id]?.dateFinDepotAvantCloture
+      || c.dateFinDepotAvantCloture;
+    const dateLabel = dateOrigine
+      ? new Date(dateOrigine).toLocaleDateString('fr-FR')
+      : 'la date d\'origine';
+    if (!window.confirm(
+      `Restaurer la date de fin d'inscription de « ${c.libelle} » au ${dateLabel} ?\n`
+      + 'Les candidatures pourront à nouveau être déposées jusqu\'à cette date.'
+    )) {
       return;
     }
+    try {
+      const res = await decService.restaurerDateFinDepot(c.id);
+      setEtudeStatuses((prev) => ({
+        ...prev,
+        [c.id]: res.status,
+      }));
+      if (res.concours?.dateFinDepot) {
+        setConcours((prev) =>
+          prev.map((item) =>
+            item.id === c.id
+              ? {
+                  ...item,
+                  dateFinDepot: res.concours.dateFinDepot,
+                  dateFin: res.concours.dateFin || res.concours.dateFinDepot,
+                  dateFinDepotAvantCloture: null,
+                }
+              : item
+          )
+        );
+        setDetailsConcours((prev) =>
+          prev?.id === c.id
+            ? {
+                ...prev,
+                dateFinDepot: res.concours.dateFinDepot,
+                dateFin: res.concours.dateFin || res.concours.dateFinDepot,
+                dateFinDepotAvantCloture: null,
+              }
+            : prev
+        );
+      }
+      setInfoMessage(res.message || `Date de fin d'inscription restaurée pour « ${c.libelle} ».`);
+    } catch (err) {
+      setError(err.message || 'Erreur lors de la restauration de la date');
+    }
+  };
+
+  const handleCloturerEtude = async (c) => {
+    try {
+      // Rafraîchir le statut pour afficher le bon nombre de dossiers non examinés
+      const fresh = await decService.getEtudeDossiersStatus(c.id);
+      const status = fresh.status || etudeStatuses[c.id] || {};
+      setEtudeStatuses((prev) => ({ ...prev, [c.id]: status }));
+      setClotureEtudeModal({
+        concours: c,
+        dossiersNonEtudies: status.dossiersNonEtudies || 0,
+        dossiersSousReserve: status.dossiersSousReserve || 0,
+        totalDossiers: status.totalDossiers || 0,
+        incomplete: (status.dossiersNonEtudies || 0) > 0,
+      });
+    } catch (err) {
+      // Fallback sur le statut déjà chargé
+      const status = etudeStatuses[c.id] || {};
+      setClotureEtudeModal({
+        concours: c,
+        dossiersNonEtudies: status.dossiersNonEtudies || 0,
+        dossiersSousReserve: status.dossiersSousReserve || 0,
+        totalDossiers: status.totalDossiers || 0,
+        incomplete: (status.dossiersNonEtudies || 0) > 0,
+      });
+    }
+  };
+
+  const confirmerCloturerEtude = async () => {
+    if (!clotureEtudeModal?.concours) return;
+    const c = clotureEtudeModal.concours;
+    setClotureEtudeBusy(true);
+    setError('');
     try {
       const res = await decService.cloturerEtude(c.id);
       setEtudeStatuses((prev) => ({
         ...prev,
         [c.id]: res.status,
       }));
+      setClotureEtudeModal(null);
       if (res.alerte?.incomplete) {
-        window.alert(
-          `Attention : ${res.alerte.dossiersNonEtudies} dossier(s) sur ${res.alerte.totalDossiers} `
-          + `n'ont pas encore été examinés pour « ${c.libelle} ».\n\n`
-          + 'Une notification a été envoyée à la DEC. Vous pourrez relancer l\'étude plus tard.'
+        setInfoMessage(
+          `Étude clôturée pour « ${c.libelle} » : ${res.alerte.dossiersNonEtudies} dossier(s) `
+          + `non examiné(s) sur ${res.alerte.totalDossiers}. Une notification a été envoyée. `
+          + `Vous pouvez relancer l'étude plus tard.`
         );
+      } else {
+        setInfoMessage(`Étude des dossiers clôturée pour « ${c.libelle} ».`);
       }
     } catch (err) {
       setError(err.message || 'Erreur lors de la clôture');
+      setClotureEtudeModal(null);
+    } finally {
+      setClotureEtudeBusy(false);
     }
   };
 
@@ -310,25 +413,21 @@ export default function GestionConcours() {
     setSavingAffectation(true);
     setError('');
     try {
-      await decService.setAffectationsConcours(affectationModal.id, affectationForm);
+      const concoursId = affectationModal.id;
+      await decService.setAffectationsConcours(concoursId, affectationForm);
       setAffectationModal(null);
+      const etudeRes = await decService.getEtudeDossiersStatus(concoursId).catch(() => null);
+      if (etudeRes?.status) {
+        setEtudeStatuses((prev) => ({
+          ...prev,
+          [concoursId]: etudeRes.status,
+        }));
+      }
+      setInfoMessage('Affectations de la commission enregistrées.');
     } catch (err) {
       setError(err.message || 'Erreur lors de l\'enregistrement des affectations');
     } finally {
       setSavingAffectation(false);
-    }
-  };
-
-  const handleExportListe = async (c, format) => {
-    setPostEtudeBusy(true);
-    setError('');
-    try {
-      if (format === 'pdf') await decService.telechargerListeRetenusPdf(c.id);
-      else await decService.telechargerListeRetenusExcel(c.id);
-    } catch (err) {
-      setError(err.message || 'Erreur lors de l\'export de la liste des retenus');
-    } finally {
-      setPostEtudeBusy(false);
     }
   };
 
@@ -778,6 +877,20 @@ export default function GestionConcours() {
           </div>
         )}
 
+        {infoMessage && (
+          <div className='bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-xl text-sm flex items-start justify-between gap-3'>
+            <span>{infoMessage}</span>
+            <button
+              type='button'
+              onClick={() => setInfoMessage('')}
+              className='text-amber-700 hover:text-amber-900 shrink-0'
+              aria-label='Fermer'
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* LISTE DES CONCOURS */}
         <div className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
           <div className='overflow-x-auto'>
@@ -869,6 +982,20 @@ export default function GestionConcours() {
                                   const label = isRelance
                                     ? "Relancer l'étude des dossiers"
                                     : "Lancer l'étude des dossiers";
+                                  const commissionIncomplete = status.commissionComplete === false
+                                    || (status.nbExaminateurs === 0 || status.nbControleurs === 0);
+
+                                  let disabledTitle = 'Disponible uniquement après la clôture des inscriptions';
+                                  if (!anneeCourante) {
+                                    disabledTitle = "Indisponible hors de l'année académique en cours (archives)";
+                                  } else if (status.periodeTerminee && status.tousEtudies) {
+                                    disabledTitle = 'Étude clôturée — tous les dossiers ont été étudiés';
+                                  } else if (status.inscriptionsCloses && commissionIncomplete) {
+                                    const manques = [];
+                                    if (!status.nbExaminateurs) manques.push('examinateur');
+                                    if (!status.nbControleurs) manques.push('contrôleur');
+                                    disabledTitle = `Affectez au moins un ${manques.join(' et un ')} à ce concours avant de lancer l'étude`;
+                                  }
 
                                   return (
                                     <button
@@ -877,11 +1004,7 @@ export default function GestionConcours() {
                                       onClick={() => handleLancerEtude(c)}
                                       title={
                                         disabled
-                                          ? !anneeCourante
-                                            ? "Indisponible hors de l'année académique en cours (archives)"
-                                            : status.periodeTerminee && status.tousEtudies
-                                              ? 'Étude clôturée — tous les dossiers ont été étudiés'
-                                              : 'Disponible uniquement après la clôture des inscriptions'
+                                          ? disabledTitle
                                           : isRelance
                                             ? `${status.dossiersNonEtudies || 0} dossier(s) sans verdict / non finalisé(s) — relancer l'étude`
                                             : "Ouvre immédiatement l'accès aux dossiers pour les examinateurs et contrôleurs"
@@ -898,6 +1021,20 @@ export default function GestionConcours() {
                                     </button>
                                   );
                                 })()}
+                                {status.peutRestaurerDateFinDepot && (
+                                  <button
+                                    type='button'
+                                    onClick={() => handleRestaurerDateFinDepot(c)}
+                                    title={
+                                      status.dateFinDepotAvantCloture
+                                        ? `Remettre la date de fin au ${new Date(status.dateFinDepotAvantCloture).toLocaleDateString('fr-FR')}`
+                                        : 'Restaurer la date de fin d\'inscription d\'origine'
+                                    }
+                                    className='px-2 py-1.5 rounded-lg text-[11px] font-semibold transition bg-sky-600 text-white hover:bg-sky-700'
+                                  >
+                                    Restaurer date d&apos;inscription
+                                  </button>
+                                )}
                               </>
                             );
                           })()}
@@ -1010,6 +1147,20 @@ export default function GestionConcours() {
                         Clôturer les inscriptions (test)
                       </button>
                     )}
+                    {etudeStatuses[detailsConcours.id]?.peutRestaurerDateFinDepot && (
+                      <button
+                        type='button'
+                        onClick={() => handleRestaurerDateFinDepot(detailsConcours)}
+                        title={
+                          etudeStatuses[detailsConcours.id]?.dateFinDepotAvantCloture
+                            ? `Remettre la date de fin au ${new Date(etudeStatuses[detailsConcours.id].dateFinDepotAvantCloture).toLocaleDateString('fr-FR')}`
+                            : 'Restaurer la date de fin d\'inscription d\'origine'
+                        }
+                        className='w-full px-3 py-2 rounded-lg text-sm font-semibold bg-sky-600 text-white hover:bg-sky-700 ring-2 ring-sky-300'
+                      >
+                        Restaurer la date de fin d&apos;inscription
+                      </button>
+                    )}
                     <button
                       type='button'
                       onClick={() => openAffectationModal(detailsConcours)}
@@ -1028,19 +1179,25 @@ export default function GestionConcours() {
                     <div className='flex gap-2'>
                       <button
                         type='button'
-                        disabled={postEtudeBusy}
-                        onClick={() => handleExportListe(detailsConcours, 'pdf')}
-                        className='flex-1 px-3 py-2 rounded-lg text-sm font-semibold bg-teal-700 text-white hover:bg-teal-800 disabled:opacity-50'
+                        onClick={() => {
+                          const c = detailsConcours;
+                          setDetailsConcours(null);
+                          navigate(`/dec-selection-resultats?concoursId=${encodeURIComponent(c.id)}`);
+                        }}
+                        className='flex-1 px-3 py-2 rounded-lg text-sm font-semibold bg-slate-700 text-white hover:bg-slate-800'
                       >
-                        Liste PDF
+                        Sélection / Résultats
                       </button>
                       <button
                         type='button'
-                        disabled={postEtudeBusy}
-                        onClick={() => handleExportListe(detailsConcours, 'excel')}
-                        className='flex-1 px-3 py-2 rounded-lg text-sm font-semibold bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50'
+                        onClick={() => {
+                          const c = detailsConcours;
+                          setDetailsConcours(null);
+                          navigate(`/dec-listes-retenus?concoursId=${encodeURIComponent(c.id)}`);
+                        }}
+                        className='flex-1 px-3 py-2 rounded-lg text-sm font-semibold bg-teal-700 text-white hover:bg-teal-800'
                       >
-                        Liste Excel
+                        Listes retenus
                       </button>
                     </div>
                     <div className='flex gap-2 pt-1'>
@@ -1069,6 +1226,76 @@ export default function GestionConcours() {
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+        {clotureEtudeModal && createPortal(
+          <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4'>
+            <div className='bg-white rounded-xl shadow-xl w-full max-w-md'>
+              <div className='px-6 py-4 border-b border-gray-100'>
+                <h2 className='text-lg font-bold text-gray-800'>Clôturer l&apos;étude des dossiers ?</h2>
+                <p className='text-xs text-gray-500 mt-1'>{clotureEtudeModal.concours.libelle}</p>
+              </div>
+              <div className='px-6 py-4 space-y-3'>
+                {clotureEtudeModal.incomplete ? (
+                  <div className='rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900'>
+                    <p className='font-semibold mb-1'>Tous les dossiers n&apos;ont pas été examinés</p>
+                    <p>
+                      {clotureEtudeModal.dossiersNonEtudies} dossier
+                      {clotureEtudeModal.dossiersNonEtudies > 1 ? 's' : ''} sur{' '}
+                      {clotureEtudeModal.totalDossiers} n&apos;ont pas encore de verdict final.
+                    </p>
+                  </div>
+                ) : (
+                  <p className='text-sm text-gray-600'>
+                    Tous les dossiers ont été examinés. Les examinateurs et contrôleurs
+                    n&apos;auront plus accès aux dossiers de ce concours.
+                  </p>
+                )}
+                {(clotureEtudeModal.dossiersSousReserve || 0) > 0 && (
+                  <div className='rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-900'>
+                    <p className='font-semibold mb-1'>Dossiers encore sous réserve</p>
+                    <p>
+                      {clotureEtudeModal.dossiersSousReserve} candidat
+                      {clotureEtudeModal.dossiersSousReserve > 1 ? 's ont' : ' a'} encore
+                      {' '}leur dossier sous réserve
+                      {clotureEtudeModal.dossiersSousReserve > 1 ? 's' : ''}.
+                      {' '}Ces dossiers pourront encore être corrigés par les candidats concernés.
+                    </p>
+                  </div>
+                )}
+                <p className='text-sm text-gray-600'>
+                  Êtes-vous sûr de vouloir clôturer l&apos;étude des dossiers ?
+                </p>
+              </div>
+              <div className='px-6 py-4 border-t border-gray-100 flex justify-end gap-2'>
+                <button
+                  type='button'
+                  disabled={clotureEtudeBusy}
+                  onClick={() => setClotureEtudeModal(null)}
+                  className='px-3 py-2 text-sm rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50'
+                >
+                  Annuler
+                </button>
+                <button
+                  type='button'
+                  disabled={clotureEtudeBusy}
+                  onClick={confirmerCloturerEtude}
+                  className={`px-3 py-2 text-sm rounded-lg font-semibold text-white disabled:opacity-50 ${
+                    clotureEtudeModal.incomplete
+                      ? 'bg-amber-600 hover:bg-amber-700'
+                      : 'bg-rose-600 hover:bg-rose-700'
+                  }`}
+                >
+                  {clotureEtudeBusy
+                    ? 'Clôture…'
+                    : clotureEtudeModal.incomplete
+                      ? 'Oui, clôturer quand même'
+                      : "Clôturer l'étude"}
+                </button>
               </div>
             </div>
           </div>,
@@ -1161,7 +1388,7 @@ export default function GestionConcours() {
                     {numerosModal.totalGeneres} numéro(s)
                   </p>
                   <p className='text-[11px] text-gray-400 mt-1 font-mono'>
-                    Format : AA + commune + concours + rang (ex. 260140601)
+                    Format : AA + ville + filière + centre + rang (ex. 26014015601)
                   </p>
                 </div>
                 <button
@@ -1187,7 +1414,9 @@ export default function GestionConcours() {
                 {(numerosModal.centres || []).map((centre) => (
                   <div key={centre.centreId} className='border border-gray-100 rounded-xl overflow-hidden'>
                     <div className='bg-gray-50 px-4 py-2 text-sm font-semibold text-gray-700'>
-                      {centre.ville} ({centre.communeCode}) — {centre.centreNom}
+                      {centre.ville} (ville {centre.communeCode}
+                      {centre.centreCode ? ` · centre ${centre.centreCode}` : ''}
+                      ) — {centre.centreNom}
                       <span className='text-gray-400 font-normal ml-2'>{centre.total} candidat(s)</span>
                     </div>
                     <table className='w-full text-xs'>

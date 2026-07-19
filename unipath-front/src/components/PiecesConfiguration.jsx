@@ -17,14 +17,18 @@ const FORMATS_PIECE_PERSO = [
   FORMATS_FICHIERS.PNG,
 ];
 
-export function PiecesConfiguration({ piecesRequises, onChange }) {
+export function PiecesConfiguration({ piecesRequises, onChange, excludeQuittance = false }) {
   const [nouvellepiece, setNouvellePiece] = useState({ nom: '', formats: ['PDF'], obligatoire: true });
   const [ajoutOuvert, setAjoutOuvert] = useState(false);
+
+  const piecesUi = excludeQuittance
+    ? PIECES_UI.filter((p) => p.id !== PIECE_IDS.QUITTANCE)
+    : PIECES_UI;
 
   const togglePiecePredéfinie = (piece) => {
     const existe = piecesRequises.find((p) => convertLegacyId(p.id) === piece.id);
     if (existe) {
-      if (piece.id === PIECE_IDS.QUITTANCE) return;
+      if (!excludeQuittance && piece.id === PIECE_IDS.QUITTANCE) return;
       onChange(piecesRequises.filter((p) => convertLegacyId(p.id) !== piece.id));
     } else {
       onChange([...piecesRequises, { ...piece }]);
@@ -57,7 +61,7 @@ export function PiecesConfiguration({ piecesRequises, onChange }) {
   };
 
   const supprimerPiece = (id) => {
-    if (convertLegacyId(id) === PIECE_IDS.QUITTANCE) return;
+    if (!excludeQuittance && convertLegacyId(id) === PIECE_IDS.QUITTANCE) return;
     onChange(piecesRequises.filter((p) => p.id !== id));
   };
 
@@ -73,9 +77,9 @@ export function PiecesConfiguration({ piecesRequises, onChange }) {
       <div>
         <p className='text-xs text-gray-500 mb-2'>Pièces standard</p>
         <div className='space-y-2'>
-          {PIECES_UI.map((piece) => {
+          {piecesUi.map((piece) => {
             const selectionnee = !!piecesRequises.find((p) => convertLegacyId(p.id) === piece.id);
-            const estQuittance = piece.id === PIECE_IDS.QUITTANCE;
+            const estQuittance = !excludeQuittance && piece.id === PIECE_IDS.QUITTANCE;
             return (
               <div
                 key={piece.id}

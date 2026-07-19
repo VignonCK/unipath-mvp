@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { campagneService, filiereService } from '../../services/api';
+import { campagneService, dgesService, filiereService } from '../../services/api';
 import CandidatLayout from '../../components/CandidatLayout';
 import EcolesPriveesNav from '../../components/EcolesPriveesNav';
 import { ROUTES } from '../../constants/routes';
@@ -16,15 +16,25 @@ export default function PageCampagnesInscription() {
   const [filieres, setFilieres] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filters, setFilters] = useState({ ville: '', anneeAcademique: '', filiereId: '' });
+  const [anneeEnCours, setAnneeEnCours] = useState('');
+  const [filters, setFilters] = useState({ ville: '', filiereId: '' });
+
+  useEffect(() => {
+    dgesService
+      .getAnneeEnCours()
+      .then((data) => {
+        setAnneeEnCours(data?.annee?.libelle || '');
+      })
+      .catch(() => {});
+  }, []);
 
   const charger = () => {
     setLoading(true);
     setError('');
     const params = {};
     if (filters.ville) params.ville = filters.ville;
-    if (filters.anneeAcademique) params.anneeAcademique = filters.anneeAcademique;
     if (filters.filiereId) params.filiereId = filters.filiereId;
+    // Année : laissée vide → API = année DGES en cours uniquement
 
     campagneService
       .getAll(params)
@@ -39,7 +49,7 @@ export default function PageCampagnesInscription() {
 
   useEffect(() => {
     charger();
-  }, [filters.ville, filters.anneeAcademique, filters.filiereId]);
+  }, [filters.ville, filters.filiereId]);
 
   const villes = [...new Set(campagnes.map((c) => c.etablissement?.ville).filter(Boolean))].sort();
 
@@ -74,6 +84,12 @@ export default function PageCampagnesInscription() {
                 <h1 className="text-2xl md:text-3xl font-black text-gray-900">Écoles privées</h1>
                 <p className="text-gray-600 mt-2">
                   Campagnes ouvertes — déposez votre dossier directement depuis une offre publiée.
+                  {anneeEnCours ? (
+                    <>
+                      {' '}
+                      Année en cours : <strong>{anneeEnCours}</strong>.
+                    </>
+                  ) : null}
                 </p>
               </div>
             </div>
@@ -88,7 +104,7 @@ export default function PageCampagnesInscription() {
         </div>
 
         <BentoCard className="p-4 !bg-white dark:!bg-white">
-          <div className="grid sm:grid-cols-3 gap-3">
+          <div className="grid sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Ville</label>
               <select
@@ -103,15 +119,6 @@ export default function PageCampagnesInscription() {
                   </option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Année académique</label>
-              <input
-                value={filters.anneeAcademique}
-                onChange={(e) => setFilters((p) => ({ ...p, anneeAcademique: e.target.value }))}
-                placeholder="2025-2026"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Filière</label>
@@ -163,9 +170,7 @@ export default function PageCampagnesInscription() {
                     {c.etablissement?.nom}
                   </p>
                   <h2 className="font-bold text-gray-900 mt-1">{c.titre}</h2>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {c.etablissement?.ville} · {c.anneeAcademique}
-                  </p>
+                  <p className="text-sm text-gray-500 mt-1">{c.etablissement?.ville}</p>
                   <p className="text-xs text-gray-400 mt-2">
                     {formatDate(c.dateOuverture)} → {formatDate(c.dateCloture)}
                   </p>

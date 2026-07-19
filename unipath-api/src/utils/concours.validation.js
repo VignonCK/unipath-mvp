@@ -209,6 +209,45 @@ function validatePiecesRequises(piecesRequises) {
 }
 
 /**
+ * Valide les pièces d'une campagne établissement (quittance frais de dossier gérée à part).
+ * @param {Object|Array} piecesRequises - { pieces: [...] } ou [...]
+ * @returns {{ valid: boolean, error?: string }}
+ */
+function validatePiecesCampagne(piecesRequises) {
+  if (!piecesRequises || typeof piecesRequises !== 'object') {
+    return { valid: false, error: 'La configuration des pièces est invalide' };
+  }
+
+  const pieces = piecesRequises.pieces || piecesRequises;
+  if (!Array.isArray(pieces)) {
+    return { valid: false, error: 'Les pièces requises doivent être un tableau' };
+  }
+  if (pieces.length === 0) {
+    return { valid: false, error: 'Au moins une pièce doit être configurée' };
+  }
+
+  const formatsValides = FORMATS_DISPONIBLES.map((f) => f.value);
+
+  for (const piece of pieces) {
+    if (!piece.nom || typeof piece.nom !== 'string' || piece.nom.trim() === '') {
+      return { valid: false, error: 'Chaque pièce doit avoir un nom valide' };
+    }
+    if (!piece.formats || !Array.isArray(piece.formats) || piece.formats.length === 0) {
+      return { valid: false, error: `La pièce "${piece.nom}" doit avoir au moins un format accepté` };
+    }
+    const formatsInvalides = piece.formats.filter((f) => !formatsValides.includes(f));
+    if (formatsInvalides.length > 0) {
+      return {
+        valid: false,
+        error: `Formats invalides pour "${piece.nom}" : ${formatsInvalides.join(', ')}`,
+      };
+    }
+  }
+
+  return { valid: true };
+}
+
+/**
  * Valide la configuration des critères d'éligibilité
  * @param {Object|Array} criteresEligibilite - format { criteres: [...] } ou [...]
  * @returns {Object} { valid: boolean, error?: string }
@@ -264,5 +303,6 @@ module.exports = {
   validateDatesCoherence,
   validateSeries,
   validatePiecesRequises,
+  validatePiecesCampagne,
   validateCriteresEligibilite
 };

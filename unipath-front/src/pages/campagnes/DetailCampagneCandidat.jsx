@@ -89,7 +89,6 @@ export default function DetailCampagneCandidat() {
                   <th className="text-left px-4 py-3 font-semibold text-gray-600">Filière</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-600">Niveau</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-600">Frais</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600">Places</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-600">Séries</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-600">Critères</th>
                   <th className="px-4 py-3" />
@@ -101,7 +100,6 @@ export default function DetailCampagneCandidat() {
                     <td className="px-4 py-4 font-medium">{cf.filiere?.nom}</td>
                     <td className="px-4 py-4 text-gray-600">{cf.filiere?.niveau || '—'}</td>
                     <td className="px-4 py-4">{cf.fraisDossier?.toLocaleString('fr-FR')} FCFA</td>
-                    <td className="px-4 py-4">{cf.placesDisponibles ?? '—'}</td>
                     <td className="px-4 py-4">{(cf.seriesAcceptees || []).join(', ') || 'Toutes'}</td>
                     <td className="px-4 py-4 text-gray-600 max-w-xs">{cf.criteresSelection || '—'}</td>
                     <td className="px-4 py-4">

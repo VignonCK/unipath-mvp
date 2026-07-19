@@ -255,7 +255,6 @@ export default function EtablissementDetail() {
                         <tr>
                           <th className="text-left px-4 py-3 font-semibold text-gray-600">Filière</th>
                           <th className="text-left px-4 py-3 font-semibold text-gray-600">Frais dossier</th>
-                          <th className="text-left px-4 py-3 font-semibold text-gray-600">Places</th>
                           <th className="text-left px-4 py-3 font-semibold text-gray-600">Séries</th>
                           <th className="px-4 py-3" />
                         </tr>
@@ -265,7 +264,6 @@ export default function EtablissementDetail() {
                           <tr key={cf.id}>
                             <td className="px-4 py-3 font-medium">{cf.filiere?.nom || '—'}</td>
                             <td className="px-4 py-3">{formatFcfa(cf.fraisDossier)}</td>
-                            <td className="px-4 py-3">{cf.placesDisponibles ?? '—'}</td>
                             <td className="px-4 py-3">{(cf.seriesAcceptees || []).join(', ') || 'Toutes'}</td>
                             <td className="px-4 py-3">
                               <button

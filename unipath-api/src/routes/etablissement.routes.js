@@ -14,9 +14,9 @@ router.post(
   checkRole(['CANDIDAT']),
   etablissementController.rechercherParFilieres
 );
-router.get('/mon/profil', protect, checkRole(['ETABLISSEMENT']), etablissementController.getMonProfilEtablissement);
-router.put('/mon/profil', protect, checkRole(['ETABLISSEMENT']), etablissementController.updateMonProfilEtablissement);
-router.post('/mon/logo', protect, checkRole(['ETABLISSEMENT']), upload.single('logo'), etablissementController.uploadMonLogoEtablissement);
+router.get('/mon/profil', protect, checkRole(['ADMIN_ETABLISSEMENT', 'ETABLISSEMENT']), etablissementController.getMonProfilEtablissement);
+router.put('/mon/profil', protect, checkRole(['ADMIN_ETABLISSEMENT', 'ETABLISSEMENT']), etablissementController.updateMonProfilEtablissement);
+router.post('/mon/logo', protect, checkRole(['ADMIN_ETABLISSEMENT', 'ETABLISSEMENT']), upload.single('logo'), etablissementController.uploadMonLogoEtablissement);
 router.get('/:id', etablissementController.getEtablissementById);
 router.get('/:id/etudiants', protect, etablissementController.getEtudiantsEtablissement);
 router.get('/:id/statistiques', protect, etablissementController.getStatistiquesEtablissement);

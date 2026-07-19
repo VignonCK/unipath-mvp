@@ -277,7 +277,6 @@ exports.getMesConcours = async (req, res) => {
             nom: concours.libelle,
             libelle: concours.libelle,
             etablissement: concours.etablissement,
-            code: concours.code,
             dateDebutEtudeDossiers: concours.dateDebutEtudeDossiers,
             dateFinEtudeDossiers: concours.dateFinEtudeDossiers,
             etudeDossiersClotureeAt: concours.etudeDossiersClotureeAt,

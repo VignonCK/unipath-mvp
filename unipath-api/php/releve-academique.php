@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require(__DIR__ . '/fpdf.php');
 require(__DIR__ . '/pdf-common.php');
 
@@ -55,15 +55,15 @@ function renderEtablissementHeader($pdf, $leftMargin, $rightMargin, $contentWidt
         $pdf->Image($logoAbsolute, $pageWidth - $rightMargin - 30, 15, 30, 22);
     } else {
         $pdf->SetXY($pageWidth - $rightMargin - 30, 15);
-        $pdf->SetFont('Helvetica', 'B', 12);
+        $pdf->SetFont('Times', 'B', 12);
         $pdf->Cell(30, 22, 'LOGO ETAB', 1, 0, 'C');
     }
 
     $pdf->SetY(20);
-    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetFont('Times', 'B', 12);
     $pdf->SetTextColor(0, 0, 0);
     $pdf->Cell(0, 5, strtoupper(cleanText($etablissement['nom'] ?? 'Etablissement')), 0, 1, 'C');
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
     if (!empty($etablissement['adresse'])) {
         $pdf->Cell(0, 4, cleanText($etablissement['adresse']), 0, 1, 'C');
     }
@@ -78,10 +78,10 @@ function renderEtablissementHeader($pdf, $leftMargin, $rightMargin, $contentWidt
     $pdf->SetDrawColor(0, 0, 0);
     $pdf->SetLineWidth(0.5);
     $pdf->Rect($leftMargin + 30, $pdf->GetY(), $contentWidth - 60, 12);
-    $pdf->SetFont('Helvetica', 'B', 14);
+    $pdf->SetFont('Times', 'B', 14);
     $pdf->Cell(0, 12, 'RELEVE ACADEMIQUE', 0, 1, 'C');
     $pdf->Ln(3);
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
     $pdf->Cell(0, 6, cleanText('Bulletin officiel du parcours universitaire'), 0, 1, 'C');
     $pdf->Ln(3);
 }
@@ -96,7 +96,7 @@ function calculerMention($moyenne) {
 }
 
 function renderNotesTableHeader($pdf, $leftMargin) {
-    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetFont('Times', 'B', 12);
     $pdf->SetFillColor(235, 235, 235);
     $pdf->SetX($leftMargin);
     $pdf->Cell(52, 7, 'Matiere', 1, 0, 'L', true);
@@ -105,11 +105,11 @@ function renderNotesTableHeader($pdf, $leftMargin) {
     $pdf->Cell(24, 7, 'Moyenne', 1, 0, 'C', true);
     $pdf->Cell(20, 7, 'Credits', 1, 0, 'C', true);
     $pdf->Cell(18, 7, 'Sem', 1, 1, 'C', true);
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
 }
 
 function renderRecapTableHeader($pdf, $leftMargin) {
-    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetFont('Times', 'B', 12);
     $pdf->SetFillColor(235, 235, 235);
     $pdf->SetX($leftMargin);
     $pdf->Cell(45, 7, 'Annee', 1, 0, 'C', true);
@@ -117,7 +117,7 @@ function renderRecapTableHeader($pdf, $leftMargin) {
     $pdf->Cell(22, 7, 'Niveau', 1, 0, 'C', true);
     $pdf->Cell(22, 7, 'Credits', 1, 0, 'C', true);
     $pdf->Cell(26, 7, 'Moyenne', 1, 1, 'C', true);
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
 }
 
 try {
@@ -142,35 +142,35 @@ try {
     $cardHeight = 37;
     $pdf->Rect($leftMargin, $cardY, $contentWidth, $cardHeight, 'FD');
 
-    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetFont('Times', 'B', 12);
     $pdf->SetX($leftMargin + 2);
     $pdf->Cell(44, 6, 'ETABLISSEMENT :', 0, 0, 'L');
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
     $pdf->Cell(0, 6, cleanText($etabNom), 0, 1, 'L');
 
-    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetFont('Times', 'B', 12);
     $pdf->SetX($leftMargin + 2);
     $pdf->Cell(44, 6, 'NOM ET PRENOM :', 0, 0, 'L');
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
     $pdf->Cell(0, 6, strtoupper(cleanText(($candidat['prenom'] ?? '') . ' ' . ($candidat['nom'] ?? ''))), 0, 1, 'L');
 
-    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetFont('Times', 'B', 12);
     $pdf->SetX($leftMargin + 2);
     $pdf->Cell(44, 6, 'MATRICULE :', 0, 0, 'L');
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
     $pdf->Cell(0, 6, strtoupper(cleanText($candidat['matricule'] ?? 'N/A')), 0, 1, 'L');
 
-    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetFont('Times', 'B', 12);
     $pdf->SetX($leftMargin + 2);
     $pdf->Cell(44, 6, 'DATE / LIEU NAISS. :', 0, 0, 'L');
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
     $dateNaiss = !empty($candidat['dateNaiss']) ? date('d/m/Y', strtotime($candidat['dateNaiss'])) : 'N/A';
     $pdf->Cell(0, 6, $dateNaiss . ' / ' . cleanText($candidat['lieuNaiss'] ?? 'N/A'), 0, 1, 'L');
 
-    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetFont('Times', 'B', 12);
     $pdf->SetX($leftMargin + 2);
     $pdf->Cell(44, 6, 'NATIONALITE :', 0, 0, 'L');
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
     $pdf->Cell(0, 6, cleanText($candidat['nationalite'] ?? 'N/A'), 0, 1, 'L');
 
     $photoX = $leftMargin + $contentWidth - 30;
@@ -179,20 +179,20 @@ try {
         $pdf->Image($photoPath, $photoX, $photoY, 24, 30);
     } else {
         $pdf->Rect($photoX, $photoY, 24, 30);
-        $pdf->SetFont('Helvetica', '', 12);
+        $pdf->SetFont('Times', '', 12);
         $pdf->SetXY($photoX, $photoY + 10);
         $pdf->Cell(24, 6, 'PHOTO', 0, 0, 'C');
     }
 
     $pdf->SetY($cardY + $cardHeight + 3);
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
     $pdf->SetX($leftMargin);
     $pdf->Cell(45, 6, 'MOYENNE GENERALE :', 0, 0, 'L');
-    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetFont('Times', 'B', 12);
     $pdf->Cell(40, 6, is_numeric($moyenneGlobale) ? number_format($moyenneGlobale, 2, ',', ' ') . '/20' : 'Non disponible', 0, 0, 'L');
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
     $pdf->Cell(22, 6, 'Mention :', 0, 0, 'L');
-    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetFont('Times', 'B', 12);
     $pdf->Cell(0, 6, cleanText(calculerMention($moyenneGlobale)), 0, 1, 'L');
 
     $pdf->Ln(2);
@@ -263,7 +263,7 @@ try {
     $pdf->SetDrawColor(0, 0, 0);
     $pdf->SetLineWidth(0.4);
     $pdf->Rect($leftMargin, $pdf->GetY(), $contentWidth, 10);
-    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetFont('Times', 'B', 12);
     $pdf->Cell(0, 10, cleanText('DECISION DU JURY : ' . $decisionJury), 0, 1, 'C');
 
     renderSignatureBlock($pdf, 'Le President du Jury');

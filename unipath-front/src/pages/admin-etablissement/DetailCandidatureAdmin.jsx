@@ -1,16 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { applicationService, ouvrirPiece } from '../../services/api';
+import { applicationService, preinscriptionEtablissementService } from '../../services/api';
 import AdminEtablissementLayout from '../../components/AdminEtablissementLayout';
 import { BentoCard } from '../../components/AcademicLayout';
-import { getApplicationStatus, needsPreinscriptionDecision, PREINSCRIPTION_STATUS } from '../../utils/adminParcoursInscription';
-
-const PIECES_LABELS = {
-  acteNaissance: 'Acte de naissance',
-  carteIdentite: "Carte d'identité",
-  photo: "Photo d'identité",
-  releve: 'Relevé de notes',
-};
+import {
+  getCandidatureDisplayStatus,
+  needsPreinscriptionDecision,
+  isVerdictLocked,
+  PREINSCRIPTION_STATUS,
+} from '../../utils/adminParcoursInscription';
+import { buildUnifiedPieces } from '../../utils/application-pieces';
 
 export default function DetailCandidatureAdmin() {
   const { id } = useParams();
@@ -19,9 +18,13 @@ export default function DetailCandidatureAdmin() {
   const [completion, setCompletion] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [openingPiece, setOpeningPiece] = useState(null);
+  const [decisionBusy, setDecisionBusy] = useState(false);
+  const [sousReserveModal, setSousReserveModal] = useState({ open: false, commentaire: '' });
 
-  useEffect(() => {
+  const reload = () => {
+    setLoading(true);
     applicationService
       .getById(id)
       .then((data) => {
@@ -30,13 +33,27 @@ export default function DetailCandidatureAdmin() {
       })
       .catch((err) => setError(err.message || 'Candidature introuvable'))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const handleOpenPiece = async (url, key) => {
-    if (!url) return;
+  const pieces = useMemo(() => buildUnifiedPieces(application), [application]);
+
+  const handleOpenPiece = (url, key) => {
+    if (!url) {
+      setError('Fichier introuvable pour cette pièce.');
+      return;
+    }
     setOpeningPiece(key);
+    setError('');
     try {
-      await ouvrirPiece(url);
+      const opened = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!opened) {
+        setError('Le navigateur a bloqué l\'ouverture du fichier. Autorisez les pop-ups.');
+      }
     } catch (err) {
       setError(err.message || 'Impossible d\'ouvrir le document');
     } finally {
@@ -44,7 +61,41 @@ export default function DetailCandidatureAdmin() {
     }
   };
 
-  if (loading) {
+  const decider = async (statut, extra = {}) => {
+    const preinscriptionId = application?.preinscription?.id;
+    if (!preinscriptionId) {
+      setError('Aucune pré-inscription liée à ce dossier.');
+      return;
+    }
+    if (application?.preinscription?.statut !== 'EN_ATTENTE') {
+      setError(
+        application?.preinscription?.statut === 'SOUS_RESERVE'
+          ? 'Dossier sous réserve : attendez la resoumission du candidat avant un nouveau verdict.'
+          : 'Cette décision est définitive et ne peut plus être modifiée.'
+      );
+      return;
+    }
+    setError('');
+    setSuccess('');
+    setDecisionBusy(true);
+    try {
+      await preinscriptionEtablissementService.decider(preinscriptionId, { statut, ...extra });
+      if (statut === 'VALIDE') {
+        setSuccess('Candidat validé — il apparaîtra dans la liste Étudiants.');
+      } else if (statut === 'SOUS_RESERVE') {
+        setSuccess('Décision enregistrée : sous réserve. Le candidat a été notifié.');
+      } else {
+        setSuccess('Dossier rejeté.');
+      }
+      reload();
+    } catch (err) {
+      setError(err.message || 'Décision impossible');
+    } finally {
+      setDecisionBusy(false);
+    }
+  };
+
+  if (loading && !application) {
     return (
       <AdminEtablissementLayout>
         <div className="flex justify-center py-24">
@@ -63,9 +114,9 @@ export default function DetailCandidatureAdmin() {
   }
 
   const candidat = application.candidat;
-  const dossier = candidat?.dossier;
-  const statusInfo = getApplicationStatus(application.status);
+  const statusInfo = getCandidatureDisplayStatus(application);
   const awaitingDecision = needsPreinscriptionDecision(application);
+  const verdictLocked = isVerdictLocked(application);
   const preinStatut = application.preinscription?.statut;
   const preinInfo = preinStatut ? PREINSCRIPTION_STATUS[preinStatut] : null;
 
@@ -83,6 +134,9 @@ export default function DetailCandidatureAdmin() {
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
+        {success && (
+          <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div>
+        )}
 
         <BentoCard className="p-6 space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -97,7 +151,13 @@ export default function DetailCandidatureAdmin() {
           <p className="text-sm text-gray-500">{statusInfo.hint}</p>
           {completion && (
             <p className="text-sm text-gray-600">
-              Complétude du dossier : <strong>{completion.percentage ?? completion.pourcentage ?? 0}%</strong>
+              Complétude du dossier :{' '}
+              <strong>
+                {completion.percentage
+                  ?? completion.pourcentage
+                  ?? (completion.isComplete ? 100 : 0)}
+                %
+              </strong>
             </p>
           )}
           {application.preinscription && (
@@ -113,19 +173,6 @@ export default function DetailCandidatureAdmin() {
           )}
         </BentoCard>
 
-        {awaitingDecision && (
-          <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-900 flex flex-wrap items-center justify-between gap-3">
-            <span>Ce dossier est prêt — la décision d&apos;admission se prend dans Pré-inscriptions.</span>
-            <button
-              type="button"
-              onClick={() => navigate('/admin-etablissement/preinscriptions')}
-              className="px-3 py-1.5 text-xs font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-600"
-            >
-              Aller aux pré-inscriptions →
-            </button>
-          </div>
-        )}
-
         <BentoCard className="p-6 space-y-2">
           <h2 className="font-bold text-gray-900">Candidat</h2>
           <p className="text-sm text-gray-800">{candidat?.prenom} {candidat?.nom}</p>
@@ -136,59 +183,139 @@ export default function DetailCandidatureAdmin() {
 
         <BentoCard className="p-6">
           <h2 className="font-bold text-gray-900 mb-4">Pièces du dossier</h2>
-          {!dossier ? (
+          {pieces.length === 0 ? (
             <p className="text-sm text-gray-400">Aucune pièce enregistrée.</p>
           ) : (
             <ul className="space-y-2">
-              {Object.entries(PIECES_LABELS).map(([key, label]) => {
-                const url = dossier[key];
-                return (
-                  <li key={key} className="flex items-center justify-between gap-3 text-sm border-b border-gray-50 pb-2">
-                    <span className="text-gray-700">{label}</span>
-                    {url ? (
-                      <button
-                        type="button"
-                        disabled={openingPiece === key}
-                        onClick={() => handleOpenPiece(url, key)}
-                        className="text-teal-800 font-semibold text-xs hover:underline disabled:opacity-50"
-                      >
-                        {openingPiece === key ? 'Ouverture...' : 'Consulter'}
-                      </button>
-                    ) : (
-                      <span className="text-xs text-gray-400">Manquant</span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </BentoCard>
-
-        {(application.documents?.length > 0) && (
-          <BentoCard className="p-6">
-            <h2 className="font-bold text-gray-900 mb-4">Documents complémentaires</h2>
-            <ul className="space-y-2">
-              {application.documents.map((doc) => (
-                <li key={doc.id} className="flex items-center justify-between gap-3 text-sm">
-                  <span>{doc.label || doc.code}</span>
-                  {doc.documentUrl ? (
-                    <a
-                      href={doc.documentUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-teal-800 font-semibold text-xs hover:underline"
+              {pieces.map((piece) => (
+                <li
+                  key={piece.key}
+                  className="flex items-center justify-between gap-3 text-sm border-b border-gray-50 pb-2 last:border-0"
+                >
+                  <span className="text-gray-700">{piece.label}</span>
+                  {piece.openUrl ? (
+                    <button
+                      type="button"
+                      disabled={openingPiece === piece.key}
+                      onClick={() => handleOpenPiece(piece.openUrl, piece.key)}
+                      className="text-teal-800 font-semibold text-xs hover:underline disabled:opacity-50"
                     >
-                      Ouvrir
-                    </a>
+                      {openingPiece === piece.key ? 'Ouverture...' : 'Consulter'}
+                    </button>
                   ) : (
-                    <span className="text-xs text-gray-400">{doc.status}</span>
+                    <span className="text-xs text-gray-400">
+                      {piece.status === 'PROVIDED' ? 'Fichier non disponible' : (piece.status || 'Manquant')}
+                    </span>
                   )}
                 </li>
               ))}
             </ul>
+          )}
+        </BentoCard>
+
+        {awaitingDecision && application.preinscription?.id && (
+          <BentoCard className="p-6 space-y-3 border border-orange-200 bg-orange-50/50">
+            <h2 className="font-bold text-orange-950">Décision d&apos;admission</h2>
+            <p className="text-sm text-orange-900">
+              Valider crée l&apos;inscription académique et envoie la fiche au candidat.
+              Une fois rendue, la décision ne pourra plus être modifiée
+              (sauf nouveau passage en attente après sous réserve).
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={decisionBusy}
+                onClick={() => decider('VALIDE')}
+                className="px-3 py-1.5 text-xs font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              >
+                Valider
+              </button>
+              <button
+                type="button"
+                disabled={decisionBusy}
+                onClick={() => setSousReserveModal({ open: true, commentaire: '' })}
+                className="px-3 py-1.5 text-xs font-semibold bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50"
+              >
+                Sous réserve
+              </button>
+              <button
+                type="button"
+                disabled={decisionBusy}
+                onClick={() => {
+                  const motifDecision = window.prompt('Motif du rejet :', '') || '';
+                  if (!motifDecision.trim()) return;
+                  decider('REJETE', { motifDecision: motifDecision.trim() });
+                }}
+                className="px-3 py-1.5 text-xs font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                Rejeter
+              </button>
+            </div>
+          </BentoCard>
+        )}
+
+        {verdictLocked && (
+          <BentoCard className="p-6 space-y-2">
+            <h2 className="font-bold text-gray-900">
+              Verdict : {preinInfo?.label || preinStatut}
+            </h2>
+            <p className="text-sm text-gray-600">
+              {preinStatut === 'SOUS_RESERVE'
+                ? 'En attente des corrections du candidat. Vous pourrez redonner un verdict uniquement après sa resoumission.'
+                : 'Cette décision est définitive et ne peut plus être modifiée.'}
+            </p>
+            {application.preinscription?.motifDecision && (
+              <p className="text-sm text-gray-700">
+                Motif : {application.preinscription.motifDecision}
+              </p>
+            )}
           </BentoCard>
         )}
       </div>
+
+      {sousReserveModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="font-semibold text-gray-900">Accepter sous réserve</h3>
+            </div>
+            <div className="px-6 py-5">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Message au candidat <span className="text-red-600">*</span>
+              </label>
+              <textarea
+                value={sousReserveModal.commentaire}
+                onChange={(e) => setSousReserveModal((m) => ({ ...m, commentaire: e.target.value }))}
+                placeholder="Indiquez les compléments attendus du candidat…"
+                rows={5}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm resize-none"
+              />
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setSousReserveModal({ open: false, commentaire: '' })}
+                className="text-sm border border-gray-200 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={!sousReserveModal.commentaire.trim() || decisionBusy}
+                onClick={async () => {
+                  await decider('SOUS_RESERVE', {
+                    motifDecision: sousReserveModal.commentaire.trim(),
+                  });
+                  setSousReserveModal({ open: false, commentaire: '' });
+                }}
+                className="text-sm bg-amber-500 text-white px-5 py-2 rounded-lg hover:bg-amber-600 disabled:opacity-60"
+              >
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminEtablissementLayout>
   );
 }

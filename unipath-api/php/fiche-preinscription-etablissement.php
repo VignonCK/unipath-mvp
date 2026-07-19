@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require(__DIR__ . '/fpdf.php');
 require(__DIR__ . '/pdf-common.php');
 
@@ -29,6 +29,9 @@ if (!isset($data['candidat']) || !isset($data['preinscription'])) {
 
 $candidat = $data['candidat'];
 $pre = $data['preinscription'];
+$photoBase64 = $data['photoBase64'] ?? null;
+$photoMime = $data['photoMime'] ?? null;
+$photoStoragePath = $data['photoStoragePath'] ?? ($candidat['photoPath'] ?? null);
 
 try {
     $pdf = new FPDF('P', 'mm', 'A4');
@@ -39,6 +42,9 @@ try {
     $leftMargin = 20;
     $rightMargin = 20;
     $contentWidth = 170;
+    $photoW = 28;
+    $photoH = 34;
+    $textWidth = $contentWidth - $photoW - 6;
 
     renderOfficialHeader(
         $pdf,
@@ -53,29 +59,47 @@ try {
     $pdf->SetFillColor(245, 247, 251);
     $pdf->SetDrawColor(200, 210, 220);
     $pdf->Rect($leftMargin, $pdf->GetY(), $contentWidth, 10, 'FD');
-    $pdf->SetFont('Helvetica', 'B', 12);
+    $pdf->SetFont('Times', 'B', 12);
     $pdf->SetX($leftMargin + 2);
     $pdf->Cell($contentWidth - 4, 10, cleanText('Numero de pre-inscription : ') . $numero, 0, 1, 'L');
     $pdf->Ln(3);
 
     renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Informations etudiant', 'blue');
-    $pdf->SetFont('Helvetica', '', 12);
-    $pdf->SetX($leftMargin + 2);
+
+    $sectionStartY = $pdf->GetY();
+    $photoX = $leftMargin + $contentWidth - $photoW;
+    $photoY = $sectionStartY + 1;
+
+    $pdf->SetFont('Times', '', 12);
+    $pdf->SetXY($leftMargin + 2, $sectionStartY + 1);
     $pdf->Cell(58, 8, 'Nom et prenom :', 0, 0, 'L');
-    $pdf->Cell(0, 8, strtoupper(cleanText(($candidat['nom'] ?? '') . ' ' . ($candidat['prenom'] ?? ''))), 0, 1, 'L');
+    $pdf->Cell($textWidth - 58, 8, strtoupper(cleanText(($candidat['nom'] ?? '') . ' ' . ($candidat['prenom'] ?? ''))), 0, 1, 'L');
     $pdf->SetX($leftMargin + 2);
     $pdf->Cell(58, 8, 'Matricule :', 0, 0, 'L');
-    $pdf->Cell(0, 8, strtoupper(cleanText($candidat['matricule'] ?? 'N/A')), 0, 1, 'L');
+    $pdf->Cell($textWidth - 58, 8, strtoupper(cleanText($candidat['matricule'] ?? 'N/A')), 0, 1, 'L');
     $pdf->SetX($leftMargin + 2);
     $pdf->Cell(58, 8, 'Email :', 0, 0, 'L');
-    $pdf->Cell(0, 8, cleanText($candidat['email'] ?? 'N/A'), 0, 1, 'L');
+    $pdf->Cell($textWidth - 58, 8, cleanText($candidat['email'] ?? 'N/A'), 0, 1, 'L');
     $pdf->SetX($leftMargin + 2);
     $pdf->Cell(58, 8, 'Telephone :', 0, 0, 'L');
-    $pdf->Cell(0, 8, cleanText($candidat['telephone'] ?? 'Non renseigne'), 0, 1, 'L');
+    $pdf->Cell($textWidth - 58, 8, cleanText($candidat['telephone'] ?? 'Non renseigne'), 0, 1, 'L');
 
-    $pdf->Ln(2);
+    $textEndY = $pdf->GetY();
+    renderIdentityPhotoZone(
+        $pdf,
+        $photoBase64,
+        $photoMime,
+        $photoX,
+        $photoY,
+        $photoW,
+        $photoH,
+        $photoStoragePath,
+        'Photo'
+    );
+    $pdf->SetY(max($textEndY, $photoY + $photoH) + 4);
+
     renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Informations de pre-inscription', 'green');
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
     $pdf->SetX($leftMargin + 2);
     $pdf->Cell(58, 8, 'Etablissement :', 0, 0, 'L');
     $pdf->Cell(0, 8, cleanText($pre['etablissementNom'] ?? 'N/A'), 0, 1, 'L');
@@ -94,7 +118,7 @@ try {
 
     $pdf->Ln(2);
     renderSectionHeader($pdf, $leftMargin, $contentWidth, 'Mentions importantes', 'red');
-    $pdf->SetFont('Helvetica', '', 12);
+    $pdf->SetFont('Times', '', 12);
     $mentions = [
         'Ce document atteste uniquement la pre-inscription.',
         'La validation finale releve de l etablissement concerne.',
