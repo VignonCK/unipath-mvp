@@ -40,4 +40,11 @@ router.delete(
   adminEtablissementController.supprimerAdmin
 );
 
+router.post(
+  '/:etablissementId/admins/:adminId/reinitialiser-mot-de-passe',
+  protect,
+  checkRole(['DGES']),
+  adminEtablissementController.reinitialiserMotDePasse
+);
+
 module.exports = router;

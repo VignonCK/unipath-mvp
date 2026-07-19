@@ -555,6 +555,11 @@ export const dgesService = {
       body: JSON.stringify(data),
     }),
 
+  reinitialiserMotDePasseAdmin: (etablissementId, adminId) =>
+    request(`/dges/etablissements/${etablissementId}/admins/${adminId}/reinitialiser-mot-de-passe`, {
+      method: 'POST',
+    }),
+
   supprimerAdminEtablissement: (etablissementId, adminId) =>
     request(`/dges/etablissements/${etablissementId}/admins/${adminId}`, {
       method: 'DELETE',

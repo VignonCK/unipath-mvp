@@ -98,12 +98,12 @@ exports.creerAdmin = async (req, res) => {
           <h2>Bienvenue sur UniPath</h2>
           <p>Bonjour ${admin.prenom} ${admin.nom},</p>
           <p>Un compte administrateur a été créé pour l'établissement <strong>${etablissement.nom}</strong>.</p>
-          <p><strong>Email :</strong> ${emailNormalise}</p>
-          <p><strong>Mot de passe temporaire :</strong> ${motDePasseTemporaire}</p>
-          <p><strong>Validité :</strong> ${TEMP_PASSWORD_VALIDITY_HOURS} heures à compter de la réception de cet email.</p>
-          <p>Connectez-vous sur <a href="${loginUrl}">${loginUrl}</a>. Vous devrez <strong>immédiatement définir un mot de passe personnel</strong> (le temporaire ne sera plus utilisable ensuite).</p>
+          <p><strong>Email de connexion :</strong> ${emailNormalise}</p>
+          <p>Le mot de passe temporaire vous a été communiqué par la DGES (il n'est pas repris dans cet email).</p>
+          <p><strong>Validité du temporaire :</strong> ${TEMP_PASSWORD_VALIDITY_HOURS} heures.</p>
+          <p>Connectez-vous sur <a href="${loginUrl}">${loginUrl}</a>. Vous devrez <strong>immédiatement définir un mot de passe personnel</strong>.</p>
         `,
-        textBody: `Bonjour ${admin.prenom} ${admin.nom}, votre compte admin UniPath pour ${etablissement.nom} : email ${emailNormalise}, mot de passe temporaire ${motDePasseTemporaire} (valable ${TEMP_PASSWORD_VALIDITY_HOURS}h). Connexion : ${loginUrl}. Vous devrez définir un mot de passe personnel à la première connexion.`,
+        textBody: `Bonjour ${admin.prenom} ${admin.nom}, compte admin UniPath pour ${etablissement.nom} : email ${emailNormalise}. Mot de passe temporaire communiqué par la DGES (valable ${TEMP_PASSWORD_VALIDITY_HOURS}h). Connexion : ${loginUrl}.`,
       });
     } catch (emailErr) {
       logger.error('[AdminEtablissement] Email credentials non envoyé', {
@@ -119,7 +119,8 @@ exports.creerAdmin = async (req, res) => {
     });
 
     return res.status(201).json({
-      message: 'Administrateur créé avec succès. Un email avec les identifiants a été envoyé.',
+      message: 'Administrateur créé. Notez le mot de passe temporaire : il ne sera plus affiché ensuite. Un email de notification a été envoyé.',
+      temporaryPassword: motDePasseTemporaire,
       admin: {
         id: admin.id,
         nom: admin.nom,
@@ -133,6 +134,97 @@ exports.creerAdmin = async (req, res) => {
   } catch (error) {
     logger.error('[AdminEtablissement] Erreur creerAdmin', { error: error.message });
     return res.status(500).json({ error: 'Erreur serveur lors de la création de l\'administrateur' });
+  }
+};
+
+/**
+ * POST /api/dges/etablissements/:etablissementId/admins/:adminId/reinitialiser-mot-de-passe
+ * Génère un nouveau mdp temporaire (one-shot dans la réponse). Ne stocke jamais le clair.
+ */
+exports.reinitialiserMotDePasse = async (req, res) => {
+  try {
+    const { etablissementId, adminId } = req.params;
+
+    const admin = await prisma.adminEtablissement.findFirst({
+      where: { id: adminId, etablissementId },
+      select: {
+        id: true,
+        nom: true,
+        prenom: true,
+        email: true,
+        sousRole: true,
+        etablissementId: true,
+        etablissement: { select: { id: true, nom: true } },
+      },
+    });
+    if (!admin) {
+      return res.status(404).json({ error: 'Administrateur non trouvé pour cet établissement' });
+    }
+
+    const motDePasseTemporaire = genererMotDePasseTemporaire();
+
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(adminId, {
+      password: motDePasseTemporaire,
+      email_confirm: true,
+      user_metadata: buildAdminEtablissementMetadata(
+        etablissementId,
+        admin.sousRole || 'ADMIN',
+      ),
+    });
+
+    if (authError) {
+      logger.error('[AdminEtablissement] Erreur réinit Auth', {
+        adminId,
+        error: authError.message,
+      });
+      return res.status(400).json({ error: authError.message });
+    }
+
+    const loginUrl = buildFrontendUrl('/login');
+    try {
+      await emailService.createEmail({
+        userId: admin.id,
+        recipient: admin.email,
+        subject: `UniPath — Mot de passe réinitialisé (${admin.etablissement?.nom || 'établissement'})`,
+        emailType: 'ADMIN_ETABLISSEMENT_CREDENTIALS',
+        htmlBody: `
+          <h2>Mot de passe réinitialisé</h2>
+          <p>Bonjour ${admin.prenom} ${admin.nom},</p>
+          <p>La DGES a réinitialisé votre accès administrateur pour <strong>${admin.etablissement?.nom || ''}</strong>.</p>
+          <p><strong>Email de connexion :</strong> ${admin.email}</p>
+          <p>Le nouveau mot de passe temporaire vous a été communiqué par la DGES (il n'est pas repris dans cet email).</p>
+          <p><strong>Validité :</strong> ${TEMP_PASSWORD_VALIDITY_HOURS} heures.</p>
+          <p>Connectez-vous sur <a href="${loginUrl}">${loginUrl}</a> et définissez immédiatement un mot de passe personnel.</p>
+        `,
+        textBody: `Mot de passe UniPath réinitialisé pour ${admin.email}. Temporaire communiqué par la DGES (valable ${TEMP_PASSWORD_VALIDITY_HOURS}h). Connexion : ${loginUrl}`,
+      });
+    } catch (emailErr) {
+      logger.error('[AdminEtablissement] Email réinit non envoyé', {
+        adminId: admin.id,
+        error: emailErr.message,
+      });
+    }
+
+    logger.info('[AdminEtablissement] Mot de passe réinitialisé', {
+      adminId,
+      etablissementId,
+      event: 'ADMIN_ETABLISSEMENT_PASSWORD_RESET',
+    });
+
+    return res.json({
+      message: 'Mot de passe réinitialisé. Notez-le : il ne sera plus affiché ensuite.',
+      temporaryPassword: motDePasseTemporaire,
+      admin: {
+        id: admin.id,
+        nom: admin.nom,
+        prenom: admin.prenom,
+        email: admin.email,
+        etablissement: admin.etablissement,
+      },
+    });
+  } catch (error) {
+    logger.error('[AdminEtablissement] Erreur reinitialiserMotDePasse', { error: error.message });
+    return res.status(500).json({ error: 'Erreur serveur lors de la réinitialisation' });
   }
 };
 

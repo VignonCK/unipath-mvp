@@ -20,6 +20,10 @@ export default function DGESEtablissementsAdmins() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
   const [modalError, setModalError] = useState('');
+  const [resettingId, setResettingId] = useState(null);
+
+  const [passwordReveal, setPasswordReveal] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [etabForm, setEtabForm] = useState(ETAB_FORM_INIT);
@@ -42,6 +46,26 @@ export default function DGESEtablissementsAdmins() {
     chargerEtablissements();
   }, []);
 
+  const ouvrirPasswordReveal = ({ temporaryPassword, email, context }) => {
+    setCopied(false);
+    setPasswordReveal({ temporaryPassword, email, context });
+  };
+
+  const fermerPasswordReveal = () => {
+    setPasswordReveal(null);
+    setCopied(false);
+  };
+
+  const copierMotDePasse = async () => {
+    if (!passwordReveal?.temporaryPassword) return;
+    try {
+      await navigator.clipboard.writeText(passwordReveal.temporaryPassword);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
   const ouvrirModal = async (etab) => {
     setSelectedEtab(etab);
     setModalOpen(true);
@@ -63,6 +87,7 @@ export default function DGESEtablissementsAdmins() {
     setModalOpen(false);
     setSelectedEtab(null);
     setAdmins([]);
+    fermerPasswordReveal();
   };
 
   const handleCreate = async (e) => {
@@ -77,10 +102,46 @@ export default function DGESEtablissementsAdmins() {
       setForm(FORM_INIT);
       const refreshed = await dgesService.listerAdminsEtablissement(selectedEtab.id);
       setAdmins(refreshed.admins || []);
+      if (data.temporaryPassword) {
+        ouvrirPasswordReveal({
+          temporaryPassword: data.temporaryPassword,
+          email: data.admin?.email || form.email,
+          context: 'création',
+        });
+      }
     } catch (err) {
       setModalError(err.message || 'Erreur lors de la création');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleResetPassword = async (admin) => {
+    if (!selectedEtab) return;
+    if (
+      !window.confirm(
+        `Réinitialiser le mot de passe de ${admin.prenom} ${admin.nom} (${admin.email}) ?`
+      )
+    ) {
+      return;
+    }
+    setResettingId(admin.id);
+    setModalError('');
+    setMessage('');
+    try {
+      const data = await dgesService.reinitialiserMotDePasseAdmin(selectedEtab.id, admin.id);
+      setMessage(data.message || 'Mot de passe réinitialisé');
+      if (data.temporaryPassword) {
+        ouvrirPasswordReveal({
+          temporaryPassword: data.temporaryPassword,
+          email: data.admin?.email || admin.email,
+          context: 'réinitialisation',
+        });
+      }
+    } catch (err) {
+      setModalError(err.message || 'Erreur lors de la réinitialisation');
+    } finally {
+      setResettingId(null);
     }
   };
 
@@ -249,18 +310,28 @@ export default function DGESEtablissementsAdmins() {
                 ) : (
                   <ul className="space-y-2">
                     {admins.map((admin) => (
-                      <li key={admin.id} className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3">
+                      <li key={admin.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-gray-100 px-4 py-3">
                         <div>
                           <p className="font-medium text-gray-900">{admin.prenom} {admin.nom}</p>
                           <p className="text-xs text-gray-500">{admin.email}{admin.telephone ? ` · ${admin.telephone}` : ''}</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(admin.id)}
-                          className="text-xs font-semibold text-red-600 hover:text-red-800"
-                        >
-                          Supprimer
-                        </button>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <button
+                            type="button"
+                            disabled={resettingId === admin.id}
+                            onClick={() => handleResetPassword(admin)}
+                            className="text-xs font-semibold text-blue-900 hover:text-orange-500 disabled:opacity-60"
+                          >
+                            {resettingId === admin.id ? 'Réinitialisation…' : 'Réinitialiser le mot de passe'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(admin.id)}
+                            className="text-xs font-semibold text-red-600 hover:text-red-800"
+                          >
+                            Supprimer
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -297,6 +368,43 @@ export default function DGESEtablissementsAdmins() {
                   </div>
                 </form>
               </section>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {passwordReveal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-900">Mot de passe temporaire</h2>
+              <p className="text-xs text-gray-500 mt-1">
+                Affiché une seule fois ({passwordReveal.context}) — {passwordReveal.email}
+              </p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                Notez-le, il ne sera plus affiché ensuite.
+              </div>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 rounded-lg bg-gray-100 px-3 py-2.5 text-sm font-mono text-gray-900 break-all">
+                  {passwordReveal.temporaryPassword}
+                </code>
+                <button
+                  type="button"
+                  onClick={copierMotDePasse}
+                  className="shrink-0 px-3 py-2.5 rounded-lg bg-blue-900 text-white text-xs font-semibold hover:bg-blue-800"
+                >
+                  {copied ? 'Copié' : 'Copier'}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={fermerPasswordReveal}
+                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                J&apos;ai noté le mot de passe
+              </button>
             </div>
           </div>
         </div>
