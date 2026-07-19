@@ -87,8 +87,52 @@ exports.getCommission = async (req, res) => {
       })
     );
 
-    const examinateurs = membres.filter((m) => m.sousRole === 'EXAMINATEUR');
-    const controleurs = membres.filter((m) => m.sousRole === 'CONTROLEUR');
+    const [examCounts, ctrlCounts] = await Promise.all([
+      withPrismaRetry(() =>
+        prisma.dossierInscription.groupBy({
+          by: ['verdict1Par'],
+          where: {
+            verdict1Par: { not: null },
+            inscription: { concoursId },
+          },
+          _count: { _all: true },
+        })
+      ),
+      withPrismaRetry(() =>
+        prisma.dossierInscription.groupBy({
+          by: ['decisionControleurPar'],
+          where: {
+            decisionControleurPar: { not: null },
+            inscription: { concoursId },
+          },
+          _count: { _all: true },
+        })
+      ),
+    ]);
+
+    const countByExam = Object.fromEntries(
+      (examCounts || [])
+        .filter((r) => r.verdict1Par)
+        .map((r) => [r.verdict1Par, r._count._all]),
+    );
+    const countByCtrl = Object.fromEntries(
+      (ctrlCounts || [])
+        .filter((r) => r.decisionControleurPar)
+        .map((r) => [r.decisionControleurPar, r._count._all]),
+    );
+
+    const membresAvecStats = membres.map((m) => {
+      let nbDossiersExamines = 0;
+      if (m.sousRole === 'EXAMINATEUR') {
+        nbDossiersExamines = countByExam[m.id] || 0;
+      } else if (m.sousRole === 'CONTROLEUR') {
+        nbDossiersExamines = countByCtrl[m.id] || 0;
+      }
+      return { ...m, nbDossiersExamines };
+    });
+
+    const examinateurs = membresAvecStats.filter((m) => m.sousRole === 'EXAMINATEUR');
+    const controleurs = membresAvecStats.filter((m) => m.sousRole === 'CONTROLEUR');
     const staff = await getCommissionStaffStatus(prisma, concoursId);
 
     const concoursRow = await prisma.concours.findUnique({
@@ -103,7 +147,7 @@ exports.getCommission = async (req, res) => {
         ...result.concours,
         etudeDejaOuverte,
       },
-      membres,
+      membres: membresAvecStats,
       examinateurs,
       controleurs,
       peutOuvrirEtude: staff.peutOuvrirEtude,

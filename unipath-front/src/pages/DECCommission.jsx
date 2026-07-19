@@ -310,17 +310,23 @@ export default function DECCommission() {
                         <th className="py-2 px-4 font-semibold">Nom</th>
                         <th className="py-2 px-4 font-semibold">Email</th>
                         <th className="py-2 px-4 font-semibold">Rôle</th>
+                        <th className="py-2 px-4 font-semibold">Activité</th>
                         <th className="py-2 px-4 font-semibold text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {assignes.map((m) => (
+                      {assignes.map((m) => {
+                        const n = Number(m.nbDossiersExamines) || 0;
+                        return (
                         <tr key={m.id} className="border-b border-gray-100 hover:bg-gray-50/80">
                           <td className="py-3 px-4 font-medium text-gray-900">
                             {m.prenom} {m.nom}
                           </td>
                           <td className="py-3 px-4 text-gray-600">{m.email}</td>
                           <td className="py-3 px-4 text-gray-700">{roleLabel(m.sousRole)}</td>
+                          <td className="py-3 px-4 text-gray-600">
+                            {n} dossier{n !== 1 ? 's' : ''} examiné{n !== 1 ? 's' : ''}
+                          </td>
                           <td className="py-3 px-4 text-right">
                             <button
                               type="button"
@@ -332,7 +338,8 @@ export default function DECCommission() {
                             </button>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

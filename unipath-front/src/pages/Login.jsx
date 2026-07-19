@@ -36,6 +36,7 @@ export default function Login() {
   const [emailNotConfirmed, setEmailNotConfirmed] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
+  const [passwordChangeNotice, setPasswordChangeNotice] = useState('');
 
   const successMessage = location.state?.message;
   const messageType    = location.state?.type;
@@ -60,11 +61,21 @@ export default function Login() {
     }
   }, [navigate]);
 
+  const redirectAfterPasswordNotice = (path) => {
+    setPasswordChangeNotice(
+      'Première connexion : vous allez être redirigé pour changer votre mot de passe',
+    );
+    setTimeout(() => {
+      navigate(path);
+    }, 1400);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     setEmailNotConfirmed(false);
+    setPasswordChangeNotice('');
     try {
       const data = await authService.login(email, password);
       if (!data?.token || !data?.user?.role) {
@@ -73,11 +84,11 @@ export default function Login() {
       const { role, sousRole, mustChangePassword } = data.user;
       if (mustChangePassword) {
         if (role === 'ADMIN_ETABLISSEMENT') {
-          navigate('/admin-etablissement/changer-mot-de-passe');
+          redirectAfterPasswordNotice('/admin-etablissement/changer-mot-de-passe');
           return;
         }
         if (role === 'COMMISSION') {
-          navigate('/commission/changer-mot-de-passe');
+          redirectAfterPasswordNotice('/commission/changer-mot-de-passe');
           return;
         }
       }
@@ -174,6 +185,15 @@ export default function Login() {
                 : 'bg-green-50 border-green-200 text-green-700'
             }`}>
               {successMessage}
+            </div>
+          )}
+
+          {!resetMode && passwordChangeNotice && (
+            <div
+              role="status"
+              className="px-4 py-3 rounded-xl mb-4 text-sm border bg-amber-50 border-amber-200 text-amber-900 font-medium animate-pulse"
+            >
+              {passwordChangeNotice}
             </div>
           )}
 
