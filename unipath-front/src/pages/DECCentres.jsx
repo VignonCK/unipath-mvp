@@ -5,6 +5,7 @@ import DECLayout from '../components/DECLayout';
 import GestionCentresConcours from '../components/concours/GestionCentresConcours';
 
 const EMPTY_CENTRE = { nom: '', ville: '', codeVille: '', adresse: '', telephone: '' };
+const EMPTY_SALLE = { nom: '', capacite: '' };
 
 export default function DECCentres() {
   const [centres, setCentres] = useState([]);
@@ -16,6 +17,14 @@ export default function DECCentres() {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_CENTRE);
+
+  const [sallesCentre, setSallesCentre] = useState(null);
+  const [salles, setSalles] = useState([]);
+  const [loadingSalles, setLoadingSalles] = useState(false);
+  const [sallesError, setSallesError] = useState('');
+  const [showSalleModal, setShowSalleModal] = useState(false);
+  const [editingSalleId, setEditingSalleId] = useState(null);
+  const [salleForm, setSalleForm] = useState(EMPTY_SALLE);
 
   const loadCatalogue = useCallback(async () => {
     setLoading(true);
@@ -37,6 +46,28 @@ export default function DECCentres() {
   useEffect(() => {
     loadCatalogue();
   }, [loadCatalogue]);
+
+  const loadSalles = async (centre) => {
+    setSallesCentre(centre);
+    setLoadingSalles(true);
+    setSallesError('');
+    try {
+      const data = await centreCompositionService.listerSalles(centre.id);
+      setSalles(data.salles || []);
+    } catch (err) {
+      setSallesError(err.message || 'Impossible de charger les salles');
+      setSalles([]);
+    } finally {
+      setLoadingSalles(false);
+    }
+  };
+
+  const closeSallesPanel = () => {
+    setSallesCentre(null);
+    setSalles([]);
+    setSallesError('');
+    setShowSalleModal(false);
+  };
 
   const openCreate = () => {
     setEditingId(null);
@@ -93,6 +124,57 @@ export default function DECCentres() {
     }
   };
 
+  const openCreateSalle = () => {
+    setEditingSalleId(null);
+    setSalleForm(EMPTY_SALLE);
+    setShowSalleModal(true);
+  };
+
+  const openEditSalle = (salle) => {
+    setEditingSalleId(salle.id);
+    setSalleForm({
+      nom: salle.nom || '',
+      capacite: salle.capacite != null ? String(salle.capacite) : '',
+    });
+    setShowSalleModal(true);
+  };
+
+  const handleSubmitSalle = async (e) => {
+    e.preventDefault();
+    if (!sallesCentre) return;
+    setBusy(true);
+    try {
+      const payload = {
+        nom: salleForm.nom,
+        capacite: salleForm.capacite.trim() === '' ? null : Number(salleForm.capacite),
+      };
+      if (editingSalleId) {
+        await centreCompositionService.modifierSalle(editingSalleId, payload);
+      } else {
+        await centreCompositionService.creerSalle(sallesCentre.id, payload);
+      }
+      setShowSalleModal(false);
+      await loadSalles(sallesCentre);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDeleteSalle = async (salle) => {
+    if (!window.confirm(`Supprimer la salle « ${salle.nom} » ?`)) return;
+    setBusy(true);
+    try {
+      await centreCompositionService.supprimerSalle(salle.id);
+      if (sallesCentre) await loadSalles(sallesCentre);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const selectedConcours = concoursList.find((c) => c.id === filterConcoursId);
 
   return (
@@ -102,7 +184,7 @@ export default function DECCentres() {
           <div>
             <h1 className="text-2xl font-black text-gray-900">Centres de composition</h1>
             <p className="text-sm text-gray-500 mt-1">
-              Référentiel global et associations par concours
+              Référentiel global, salles et associations par concours
             </p>
           </div>
           <button
@@ -175,7 +257,14 @@ export default function DECCentres() {
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex justify-center gap-2">
+                          <div className="flex justify-center gap-2 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => loadSalles(c)}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-teal-50 text-teal-900 hover:bg-teal-100"
+                            >
+                              Salles
+                            </button>
                             <button
                               type="button"
                               onClick={() => openEdit(c)}
@@ -199,6 +288,93 @@ export default function DECCentres() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {sallesCentre && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Salles — {sallesCentre.nom}</h2>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {sallesCentre.ville}
+                  {sallesCentre.codeVille ? ` · code ${sallesCentre.codeVille}` : ''}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={openCreateSalle}
+                  className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-orange-600 text-white hover:bg-orange-700"
+                >
+                  + Ajouter une salle
+                </button>
+                <button
+                  type="button"
+                  onClick={closeSallesPanel}
+                  className="px-3 py-1.5 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+
+            {sallesError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {sallesError}
+              </div>
+            )}
+
+            {loadingSalles ? (
+              <p className="text-sm text-gray-500">Chargement des salles…</p>
+            ) : salles.length === 0 ? (
+              <p className="text-sm text-gray-400">Aucune salle pour ce centre.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs font-semibold text-gray-500 uppercase border-b">
+                      <th className="py-2 px-3">Nom</th>
+                      <th className="py-2 px-3">Capacité</th>
+                      <th className="py-2 px-3">Statut</th>
+                      <th className="py-2 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {salles.map((s) => (
+                      <tr key={s.id}>
+                        <td className="py-2.5 px-3 font-medium text-gray-800">{s.nom}</td>
+                        <td className="py-2.5 px-3 text-gray-600">
+                          {s.capacite != null ? s.capacite : '—'}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className={`text-xs font-semibold ${s.actif ? 'text-emerald-700' : 'text-gray-500'}`}>
+                            {s.actif ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditSalle(s)}
+                            className="text-xs font-semibold text-blue-900 hover:text-orange-600"
+                          >
+                            Éditer
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => handleDeleteSalle(s)}
+                            className="text-xs font-semibold text-red-600 hover:text-red-800 disabled:opacity-50"
+                          >
+                            Supprimer
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
@@ -276,6 +452,47 @@ export default function DECCentres() {
                 className="px-4 py-2 rounded-lg bg-orange-600 text-white text-sm font-semibold disabled:opacity-60"
               >
                 {busy ? '…' : (editingId ? 'Enregistrer' : 'Créer')}
+              </button>
+            </div>
+          </form>
+        </div>,
+        document.body,
+      )}
+
+      {showSalleModal && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <form
+            onSubmit={handleSubmitSalle}
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl space-y-4"
+          >
+            <h4 className="font-bold text-gray-900">
+              {editingSalleId ? 'Modifier la salle' : 'Nouvelle salle'}
+            </h4>
+            <p className="text-xs text-gray-500">{sallesCentre?.nom}</p>
+            <input
+              required
+              value={salleForm.nom}
+              onChange={(e) => setSalleForm({ ...salleForm, nom: e.target.value })}
+              placeholder="Nom / numéro de salle"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+            />
+            <input
+              value={salleForm.capacite}
+              onChange={(e) => setSalleForm({ ...salleForm, capacite: e.target.value })}
+              placeholder="Capacité (optionnel)"
+              inputMode="numeric"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+            />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setShowSalleModal(false)} className="px-4 py-2 text-sm text-gray-600">
+                Annuler
+              </button>
+              <button
+                type="submit"
+                disabled={busy}
+                className="px-4 py-2 rounded-lg bg-orange-600 text-white text-sm font-semibold disabled:opacity-60"
+              >
+                {busy ? '…' : (editingSalleId ? 'Enregistrer' : 'Créer')}
               </button>
             </div>
           </form>

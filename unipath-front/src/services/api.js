@@ -237,6 +237,28 @@ export const centreCompositionService = {
   toggleActif: (id) =>
     request(`/centres-composition/${id}/actif`, { method: 'PATCH' }),
 
+  listerSalles: (centreId, params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/dec/centres/${centreId}/salles${qs ? `?${qs}` : ''}`);
+  },
+
+  creerSalle: (centreId, data) =>
+    request(`/dec/centres/${centreId}/salles`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  modifierSalle: (salleId, data) =>
+    request(`/dec/salles/${salleId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  supprimerSalle: (salleId) =>
+    request(`/dec/salles/${salleId}`, {
+      method: 'DELETE',
+    }),
+
   getConcoursCentres: (concoursId, params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return request(`/concours/${concoursId}/centres${qs ? `?${qs}` : ''}`);
