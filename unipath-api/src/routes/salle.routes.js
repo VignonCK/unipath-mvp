@@ -33,4 +33,11 @@ router.delete(
   salleController.supprimerSalle,
 );
 
+router.post(
+  '/concours/:concoursId/centres/:centreId/repartir-salles',
+  protect,
+  checkRole(['DEC']),
+  salleController.repartirSalles,
+);
+
 module.exports = router;

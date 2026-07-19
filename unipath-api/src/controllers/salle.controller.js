@@ -134,3 +134,43 @@ exports.supprimerSalle = async (req, res) => {
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 };
+
+/**
+ * POST /api/dec/concours/:concoursId/centres/:centreId/repartir-salles
+ */
+exports.repartirSalles = async (req, res) => {
+  try {
+    const { concoursId, centreId } = req.params;
+    const { repartirCandidatsSallesParCentre } = require('../utils/salle.helper');
+
+    const result = await prisma.$transaction(
+      (tx) => repartirCandidatsSallesParCentre(tx, concoursId, centreId),
+      { maxWait: 15_000, timeout: 120_000 },
+    );
+
+    const parts = [];
+    if (result.resume.nbAssignes > 0) {
+      parts.push(`${result.resume.nbAssignes} candidat(s) réparti(s)`);
+    }
+    if (result.resume.nbNonAssignes > 0) {
+      parts.push(`${result.resume.nbNonAssignes} sans salle`);
+    }
+    if (parts.length === 0) {
+      parts.push('Aucun candidat VALIDE à répartir pour ce centre');
+    }
+
+    return res.json({
+      message: parts.join(' — '),
+      ...result,
+    });
+  } catch (error) {
+    console.error('repartirSalles error:', error);
+    const msg = error.message || 'Erreur serveur';
+    if (
+      /introuvable|n'est pas associé/i.test(msg)
+    ) {
+      return res.status(404).json({ error: msg });
+    }
+    return res.status(500).json({ error: msg });
+  }
+};

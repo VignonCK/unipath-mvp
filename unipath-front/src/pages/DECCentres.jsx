@@ -25,6 +25,9 @@ export default function DECCentres() {
   const [showSalleModal, setShowSalleModal] = useState(false);
   const [editingSalleId, setEditingSalleId] = useState(null);
   const [salleForm, setSalleForm] = useState(EMPTY_SALLE);
+  const [repartirConcoursId, setRepartirConcoursId] = useState('');
+  const [repartirBusy, setRepartirBusy] = useState(false);
+  const [repartirReport, setRepartirReport] = useState(null);
 
   const loadCatalogue = useCallback(async () => {
     setLoading(true);
@@ -51,6 +54,8 @@ export default function DECCentres() {
     setSallesCentre(centre);
     setLoadingSalles(true);
     setSallesError('');
+    setRepartirReport(null);
+    setRepartirConcoursId((prev) => prev || filterConcoursId || '');
     try {
       const data = await centreCompositionService.listerSalles(centre.id);
       setSalles(data.salles || []);
@@ -67,6 +72,36 @@ export default function DECCentres() {
     setSalles([]);
     setSallesError('');
     setShowSalleModal(false);
+    setRepartirReport(null);
+  };
+
+  const handleRepartirSalles = async () => {
+    if (!sallesCentre || !repartirConcoursId) {
+      alert('Sélectionnez un concours pour la répartition.');
+      return;
+    }
+    const concoursLabel = concoursList.find((c) => c.id === repartirConcoursId)?.libelle || 'ce concours';
+    if (
+      !window.confirm(
+        `Répartir les candidats VALIDE de « ${concoursLabel} » dans les salles de « ${sallesCentre.nom} » ?\nOrdre alphabétique, remplissage par capacité.`,
+      )
+    ) {
+      return;
+    }
+    setRepartirBusy(true);
+    setSallesError('');
+    try {
+      const data = await centreCompositionService.repartirSalles(
+        repartirConcoursId,
+        sallesCentre.id,
+      );
+      setRepartirReport(data);
+    } catch (err) {
+      setSallesError(err.message || 'Répartition impossible');
+      setRepartirReport(null);
+    } finally {
+      setRepartirBusy(false);
+    }
   };
 
   const openCreate = () => {
@@ -324,6 +359,74 @@ export default function DECCentres() {
                 {sallesError}
               </div>
             )}
+
+            <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-4 space-y-3">
+              <p className="text-sm font-semibold text-gray-800">Répartition automatique</p>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="flex-1 min-w-[200px]">
+                  <label className="block text-xs font-medium text-gray-600 mb-1" htmlFor="repartir-concours">
+                    Concours
+                  </label>
+                  <select
+                    id="repartir-concours"
+                    value={repartirConcoursId}
+                    onChange={(e) => setRepartirConcoursId(e.target.value)}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                  >
+                    <option value="">— Choisir un concours —</option>
+                    {concoursList.map((c) => (
+                      <option key={c.id} value={c.id}>{c.libelle}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  disabled={repartirBusy || !repartirConcoursId}
+                  onClick={handleRepartirSalles}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-teal-800 text-white hover:bg-teal-900 disabled:opacity-50"
+                >
+                  {repartirBusy ? 'Répartition…' : 'Répartir les salles'}
+                </button>
+              </div>
+
+              {repartirReport && (
+                <div className="rounded-lg border border-teal-200 bg-white px-3 py-3 text-sm space-y-2">
+                  <p className="font-semibold text-teal-900">{repartirReport.message}</p>
+                  {repartirReport.resume && (
+                    <p className="text-xs text-gray-600">
+                      {repartirReport.resume.nbAssignes}/{repartirReport.resume.totalCandidats} assignés
+                      {repartirReport.resume.nbNonAssignes > 0
+                        ? ` · ${repartirReport.resume.nbNonAssignes} sans salle`
+                        : ''}
+                      {repartirReport.resume.capaciteTotale != null
+                        ? ` · capacité totale ${repartirReport.resume.capaciteTotale}`
+                        : ''}
+                    </p>
+                  )}
+                  {(repartirReport.avertissements || []).length > 0 && (
+                    <ul className="text-xs text-amber-800 list-disc pl-4">
+                      {repartirReport.avertissements.map((a) => (
+                        <li key={a}>{a}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {(repartirReport.nonAssignes || []).length > 0 && (
+                    <details className="text-xs text-gray-600">
+                      <summary className="cursor-pointer font-medium">
+                        Candidats non assignés ({repartirReport.nonAssignes.length})
+                      </summary>
+                      <ul className="mt-1 space-y-0.5 pl-2">
+                        {repartirReport.nonAssignes.slice(0, 20).map((c) => (
+                          <li key={c.inscriptionId}>
+                            {c.prenom} {c.nom} — {c.motif}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+              )}
+            </div>
 
             {loadingSalles ? (
               <p className="text-sm text-gray-500">Chargement des salles…</p>

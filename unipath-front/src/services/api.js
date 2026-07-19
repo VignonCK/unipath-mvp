@@ -259,6 +259,11 @@ export const centreCompositionService = {
       method: 'DELETE',
     }),
 
+  repartirSalles: (concoursId, centreId) =>
+    request(`/dec/concours/${concoursId}/centres/${centreId}/repartir-salles`, {
+      method: 'POST',
+    }),
+
   getConcoursCentres: (concoursId, params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return request(`/concours/${concoursId}/centres${qs ? `?${qs}` : ''}`);
