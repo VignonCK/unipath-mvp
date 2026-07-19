@@ -299,6 +299,18 @@ export default function DGESEtablissementsAdmins() {
               {message && <div className="rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3">{message}</div>}
               {modalError && <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{modalError}</div>}
 
+              <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3">
+                <p className="text-sm font-bold text-gray-900">{selectedEtab.nom}</p>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  {selectedEtab.ville}
+                  {selectedEtab.type ? ` · ${selectedEtab.type}` : ''}
+                </p>
+                <p className="text-xs text-gray-500 mt-2">
+                  Informations communes à tous les administrateurs de cet établissement. Les lignes ci-dessous
+                  ne listent que les données individuelles (identité, contact, actions).
+                </p>
+              </div>
+
               <section>
                 <h3 className="text-sm font-bold text-gray-800 mb-3">Administrateurs existants</h3>
                 {loadingAdmins ? (
